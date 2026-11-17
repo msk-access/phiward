@@ -1,0 +1,4 @@
+# The test tools CI installs, pinned (pip install -c tests/constraints.txt ...). pytest 8.4 is
+# the last line that runs on Python 3.9.
+pytest==8.4.2
+pytest-timeout==2.4.0

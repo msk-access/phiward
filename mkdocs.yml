@@ -1,0 +1,86 @@
+# The documentation site: https://msk-access.github.io/phiward/
+# Built by .github/workflows/docs.yml. The build tools are only for the docs: phiward itself has
+# no dependencies. Build locally with:
+#   uvx --with mkdocs-material==9.8.1 mkdocs build --strict
+site_name: phiward
+site_description: Keep protected health information (PHI) out of what an AI coding agent sends to its model provider
+site_url: https://msk-access.github.io/phiward/
+repo_url: https://github.com/msk-access/phiward
+repo_name: msk-access/phiward
+edit_uri: blob/main/docs/
+copyright: Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Use phiward:
+      - Quick start: quickstart.md
+      - Daily use: daily-use.md
+      - HPC: hpc.md
+      - Plugins: plugins.md
+      - Agents with nobody watching: unattended.md
+      - "Mode B: phiward launch": launch.md
+      - Setup in detail: setup.md
+      - Configuration: configuration.md
+      - Glossary: glossary.md
+  - Decide whether it is enough:
+      - Why phiward: why.md
+      - The two modes: modes.md
+      - Threat model and limits: threat-model.md
+  - Change phiward:
+      - For contributors: developer.md
+      - Releasing: releasing.md
+  - Release notes:
+      - v0.2.0b1: release-notes/v0.2.0b1.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+validation:
+  omitted_files: warn
+  absolute_links: info
+  unrecognized_links: warn
+  anchors: warn

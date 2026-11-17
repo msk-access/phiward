@@ -1,0 +1,6 @@
+# the source archive can run its own tests: the whole tests folder, the docs and the changelog
+graft tests
+graft docs
+include CHANGELOG.md
+global-exclude __pycache__ *.py[cod]
+exclude AGENTS.md

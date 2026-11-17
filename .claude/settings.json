@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Bash(git push * main)",
+      "Bash(git push * main *)",
+      "Bash(git push *:main*)",
+      "Bash(git push *refs/heads/main*)",
+      "Bash(git push *--tags*)",
+      "Bash(git push *--follow-tags*)",
+      "Bash(git push *--mirror*)",
+      "Bash(git push *refs/tags/*)",
+      "Bash(git tag -a *)",
+      "Bash(git tag -s *)",
+      "Bash(git tag -d *)"
+    ]
+  }
+}

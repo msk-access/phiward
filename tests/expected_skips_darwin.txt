@@ -1,0 +1,36 @@
+# Tests that skip on macOS (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
+# Linux-only tests, and two that skip by design. Remake with PHIWARD_WRITE_SKIPS=FILE.
+tests/test_round2.py::test_c_linux_gateway_filter_blocks[io_uring_setup]
+tests/test_round2.py::test_c_linux_gateway_filter_blocks[ptrace]
+tests/test_round2.py::test_c_linux_gateway_filter_blocks[unshare]
+tests/test_round5.py::test_k5_linux_places_are_bound_by_descriptor
+tests/test_v2_beta.py::test_b1_a_planted_memory_link_does_not_mount_a_root
+tests/test_v2_p0a.py::test_step4_a_non_utf8_entry_name_is_masked
+tests/test_v2_p0a2.py::test_hole3_a_real_bind_mount_inside_a_root_is_found
+tests/test_v2_p0a3.py::test_f3_real_nested_mount_bound_elsewhere
+tests/test_v2_p0a3.py::test_f5_a_proc_magic_link_path_counts_as_inside
+tests/test_v2_p0a4.py::test_g2_procfs_at_a_second_path_is_recognised
+tests/test_v2_p0a4.py::test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias
+tests/test_v2_p0a4.py::test_g5_a_magic_link_is_judged_by_where_it_really_leads
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_paths_are_not_blocked[/etc/mtab]
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_paths_are_not_blocked[/proc/mounts]
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_paths_are_not_blocked[/proc/self/status]
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_use_in_a_confined_shell_is_allowed[echo hi > /dev/stderr]
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_use_in_a_confined_shell_is_allowed[ls /proc/self/fd]
+tests/test_v2_p0a4.py::test_g5_ordinary_proc_use_in_a_confined_shell_is_allowed[tee /dev/stderr < /dev/null]
+tests/test_v2_push.py::test_linux_socket_mode_reaches_only_the_shared_connection
+tests/test_v2_r1.py::test_r2_a_linked_tool_tmp_does_not_widen_the_next_session
+tests/test_v2_r1.py::test_r7_a_socket_with_a_space_in_its_path_is_covered
+tests/test_v2_r1.py::test_r8_the_session_check_never_follows_links
+tests/test_v2_r1b.py::test_1_a_planted_gitdir_link_does_not_mount_outside_files[kube]
+tests/test_v2_r1b.py::test_1_a_planted_gitdir_link_does_not_mount_outside_files[root]
+tests/test_v2_r1b.py::test_2_masks_are_applied_after_git_binds
+tests/test_v2_r1b.py::test_3_the_session_check_never_reads_through_a_planted_link
+tests/test_v2_r1b.py::test_6_printed_names_are_escaped
+tests/test_v2_round8.py::test_a_read_only_bind_that_cannot_be_opened_stops_launch
+tests/test_v2_round8.py::test_launch_refuses_a_command_line_bwrap_cannot_take
+tests/test_v2_view.py::test_changes_on_the_host_after_the_start_stay_out_of_the_view
+tests/test_v2_view.py::test_launch_starts_next_to_thousands_of_entries_and_hides_the_root
+tests/test_v2_w1b.py::test_c1_a_path_socket_outside_is_not_reachable
+tests/test_v2_w1b.py::test_c1_an_abstract_socket_outside_is_not_reachable
+tests/test_v2_w1b.py::test_c2_a_kerberos_ticket_in_tmp_is_hidden

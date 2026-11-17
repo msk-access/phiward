@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+    branches: [main]  # not tags: a release tag runs this suite once, from release.yml
+  pull_request:  # every other branch, once, through its pull request
+  workflow_call:  # the release workflow runs the suite before it builds
+
+permissions:
+  contents: read
+
+# a newer push to the same branch or pull request stops the older run; a release run is never
+# stopped
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Confinement backend (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor; bubblewrap needs them
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Install
+        run: |
+          python -m pip install -c tests/constraints.txt pytest pytest-timeout
+          python -m pip install -e .
+      - name: Tests
+        env:
+          PHIWARD_REQUIRE_CONFINE: "1"  # a missing backend fails the run instead of skipping tests
+          PHIWARD_CHECK_SKIPS: "1"  # a skip not in tests/expected_skips_<platform>.txt fails
+        run: |
+          # on Linux the made-up trees go outside /tmp: a session replaces /tmp, and tests that
+          # need their tree inside the session would skip
+          extra=""
+          if [ "$RUNNER_OS" = "Linux" ]; then extra="--basetemp=$RUNNER_TEMP/pt"; fi
+          python -m pytest -q -rs --timeout=300 $extra
+      - name: Sanitizer self-test
+        run: python -m phiward sanitize --selftest

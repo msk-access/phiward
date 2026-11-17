@@ -1,0 +1,16 @@
+phiward
+Copyright (C) 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center (MSKCC).
+Licensed under the GNU Affero General Public License v3.0 only.
+
+Design ideas in the confinement profiles (src/phiward/confine.py) were learned from these
+projects, which are licensed under the Apache License, Version 2.0:
+
+- Anthropic sandbox-runtime (https://github.com/anthropic-experimental/sandbox-runtime):
+  denying writes on every folder above a protected path, in both spellings; failing closed when
+  a list of allowed places is empty.
+- OpenAI Codex CLI (https://github.com/openai/codex): bubblewrap mounts as the main write layer
+  on Linux with Landlock as a second layer; a short list of mach services for DNS on macOS;
+  write places only from operator config.
+
+No source code was copied from these projects. If code from them is added later, its licence
+and copyright notice will be kept with it here.

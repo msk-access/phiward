@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phiward"
+dynamic = ["version"]  # from src/phiward/__init__.py: one place, which `phiward --version` prints
+description = "Guards that keep protected data out of what an AI coding agent (Claude Code) sends to its model provider"
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Ronak Shah"}]
+requires-python = ">=3.9"
+dependencies = []
+keywords = ["phi", "hipaa", "ai-agents", "claude-code", "sandbox", "data-protection", "hpc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+[project.urls]
+Homepage = "https://github.com/msk-access/phiward"
+Documentation = "https://github.com/msk-access/phiward/tree/main/docs"
+Changelog = "https://github.com/msk-access/phiward/blob/main/CHANGELOG.md"
+Issues = "https://github.com/msk-access/phiward/issues"
+
+[project.scripts]
+phiward = "phiward.cli:main"
+# the name before v0.2.0b1, an alias for the beta
+agent-guards = "phiward.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "phiward.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+phiward = ["packs/*.toml", "data/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+# `-m "not slow"` is the quick loop; every full run (and CI) runs them too
+markers = ["slow: a cost or property test over many made-up entries (seconds each)"]

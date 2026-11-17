@@ -1,0 +1,7 @@
+# What agents in this repository are told, and how CI and releases run: a maintainer reviews it.
+* @rhshah
+/AGENTS.md @rhshah
+/CLAUDE.md @rhshah
+/.agents/ @rhshah
+/.claude/ @rhshah
+/.github/ @rhshah

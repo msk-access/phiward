@@ -1,0 +1,17 @@
+{
+  "name": "phiward",
+  "owner": {
+    "name": "MSK-ACCESS"
+  },
+  "metadata": {
+    "description": "Keeps protected data and credentials out of what Claude Code sends to its model provider."
+  },
+  "plugins": [
+    {
+      "name": "phiward",
+      "source": "./plugin",
+      "version": "0.2.0b1",
+      "description": "phiward's hooks (the guard and the start-of-session note) and its skill. It needs the phiward package (uv tool install) and `phiward install claude` for Claude Code's sandbox and permission rules."
+    }
+  ]
+}

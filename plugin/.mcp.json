@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "phiward": {
+      "command": "sh",
+      "args": ["-c", "command -v phiward >/dev/null 2>&1 || { echo 'phiward is not installed or not on PATH' >&2; exit 1; }; exec phiward mcp"]
+    }
+  }
+}

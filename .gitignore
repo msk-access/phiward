@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+.phiward.local.toml
+.DS_Store
+# the agent harness: what stays on the maintainer's machine
+.agents/plans/
+.agents/local/
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
+site/

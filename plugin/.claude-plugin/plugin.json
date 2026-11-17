@@ -1,0 +1,10 @@
+{
+  "name": "phiward",
+  "version": "0.2.0b1",
+  "description": "Keeps protected data and credentials out of what Claude Code sends to its model provider: a guard on every tool call, a start-of-session note, and the skill for working through phiward's gateway.",
+  "license": "AGPL-3.0-only",
+  "repository": "https://github.com/msk-access/phiward",
+  "author": {
+    "name": "MSK-ACCESS"
+  }
+}
