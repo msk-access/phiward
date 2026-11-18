@@ -133,3 +133,19 @@ def test_no_module_of_phiward_uses_shutil_rmtree():
     src = pathlib.Path(__file__).resolve().parents[1] / "src" / "phiward"
     users = [p.name for p in src.rglob("*.py") if "rmtree(" in p.read_text(encoding="utf-8")]
     assert users == [], users
+
+
+# --- the CI run on develop after the merge: macOS, Python 3.10 ------------------------------------
+# git's background maintenance (after a commit) made and removed .git/objects/maintenance.lock while
+# a test removed .git: "No such file or directory: 'maintenance.lock'".
+
+def test_the_test_repositories_run_no_background_maintenance(tmp_path):
+    import subprocess
+    from helpers import git_repo
+    git_repo(tmp_path / "r")
+
+    def get(key):
+        return subprocess.run(["git", "config", "--get", key], cwd=tmp_path / "r",
+                              capture_output=True, text=True).stdout.strip()
+    assert get("maintenance.auto") == "false"
+    assert get("gc.auto") == "0"
