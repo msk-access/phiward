@@ -147,7 +147,10 @@ def tree(tmp_path, monkeypatch):
         # on Linux `launch` binds every entry next to a protected root into the session's view
         # (bwrap takes at most 9000 arguments): the trees of earlier tests must not pile up
         # beside this one in pytest's temp folder
-        shutil.rmtree(t, ignore_errors=True)
+        # any depth (a test's session may leave a deep quarantine; shutil.rmtree recursed before
+        # Python 3.12): phiward's own remover
+        from phiward import safeio
+        safeio.remove_tree(str(t))
 
 
 @pytest.fixture(autouse=True)
