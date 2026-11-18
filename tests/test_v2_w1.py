@@ -140,6 +140,11 @@ def test_w1_launch_inside_launch_runs_directly(tree):
              f"{PY!r}, '-c', 'print(\"INNER-RAN\")'], capture_output=True, text=True, env=dict(os.environ, "
              f"PYTHONPATH={SRC!r})); print(r.stdout + r.stderr)")
     _, out = launch(tree, inner)
+    if sys.platform.startswith("linux") and "create a new namespace" in out:
+        # Linux wraps again; a host that forbids a user namespace inside bubblewrap (seen on
+        # GitHub's Ubuntu runners) refuses the inner launch: nothing runs, which is safe
+        assert "INNER-RAN" not in out, out
+        return
     assert "INNER-RAN" in out, out
 
 

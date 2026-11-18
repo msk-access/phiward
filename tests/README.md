@@ -45,3 +45,4 @@ says what it holds. By feature:
 | The docs' links | test_docs_links |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
 | The judge of the real Claude Code check (scripts/sandbox-check) | test_sandbox_check_judge |
+| Hidden paths under a linked folder (bubblewrap mounts) | test_v2_bwrap_links |

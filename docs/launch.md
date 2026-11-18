@@ -167,6 +167,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
   record their settings: `git switch` still prints "set up to track" but does not); run them in
   your own terminal. A repository the session makes is not
   read-only, but its control files are listed in the exit report as files that run later.
+- **Linux: a launch inside a session** wraps itself in bubblewrap again. A host that forbids a
+  user namespace inside bubblewrap (seen on GitHub's Ubuntu 24.04 runners) refuses it, and nothing
+  runs.
 
 Read [threat-model.md](threat-model.md) (Mode B, limits L1–L8). In short:
 - **The network is open.** A session cannot read protected data, so it cannot send it. But it

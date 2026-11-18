@@ -51,6 +51,12 @@ def _spellings(paths_: Sequence[str]) -> List[str]:
     return out
 
 
+def _mount_point(path: str) -> str:
+    """`path` with the links in its folder resolved, its last part kept as written: where
+    bubblewrap can mount over it (it cannot make a mount point through a link)."""
+    return os.path.join(os.path.realpath(os.path.dirname(path)), os.path.basename(path))
+
+
 def _ancestors(paths_: Sequence[str]) -> List[str]:
     """Every folder above each path (both spellings), shallowest first, without "/"."""
     out: List[str] = []
@@ -237,8 +243,14 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
         c = os.path.join(w, ".claude")
         if os.path.isdir(c) and not os.path.islink(c):
             args += ["--ro-bind", c, c]
-    # what the command may not read (credentials, traces): masked last, over every bind
+    # what the command may not read (credentials, traces): masked last, over every bind, each at
+    # its real place (bubblewrap cannot make a mount point through a link: /var/run -> /run)
+    masked: List[str] = []
     for p in _spellings(list(deny_read)):
+        p = _mount_point(p)
+        if p in masked:
+            continue
+        masked.append(p)
         if os.path.isdir(p) and not os.path.islink(p):
             args += ["--tmpfs", p]
         elif os.path.lexists(p) and not os.path.islink(p):
@@ -249,7 +261,7 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
         # resolved target, unless that target is hidden
         real = os.path.realpath(p)
         if os.path.isfile(real) and not any(real == h or real.startswith(h + "/") for h in hidden):
-            args += ["--ro-bind", real, p]
+            args += ["--ro-bind", real, _mount_point(p)]
     if socket:
         # every other socket that has a path (an SSH agent's, X11's, another shared
         # connection's) is masked: a read-only bind does not stop a connect;

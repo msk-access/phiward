@@ -6,6 +6,10 @@ set -e
 apt-get update -qq >/dev/null
 apt-get install -y -qq bubblewrap git rsync >/dev/null
 useradd -m tester
+# a Docker socket where a host with Docker has one (GitHub's runners, most workstations), behind
+# the /var/run -> /run link: the gateway must still start (it once failed on this)
+[ -L /var/run ] || { echo "linux-check: expected /var/run to be a link" >&2; exit 1; }
+python -c 'import socket; socket.socket(socket.AF_UNIX).bind("/run/docker.sock")'
 pip install -q -c /repo/tests/constraints.txt pytest pytest-timeout
 v=$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 status=0

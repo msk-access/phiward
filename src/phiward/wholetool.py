@@ -1081,6 +1081,18 @@ def _canary_path(env: Dict[str, str]) -> str:
     return os.path.join(home, ".phiward", CANARY)
 
 
+def _make_canary(canary: str) -> None:
+    """Make the canary unless it is there. Another launch may make it at the same moment (two
+    wrapped MCP servers start at once): that is fine, its content does not matter;
+    already_confined checks what is there."""
+    try:
+        fd = os.open(canary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    except FileExistsError:
+        return
+    with os.fdopen(fd, "w") as fh:
+        fh.write("the agent profile denies this file; launch checks it\n")
+
+
 def already_confined(env: Dict[str, str]) -> bool:
     """True only when the canary that only this profile denies is denied with EPERM (ordinary
     permissions give EACCES and do not count)."""
@@ -1175,10 +1187,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     tmp = os.path.join(run, "tmp")
     os.makedirs(tmp, mode=0o700, exist_ok=True)
     canary = _canary_path(env)
-    if sys.platform == "darwin" and not os.path.lexists(canary):
-        fd = os.open(canary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
-        with os.fdopen(fd, "w") as fh:
-            fh.write("the agent profile denies this file; launch checks it\n")
+    if sys.platform == "darwin":
+        _make_canary(canary)
     child_env = {k: v for k, v in env.items() if _keep_env(k, cfg.launch_pass_env)}
     child_env["TMPDIR"] = tmp
     for k, rel in SESSION_CACHE_ENV.items():
