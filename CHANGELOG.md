@@ -3,7 +3,7 @@
 All notable changes to phiward. Dates are UTC. Versions follow semantic versioning; until
 1.0, a minor version may change behaviour.
 
-## [0.2.0b1] - 2026-11-17 (beta)
+## [0.2.0b1] - 2026-11-18 (beta)
 
 The first public release. phiward keeps protected data (for example patient data) out of what
 an AI coding agent sends to its model provider. Read

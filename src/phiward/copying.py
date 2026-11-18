@@ -16,7 +16,7 @@ import subprocess
 import sys
 from typing import Callable, Dict, List, Optional, Sequence, TextIO, Tuple
 
-from phiward import config, paths, pathid
+from phiward import config, paths, pathid, safeio
 from phiward.sanitize import Sanitizer, SanitizerError
 
 USAGE = "usage: phiward copy [--dry-run] SRC... DST\n"
@@ -520,7 +520,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             run._log(f"pull: exit {raw}")
             code = 0 if raw == 0 else 1  # the agent sees success or failure only
         finally:
-            shutil.rmtree(scratch, ignore_errors=True)
+            safeio.remove_tree(scratch)
     return code
 
 

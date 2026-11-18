@@ -66,6 +66,9 @@ def git_repo(top: Path):
     def git(*a):
         subprocess.run(["git", *a], cwd=top, check=True, capture_output=True)
     git("init", "-q")
+    # no background maintenance after the commit: it works in .git while a test removes it
+    git("config", "maintenance.auto", "false")
+    git("config", "gc.auto", "0")
     (top / "f").write_text("x\n")
     git("add", "f")
     git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-qm", "i")

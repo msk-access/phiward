@@ -70,3 +70,15 @@ def write_new(path: str, text: str, mode: int = 0o600) -> None:
         except OSError:
             pass
         raise
+
+
+def remove_tree(path: str) -> bool:
+    """Remove `path` (a folder of any depth, or a file), never through a link: carryover's remover,
+    which goes down by descriptor without recursion (shutil.rmtree recurses before Python 3.12,
+    and its ignore_errors does not catch RecursionError). False when something stayed."""
+    from phiward import carryover
+    try:
+        carryover._remove(path)
+    except (OSError, RecursionError, carryover.CarryoverError):
+        return False
+    return True
