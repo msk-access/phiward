@@ -91,7 +91,7 @@ def _deep(root, depth=DEPTH):
     """A folder `depth` levels deep, made one level at a time by descriptor, as an agent's command
     can make it. Its path is longer than macOS allows (PATH_MAX 1024) and longer than the
     900 characters below which `carryover._remove` works by name; Linux allows 4096."""
-    assert len(str(root)) + 2 * depth > 1024
+    assert 2 * depth > 1024, "too shallow to pass macOS's PATH_MAX"
     root.mkdir(parents=True)
     fd = os.open(str(root), os.O_RDONLY | os.O_DIRECTORY)
     for _ in range(depth):

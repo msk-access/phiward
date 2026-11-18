@@ -153,7 +153,9 @@ def test_17_7_a_deep_tree_does_not_break_the_end(tree):
                                   f"os.chdir(os.path.join({CFG}, 'skills'))\n"
                                   "for i in range(600):\n    os.mkdir('d')\n    os.chdir('d')\nprint('MADE')",
                             recursion_limit=300)
+    # the end of this session removes the tree, not only the next start
     assert "MADE" in out and "Traceback" not in err, err
+    assert "did not finish" not in err and "could not be removed" not in err, err
     code, out, err = launch(tree, "print('AGAIN')", recursion_limit=300)
     assert "AGAIN" in out and "could not be removed" not in err, err
 
