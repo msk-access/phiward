@@ -5,7 +5,7 @@ tests/test_round2.py::test_c_linux_gateway_filter_blocks[ptrace]
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[unshare]
 tests/test_round5.py::test_k5_linux_places_are_bound_by_descriptor
 tests/test_v2_beta.py::test_b1_a_planted_memory_link_does_not_mount_a_root
-tests/test_v2_bwrap_links.py::test_bubblewrap_runs_and_the_linked_secret_is_hidden
+tests/test_v2_github_ci.py::test_bubblewrap_runs_and_the_linked_secret_is_hidden
 tests/test_v2_p0a.py::test_step4_a_non_utf8_entry_name_is_masked
 tests/test_v2_p0a2.py::test_hole3_a_real_bind_mount_inside_a_root_is_found
 tests/test_v2_p0a3.py::test_f3_real_nested_mount_bound_elsewhere

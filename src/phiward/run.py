@@ -37,7 +37,7 @@ import time
 from dataclasses import dataclass, field
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
-from phiward import config, confine, paths
+from phiward import config, confine, paths, safeio
 from phiward.sanitize import Sanitizer, SanitizerError
 
 MAX_LINE = 64 * 1024  # bytes; a longer output line is withheld, not held in memory
@@ -149,7 +149,7 @@ def end_all() -> None:
             os.killpg(pgid, signal.SIGKILL)
         except OSError:
             pass
-        shutil.rmtree(scratch, ignore_errors=True)
+        safeio.remove_tree(scratch)
 
 
 def sweep_scratch(cache: str) -> int:
@@ -162,7 +162,7 @@ def sweep_scratch(cache: str) -> int:
         return 0
     for e in entries:
         if e.name.startswith(SCRATCH_PREFIXES) and e.is_dir(follow_symlinks=False):
-            shutil.rmtree(e.path, ignore_errors=True)
+            safeio.remove_tree(e.path)
             n += 1
     return n
 
@@ -365,7 +365,7 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                   + "\n")
         return seen
     finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+        safeio.remove_tree(scratch)
 
 
 def resolve_grant(d: str, cwd: str, cfg: config.Config) -> Optional[str]:
