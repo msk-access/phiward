@@ -7,7 +7,7 @@ site_description: Keep protected health information (PHI) out of what an AI codi
 site_url: https://msk-access.github.io/phiward/
 repo_url: https://github.com/msk-access/phiward
 repo_name: msk-access/phiward
-edit_uri: blob/main/docs/
+edit_uri: blob/develop/docs/
 copyright: Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
 
 theme:
@@ -40,6 +40,12 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+
+# the version picker: mike publishes each release, and develop as "dev" (.github/workflows/docs.yml)
+extra:
+  version:
+    provider: mike
+    default: stable
 
 nav:
   - Home: index.md

@@ -27,7 +27,9 @@ works from a private repository.
 2. Add the pending publisher (above).
 3. Push the tag (below). The workflow tests, builds and publishes.
 4. Check https://pypi.org/project/phiward/ and the install line.
-5. Only then make the repository public.
+5. Only then make the repository public, and turn on GitHub Pages: Settings, Pages, **Deploy from
+   a branch**, `gh-pages`, `/ (root)`. The `docs` workflow publishes there with mike: `develop` as
+   `dev`, each release tag as its version with the alias `stable`, which the site opens on.
 
 ## Each release
 
