@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]  # not tags: a release tag runs this suite once, from release.yml
+    branches: [main, develop]  # not tags: a release tag runs this suite once, from release.yml
   pull_request:  # every other branch, once, through its pull request
   workflow_call:  # the release workflow runs the suite before it builds
 

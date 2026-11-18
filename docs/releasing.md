@@ -22,13 +22,18 @@ works from a private repository.
 
 ## The first release
 
-1. Create `msk-access/phiward` as a **private** repository and push `main`.
+1. Create `msk-access/phiward` as a **private** repository and push `main` and `develop`.
 2. Add the pending publisher (above).
 3. Push the tag (below). The workflow tests, builds and publishes.
 4. Check https://pypi.org/project/phiward/ and the install line.
 5. Only then make the repository public.
 
 ## Each release
+
+The repository uses git-flow (`gitflow.prefix.versiontag` is `v`): start with
+`git flow release start 0.2.0b2` from `develop`, make the changes below on that branch, and
+`git flow release finish 0.2.0b2` merges it into `main` and `develop` and makes the tag `v0.2.0b2`.
+Then push `main`, `develop` and the tag.
 
 1. Set the version: `__version__` in `src/phiward/__init__.py` (the package and
    `phiward --version` take it from there), and the same in `plugin/.claude-plugin/plugin.json`
@@ -52,7 +57,8 @@ works from a private repository.
    writes `~/.claude/settings.json` must fail, and a wrapped MCP server must start. Run it when
    phiward's Claude Code wiring (`install.py`, `claude_settings.py`, `fasthook.py`, `mcp.py`) or
    the lowest Claude Code version it supports changed since the last release; otherwise skip it.
-4. Commit, then tag and push the tag:
+4. Commit and tag: `git flow release finish` does both; the first release is tagged by hand on
+   `main`. Then push the tag:
 
    ```bash
    git tag -a v0.2.0b1 -m "phiward v0.2.0b1"

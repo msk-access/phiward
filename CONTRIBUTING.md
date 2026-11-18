@@ -31,7 +31,8 @@ repository.
 
 ## A pull request
 
-- Open it against `main`. CI runs the whole suite on Linux and macOS, Python 3.9 to 3.14, so you do
+- Branch from `develop` (`feature/NAME`) and open it against `develop`; `main` gets only
+  releases (git-flow). CI runs the whole suite on Linux and macOS, Python 3.9 to 3.14, so you do
   not need every system yourself.
 - Some checks need a maintainer's machine (the Linux suites in Docker, the quickstart check, the
   install check on macOS); a maintainer runs them before a release.
