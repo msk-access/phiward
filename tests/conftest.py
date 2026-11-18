@@ -149,6 +149,8 @@ def tree(tmp_path, monkeypatch):
         # beside this one in pytest's temp folder
         # any depth (a test's session may leave a deep quarantine; shutil.rmtree recursed before
         # Python 3.12): phiward's own remover
+        # after the test's own replacements are undone (a test may replace os.lstat)
+        monkeypatch.undo()
         from phiward import safeio
         safeio.remove_tree(str(t))
 
