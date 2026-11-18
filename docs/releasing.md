@@ -13,7 +13,8 @@ release; after that, the project's own **Settings → Publishing**), and enter:
 - Owner: `msk-access`
 - Repository name: `phiward`
 - Workflow name: `release.yml`
-- Environment name: `pypi`. Create that environment in the repository settings (Settings, Environments) with yourself as a required reviewer, so a pushed tag waits for your approval before it publishes.
+- Environment name: leave it empty. The publish job runs in no GitHub environment, as in gbcms
+  and krewlyzer: a pushed tag publishes once the tests and checks pass.
 
 A pending publisher does not reserve the name: the first publish creates the project. So
 **publish the first release before the repository is public**: until then, anyone could take
@@ -71,8 +72,8 @@ Then push `main`, `develop` and the tag.
 5. The `release` workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
    checks that the tag names the version everywhere, builds the wheel and the source archive,
    checks them (`twine check --strict`), installs the wheel and runs it. Only then does the
-   publish job start, and it waits for your approval in the `pypi` environment. Its actions are pinned by commit; update a pin by its release's
-   commit, not a tag.
+   publish job start; nothing waits for an approval, so push the tag only when the release is
+   ready. Its actions are pinned by commit; update a pin by its release's commit, not a tag.
 6. After it is published, check the install line from a clean shell:
 
    ```bash

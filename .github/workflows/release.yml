@@ -78,8 +78,6 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
-    # a GitHub environment with a required reviewer: a pushed tag alone cannot publish
-    environment: pypi
     permissions:
       id-token: write  # trusted publishing; nothing else
     steps:
