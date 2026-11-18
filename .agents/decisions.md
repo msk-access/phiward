@@ -6,6 +6,13 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **Which CI cells run when.** A pull request runs Python 3.9 and 3.14 on Ubuntu 24.04 and macOS,
+  and 3.14 on the newest Ubuntu (5 cells); a push to develop and a release run every version from
+  3.9 to 3.14 (13 cells). The short list is chosen only for a `pull_request` event, never by the
+  branch or ref. A push to main runs nothing: its tag runs the suite before publishing. (Every
+  cell runs the whole suite. The reason is the queue: macOS runners are shared and few, and runs
+  waited 11 to 47 minutes for them. What it costs: a bug only on 3.10 to 3.13 is found at the
+  merge into develop, not on the pull request.)
 - **A program list entry is the file that runs.** Under `[broker] commands`, a bare name runs what
   the broker's `PATH` finds, called by that name alone; a path entry is a real file (no link, no
   `..` on it) and runs as itself; a folder entry runs a name in that folder. A repository's list
@@ -30,7 +37,8 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   on running alone.
 - **Regrouping the test files by feature:** helpers of the same name differ from file to file, so a
   move can change what a test checks. `tests/README.md` indexes the files instead.
-- **A separate quick CI matrix:** CI runs the whole suite on every cell.
+- **A separate quick CI matrix:** CI runs the whole suite on every cell. (A pull request runs
+  fewer cells, never fewer tests: see "Which CI cells run when".)
 - **A supervisor that kills a gateway command's leftover processes on macOS:** the command can kill
   the supervisor first; the limit is stated in the threat model.
 - **Repository roots only inside the repository:** a repo config protects folders next to it

@@ -32,8 +32,9 @@ repository.
 ## A pull request
 
 - Branch from `develop` (`feature/NAME`) and open it against `develop`; `main` gets only
-  releases (git-flow). CI runs the whole suite on Linux and macOS, Python 3.9 to 3.14, so you do
-  not need every system yourself.
+  releases (git-flow). On a pull request, CI runs the whole suite on Linux and macOS with Python
+  3.9 and 3.14; after the merge into `develop`, and for a release, with every version from 3.9 to
+  3.14. You do not need every system yourself.
 - Some checks need a maintainer's machine (the Linux suites in Docker, the quickstart check, the
   install check on macOS); a maintainer runs them before a release.
 - A change to `AGENTS.md`, `CLAUDE.md`, `.agents/` or `.claude/` changes what every agent here is
