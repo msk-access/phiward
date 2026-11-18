@@ -1,8 +1,10 @@
 """Start the real `claude -p` for the sandbox check with a clean environment: only the variables
 it needs, the credential from the caller's environment or the first line of stdin (never argv or
 a file), Claude Code's own credential scrub for its commands, no auto-update. A watchdog stops it.
-Afterwards, writes HOME/token-seen: whether the credential is in the session's output (what the
-model and the provider saw); a copy in another file of the check's home is only reported.
+Afterwards, writes HOME/token-in-env (whether the token is in the commands' environment, as
+probes.sh saved it; that file is then removed) and HOME/token-seen (whether it is in the
+session's output: what the model and the provider saw); a copy in another file of the check's
+home is only reported.
 Usage: python3 launch.py HOME STREAM_OUT SECONDS -- CLAUDE ARGS..."""
 import os
 import signal
@@ -43,7 +45,8 @@ with open(stream_out, "wb") as out:
 needle = token.encode()
 seen = []
 for root, dirs, files in os.walk(home):
-    dirs[:] = [d for d in dirs if d not in ("py", ".cache") and not os.path.islink(os.path.join(root, d))]
+    dirs[:] = [d for d in dirs
+               if d not in ("py", ".cache") and not os.path.islink(os.path.join(root, d))]
     for f in files:
         path = os.path.join(root, f)
         try:
@@ -56,6 +59,15 @@ for root, dirs, files in os.walk(home):
             continue
 with open(stream_out, "rb") as fh:
     in_stream = needle in fh.read()
+env_dump = os.path.join(home, "proj", "env.txt")
+try:
+    with open(env_dump, "rb") as fh:
+        in_env = "yes" if needle in fh.read() else "no"
+    os.remove(env_dump)  # a kept folder never holds what the commands' environment held
+except OSError:
+    in_env = "missing"
+with open(os.path.join(home, "token-in-env"), "w") as fh:
+    fh.write(in_env + "\n")
 with open(os.path.join(home, "token-seen"), "w") as fh:
     fh.write("yes\n" if in_stream else "no\n")
 for path in seen:

@@ -3,7 +3,8 @@ the probes, its sandbox refused each one with "Operation not permitted", every c
 nothing was written, the wrapped MCP server started in this run without reading the protected
 file, and neither the protected content nor the token reached the session's output.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why).
-Usage: python3 judge.py HOME RESULTS STREAM SERVER NONCE MARKER SETTINGS_SAME TOKEN_SEEN"""
+Usage: python3 judge.py HOME RESULTS STREAM SERVER NONCE MARKER SETTINGS_SAME TOKEN_SEEN
+       TOKEN_IN_ENV (yes, no or missing)"""
 import json
 import os
 import sys
@@ -27,7 +28,8 @@ def _events(lines):
 
 def _tool_uses(events):
     for ev in events:
-        content = (ev.get("message") or {}).get("content") if ev.get("type") == "assistant" else None
+        msg = ev.get("message") or {}
+        content = msg.get("content") if ev.get("type") == "assistant" else None
         for part in content if isinstance(content, list) else ():
             if isinstance(part, dict) and part.get("type") == "tool_use":
                 yield part
@@ -44,7 +46,8 @@ def _tool_results(events):
     return out
 
 
-def judge(results, stream_lines, server, nonce, marker, created, settings_same, token_seen):
+def judge(results, stream_lines, server, nonce, marker, created, settings_same, token_seen,
+          token_in_env):
     """(verdict, report lines)."""
     report, fails, unsure = [], [], []
     events = _events(stream_lines)
@@ -74,14 +77,19 @@ def judge(results, stream_lines, server, nonce, marker, created, settings_same, 
             unsure.append(f"{name}: {got} (failed, but not as the sandbox refuses)")
         else:
             fails.append(f"{name}: {got}: it got through")
-    env = lines.get("env-secrets")
-    if env is not None:
-        if env == "COUNT 0":
-            report.append("ok   env-secrets: no token or key in the commands' environment")
-        else:
-            fails.append(f"env-secrets: {env} names like a token or key in the commands' environment")
+    # the token by its value (launch.py looked for it in the commands' whole environment); names
+    # like a key are only a note: Claude Code's own sandbox proxy sets some
+    # (CLOUDSDK_PROXY_PASSWORD, GIT_CONFIG_KEY_0)
+    if token_in_env == "yes":
+        fails.append("the token is in the commands' environment")
+    elif token_in_env == "no":
+        report.append("ok   the token is not in the commands' environment")
     elif lines:
-        unsure.append("env-secrets: no result")
+        unsure.append("no record of the commands' environment")
+    env = lines.get("env-secrets")
+    if env is not None and env != "COUNT 0":
+        names = env.split(" ", 2)[-1]
+        report.append(f"note names like a key in the commands' environment: {names}")
     for path in created:
         fails.append(f"written although refused: {path}")
     if not settings_same:
@@ -109,7 +117,7 @@ def judge(results, stream_lines, server, nonce, marker, created, settings_same, 
 
 
 def main(argv):
-    home, results, stream, server, nonce, marker, same, seen = argv[1:9]
+    home, results, stream, server, nonce, marker, same, seen, in_env = argv[1:10]
 
     def text(path):
         try:
@@ -120,7 +128,7 @@ def main(argv):
     created = [p for p in (os.path.join(home, ".phiward", "sbx-probe"),
                            os.path.join(home, "data", "sbx-probe")) if os.path.lexists(p)]
     verdict, report = judge(text(results), text(stream).splitlines(), text(server), nonce, marker,
-                            created, same == "yes", seen == "yes")
+                            created, same == "yes", seen == "yes", in_env)
     print("\n".join(report))
     print(verdict)
     return {PASS: 0, FAIL: 1, INCONCLUSIVE: 2}[verdict]

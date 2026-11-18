@@ -110,6 +110,7 @@ token=""
 after=$(sum "$H/.claude/settings.json")
 same=no; [ "$before" = "$after" ] && same=yes
 seen=$(cat "$H/token-seen" 2>/dev/null || echo no)
+in_env=$(cat "$H/token-in-env" 2>/dev/null || echo missing)
 echo
 "$py" "$here/judge.py" "$H" "$H/proj/results.txt" "$H/stream.jsonl" "$H/proj/server.out" "$nonce" \
-  "$marker" "$same" "$seen"
+  "$marker" "$same" "$seen" "$in_env"

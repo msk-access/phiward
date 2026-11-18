@@ -17,6 +17,7 @@ try read-protected cat "$(p protected-file)"
 try write-data touch "$(p data)/sbx-probe"
 try write-phiward touch "$(p phiward)/sbx-probe"
 try write-settings sh -c 'printf x >> "$1"' sh "$(p settings)"
+env > env.txt  # launch.py looks for the token in it, then removes it
 names=$(env | sed 's/=.*//' | grep -iE 'token|key|secret|password|credential' | tr '\n' ' ')
 set -- $names
 echo "env-secrets COUNT $# $names" | sed 's/ *$//' >> results.txt
