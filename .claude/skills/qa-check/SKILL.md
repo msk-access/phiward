@@ -35,4 +35,8 @@ sh scripts/quickstart-check/check.sh                # 14 runs of a new user's se
 sh scripts/quickstart-check/mac.sh WHEEL PYTHON     # macOS; PYTHON: uv's own python3
 ```
 
+`sh scripts/sandbox-check/check.sh` runs the real Claude Code against phiward's settings, in a
+home folder of its own. The maintainer runs it in their own terminal (it asks for their token);
+an agent never runs it.
+
 The release steps are in [docs/releasing.md](../../../docs/releasing.md).

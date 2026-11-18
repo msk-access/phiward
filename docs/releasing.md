@@ -45,9 +45,13 @@ works from a private repository.
    umask 022 and 002, must end with no doctor WARNING and a wrapped MCP server. On macOS, run
    `sh scripts/quickstart-check/mac.sh WHEEL PYTHON` with uv's or Homebrew's `python3` (a home
    folder of its own, no login service).
-   Then check Claude Code's real sandbox yourself, which no script here runs: in a session after
-   `phiward setup`, a Bash command that reads a protected file, writes `~/.phiward` or writes
-   `~/.claude/settings.json` must fail, and a wrapped MCP server must start.
+   Then check that the real Claude Code obeys the settings phiward writes, which the scripts above
+   cannot show: `sh scripts/sandbox-check/check.sh` (macOS; it asks only for a token from
+   `claude setup-token` and builds the rest in a home folder of its own, with made-up data). In a
+   `claude -p` session there, a Bash command that reads a protected file, writes `~/.phiward` or
+   writes `~/.claude/settings.json` must fail, and a wrapped MCP server must start. Run it when
+   phiward's Claude Code wiring (`install.py`, `claude_settings.py`, `fasthook.py`, `mcp.py`) or
+   the lowest Claude Code version it supports changed since the last release; otherwise skip it.
 4. Commit, then tag and push the tag:
 
    ```bash

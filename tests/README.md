@@ -44,3 +44,4 @@ says what it holds. By feature:
 | Git hooks | test_githooks |
 | The docs' links | test_docs_links |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
+| The judge of the real Claude Code check (scripts/sandbox-check) | test_sandbox_check_judge |
