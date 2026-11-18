@@ -122,7 +122,10 @@ _LOCKED = []  # folders a setup made unlistable: opened again after the test
 def _unlock():
     yield
     while _LOCKED:
-        os.chmod(_LOCKED.pop(), 0o755)
+        try:
+            os.chmod(_LOCKED.pop(), 0o755)
+        except FileNotFoundError:
+            pass  # the tree is gone already (Linux: the tree fixture removes it)
 
 
 def _xonly(tree):  # a folder that can be passed through, not listed

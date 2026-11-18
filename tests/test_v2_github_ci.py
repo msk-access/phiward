@@ -1,4 +1,6 @@
-"""A hidden path whose parent folder is a link (`/var/run/docker.sock`, with `/var/run` -> `/run`
+"""Fixes from the first CI runs on GitHub's own machines.
+
+A hidden path whose parent folder is a link (`/var/run/docker.sock`, with `/var/run` -> `/run`
 on most Linux systems) must be hidden at its real place: bubblewrap cannot make a mount point
 through a link, and before this fix every gateway command failed on a machine with Docker
 ("bwrap: Can't create file at /var/run/docker.sock"), found by the first CI run on GitHub's
@@ -73,3 +75,61 @@ def test_a_canary_made_by_another_launch_at_the_same_moment_is_fine(tmp_path):
     fresh = tmp_path / "fresh-canary"
     wholetool._make_canary(str(fresh))
     assert fresh.is_file() and not fresh.is_symlink()
+
+
+# --- the second CI run on GitHub: Python 3.10 and 3.11 -------------------------------------------
+# shutil.rmtree recurses before Python 3.12, and ignore_errors does not catch RecursionError, so a
+# scratch folder the agent's command made deep enough stopped its request and stayed behind, and
+# the next broker start (sweep_scratch) failed on it.
+
+def _deep(root, depth=1500):
+    """A folder `depth` levels deep, made one level at a time by descriptor (its path is longer
+    than the system allows, as an agent's command can make it)."""
+    root.mkdir(parents=True)
+    fd = os.open(str(root), os.O_RDONLY | os.O_DIRECTORY)
+    for _ in range(depth):
+        os.mkdir("d", dir_fd=fd)
+        nfd = os.open("d", os.O_RDONLY | os.O_DIRECTORY, dir_fd=fd)
+        os.close(fd)
+        fd = nfd
+    f = os.open("f", os.O_WRONLY | os.O_CREAT, 0o600, dir_fd=fd)
+    os.close(f)
+    os.close(fd)
+
+
+def _no_recursive_rmtree(monkeypatch):
+    import shutil as _sh
+
+    def boom(*a, **k):
+        raise RecursionError("maximum recursion depth exceeded (as Python 3.9-3.11)")
+    monkeypatch.setattr(_sh, "rmtree", boom)
+
+
+def test_a_deep_scratch_folder_is_removed_at_the_broker_start(tmp_path, monkeypatch):
+    from phiward import run
+    _no_recursive_rmtree(monkeypatch)
+    cache = tmp_path / "cache"
+    scratch = cache / (run.SCRATCH_PREFIXES[0] + "left")
+    _deep(scratch)
+    assert run.sweep_scratch(str(cache)) == 1
+    assert not scratch.exists()
+
+
+def test_remove_tree_takes_any_depth_and_never_follows_a_link(tmp_path):
+    from phiward import safeio
+    keep = tmp_path / "keep"
+    keep.mkdir()
+    (keep / "k").write_text("kept\n")
+    t = tmp_path / "t"
+    _deep(t)
+    (t / "link").symlink_to(keep, target_is_directory=True)
+    assert safeio.remove_tree(str(t)) is True
+    assert not t.exists() and (keep / "k").read_text() == "kept\n"
+    assert safeio.remove_tree(str(tmp_path / "absent")) is True
+
+
+def test_no_module_of_phiward_uses_shutil_rmtree():
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parents[1] / "src" / "phiward"
+    users = [p.name for p in src.rglob("*.py") if "rmtree(" in p.read_text(encoding="utf-8")]
+    assert users == [], users

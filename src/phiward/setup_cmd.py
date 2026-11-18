@@ -10,12 +10,11 @@ reads before it is written and that `doctor` checks afterwards.
 import difflib
 import os
 import re
-import shutil
 import sys
 import tempfile
 from typing import Tuple, Any, Callable, Dict, List, Optional, TextIO
 
-from phiward import _toml, config, pathid
+from phiward import _toml, config, pathid, safeio
 
 USAGE = ("usage: phiward setup [--from TEAM.toml]\n"
          "       phiward setup --first-run --root PATH [--root PATH]... [--remote HOST:/PATH]...\n")
@@ -250,7 +249,6 @@ def _read_existing(path: str) -> Dict[str, Dict[str, Any]]:
 def _write(path: str, text: str) -> None:
     folder = os.path.dirname(path)
     os.makedirs(folder, mode=0o700, exist_ok=True)
-    from phiward import safeio
     if os.path.exists(path):
         safeio.write_new(path + ".bak", safeio.read_text(path))
     safeio.write_new(path, text)
@@ -652,7 +650,7 @@ def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
             fh.write(text)
         cfg = config.load("/", env=dict(env, PHIWARD_CONFIG=tmp))
     finally:
-        shutil.rmtree(trial, ignore_errors=True)
+        safeio.remove_tree(trial)
     ask.say("")
     ask.say("The new user config:")
     ask.say("-" * 60)
