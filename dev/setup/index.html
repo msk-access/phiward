@@ -1,0 +1,2313 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/dev/setup/">
+      
+      
+        <link rel="prev" href="../launch/">
+      
+      
+        <link rel="next" href="../configuration/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Setup in detail - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#setup-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Setup in detail
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-user-config-phiward-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The user config: phiward setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The user config: phiward setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-guided-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The guided first run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-1-protected-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 1: protected roots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-2-protected-patterns-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 2: protected patterns (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-3-write-places-broker-write_to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 3: write places ([broker] write_to)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-4-programs-broker-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 4: programs ([broker] commands)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-5-network-for-gateway-commands-broker-net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 5: network for gateway commands ([broker] net)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-6-copy-remotes-copy-remotes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 6: copy remotes ([copy] remotes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-7-network-for-shell-commands-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 7: network for shell commands ([network])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hpc-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HPC questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-end-of-the-dialogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The end of the dialogue
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-wire-the-agent-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Wire the agent tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Wire the agent tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-start-the-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Start the broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-pin-the-derived-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Pin the derived folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-check-with-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Check with doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-try-it-on-made-up-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Try it on made-up data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-per-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Per repository
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Per repository">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiwardtoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .phiward.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#git-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Git hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-the-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change the setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrade-from-agent-guards-010" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade from agent-guards 0.1.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove-phiward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remove phiward
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-user-config-phiward-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The user config: phiward setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. The user config: phiward setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-guided-first-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The guided first run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-1-protected-roots" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 1: protected roots
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-2-protected-patterns-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 2: protected patterns (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-3-write-places-broker-write_to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 3: write places ([broker] write_to)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-4-programs-broker-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 4: programs ([broker] commands)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-5-network-for-gateway-commands-broker-net" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 5: network for gateway commands ([broker] net)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-6-copy-remotes-copy-remotes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 6: copy remotes ([copy] remotes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#question-7-network-for-shell-commands-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 7: network for shell commands ([network])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hpc-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The HPC questions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-end-of-the-dialogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The end of the dialogue
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-wire-the-agent-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Wire the agent tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Wire the agent tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#other-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-start-the-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Start the broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-pin-the-derived-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Pin the derived folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-check-with-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Check with doctor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-try-it-on-made-up-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Try it on made-up data
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-per-repository" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Per repository
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Per repository">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiwardtoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .phiward.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#git-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Git hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#change-the-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change the setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upgrade-from-agent-guards-010" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upgrade from agent-guards 0.1.0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remove-phiward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remove phiward
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="setup-reference">Setup reference<a class="headerlink" href="#setup-reference" title="Permanent link">&para;</a></h1>
+<p><strong>For:</strong> anyone who wants each setup step, option and limit explained; upgrades; removal.</p>
+<p>The <a href="../quickstart/">quick start</a> is the short way. This page explains each step, its options
+and its limits, in the same order. Run the steps in your own Terminal. The guided setup
+(<code>/phiward:setup</code>) lets the agent run the first-time steps for you, but only while no config
+exists (<a href="#the-guided-first-run">below</a>).</p>
+<ol>
+<li><a href="#1-requirements">Check the requirements</a></li>
+<li><a href="#2-install">Install</a></li>
+<li><a href="#3-the-user-config-phiward-setup">Write the user config with <code>phiward setup</code></a></li>
+<li><a href="#4-wire-the-agent-tool">Wire the agent tool</a></li>
+<li><a href="#5-start-the-broker">Start the broker</a></li>
+<li><a href="#6-pin-the-derived-folders">Pin the derived folders</a></li>
+<li><a href="#7-check-with-doctor">Check everything with <code>phiward doctor</code></a></li>
+<li><a href="#8-try-it-on-made-up-data">Try it on made-up data</a></li>
+<li><a href="#9-per-repository">Per repository: <code>.phiward.toml</code> and the git hooks</a></li>
+</ol>
+<p>Later: <a href="#change-the-setup">change the setup</a>,
+<a href="#upgrade-from-agent-guards-010">upgrade from agent-guards</a>, <a href="#remove-phiward">remove phiward</a>.</p>
+<h2 id="1-requirements">1. Requirements<a class="headerlink" href="#1-requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Python 3.9 or newer.</li>
+<li>macOS: <code>/usr/bin/sandbox-exec</code> (part of macOS; Apple marks it as deprecated, Claude Code uses
+  it too).</li>
+<li>Linux:</li>
+<li>bubblewrap (<code>bwrap</code>) on the <code>PATH</code>;</li>
+<li>Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
+    gateway uses it as a second layer for its writes and refuses to run without it;</li>
+<li>on Ubuntu 24.04, AppArmor can block unprivileged user namespaces
+    (<code>kernel.apparmor_restrict_unprivileged_userns</code>). Then bubblewrap cannot start. Change the
+    setting, or add an AppArmor profile for <code>bwrap</code>. <code>doctor</code> says when this is the cause.</li>
+<li>Native Windows has no confinement. Use WSL 2, which is Linux.</li>
+<li>For Claude Code: version 2.1.295 or newer (it needs <code>onFailure</code> on hooks). On Linux, Claude
+  Code's own sandbox (Mode A) also needs bubblewrap and <code>socat</code>; <code>install</code> sets
+  <code>failIfUnavailable</code>, so without them Claude Code stops at start instead of running commands
+  unsandboxed. <code>doctor</code> checks both.</li>
+</ul>
+<p>Without a working confinement backend, the broker refuses to run anything. It fails closed.</p>
+<h2 id="2-install">2. Install<a class="headerlink" href="#2-install" title="Permanent link">&para;</a></h2>
+<p>Install a release from PyPI with <code>uv</code> (to get <code>uv</code> itself:
+<code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>, or <code>brew install uv</code>):</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+</code></pre></div>
+<p>Or with <code>pipx</code>:</p>
+<div class="highlight"><pre><span></span><code>pipx<span class="w"> </span>install<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+</code></pre></div>
+<p>Name the version: a beta is not chosen without it. The same release from its GitHub tag, without
+PyPI: <code>uv tool install git+https://github.com/msk-access/phiward@v0.2.0b1</code>. Pin a version or a tag;
+do not install a branch. Use <code>uv tool</code> or <code>pipx</code>: they give phiward a Python folder of its own.
+phiward protects the folder of the Python that runs it (the agent may not write there, or it could
+change what the broker runs), so an install into a shared environment (a conda base, a project's
+<code>.venv</code>) would make that whole environment read-only for the agent. They also keep the launcher at
+one path across upgrades (<code>~/.local/share/uv/tools/phiward/bin/phiward</code>,
+pipx's folder, for example <code>~/.local/share/pipx/venvs/phiward/bin/phiward</code>), which <code>phiward mcp wrap</code> writes into each entry; an
+install whose path holds the version (phiward in a Homebrew Python's own site folder) would need
+<code>wrap</code> again after each upgrade. Check the install:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>--help
+</code></pre></div>
+<h2 id="3-the-user-config-phiward-setup">3. The user config: <code>phiward setup</code><a class="headerlink" href="#3-the-user-config-phiward-setup" title="Permanent link">&para;</a></h2>
+<p><code>setup</code> first asks how you will use phiward:</p>
+<ol>
+<li><strong>Real patient data</strong> (the default): you give your protected folders; it suggests a results
+   folder inside the first one (the one write place, so no <code>--write-to</code> is needed), sets the
+   program list to <code>@genomics</code> plus an optional folder of your own scripts, gives gateway
+   commands no network, asks whether shell commands may reach only hosts you list (<code>[network]</code>;
+   yes is suggested; with yes, <code>git push</code> and <code>pip install</code> fail until you list their hosts),
+   and asks about HPC.</li>
+<li><strong>Made-up data</strong>: your folders and a results folder; any program may run.</li>
+<li><strong>Every setting</strong>: the <a href="#question-1-protected-roots">questions below</a>, one by one.</li>
+</ol>
+<p><code>phiward setup --from team.toml</code> starts from a team template (a config file with shared
+settings); its settings fill in what your config does not have, and lists are joined with
+yours. A template may set only shared settings: the program list (by name or <code>@</code> list, not by
+path), built-in packs, HPC host names and the programs allowed there, cluster folders to mask,
+patterns, and limits (only lower than the defaults). It may never set a write place, the
+network, a copy remote, an ssh config, names files, pack files or environment. One kept in a
+project (a folder with <code>.git</code>, <code>.claude</code> or <code>.phiward.toml</code> above it) is refused. <code>setup</code>
+shows every setting in it and asks before it uses them. At the end <code>setup</code> writes the
+file after your yes, makes the results folder and phiward's ssh config, approves the programs,
+wires Claude Code, and installs or restarts the broker service (each with a yes; see
+<a href="#the-end-of-the-dialogue">the end of the dialogue</a>).</p>
+<p>The user config holds the facts of your machine: which folders are protected, and what gateway
+commands may do. Once step 4 is done, the agent's shell cannot write it, and the hook refuses
+the agent's file tools for its usual spelling (not for every spelling: <a href="../threat-model/#gaps-of-the-hook-alone">known gap
+2</a>). Write it with:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>setup
+</code></pre></div>
+<p>Each answer is checked as phiward checks the file later; a
+refused answer is asked again, with the reason. Nothing is written until you say yes at the end.
+It writes <code>~/.config/phiward/config.toml</code> (or the file that <code>$PHIWARD_CONFIG</code> names;
+see <a href="../configuration/#where-the-files-are">configuration.md</a>) with mode 0600, and keeps the old
+file as <code>config.toml.bak</code> (each run replaces the <code>.bak</code> file, so copy it away if you want to
+keep an older one).</p>
+<p>Once a config exists, <code>setup</code> is yours only: it refuses to run without a terminal, and the hook
+refuses it as an agent command. These two checks are a convenience, not a boundary: a program can
+fake a terminal. What stops an agent is that Claude Code's sandbox (or <code>launch</code>) denies writes
+to the config, <code>~/.phiward</code> and the service file. If an agent shows you <code>phiward setup</code> as a command to approve,
+refuse it.</p>
+<h3 id="the-guided-first-run">The guided first run<a class="headerlink" href="#the-guided-first-run" title="Permanent link">&para;</a></h3>
+<p><strong>We recommend that you run <code>phiward setup</code> yourself</strong>, as above. The guided setup
+(<code>/phiward:setup</code>) recommends it too, and gives you the commands.</p>
+<p>It can also let the agent write the first config: <code>phiward setup --first-run --root PATH
+[--root PATH ...] [--remote host:/path ...]</code>, with the paths that you type in chat. This works
+only while no config exists. It writes protected roots and copy remotes only, never a grant (no
+write places, no network). It refuses a <code>PHIWARD_CONFIG</code>, <code>PHIWARD_SPOOL</code> or <code>XDG_*</code> override
+without a terminal.</p>
+<p><strong>When to use it, and what you trust.</strong> Before your config exists, nothing protects the agent's
+choices: you trust the agent, in that session, to write exactly what you said, and to install
+the broker service and the wiring as they should be. Use it only in a <strong>new</strong> session that has
+not read web pages, other people's files or repositories you do not know. Then check what it
+wrote: <code>phiward doctor --show-paths</code>, in your own Terminal, lists the roots. These limits hold on both
+paths:
+- a root that is your home folder or above it, in a dot-folder of your home folder, in
+  <code>~/Library</code> or in a <code>PATH</code> folder stays protected, but gateway commands cannot write in it
+  (your own tools load code from there);
+- a copy remote must name a work folder: not <code>/</code>, a folder just below it, a home folder, or a
+  dot-folder;
+- the broker service skips <code>PATH</code> folders inside a project, and folders the agent's sandbox may write
+  (a temp folder, also inside your home folder, the spool, an allowWrite folder of your own or
+  the managed settings).</p>
+<p>The agent-run setup takes <code>KRB5CCNAME</code> and the other Kerberos variables from its session, as
+your own shell names them. If your ticket cache is in a place other than the default ones, run
+the setup yourself.</p>
+<h3 id="question-1-protected-roots">Question 1: protected roots<a class="headerlink" href="#question-1-protected-roots" title="Permanent link">&para;</a></h3>
+<p>Folders that hold protected data. Give each one as an absolute path or with <code>~/</code>, one per line,
+and an empty line to end the list.</p>
+<ul>
+<li>Give the folder that holds the data, not a folder above it. A root cannot be <code>/</code>, your home
+  folder, or a folder above your home folder (the agent could not work at all). <code>setup</code> refuses
+  these; the loader refuses only <code>/</code>, so take care when you edit the file by hand.</li>
+<li>A root cannot hold a phiward file or folder (for example <code>~/.config</code>, which holds the
+  user config). <code>setup</code> refuses such a root.</li>
+<li>Each root must exist; <code>setup</code> refuses a missing one. Claude Code's sandbox hides a root only
+  when it exists as a command starts.</li>
+<li>Prefer the real path. A root reached through a link is protected, but gateway commands cannot
+  write to it (<code>doctor</code> says so).</li>
+<li>Keep protected data outside the git repositories that the agent works in. The <code>.git</code> folder of
+  a work tree that holds a root is protected too, so the agent cannot use git there.</li>
+</ul>
+<h3 id="question-2-protected-patterns-optional">Question 2: protected patterns (optional)<a class="headerlink" href="#question-2-protected-patterns-optional" title="Permanent link">&para;</a></h3>
+<p>Glob patterns, such as <code>/data/runs/*/panel</code>, for protected places that are spread out. <code>*</code> is the
+only wildcard, and only printable ASCII is accepted (see
+<a href="../configuration/#protected_paths">configuration.md</a>). Prefer roots: Claude Code's sandbox cannot take patterns, so
+on Linux its shell does not count as confined while patterns are set, and the hook then refuses
+shell commands other than gateway calls (see <a href="../configuration/#shell">configuration.md</a>). The
+gateway and <code>phiward launch</code> still enforce patterns.</p>
+<h3 id="question-3-write-places-broker-write_to">Question 3: write places (<code>[broker] write_to</code>)<a class="headerlink" href="#question-3-write-places-broker-write_to" title="Permanent link">&para;</a></h3>
+<p>Folders where <code>phiward run --write-to DIR</code> may write. DIR must be one of these folders or a
+folder inside one. Use this for result folders, for example <code>~/projects/study-a/results</code>.</p>
+<ul>
+<li>Each folder must exist, and you must give its real path (no link on the way). It must not
+  hold a <code>.claude</code> folder: choose a results folder, not a project folder. (A <code>.claude</code> folder
+  made there later makes phiward skip the entry.) <code>setup</code> shows
+  the real path when you give a link.</li>
+<li>A write place cannot be <code>/</code>, your home folder or above it, in a dot-folder of your home folder
+  (<code>~/.ssh</code>, <code>~/.config</code>), in <code>~/Library</code> or a <code>PATH</code> folder, above a protected root, in a
+  derived protected folder or a pattern match, hold a names or pack file of the config, or hold
+  or be inside a phiward file or folder. It <strong>may</strong> sit inside a protected root: what is written
+  there stays protected.</li>
+<li>Gateway commands write only in their own scratch folder and in these places: protected roots
+  are read only for them. So a workflow that writes results next to protected data needs a write
+  place inside that root, for example <code>~/data/patients/derived</code>.</li>
+<li>Each write place gives code that the agent chooses a place to put what it read. To keep the
+  gateway as closed as possible, keep this list short.</li>
+</ul>
+<h3 id="question-4-programs-broker-commands">Question 4: programs (<code>[broker] commands</code>)<a class="headerlink" href="#question-4-programs-broker-commands" title="Permanent link">&para;</a></h3>
+<p>The programs gateway commands may run. Empty means any program: then code the agent writes can
+run on protected data. For real data, list them: <code>@genomics</code> or <code>@counts</code> (built-in lists),
+program names, your own scripts by full path, or a folder of your scripts as a path ending in
+<code>/</code>. Interpreters and shells (<code>python3</code>, <code>bash</code>) run any code: list your scripts instead.
+Choice 1 sets <code>@genomics</code> and asks for a folder of your own scripts; how a script gets there is
+in <a href="../daily-use/#run-a-script-the-agent-wrote">daily-use.md</a>.</p>
+<h3 id="question-5-network-for-gateway-commands-broker-net">Question 5: network for gateway commands (<code>[broker] net</code>)<a class="headerlink" href="#question-5-network-for-gateway-commands-broker-net" title="Permanent link">&para;</a></h3>
+<p>With yes, <code>phiward run --net</code> gets the network. Code that reads protected data could then
+send it anywhere. The default and the recommendation is no. <code>phiward copy</code> to a configured
+remote gets the network for that copy without this setting.</p>
+<h3 id="question-6-copy-remotes-copy-remotes">Question 6: copy remotes (<code>[copy] remotes</code>)<a class="headerlink" href="#question-6-copy-remotes-copy-remotes" title="Permanent link">&para;</a></h3>
+<p>Places on other machines that <code>phiward copy</code> may copy to or from, as <code>host:/absolute/prefix</code>
+(through your shared SSH connection: <a href="../hpc/">hpc.md</a>). For example <code>cluster:/data/work/study-a</code>. Leave the list empty if you do not
+copy to another machine. Each remote is a place where protected data may go.</p>
+<p>A remote copy does not read <code>~/.ssh/config</code> (the agent may be able to write it). It reads
+phiward's own ssh config (<code>[copy] ssh_config</code>), which the HPC questions below write for you; or
+write a small one yourself and set <code>[copy] ssh_config</code> by hand
+(<a href="../configuration/#copy">configuration.md</a>).</p>
+<h3 id="question-7-network-for-shell-commands-network">Question 7: network for shell commands (<code>[network]</code>)<a class="headerlink" href="#question-7-network-for-shell-commands-network" title="Permanent link">&para;</a></h3>
+<p>With yes, the shell commands an agent runs in Claude Code reach only the hosts you list (Claude
+Code's own sandbox enforces it). Commands that need the network fail until their hosts are
+listed: <code>git push</code> needs <code>github.com</code> (or your git server), <code>pip install</code> needs <code>*.pypi.org</code>
+and <code>files.pythonhosted.org</code>. Claude Code itself, WebFetch and MCP servers are not limited by
+it. Each listed host is a way out, so list few. Choice 1 asks this too, with yes suggested.</p>
+<h3 id="the-hpc-questions">The HPC questions<a class="headerlink" href="#the-hpc-questions" title="Permanent link">&para;</a></h3>
+<p>Choices 1 and 3 then ask whether you work with an HPC cluster. With yes, they ask for its short
+name, its login host, your user name and work folder there, and the cluster folders to mask.
+<code>setup</code> adds the work folder to the copy remotes, writes phiward's ssh config and prints the
+lines to add to your own <code>~/.ssh/config</code> (<a href="../hpc/#one-time-setup">hpc.md</a>).</p>
+<h3 id="the-end-of-the-dialogue">The end of the dialogue<a class="headerlink" href="#the-end-of-the-dialogue" title="Permanent link">&para;</a></h3>
+<ol>
+<li><code>setup</code> shows the whole new file and the difference from the old one, and asks whether to
+   write it.</li>
+<li>It pins the derived folders (<a href="#6-pin-the-derived-folders">step 6</a>).</li>
+<li>When a program is new or changed, it lists the programs of <code>[broker] commands</code> as they are
+   now, each with its path, and the count ("N found, M not installed here"). Then it asks
+   <strong>"Approve these N program(s) as they are now?"</strong> The broker runs only approved programs.</li>
+<li>The default is <strong>Yes</strong> on a first run (nothing approved before) with nothing marked.</li>
+<li>The default is <strong>No</strong> when you approved programs before, when a program is marked
+     <code>(changed)</code>, or when a program in your home folder shadows a system program of the same
+     name (marked <code>(shadows /usr/bin/NAME)</code>). Read those lines before you say yes.</li>
+<li>With No, the broker refuses every gateway request while a listed program is not approved,
+     until you run <code>phiward pin</code> and restart it.</li>
+<li>A program not installed here is approved when you run <code>phiward pin</code> from a terminal where
+     it is found.</li>
+<li>It asks whether to wire Claude Code for every session (step 4). One yes is enough: it shows
+   the change and writes it.</li>
+<li>It asks whether to start the broker at every login, or restart it (step 5).</li>
+<li>It prints the next steps: what you did not say yes to, then <code>phiward doctor</code> in a project
+   folder.</li>
+</ol>
+<p><code>setup</code> keeps the other sections of an existing file (<code>[sanitize]</code>, <code>[git]</code>, <code>unresolved</code>), but
+not its comments; the <code>.bak</code> file of this run has them. To set those other keys, edit the file by hand; see
+<a href="../configuration/">configuration.md</a>.</p>
+<h2 id="4-wire-the-agent-tool">4. Wire the agent tool<a class="headerlink" href="#4-wire-the-agent-tool" title="Permanent link">&para;</a></h2>
+<p>There are two modes (<a href="../modes/">modes.md</a>). <strong>Mode A</strong>, a normal Claude Code session (the
+desktop app, an IDE, a terminal), is what this section wires; it is the usual way for day-to-day
+work. <strong>Mode B</strong>, <code>phiward launch --tool claude</code>, runs the whole tool inside phiward's kernel
+profile and needs no wiring (<a href="../launch/">launch.md</a>).</p>
+<p>Wire your <strong>user</strong> settings, so every session in every folder is protected. Project wiring alone
+protects only sessions opened in that folder. The Claude Code plugin
+(<a href="../plugins/">plugins.md</a>) can add the skill, the commands and a second check; keep these user
+hooks with it. <code>--no-hooks</code> writes only the sandbox and permission
+settings (for a project whose contributors have user wiring).</p>
+<h3 id="claude-code">Claude Code<a class="headerlink" href="#claude-code" title="Permanent link">&para;</a></h3>
+<p><code>setup</code> offers to do this. To do it yourself, first look at what will change:</p>
+<div class="highlight"><pre><span></span><code><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>~<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>phiward<span class="w"> </span>install<span class="w"> </span>claude<span class="w"> </span>--user<span class="o">)</span>
+</code></pre></div>
+<p>This prints a few <code>//</code> comment lines and then the JSON block for <code>~/.claude/settings.json</code> (a
+long one: it lists every protected path and credential twice, as sandbox entries and as
+permission rules). It writes nothing. Then merge it:</p>
+<div class="highlight"><pre><span></span><code><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>~<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>phiward<span class="w"> </span>install<span class="w"> </span>claude<span class="w"> </span>--user<span class="w"> </span>--write<span class="o">)</span>
+</code></pre></div>
+<p>It shows a diff and asks for your yes. It keeps a backup (<code>settings.json.phiward.bak</code>).
+<code>--project</code> writes the project's <code>.claude/settings.json</code> with only what is the same for every
+contributor (it can be committed) and puts the personal part into <code>.claude/settings.local.json</code>
+(do not commit it).</p>
+<p>Notes:</p>
+<ul>
+<li>Run <code>setup</code> and <code>broker --service</code> from your home folder (<code>cd ~</code>). They take the folder they
+  run in for a project, and leave its <code>PATH</code> folders (a <code>.venv/bin</code>) out of the broker's <code>PATH</code>.
+  <code>install --user</code> reads only your user config, wherever it runs; <code>install --project</code> also reads
+  the project's <code>.phiward.toml</code>.</li>
+<li><code>install --user</code> writes <code>settings.json</code> where Claude Code reads it: in <code>$CLAUDE_CONFIG_DIR</code>
+  when you set that variable, else in <code>~/.claude</code> (the file <code>doctor</code> reads too).</li>
+<li><code>install</code> only adds entries. When you remove a root from the config, remove it from
+  <code>denyRead</code> and <code>denyWrite</code> by hand.</li>
+<li>Without a terminal, <code>install --write</code> refuses unless <code>--yes</code> is given. The guided first run
+  gives <code>--yes</code>, before your config exists. After that, do not give <code>--yes</code> to an agent: read
+  the diff yourself.</li>
+</ul>
+<p>The block has four parts.</p>
+<ol>
+<li>One <code>PreToolUse</code> hook entry with the matcher <code>*</code> (every tool). It sets <code>"onFailure": "block"</code>: without it, Claude
+   Code lets a tool call go on when the hook fails. The command is
+   <code>/bin/sh -c 'V=$(/usr/bin/awk ...) || { ...; exit 2; }; IFS=" "; unset $V; exec /path/to/python -I -m phiward hook claude'</code>:
+   every <code>PYTHON*</code>, <code>LD_*</code> and <code>DYLD_*</code> variable is unset (a project's settings could set them to
+   load other code; if <code>/usr/bin/awk</code> cannot list them, the hook refuses every call), then
+   phiward's own Python runs isolated (<code>-I</code>: no user site folder). Before it writes, <code>install</code>
+   checks that this Python finds phiward with <code>-I</code> (an install in the user site folder is not
+   seen there) and that <code>/usr/bin/awk</code> exists. The plugin's hooks and <code>install --project</code> run
+   <code>phiward</code> by name after the same unset; a project's <code>env.PATH</code> would choose that <code>phiward</code>, so
+   the hook refuses every call while a project sets it, and you should wire your user settings
+   too. <code>install</code>
+   replaces every earlier form of its own hook entries (<code>.../bin/phiward hook claude</code>,
+   <code>... -I -m phiward ...</code>).</li>
+<li>A <code>SessionStart</code> hook (<code>phiward session-note claude</code>): every session starts with a short note
+   on the rules (the gateway is the intended route). It names no protected path.</li>
+<li><code>permissions.deny</code>: <code>Read(...)</code> and <code>Edit(...)</code> rules for every protected root and every entry
+   of the hidden list (credentials, tickets, histories). They are a second check on the file
+   tools, inside Claude Code.</li>
+<li>The sandbox block (shortened here; the real one also lists the hidden list):</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"sandbox"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"failIfUnavailable"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"allowUnsandboxedCommands"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"filesystem"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"denyRead"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"/data/patients"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/Users/me/.cache/phiward"</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">"denyWrite"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"/data/patients"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/Users/me/.cache/phiward"</span><span class="p">,</span>
+<span class="w">                    </span><span class="s2">"/Users/me/.config/phiward/config.toml"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/Users/me/.config/phiward"</span><span class="p">,</span>
+<span class="w">                    </span><span class="s2">"/path/to/site-packages/phiward"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/Users/me/.phiward/broker.json"</span><span class="p">,</span>
+<span class="w">                    </span><span class="s2">"/Users/me/.local/share/uv/tools/phiward"</span><span class="p">,</span>
+<span class="w">                    </span><span class="s2">"/Users/me/.local/bin/phiward"</span><span class="p">,</span>
+<span class="w">                    </span><span class="s2">"/Users/me/.local/lib/python3.12/site-packages"</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">"allowWrite"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"/Users/me/.phiward-spool"</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sandbox.enabled: true</code></td>
+<td>Claude Code runs shell commands in its sandbox.</td>
+</tr>
+<tr>
+<td><code>failIfUnavailable: true</code></td>
+<td>Claude Code does not start when its sandbox cannot (on Linux it needs bubblewrap and socat). Without it, commands would run unsandboxed.</td>
+</tr>
+<tr>
+<td><code>allowUnsandboxedCommands: false</code></td>
+<td>The model cannot retry a command outside the sandbox.</td>
+</tr>
+<tr>
+<td><code>denyRead</code></td>
+<td>Every protected root and the derived folders (the cache folder, the <code>.git</code> of a work tree that holds a root).</td>
+</tr>
+<tr>
+<td><code>denyWrite</code></td>
+<td>The same roots, the phiward config and code, the broker's status file, the Python folder that runs phiward, the <code>phiward</code> launcher, the user site folder, and <code>[copy] ssh_config</code> when set. An agent that can change these can turn the guard off or change what the broker runs. Run <code>install</code> again after you set <code>ssh_config</code>.</td>
+</tr>
+<tr>
+<td><code>allowWrite</code></td>
+<td>The broker's spool folder: a gateway call is a client in the sandbox that writes its request there.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Patterns</strong> (<code>[protected_paths] patterns</code>): with Claude Code 2.1.236 or newer, <code>install --user</code>
+also adds each pattern and <code>pattern/**</code> to <code>denyRead</code>, and on macOS to <code>denyWrite</code>. On macOS the
+shell can then count as confined with patterns. On Linux the sandbox cannot deny writes to a
+wildcard path, so the entries are an extra layer, the shell does not count as confined, and the
+hook refuses shell commands other than gateway calls. Protect plain folders (roots) on Linux.</p>
+<p><strong>The <code>--settings</code> file.</strong> <code>install --user --write</code> also writes
+<code>~/.config/phiward/claude-settings.json</code>, which sets <code>sandbox.enabled</code>, <code>failIfUnavailable</code> and
+<code>allowUnsandboxedCommands: false</code>. Start Claude Code with <code>claude --settings
+~/.config/phiward/claude-settings.json</code> (an alias in your shell startup file does it): a <code>false</code>
+given with <code>--settings</code> makes the sandbox admin-required, as managed settings would, so a
+repository's <code>.claude/settings.json</code> cannot turn the sandbox off, add excluded commands or
+writable folders, or re-open a folder you deny (Claude Code's
+<a href="https://code.claude.com/docs/en/sandboxing">sandboxing page</a>, "Repository settings under an
+admin-required sandbox"). The file and its folder are guard files. <code>doctor</code> checks the file, but
+cannot tell whether a session was started with it, and the hook does not rely on it: it keeps
+checking the user and project settings itself.</p>
+<p><strong>After an upgrade, run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again.</strong> A new phiward can add
+guard files; until the sandbox's <code>denyWrite</code> covers them, the shell does not count as confined
+and the hook refuses shell commands (<code>doctor</code> says so).</p>
+<p><strong>The shell is pinned to bash.</strong> <code>install --user</code> sets <code>env.CLAUDE_CODE_SHELL</code> to <code>/bin/bash</code>:
+the hook reads commands as bash does. A project's settings that
+set <code>CLAUDE_CODE_SHELL</code> or <code>CLAUDE_CODE_SHELL_PREFIX</code> make the hook refuse every call (a
+project's value wins over yours in Claude Code).</p>
+<p>An older phiward offered <code>--shell-prefix</code>, which ran every shell command through its own kernel
+profile. It is gone: Claude Code's sandbox confines the shell. If you used it, run
+<code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again; it removes the prefix setting (<code>doctor</code> warns
+while it is there, because every shell command would fail).</p>
+<p><strong><code>--block-outside-reads</code></strong> (optional, <code>--user</code>): sets
+<code>permissions.blockReadsOutsideWorkingDirectories</code> (Claude Code 2.1.257 or newer: Read, Grep and
+Glob refuse paths outside the working folders, in every permission mode) and
+<code>permissions.denyInsteadOfPrompting</code> (2.1.319 or newer: a call that would wait on a prompt is
+refused). Each is written only when <code>claude --version</code> is new enough. They are defence in depth
+around the project, not a protected-path rule: phiward's own checks are the same with or
+without them. <code>doctor</code> shows which are on.</p>
+<p><strong>Bash stops asking.</strong> With the sandbox on, Claude Code runs sandboxed Bash commands without a
+permission prompt (its <code>sandbox.autoAllowBashIfSandboxed</code>, true by default): the sandbox takes
+the place of the prompt. <code>deny</code> rules and narrow <code>ask</code> rules such as <code>Bash(git push *)</code> still
+apply. To be asked for each command, set <code>"autoAllowBashIfSandboxed": false</code> in the <code>sandbox</code>
+block of <code>~/.claude/settings.json</code>; phiward works the same either way.</p>
+<p>The shell counts as confined only when all of these hold:</p>
+<ul>
+<li>the settings in the table above are in force;</li>
+<li><code>excludedCommands</code> is empty;</li>
+<li><code>network.allowAllUnixSockets</code> is not true, and <code>network.allowUnixSockets</code> is empty (a socket
+  such as Docker's reaches a process outside the sandbox);</li>
+<li>no other project settings file that Claude Code may read turns part of the sandbox off;</li>
+<li>none of these is set, because each lets a command reach past the sandbox:
+  <code>filesystem.disabled</code>, <code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code>,
+  <code>allowNestedUserNamespaces</code>, <code>network.allowLocalBinding</code>, <code>network.allowMachLookup</code>;</li>
+<li>no <code>allowRead</code> entry re-opens a root;</li>
+<li>no protected patterns are configured.</li>
+</ul>
+<p>The hook reads the merged settings: managed settings and their <code>managed-settings.d</code> drop-ins,
+the project settings, and the user settings in <code>$CLAUDE_CONFIG_DIR</code> (or <code>~/.claude</code>). The
+project settings are <code>.claude/settings.json</code> in <code>$CLAUDE_PROJECT_DIR</code> and the
+<code>.claude/settings.local.json</code> that Claude Code reads: at the git repository's root, or a
+worktree's main checkout (the project folder when there is no repository, the root is your home
+folder, or the root is not yours). A <code>.git</code> entry counts only as git counts it: an empty <code>.git</code>
+folder is passed over, and a worktree's <code>.git</code> file must be named back by its worktree entry. Only these files can make the shell count as confined. Every
+other <code>settings.local.json</code> Claude Code may read, and a project settings file that does not
+parse as JSON, can only make it count as not confined. Settings passed with <code>--settings</code> cannot be seen. While the shell is confined, the
+hook relaxes its text check for shell commands: the kernel guards them. The file tools stay
+guarded by the hook only (see the
+<a href="../threat-model/#gaps-of-the-hook-alone">gaps of the hook alone</a>).</p>
+<p>The hook also refuses file-tool writes (Write, Edit) to the phiward config, code and status
+file, and to any <code>.claude/settings.json</code>, <code>.claude/settings.local.json</code> and the managed
+settings. The shell sandbox's <code>denyWrite</code> covers the phiward files for shell commands.</p>
+<p><strong>The strong form is managed settings.</strong> A repository can put <code>"disableAllHooks": true</code> or
+<code>excludedCommands</code> in its own <code>.claude/settings.json</code>. Managed settings (installed by an
+administrator; a repository cannot change them) with the same block prevent that. The file is
+<code>/Library/Application Support/ClaudeCode/managed-settings.json</code> on macOS and
+<code>/etc/claude-code/managed-settings.json</code> on Linux.</p>
+<h3 id="other-tools">Other tools<a class="headerlink" href="#other-tools" title="Permanent link">&para;</a></h3>
+<p>Only the Claude Code hook exists (<code>phiward hook claude</code>). It also reads the payload that
+GitHub Copilot sends when it runs hooks from <code>.claude/settings.json</code>.</p>
+<p>For another tool, run the whole tool under <code>phiward launch</code> (Mode B, <a href="../launch/">launch.md</a>):
+its shell, file tools and MCP servers then run in phiward's kernel profile.</p>
+<h2 id="5-start-the-broker">5. Start the broker<a class="headerlink" href="#5-start-the-broker" title="Permanent link">&para;</a></h2>
+<p>Open a terminal of its own, outside the agent tool, and run:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>broker
+</code></pre></div>
+<p>Keep it open while the agent works. For each request it prints three lines (its id with the
+subcommand, the command's exit code with its line counts, then the code it reported), never
+the output. Stop it with Ctrl-C. Only one broker runs at a time.</p>
+<ul>
+<li>It builds each command's environment from its own variables only: <code>PATH</code>, <code>HOME</code>, <code>USER</code>,
+  <code>LOGNAME</code>, <code>LANG</code>, <code>LC_*</code>, <code>TZ</code> and <code>TERM</code>. The program is found on your <code>PATH</code>, not on the
+  agent's.</li>
+<li><code>--max-jobs N</code> sets how many commands run at the same time (default 4). At most 8 requests per
+  job wait; past that, a request is refused as busy.</li>
+<li>It keeps its spool folder at <code>~/.phiward-spool</code> (or <code>$PHIWARD_SPOOL</code>), and its
+  status file at <code>~/.phiward/broker.json</code>. When the broker stops, it removes the status
+  file.</li>
+<li>It makes the spool folder with mode 0700. It refuses to start when the folder is a link, is
+  not yours, or has another mode, and it stops when the folder is moved.</li>
+</ul>
+<p>The broker must run in the same user account as the agent, with the same <code>HOME</code>,
+<code>PHIWARD_CONFIG</code> and <code>XDG_*</code> variables. <code>doctor</code> warns when they differ.</p>
+<p><strong>Or run it as a login service</strong>, so you do not keep a terminal open. You still decide that it
+runs; the agent cannot start, stop or change it (the service file is a guard file):</p>
+<div class="highlight"><pre><span></span><code><span class="o">(</span><span class="nb">cd</span><span class="w"> </span>~<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>phiward<span class="w"> </span>broker<span class="w"> </span>--service<span class="w"> </span>--write<span class="o">)</span>
+</code></pre></div>
+<p>It writes a LaunchAgent (macOS) or a systemd user service (Linux) that starts the broker at
+login and again if it stops, with the <code>PHIWARD_*</code> and <code>XDG_*</code> variables of the terminal you run
+it in. Run in your own terminal, it then loads the service, or restarts it when it runs already
+(<code>launchctl</code> or <code>systemctl --user</code>); without a terminal it only prints those commands. It also
+prints the commands that remove it. Its log is in <code>~/Library/Logs/phiward</code> (macOS) or
+<code>~/.local/state/phiward</code> (Linux), which no session can read; <code>phiward doctor</code> shows whether it
+is running. The gateway is then available whenever
+you are logged in; every request is still checked against your config.</p>
+<h2 id="6-pin-the-derived-folders">6. Pin the derived folders<a class="headerlink" href="#6-pin-the-derived-folders" title="Permanent link">&para;</a></h2>
+<p><code>phiward setup</code> does this each time it writes the config. After the
+guided first run, or after you edit the config by hand, do it yourself (<code>phiward doctor</code> notes
+when they are not pinned). In your own terminal:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pin
+</code></pre></div>
+<p>It records, now, the folders phiward protects without being told (the <code>.git</code> of a work tree
+that holds a root, snapshot folders next to a root, other mounts of the same data), so a file
+the agent plants later cannot hide them. It also lists the programs of <code>[broker] commands</code> as
+they are now, and approves them with the same yes. Then restart the broker, so it uses the new
+pins; <code>pin</code> ends by printing the command: <code>(cd ~ &amp;&amp; phiward broker --service --write)</code>.</p>
+<h2 id="7-check-with-doctor">7. Check with doctor<a class="headerlink" href="#7-check-with-doctor" title="Permanent link">&para;</a></h2>
+<p>In the top folder of each project where the agent works (it reads <code>.claude/</code> there):</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>doctor
+</code></pre></div>
+<p>It prints, among others:</p>
+<ul>
+<li>the config files in use, and the counts of roots, patterns and derived folders;</li>
+<li>whether the confinement backend works here;</li>
+<li>whether the sanitizer starts;</li>
+<li>the grants: the number of write places (and the ones skipped, with why), network yes or no,
+  the number of copy remotes;</li>
+<li>whether the broker runs, and whether it uses the same config as this shell;</li>
+<li>keys that a repo config set but may not set (they are ignored);</li>
+<li>for Claude Code: each settings level, whether phiward is wired with <code>onFailure: "block"</code>,
+  and whether the sandbox confines the shell (and if not, why not).</li>
+</ul>
+<p>Fix each line that starts with PROBLEM or WARNING (<code>doctor</code> exits with 0 even when there are
+WARNING lines). It also warns when the current folder is inside or above a protected path.</p>
+<p><code>doctor</code> shows the protected paths only as counts; add <code>--show-paths</code> to list them. It always
+names the files it reads, and a PROBLEM line can quote a path from the config. Run it in your
+own terminal when the paths are sensitive: when an agent runs it, the output reaches the model.</p>
+<h2 id="8-try-it-on-made-up-data">8. Try it on made-up data<a class="headerlink" href="#8-try-it-on-made-up-data" title="Permanent link">&para;</a></h2>
+<p>Do this once, with a made-up folder, before the agent sees real data. Make a folder with a fake
+file, for example <code>~/phiward-trial/FAKE-PT-0001.txt</code> holding <code>FAKE-CONTENT</code>, and add <code>~/phiward-trial</code> as a
+root (run <code>(cd ~ &amp;&amp; phiward setup)</code> again, and let it wire Claude Code again, so that the sandbox
+covers the new root). The broker must run (step 5). Then, in a project folder:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>run<span class="w"> </span>--<span class="w"> </span>ls<span class="w"> </span>~/phiward-trial
+</code></pre></div>
+<p>This must print <code>&lt;ENTRY&gt;</code> in place of the file name, then <code>run done: exit=0 ...</code>.</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>run<span class="w"> </span>--net<span class="w"> </span>--<span class="w"> </span><span class="nb">true</span>
+</code></pre></div>
+<p>With <code>net</code> not set, this must print <code>run refused: --net is not granted</code>.</p>
+<p>Then the real test, in the Claude Code desktop app: open a <strong>new</strong> session in a project folder,
+and ask the agent (1) to read <code>~/phiward-trial/FAKE-PT-0001.txt</code> with its Read tool, (2) to run
+<code>cat ~/phiward-trial/FAKE-PT-0001.txt</code>, (3) to run <code>phiward run -- wc -l ~/phiward-trial/FAKE-PT-0001.txt</code>.
+The first two must be refused; the third must print a count with the name masked. Also ask it to
+edit a file and run a script in the project: those must work. Remove the trial root
+afterwards, from the config (with <code>setup</code>) and from <code>denyRead</code> and <code>denyWrite</code> in the Claude Code
+settings (by hand).</p>
+<h2 id="9-per-repository">9. Per repository<a class="headerlink" href="#9-per-repository" title="Permanent link">&para;</a></h2>
+<h3 id="phiwardtoml"><code>.phiward.toml</code><a class="headerlink" href="#phiwardtoml" title="Permanent link">&para;</a></h3>
+<p>A repository can commit <code>.phiward.toml</code>. It can only add protection: more roots and
+patterns, built-in packs, protected branches, a stricter <code>unresolved</code>, a lower
+<code>inventory_limit</code>. It cannot grant anything: <code>write_to</code>, <code>net</code>, <code>remotes</code>, sanitize rules and
+pack files come from the user config only. A root that only a repo config adds is protected from
+the agent, but gateway commands cannot write to it. See
+<a href="../configuration/#the-repo-config">configuration.md</a>.</p>
+<h3 id="git-hooks">Git hooks<a class="headerlink" href="#git-hooks" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>git-hook<span class="w"> </span>install
+</code></pre></div>
+<p>This writes <code>pre-commit</code> and <code>pre-push</code> hooks in the current repository (it refuses to replace a
+hook that is not its own, unless you add <code>--force</code>).</p>
+<ul>
+<li><code>pre-commit</code> refuses a staged file inside a protected path, and an added line or file name
+  that holds an identifier.</li>
+<li><code>pre-push</code> refuses a push to a protected branch. It does nothing until you list branches in
+  <code>[git] protected_branches</code> (by hand; <code>setup</code> does not ask).</li>
+</ul>
+<p>They print only sanitized names, line numbers and placeholder words. A human can bypass them with
+<code>--no-verify</code>; an agent must not.</p>
+<h2 id="change-the-setup">Change the setup<a class="headerlink" href="#change-the-setup" title="Permanent link">&para;</a></h2>
+<p>Run <code>(cd ~ &amp;&amp; phiward setup)</code> again. It starts from the current file: for each list it shows what is
+there and asks whether to start that list again. Or edit the file by hand and run
+<code>phiward doctor</code>. A bad file makes every guarded action refuse until you fix it.</p>
+<p>After you add a root, wire the agent tool again
+(<code>(cd ~ &amp;&amp; phiward install claude --user --write)</code>), so that its sandbox lists it; <code>doctor</code> says when a root is not covered. After you
+remove a root, remove it from <code>denyRead</code> and <code>denyWrite</code> by hand (<code>install</code> only adds).</p>
+<p><strong>Restart the broker after every change.</strong> The broker takes a fingerprint of the config, the
+pins and the names and pack files the config names when it starts, and refuses requests when
+their content changes, until you restart it. Saving the same text again changes nothing. So a
+config that something else changes has no effect until you have read it. On macOS:
+<code>launchctl kickstart -k gui/$(id -u)/org.phiward.broker</code>; on Linux:
+<code>systemctl --user restart phiward-broker.service</code>; or stop <code>phiward broker</code> and start it
+again.</p>
+<h2 id="upgrade-from-agent-guards-010">Upgrade from agent-guards 0.1.0<a class="headerlink" href="#upgrade-from-agent-guards-010" title="Permanent link">&para;</a></h2>
+<p>phiward was called agent-guards before 0.2.0b1.</p>
+<ol>
+<li>Uninstall agent-guards first (<code>uv tool uninstall agent-guards</code>, or
+   <code>pipx uninstall agent-guards</code>): phiward also installs an <code>agent-guards</code> command, so the
+   installer refuses while the old one is there. Then install phiward (step 2).</li>
+<li>Move your config: <code>mv ~/.config/agent-guards ~/.config/phiward</code>. In each repository, rename
+   <code>.agent-guards.toml</code> to <code>.phiward.toml</code>. Until you do, phiward refuses, because the old files
+   may protect paths.</li>
+<li>Wire Claude Code again: <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code>. This replaces the
+   old hook entries.</li>
+<li>Delete <code>~/.agent-guards</code> (sessions cannot read it).</li>
+</ol>
+<p>The command <code>agent-guards</code> stays as an alias of <code>phiward</code> during the beta.</p>
+<h2 id="remove-phiward">Remove phiward<a class="headerlink" href="#remove-phiward" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Unwrap your MCP servers first: a wrapped entry names phiward's launcher, so it fails to start
+   once phiward is gone. <code>phiward mcp list</code> names them; <code>phiward mcp unwrap NAME</code> for each.</li>
+<li>Remove the phiward entries from the agent tool's settings (the backup from <code>install</code> has
+   the old file), and the <code>alias claude='claude --settings ...'</code> line if you added one.</li>
+<li>Stop the broker. If it runs as a login service: <code>launchctl bootout gui/$(id -u)
+   ~/Library/LaunchAgents/org.phiward.broker.plist</code> and remove that file (macOS), or
+   <code>systemctl --user disable --now phiward-broker.service</code> and remove the unit (Linux).</li>
+<li>In each project where you ran <code>phiward init</code>: remove the git hooks from <code>.git/hooks</code>, the
+   phiward section of <code>AGENTS.md</code>, and the phiward entries of <code>.claude/settings.json</code> and
+   <code>.claude/settings.local.json</code>.</li>
+<li>Uninstall: <code>uv tool uninstall phiward</code> (or <code>pipx uninstall phiward</code>), and the plugin if you
+   added it (<code>/plugin uninstall phiward</code>).</li>
+<li>Remove <code>~/.config/phiward</code>, <code>~/.phiward</code>, <code>~/.cache/phiward</code>, <code>~/.phiward-spool</code> and the
+   broker's log (<code>~/Library/Logs/phiward</code> on macOS, <code>~/.local/state/phiward</code> on Linux).</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../launch/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Mode B: phiward launch">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Mode B: phiward launch
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../configuration/" class="md-footer__link md-footer__link--next" aria-label="Next: Configuration">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
