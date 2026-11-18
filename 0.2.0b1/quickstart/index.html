@@ -1,0 +1,1551 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b1/quickstart/">
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../daily-use/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Quick start - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#quick-start" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Quick start
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-install-phiward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install phiward
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-set-it-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Set it up
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Set it up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#with-claude-codes-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Claude Code's help
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#by-hand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By hand
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-set-up-each-project-and-check-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Set up each project, and check it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-project-where-every-contributor-is-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A project where every contributor is protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-something-goes-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If something goes wrong
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-install-phiward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install phiward
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-set-it-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Set it up
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Set it up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#with-claude-codes-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        With Claude Code's help
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#by-hand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        By hand
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-set-up-each-project-and-check-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Set up each project, and check it
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-project-where-every-contributor-is-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A project where every contributor is protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-something-goes-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If something goes wrong
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="quick-start">Quick start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>For:</strong> anyone who sets phiward up for the first time.</li>
+<li><strong>Before:</strong> macOS or Linux, and Claude Code 2.1.295 or newer.</li>
+<li><strong>You will have:</strong> phiward installed, your protected folders set, Claude Code wired, and a test
+  that shows it works.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Where</th>
+<th>What you type</th>
+<th>You see</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. Install</td>
+<td>Terminal</td>
+<td><code>uv tool install ... phiward==0.2.0b1</code></td>
+<td><code>phiward --version</code> prints the version</td>
+</tr>
+<tr>
+<td>2. Set up</td>
+<td>Terminal (or the plugin)</td>
+<td><code>cd ~ &amp;&amp; phiward setup</code></td>
+<td>its questions, then the config it wrote</td>
+</tr>
+<tr>
+<td>3. Check</td>
+<td>the project folder</td>
+<td><code>phiward init</code>, then <code>phiward doctor</code></td>
+<td>no <code>PROBLEM</code> or <code>WARNING</code> line</td>
+</tr>
+</tbody>
+</table>
+<p>phiward keeps protected data (for example patient data) and your credentials out of what an AI
+coding agent sends to its model provider. The agent works on protected data only through
+phiward's <strong>gateway</strong> (<code>phiward run</code>, <code>phiward copy</code>). A <strong>broker</strong> runs those commands outside
+the agent and masks their output. Words in bold are explained in the <a href="../glossary/">glossary</a>.</p>
+<p><strong>What you get with the steps below:</strong> <strong>Mode A</strong>. The wiring in your user settings covers every
+Claude Code session, in every folder: phiward's hook checks each tool call, and Claude Code's
+sandbox keeps shell commands out of your protected folders. In each project where you work with
+protected data, you also run <code>phiward init</code> once (step 3): without it, a shell command in that
+project could rewrite the project's Claude Code settings. This is the right start for most
+people. The stronger <strong>Mode B</strong>
+(<code>phiward launch</code>) is for the terminal only; see <a href="../modes/">modes.md</a> when you need it.</p>
+<h2 id="1-install-phiward">1. Install phiward<a class="headerlink" href="#1-install-phiward" title="Permanent link">&para;</a></h2>
+<p>In Terminal:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>update-shell
+</code></pre></div>
+<p>The first command installs <code>uv</code>, a Python installer that needs no admin rights. If you have
+Homebrew, <code>brew install uv</code> does the same. The second gives phiward a Python of its own, which
+uv downloads once (not Xcode's, conda's or the system's, which another account or tool can
+change). The last command puts <code>~/.local/bin</code>, where <code>phiward</code>
+now is, on your <code>PATH</code>.</p>
+<p>Then <strong>open a new Terminal</strong>, and <strong>quit and reopen the Claude Code desktop app</strong> (Cmd-Q), so
+that both find <code>phiward</code>. In the new Terminal, <code>phiward --version</code> prints the version.</p>
+<p><strong>On Linux</strong>, install bubblewrap and socat first (phiward's kernel profile and Claude Code's
+sandbox need them), with your package manager, for example <code>sudo apt install bubblewrap socat</code>.
+Without admin rights, see <a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>.</p>
+<p>Do not install phiward into conda or another shared Python environment: phiward protects its own
+folder from the agent. Setup also makes phiward's own Python writable by you alone (it says
+which folders it changed); it never changes your home folder. If an older phiward is in conda, remove it there first
+(<code>pip uninstall phiward</code>).</p>
+<h2 id="2-set-it-up">2. Set it up<a class="headerlink" href="#2-set-it-up" title="Permanent link">&para;</a></h2>
+<p>Choose one way. Both do the same steps.</p>
+<h3 id="with-claude-codes-help">With Claude Code's help<a class="headerlink" href="#with-claude-codes-help" title="Permanent link">&para;</a></h3>
+<p>In a Claude Code session, type these two commands:</p>
+<div class="highlight"><pre><span></span><code>/plugin marketplace add msk-access/phiward#v0.2.0b1
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>/plugin install phiward@phiward
+</code></pre></div>
+<p>Then open a <strong>new</strong> session and type:</p>
+<div class="highlight"><pre><span></span><code>/phiward:setup
+</code></pre></div>
+<p>The agent walks you through the steps, and Claude Code asks you before each command. It asks
+<strong>you</strong> which folders hold protected data; it never looks into your folders to guess.</p>
+<p>It recommends that you write the config yourself, with the two commands of "By hand" below, which
+it gives you. It can also write the first config for you, while none exists. That is quicker,
+but then you trust the agent, in that session, to write exactly what you say: do it only in a
+new session that has not read web pages, other people's files or repositories you do not know.
+After the first config, only you can change it, in your own Terminal (<code>phiward setup</code>).</p>
+<p><strong>If the agent wrote the first config</strong>, it holds your protected folders (and copy remotes)
+only: no results folder, no list of programs, no network. The rest is yours, in your own
+Terminal: <code>cd ~ &amp;&amp; phiward setup</code>, and choose <strong>1</strong> (the steps below). It adds the results folder
+and the program list, wires Claude Code and starts the broker at every login. More about the plugin: <a href="../plugins/">plugins.md</a>.</p>
+<h3 id="by-hand">By hand<a class="headerlink" href="#by-hand" title="Permanent link">&para;</a></h3>
+<p>In Terminal, in your home folder (not inside a project), from a Terminal where your tools (for
+example <code>samtools</code> from conda) are found:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>phiward<span class="w"> </span>setup
+</code></pre></div>
+<p>It asks how you will use phiward. Choose <strong>1, real patient data</strong> (the default), and it sets
+safe defaults for you:
+- your protected folders (you type them);
+- a results folder inside the first one, where gateway commands write (Enter accepts it);
+- a list of programs that gateway commands may run on the data (<code>@genomics</code>), plus a folder of
+  your own scripts if you have one;
+- no network for gateway commands;
+- shell commands in Claude Code reach only the hosts you list (Enter says yes). <code>git push</code> and
+  <code>pip install</code> from a session fail until you list their hosts, such as <code>github.com</code>;
+- if you use an HPC cluster: its short name, login host, your user name and work folder.
+  <code>setup</code> writes phiward's ssh config and prints the lines to add to your <code>~/.ssh/config</code>.</p>
+<p>At the end it shows the whole config. Nothing is written until you say yes; then it writes the
+config and records the folders it protects with your roots (<code>phiward pin</code>). Then it asks three
+more questions:</p>
+<ol>
+<li><strong>"Approve these N program(s) as they are now?"</strong> It first lists each program of your
+   program list with its path. The broker runs only the programs you approve. On a first run,
+   with nothing marked, Enter says yes. When a program is marked <code>(changed)</code>, or a program in
+   your home folder hides a system program of the same name (<code>(shadows /usr/bin/NAME)</code>), the
+   default is No: read those lines first.</li>
+<li><strong>Wire Claude Code for every session?</strong> One yes: it shows the change to your user settings
+   (a long list: every protected path and credential, twice) and writes it (<code>(cd ~ &amp;&amp; phiward install claude --user --write)</code>).</li>
+<li><strong>Start the broker at every login?</strong> (A system without a service manager for your login,
+   such as a container or WSL without systemd, cannot: <code>setup</code> says so, and you run
+   <code>phiward broker</code> yourself in a terminal that stays open.)</li>
+</ol>
+<p>Say yes to each. The wiring ends with an <code>alias claude='claude --settings ...'</code> line. Add it to
+your shell startup file (for example <code>~/.zshrc</code>) yourself, if you start <code>claude</code> in Terminal:
+then a repository's settings cannot turn the sandbox off. Without it phiward still works; the
+hook checks the project's settings itself (<a href="../setup/#claude-code">setup.md</a>).
+(Choose 2 to try phiward on made-up data with open defaults, or 3 to choose every setting.)</p>
+<p><strong>When you change your config later</strong>, run <code>(cd ~ &amp;&amp; phiward setup)</code> again: it restarts the broker for
+you. After a change by hand, restart it yourself: the broker refuses requests after the config
+changes, and the refusal names the command.</p>
+<p>A team can share its settings in a template: <code>phiward setup --from team.toml</code> fills in the
+program list, packs and HPC hosts; each person adds their own folders.</p>
+<h2 id="3-set-up-each-project-and-check-it">3. Set up each project, and check it<a class="headerlink" href="#3-set-up-each-project-and-check-it" title="Permanent link">&para;</a></h2>
+<p>In Terminal, in each project folder where you work with protected data, run once:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>init
+</code></pre></div>
+<p>It only adds; it changes nothing that is there. It adds the phiward rules for agents to
+<code>AGENTS.md</code>, a <code>.gitignore</code> line, the project's Claude Code settings (<code>.claude/settings.json</code>
+and <code>.claude/settings.local.json</code>) and git hooks. The project settings stop a shell command
+from rewriting them. In a repository that is not yours, do not commit these files: list the
+new ones in <code>.git/info/exclude</code> (for example <code>AGENTS.md</code> and <code>.claude/</code>). Then, in the same
+folder:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>doctor
+</code></pre></div>
+<p>When all is well, you see lines such as:</p>
+<div class="highlight"><pre><span></span><code>protected roots: 1, patterns: 0
+  sandbox confines the shell: yes
+broker: running
+</code></pre></div>
+<p>Fix each <code>WARNING</code>; each one says how. A <code>NOTE</code> is for your information. Before Claude Code is
+wired, one line gives the next step; <code>phiward doctor --verbose</code> lists every check. Then open a
+<strong>new</strong> Claude Code session in that folder and ask the agent to read a file in a protected
+folder: it must be refused. Then ask it to run <code>phiward run -- wc -l &lt;that file&gt;</code>: you get a
+line count, with the file name masked. (If you said No to the login service, start the broker
+first: <code>phiward broker</code> in a Terminal of its own.)</p>
+<p><strong>If you chose 2 or 3 and now use real patient data</strong>, list the programs that gateway commands
+may run (<code>[broker] commands</code>, see <a href="../configuration/">configuration.md</a>): run <code>(cd ~ &amp;&amp; phiward setup)</code>
+again and choose 1.</p>
+<p>Next: <a href="../daily-use/">daily-use.md</a> tells you how to work with the agent on protected data.</p>
+<h2 id="a-project-where-every-contributor-is-protected">A project where every contributor is protected<a class="headerlink" href="#a-project-where-every-contributor-is-protected" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Each contributor does steps 1 to 3 above.</li>
+<li>Someone runs, once, in the project folder:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>init<span class="w"> </span>--root<span class="w"> </span>data/protected
+</code></pre></div>
+<p><code>--root</code> names the project's own protected folders, if it has any. <code>init</code> only adds; it
+   changes nothing that is there. It adds:
+   - the phiward rules for agents to <code>AGENTS.md</code>;
+   - the protected folders to <code>.phiward.toml</code>;
+   - the project's Claude Code settings: the shared part in <code>.claude/settings.json</code>, the
+     personal part in <code>.claude/settings.local.json</code>;
+   - a <code>.gitignore</code> line for the personal file;
+   - git hooks that refuse commits holding protected names or identifiers.
+3. Commit <code>AGENTS.md</code>, <code>.phiward.toml</code>, <code>.gitignore</code> and <code>.claude/settings.json</code>. <strong>Never</strong>
+   commit <code>.claude/settings.local.json</code>.
+4. Each other contributor runs <code>phiward init</code> once too (for the personal file and the git
+   hooks), then <code>phiward doctor</code>.</p>
+<h2 id="hpc">HPC<a class="headerlink" href="#hpc" title="Permanent link">&para;</a></h2>
+<p>The agent never uses <code>ssh</code> itself. It runs approved programs on the cluster with
+<code>phiward run --remote</code>, and moves files with <code>phiward copy</code>. Both go through <strong>your own</strong> shared
+SSH connection, which you open in Terminal (for example <code>kinit</code>, then <code>ssh -fN hpc</code>). No agent
+request can read your key or Kerberos ticket. The one-time setup is in <a href="../hpc/">hpc.md</a>.</p>
+<h2 id="if-something-goes-wrong">If something goes wrong<a class="headerlink" href="#if-something-goes-wrong" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>What you see</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Every tool call is refused with "phiward is not installed or not on PATH"</td>
+<td>The app does not find <code>phiward</code>. Quit the app (Cmd-Q) and open it again. If that does not help, check in Terminal that <code>command -v phiward</code> prints <code>~/.local/bin/phiward</code>, and run <code>uv tool update-shell</code> again.</td>
+</tr>
+<tr>
+<td><code>phiward run</code> says no broker is running</td>
+<td>Start it at every login: <code>(cd ~ &amp;&amp; phiward broker --service --write)</code> in Terminal. Or run <code>phiward broker</code> in a Terminal and keep it open.</td>
+</tr>
+<tr>
+<td>A command the agent needs is refused</td>
+<td>The refusal says what to run instead. See <a href="../daily-use/">daily-use.md</a>.</td>
+</tr>
+<tr>
+<td><code>phiward doctor</code> shows a <code>PROBLEM</code></td>
+<td>Fix it before you use the agent; the line says how.</td>
+</tr>
+<tr>
+<td>A wrapped MCP server "failed to connect", or <code>doctor</code> says phiward's own files fail its self-check</td>
+<td>Usually after <code>uv tool upgrade</code> with umask 002: run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again (it makes phiward's own Python writable by you alone), then start Claude Code again. The WARNING names any other step.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href=".." class="md-footer__link md-footer__link--prev" aria-label="Previous: Home">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Home
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../daily-use/" class="md-footer__link md-footer__link--next" aria-label="Next: Daily use">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Daily use
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

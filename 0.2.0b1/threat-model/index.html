@@ -1,0 +1,2595 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b1/threat-model/">
+      
+      
+        <link rel="prev" href="../modes/">
+      
+      
+        <link rel="next" href="../developer/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Threat model and limits - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#threat-model-and-limits" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Threat model and limits
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#for-reviewers-the-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For reviewers: the summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#against-whom-read-this-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Against whom: read this first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-shell-sandbox-the-strongest-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shell sandbox: the strongest layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-gateway-a-controlled-opening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gateway: a controlled opening
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grants-and-the-safe-setting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grants and the safe setting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-nothing-asks-at-run-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why nothing asks at run time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hook-a-first-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The hook: a first layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-not-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is not protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gaps-of-the-hook-alone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaps of the hook alone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduce-the-risk-every-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reduce the risk (every mode)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-a-a-claude-code-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode A: a Claude Code session
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mode A: a Claude Code session">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-hook-trusts-a-wrapped-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the hook trusts a wrapped MCP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-b-phiward-launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode B: phiward launch
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#for-reviewers-the-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For reviewers: the summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#against-whom-read-this-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Against whom: read this first
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-boundaries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The boundaries
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The boundaries">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-shell-sandbox-the-strongest-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The shell sandbox: the strongest layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-gateway-a-controlled-opening" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gateway: a controlled opening
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grants-and-the-safe-setting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Grants and the safe setting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-nothing-asks-at-run-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why nothing asks at run time
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hook-a-first-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The hook: a first layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-not-protected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is not protected
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gaps-of-the-hook-alone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaps of the hook alone
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reduce-the-risk-every-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reduce the risk (every mode)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-a-a-claude-code-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode A: a Claude Code session
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mode A: a Claude Code session">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-hook-trusts-a-wrapped-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the hook trusts a wrapped MCP server
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mode-b-phiward-launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mode B: phiward launch
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="threat-model-and-limits">Threat model and limits<a class="headerlink" href="#threat-model-and-limits" title="Permanent link">&para;</a></h1>
+<p><strong>For:</strong> people who decide whether phiward is enough for their data.</p>
+<p>This page says what is protected, against whom, and where the limits are.</p>
+<h2 id="for-reviewers-the-summary">For reviewers: the summary<a class="headerlink" href="#for-reviewers-the-summary" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>What leaves the machine:</strong> what the agent tool sends to its model provider: your prompts, the
+  files and output the agent reads, and the masked output of gateway commands. phiward keeps
+  protected files, credentials and unmasked gateway output out of that.</li>
+<li><strong>The network is open by default in both modes.</strong> phiward does not stop the agent from sending
+  what it can read. It stops the agent from reading protected data. In Mode A, <code>[network] limit</code>
+  lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it. The
+  WebFetch tool, MCP servers, commands a project excludes from the sandbox, and Mode B stay open.
+  Each listed host is itself a way out (a push, a gist, a host behind a shared CDN).</li>
+<li><strong>Trusted:</strong> the operator, the operator's terminal, the user config, the broker, the operating
+  system and its sandbox (Seatbelt on macOS; bubblewrap, seccomp and Landlock on Linux), and Claude
+  Code's own sandbox and permission rules in Mode A.</li>
+<li><strong>Not trusted:</strong> the agent, everything it writes, and the code it runs.</li>
+<li><strong>Masking hides names and identifiers, not other content.</strong> Gateway commands should print counts
+  and summaries, not records.</li>
+<li><strong>What stops what.</strong> The kernel is the strongest guard:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>What the agent tries</th>
+<th>Mode A stops it with</th>
+<th>Mode B stops it with</th>
+<th>The main limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A shell command reads protected data or the hidden list</td>
+<td>the kernel: Claude Code's sandbox</td>
+<td>the kernel: phiward's profile</td>
+<td>other hard links and other mounts (<a href="#the-shell-sandbox-the-strongest-layer">the shell sandbox</a>)</td>
+</tr>
+<tr>
+<td>A file tool (Read, Grep, Glob, Edit) reads them</td>
+<td>the hook and Claude Code's permission rules, not the kernel</td>
+<td>the kernel</td>
+<td>a spelling that both miss (<a href="#mode-a-a-claude-code-session">Mode A</a>)</td>
+</tr>
+<tr>
+<td>An MCP server or a hook of the tool reads them</td>
+<td>nothing, unless the server is wrapped in <code>phiward launch --</code></td>
+<td>the kernel</td>
+<td>not wrapped, they run with your rights (<a href="#gaps-of-the-hook-alone">gaps of the hook alone</a>)</td>
+</tr>
+<tr>
+<td>A gateway command prints protected data</td>
+<td>masking of names and identifiers</td>
+<td>the same</td>
+<td>other content, and a command written to leak (<a href="#the-gateway-a-controlled-opening">the gateway</a>)</td>
+</tr>
+<tr>
+<td>It sends out what it can read</td>
+<td>nothing by default; <code>[network] limit</code> for shell commands only</td>
+<td>nothing: the network is open</td>
+<td>each listed host is itself a way out</td>
+</tr>
+<tr>
+<td>It uses credentials that are not files (the Keychain, tokens in the environment)</td>
+<td>nothing: a file list does not hide them</td>
+<td>Linux: the kernel keyrings are blocked; macOS: the Keychain stays reachable. Only a short list of environment variables is passed</td>
+<td><a href="#mode-a-a-claude-code-session">Mode A</a>, <a href="#mode-b-phiward-launch">Mode B</a></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>What was tested</strong>, on made-up data:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mode A: the real Claude Code desktop app, wired by <code>install claude</code></td>
+<td>macOS</td>
+<td>reads of protected data and credentials refused (Read tool, <code>cat</code>, Monitor), <code>ssh</code> to HPC failed, normal work unaffected</td>
+</tr>
+<tr>
+<td>Mode A with the plugin only</td>
+<td>macOS, desktop app</td>
+<td>session note given, reads refused by the hook; no sandbox or permission rules without <code>install</code></td>
+</tr>
+<tr>
+<td>Mode B: the real Claude Code under <code>phiward launch</code></td>
+<td>macOS</td>
+<td>file tools and shell refused protected data; gateway output masked; skills and an MCP server carried over</td>
+</tr>
+<tr>
+<td>An MCP server wrapped in <code>phiward launch</code>: a small stdio server driven the way Claude Code drives one, and on Linux the published <code>@modelcontextprotocol/server-filesystem</code> 2.3.0</td>
+<td>macOS, Linux</td>
+<td>works; refused protected data and credentials. Wrapped, the published server read ordinary files and could neither read nor list a protected folder; unwrapped, it read both</td>
+</tr>
+<tr>
+<td>HPC through the shared SSH connection</td>
+<td>macOS to a real cluster</td>
+<td>remote runs, push, pull, refused push of <code>~/.ssh</code>, refusal without the connection</td>
+</tr>
+<tr>
+<td>The full test suite (over 1,000 tests)</td>
+<td>macOS; Linux (bubblewrap)</td>
+<td>passes</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Not tested:</strong></li>
+<li>the real Claude Code on Linux (only the test suite);</li>
+<li><code>phiward launch</code> driven from the app with Remote Control;</li>
+<li>a published MCP server under <code>launch</code> on macOS (on Linux it was);</li>
+<li>a protected folder on a mounted HPC volume;</li>
+<li><code>[network] limit</code> in a live Claude Code session (the settings it writes are tested; Claude
+    Code enforces them);</li>
+<li>other agent tools than Claude Code.</li>
+<li><strong>Independent reviews:</strong> each part had adversarial reviews before this release, and each finding
+  was fixed or is listed on this page as a limit.</li>
+</ul>
+<h2 id="what-is-protected">What is protected<a class="headerlink" href="#what-is-protected" title="Permanent link">&para;</a></h2>
+<p>The asset is protected data (for example patient data, sample identifiers, file names under a
+protected folder). The leak path is <strong>tool output</strong>: everything an agent's tools print goes to the
+model provider. phiward keeps protected data out of that output. Its git hooks also keep protected
+files and identifiers out of commits, and pushes off protected branches. They work against a
+careless agent: a deliberate commit with <code>--no-verify</code> (or a changed <code>core.hooksPath</code>) skips them.</p>
+<h2 id="against-whom-read-this-first">Against whom: read this first<a class="headerlink" href="#against-whom-read-this-first" title="Permanent link">&para;</a></h2>
+<p><strong>This release (v0.2.0b1) has two modes</strong> (<a href="../modes/">modes.md</a>), and they protect against different
+agents:</p>
+<ul>
+<li><strong>Mode B (<code>phiward launch</code>)</strong> is meant as a boundary against a hijacked agent, for what is on this
+  machine. A hijacked agent is one under prompt injection that tries on purpose to get the data out.
+  The whole tool, its file tools, MCP servers and hooks included, cannot read protected data or the
+  hidden list. Its limits are in <a href="#mode-b-phiward-launch">Mode B</a> below.</li>
+<li><strong>Mode A (a Claude Code session wired by the hook)</strong> confines Bash with Claude Code's own sandbox.
+  It refuses protected data and the hidden list to the file tools inside Claude Code (the hook and
+  permission rules, not the kernel). It stops a careless agent and makes a deliberate one work hard.
+  It is not a kernel boundary for the file tools, and hooks and MCP servers that are not wrapped run
+  with your rights. See <a href="#mode-a-a-claude-code-session">Mode A</a>.</li>
+<li><strong>The hook alone</strong> (without Claude Code's sandbox or <code>launch</code>) guards against a careless agent
+  only: <a href="#gaps-of-the-hook-alone">the gaps of the hook alone</a>.</li>
+</ul>
+<p>In every mode, the agent works on protected data only through the gateway, and the gateway's masking
+hides names and identifiers, not other content.</p>
+<p>The operator, the operator's terminal and the user config are trusted. The agent can run any command
+it likes in its own shell, write any file it can write, and choose what it asks the gateway to run.</p>
+<h2 id="the-boundaries">The boundaries<a class="headerlink" href="#the-boundaries" title="Permanent link">&para;</a></h2>
+<h3 id="the-shell-sandbox-the-strongest-layer">The shell sandbox: the strongest layer<a class="headerlink" href="#the-shell-sandbox-the-strongest-layer" title="Permanent link">&para;</a></h3>
+<p>The kernel confines the agent's <strong>shell</strong>. In Mode A it is Claude Code's sandbox, with the entries
+<code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> writes. In Mode B (<code>phiward launch</code>) it is
+phiward's own profile, for the whole tool. An agent shell command cannot read or write anything in a
+protected root (or, on macOS, a pattern match), the hidden list, or the phiward config, code or
+status file. Claude Code's sandbox also keeps its own settings files, <code>.mcp.json</code>, the project's
+<code>.git/config</code> and hooks, and the shell startup files from being written. Git's other control files
+are a known limit (see "Git's control files" below). Links, letter case, nested shells and child
+processes are covered for ASCII paths, because the kernel does the check. Exceptions (gaps 8, 9):
+other hard links to a protected file, other mounts of the same file system, and a root spelled
+<code>/System/Volumes/Data/...</code>. phiward does not confine the shell itself in Mode A. It checks that
+Claude Code's settings confine it (<code>doctor</code>), and the hook refuses shell commands when they do not.</p>
+<p>It does not cover everything: the agent tool's own file tools (Read, Grep, Glob, Edit), its MCP
+servers and its hooks run <strong>outside</strong> the kernel profile, and a few path spellings and pattern forms
+are not enforced by the kernel. See <a href="#gaps-of-the-hook-alone">the gaps of the hook alone</a>.</p>
+<h3 id="the-gateway-a-controlled-opening">The gateway: a controlled opening<a class="headerlink" href="#the-gateway-a-controlled-opening" title="Permanent link">&para;</a></h3>
+<p>The gateway (<code>phiward run</code>, <code>phiward copy</code>) runs the command the agent asks for, with read access to
+the roots. What it can do besides is fixed by the user config:</p>
+<table>
+<thead>
+<tr>
+<th>Channel</th>
+<th>Default</th>
+<th>Opened by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Output to the agent</td>
+<td>always, sanitized</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Writes</td>
+<td>its private scratch folder only (protected roots are read only)</td>
+<td><code>[broker] write_to</code> + <code>--write-to</code> (may sit inside a root); a copy's own destination</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>none</td>
+<td><code>[broker] net = true</code> + <code>--net</code>; a copy to a <code>[copy] remotes</code> entry</td>
+</tr>
+<tr>
+<td>Other processes</td>
+<td>none (see below)</td>
+<td>macOS: <code>net = true</code> also allows name lookups; unix sockets stay blocked</td>
+</tr>
+<tr>
+<td>Its environment</td>
+<td>the broker's allow list only</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>The program runs from the broker's <code>PATH</code>, which keeps only folders the agent cannot write. A folder
+is dropped when it is relative, writable by others, inside a project, or a folder the agent's
+sandbox may write. Those are a temp folder (inside your home folder too), the spool, and the
+allowWrite and additionalDirectories folders of your own and the managed settings. The broker does
+not know a project's own settings. So a project whose settings open a <code>PATH</code> folder of yours to
+writes (allowWrite <code>~/bin</code>) lets the agent put a program there, and a gateway call may run it (still
+confined, with its output sanitized). Keep tools out of folders a project opens.</p>
+<p>"Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
+processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.</p>
+<p>The sanitizer masks protected paths, entry names under the roots, and identifiers from the packs.
+This stops <strong>accidental</strong> leaks from ordinary tools (<code>ls</code>, <code>find</code>, error messages, tracebacks). It
+also covers a name that a tool writes with escapes: git's octal quoting (<code>\303\274</code>), JSON's and
+Python's <code>\u00fc</code> and <code>\xfc</code>, and a URL's <code>%C3%BC</code>. A line whose decoded form holds a name is withheld.
+It does not stop a command that is written to leak: <code>base64</code>, HTML entities, splitting a name into
+parts, or printing content that is not an identifier all get past it.</p>
+<h3 id="grants-and-the-safe-setting">Grants and the safe setting<a class="headerlink" href="#grants-and-the-safe-setting" title="Permanent link">&para;</a></h3>
+<p>A grant gives code that the agent chooses that capability. With a write place, that code can put
+what it read where something else may pick it up. With the network, it can send what it read
+anywhere. A copy remote is a place where protected data may go.</p>
+<p><strong>Protected roots are read only for the gateway.</strong> It writes only in its scratch folder, in the
+<code>write_to</code> folders you grant (which may sit inside a root), and at a copy's destination. A grant is
+refused where your own tools load code later (the home folder or above it, its dot-folders,
+<code>~/Library</code>, <code>PATH</code> folders) and where it would hold a names or pack file. A copy remote must name a
+work folder. A copy never goes into a dot-folder. A push refuses a destination that is your home
+folder on the cluster or above it (checked there, by real path). A push never sends files that run
+at login (<code>.bashrc</code>, <code>.ssh</code>, <code>.gitconfig</code>, <code>.envrc</code>) or any dot-name at the top of its destination.</p>
+<p><strong>The broker takes the config it started with.</strong> It records a fingerprint of the user config, the
+pins, and the names and pack files the config names at start, and refuses every request after their
+content changes, until the operator restarts it. So a change that the agent manages to make does not
+take effect unseen. The repository config (<code>.phiward.toml</code>) is not part of it: it can only add
+protection. A request that starts just as the config changes may still use the new one.</p>
+<p><strong>Terminal checks are a convenience.</strong> <code>setup</code>, <code>pin</code> and <code>carryover add|accept|reset</code> refuse to run
+without a terminal, but a program can fake one. What stops an agent from changing them is that
+Claude Code's sandbox (Mode A) or the kernel profile (Mode B) denies writes to the config,
+<code>~/.phiward</code> and the service file. A plugin-only session, with no sandbox, has only the hook.</p>
+<p><strong>To make the gateway itself as tight as it can be, set <code>write_to</code> empty, <code>net</code> false, <code>remotes</code>
+empty.</strong> Then the only way out of the gateway is its sanitized output, and the only leak through it
+is a command written to encode data on purpose. This does not make the hook alone safe against a
+hijacked agent: the file tools, MCP servers and hooks run outside the kernel profile (gaps 1–6).</p>
+<h3 id="why-nothing-asks-at-run-time">Why nothing asks at run time<a class="headerlink" href="#why-nothing-asks-at-run-time" title="Permanent link">&para;</a></h3>
+<p>Earlier versions asked the operator to approve grants, first on the broker's terminal, then in a
+native dialog. Reviews showed that both are in reach of the agent's code. It runs in the same user
+session, so it can write to the terminal, draw a window over the dialog, or (on X11, or with
+Accessibility permission on macOS) send it input. Approving a command's words does not approve the
+code it loads (its scripts, <code>.git/config</code>), which the agent can write. So grants are now decided
+ahead of time, in the user config. The agent's shell cannot write it; the agent's file tools are
+refused by the hook for its usual spelling only (gap 2). <code>phiward setup</code> is a dialogue, but a
+first-time one, in the operator's own terminal. Its result is a file the operator reads before it is
+written.</p>
+<h3 id="the-hook-a-first-layer">The hook: a first layer<a class="headerlink" href="#the-hook-a-first-layer" title="Permanent link">&para;</a></h3>
+<p>The hook guards the file tools, which a shell sandbox does not cover, and checks shell command text.
+Where the shell is kernel-confined, the text check is relaxed for shell commands; that relaxation
+trusts Claude Code settings files that phiward does not itself deny (gap 17). For the file tools,
+the hook is the only guard, and it checks paths as text: that is enough for a careless agent, not
+for one that tries (see gaps 1 and 2 below).</p>
+<p><strong>Without the kernel, shell commands are refused; the text check is best effort.</strong> Where no kernel
+confines the shell (Claude Code's sandbox off or not there), the hook refuses its commands by
+default (<a href="../configuration/#shell">configuration.md</a>). Only with <code>[shell] best_effort</code> on does it
+check their text instead. Shell text cannot be read completely, so that check is a first layer: for
+real data, use the sandbox or <code>phiward launch</code>, where the kernel decides. What the text check does:</p>
+<ul>
+<li>It refuses (by <code>unresolved</code>, deny by default) every word it cannot read whole:</li>
+<li>a path built from <code>$(...)</code>, backticks, a special parameter (<code>$1</code>, <code>$_</code>, <code>${1:-x}</code>, <code>$((...))</code>,
+    <code>$[...]</code>) or variables the command sets, joined to other text (<code>ph$(echo i)</code>, <code>X=../ph; Y=i/f;
+    cat $X$Y</code>);</li>
+<li>a variable whose value is made over several steps (<code>X+=</code>, <code>printf -v</code>, <code>read</code>, <code>mapfile</code>, two
+    assignments);</li>
+<li>any <code>$'...'</code>, and a <code>${NAME...}</code> with a modifier (<code>${HOME:-x}</code>);</li>
+<li><code>cd -</code>, <code>popd</code>, a <code>cd</code> to a folder built from variables, <code>find -execdir</code>, a <code>cd</code> word it does
+    not read as a command, and <code>$PWD</code> after a <code>cd</code> in the line;</li>
+<li>a <code>..</code> after a folder that does not exist yet and, in a line that runs <code>ln</code>, any path through a
+    name that does not exist yet (the line may make it a link);</li>
+<li>a zsh or extglob group outside quotes, comments and heredocs, and text it cannot parse.</li>
+<li>It follows the folder a command runs in: <code>cd</code> and <code>pushd</code> after a keyword or in a group or
+  function (<code>then cd d</code>, <code>{ cd d; }</code>), <code>cd</code> with no folder (<code>~</code>), and the folder options of <code>git
+  -C</code>, <code>make -C</code>/<code>--directory</code>, <code>tar -C</code> and <code>env -C</code>/<code>--chdir</code>. A line of plain steps (<code>;</code>, <code>&amp;&amp;</code>)
+  reads each step from the folder the steps before it left (<code>cd build &amp;&amp; cmake ..</code>); any other line
+  reads every step from every folder it names.</li>
+<li>It reads shell code passed as text: the string after <code>sh -c</code> (and <code>bash</code>, <code>zsh</code>, <code>dash</code>, <code>ksh</code>),
+  the words of <code>eval</code>, and the heredocs a shell reads.</li>
+<li>It counts a dot glob (<code>.*</code>, <code>.?</code>) as <code>..</code> too: bash before 5.2 expands it so.</li>
+<li>It lets through, as ordinary text: <code>$(...)</code> and variables in the words of an <code>echo</code> or <code>printf</code> at
+  the top of a line that defines no function and does not pipe their output on, <code>$(pwd)</code> and <code>$PWD</code>
+  when the line does not change folder, and a <code>cd</code> to exactly one <code>$(...)</code>. A <code>for</code> loop's variable
+  is like any other variable the line sets.</li>
+<li>It accepts, and only the sandbox stops: a path printed by a command (<code>cat $(printf ...)</code>, <code>cd
+  "$(cmd)"</code>) or built by an interpreter (<code>python -c</code>, <code>awk</code>); a word that is exactly one <code>$(...)</code> is
+  judged by the command inside it.</li>
+<li>Not yet covered, so only the sandbox or <code>launch</code> stops them: commands run through another program
+  (a wrapper in front of <code>sh -c</code> or <code>ln</code>), some ways of changing the folder a command runs in,
+  recursive commands that follow links, names made by moving or copying, and shell code given on
+  standard input. Closing them is planned.</li>
+</ul>
+<p>In the sandbox all of these are the kernel's to stop. A path whose written form passes through a
+protected folder (<code>../phi/x/../../repo</code>) is refused in every mode, whether or not the names on the
+way exist.</p>
+<p><strong>A wildcard gets one verdict, whatever a protected folder holds.</strong> Who stops a read decides what
+the hook does with a glob:</p>
+<ul>
+<li><strong>A shell in Claude Code's sandbox:</strong> the kernel stops a read of a protected path or a credential,
+  so the hook decides from the pattern alone, against your roots and patterns, and never lists the
+  disk. <code>cat /data/p*/G*</code> and <code>cat /data/p*/F*</code> are both refused; <code>cat lea*</code> (a link the agent made
+  to protected data) is allowed by the hook and refused by the kernel.</li>
+<li><strong>A shell without the sandbox, and the file tools:</strong> the hook is the guard. It decides from the
+  pattern against your roots, patterns and the hidden list (<code>*</code> names dot entries too), then walks
+  where the glob can go and checks every link a glob part matches: its target, then the rest of the
+  glob from there. A link to a folder is followed, as the shell follows it. A literal part is looked
+  up by name (a folder that cannot be listed hides nothing); names are compared in every case and
+  Unicode form; a file or folder that is a root under another name (a mount, a hard link) counts. No
+  folder that is, or can lead the glob into, a protected path is listed. Under <code>**</code>, a link into a
+  protected folder refuses the glob (the shell would walk into it only if it is a folder, and only
+  the protected folder knows that). More than 200 000 names listed (each folder counted once) and
+  entries looked at, or <code>..</code> after a wildcard, are refused with their own reason; nothing is cut
+  short. In the sandbox, <code>..</code> after a wildcard is read as text over the whole path
+  (<code>repo/*/../../phi</code> is <code>phi</code>). Bracket classes and <code>?</code> count as any text (a superset); <code>.</code> parts
+  are dropped as the shell drops them. A file tool's glob is also read with its braces expanded,
+  backslashes dropped and extglob groups (<code>@(a)</code>, <code>!(a)</code>, <code>(a|b)</code>, nested ones too) as <code>*</code>; a group
+  that spans folders (<code>(a/b|c)</code>) is refused.</li>
+</ul>
+<p><strong>A project's settings can run code before phiward starts.</strong> Claude Code applies a project's <code>env</code>
+to hooks, and starts a hook's command with <code>sh -c</code>. A project's settings can add hooks of their own,
+and its <code>env</code> can make that shell run code (<code>SHELLOPTS=xtrace</code> with a <code>PS4</code> that holds <code>$(...)</code>),
+before phiward runs. So phiward cannot guard against project settings it did not write. The guard
+keeps the agent from writing them (<code>.claude/settings*.json</code> and <code>.mcp.json</code>, by the hook outside the
+sandbox and by the sandbox inside it). You trust the project settings you bring in (gap 17).</p>
+<p><strong>What Claude Code runs as code, and where the file tools write (Mode A).</strong> The hook sees every tool
+(its matcher is <code>*</code>; about 85 ms per call). Claude Code's built-in tools that only carry text
+(Agent, Task, TodoWrite, AskUserQuestion, plan mode, SendMessage, ToolSearch) are not text-checked:
+a subagent's own tool calls reach the hook. For a write, in this order:
+1. Refused in every mode, by every writer the hook sees: phiward's own files, the shell's start-up
+   files, every Claude Code settings file and <code>.mcp.json</code>, anything inside a <code>.git</code> folder and any
+   file named <code>.git</code>, <code>~/.gitconfig</code> and <code>~/.config/git/</code>, and a <code>phiward</code> in any PATH folder. Why
+   <code>.git</code>: git runs what its config, hooks and <code>commondir</code> name, and Claude Code runs git outside
+   its sandbox. A writer the hook sees is a file tool, or an MCP server's tool that names the file
+   itself. The hook does not see a bare server's tool that moves a whole folder above one. A bare
+   server runs with your rights anyway: wrap it.
+2. Asked or refused: what Claude Code runs as code, and what an editor or a tool runs. Claude Code's
+   code is skills, subagents, commands, hooks, workflows, plugins, routines, <code>launch.json</code> and
+   <code>scheduled_tasks.json</code>, under any <code>.claude</code> folder but its <code>worktrees</code>, and under the user config
+   folder. An editor's or a tool's is any <code>.vscode</code> or <code>.idea</code> folder, <code>.gitmodules</code>, <code>.ripgreprc</code>.
+   The hook asks you in the modes known to prompt (<code>default</code>, <code>acceptEdits</code>, <code>plan</code>). It refuses in
+   every other (<code>bypassPermissions</code>, <code>dontAsk</code>, <code>auto</code>, a missing mode). A skill or subagent may
+   hold hooks that run with your rights: allow it only after reading it.
+3. A file tool's write outside the folders the sandbox lets the shell write (the project, the temp
+   folder, <code>allowWrite</code>, <code>additionalDirectories</code>) and Claude Code's memory and plans folders: asked
+   or refused, as in 2. To stop the prompts for a folder, add it to
+   <code>permissions.additionalDirectories</code> in your user settings.</p>
+<p>The app's own tools that start the project's code are asked or refused as in 2. They are the
+preview, the simulator's <code>build</code> and its <code>launch</code> action, and changing the session's folder. The
+preview's <code>preview_start</code> runs the command <code>.claude/launch.json</code> names. In a check in the desktop
+app it ran outside the sandbox, although the project turned the sandbox on. Tools that name a folder
+by a path field and are not MCP tools (Copilot's <code>list_dir</code>, <code>file_search</code>), and the app's browsers
+with a <code>file:</code> URL, are also judged as a search: a folder above protected data is refused. Not
+covered: a script the browser runs in a page (<code>javascript_tool</code>, <code>execute_javascript</code>). It can open
+a <code>file:</code> URL it builds itself; its text is checked only. The app's browser reads with your rights:
+keep it out of protected work.</p>
+<p>A shell command in the sandbox meets Claude Code's own rules: from version 2.1.318 its sandbox
+denies writes to the working folder's settings, skills and hooks and the user folder's code folders.
+Not covered: a <code>.claude</code> folder below the working folder, folders added with <code>/add-dir</code>, and older
+versions. A script that a settings file names (a hook, <code>statusLine</code>, <code>apiKeyHelper</code>) runs too: keep
+it in your user folder's <code>hooks/</code> (<code>~/.claude/hooks/</code>), which no session in a project writes;
+<code>phiward doctor</code> names one that a session can write.</p>
+<p>A Claude config folder is known by what it is. It is the <code>.claude</code> of every folder above the file
+written and above the project, where it really leads (a link, also one whose target is not made
+yet). Its settings and code places count where they really lead (<code>skills -&gt; ../shared/skills</code>, a
+stow-managed <code>~/.claude</code>). From those code folders one list of code roots is built for each call.
+The file tools and MCP tools meet it, and <code>doctor</code>. The list holds:
+- every link inside the code folders, followed until nothing new turns up (a skill, an agent or a
+  command linked in one at a time, and links inside those);
+- the plugin folders that <code>CLAUDE_CODE_PLUGIN_CACHE_DIR</code> and <code>CLAUDE_CODE_PLUGIN_SEED_DIR</code> name. In
+  <code>plugins</code>, links are followed only to where an install is (<code>marketplaces/NAME</code>,
+  <code>cache/MARKETPLACE/PLUGIN/VERSION</code>): a link deeper in a plugin is its own, in a folder the agent
+  cannot write;
+- a linked tree past 50,000 entries as a whole; its deep links are not followed (<code>doctor</code> names it);
+- no link to <code>/</code> or to a folder that holds your home folder (it would hold every write). <code>doctor</code>
+  names it too.</p>
+<p>A write in a root or below it is asked or refused (as 2 above). <strong>The shell is not held by this
+list</strong>: Claude Code's sandbox denies the real path of its own code folders only. So a skill linked
+in from a folder a session can write (the project, the temp folder) can be changed by that session's
+shell. <code>doctor</code> names each such link with its one step (replace the link with a copy). Not seen: a
+<code>.claude</code> link below the working folder that is off the path to the file written, a folder added
+with <code>--plugin-dir</code>, and a <code>directory</code> marketplace's own folder (Claude Code copies from it into its
+cache). A file tool's write to a file with another name (a hard link, <code>nlink &gt; 1</code>) is asked or
+refused, since that name may be a code file. This check is for the built-in file tools only: an MCP
+server's tool is not checked for it.</p>
+<p>What phiward does with a project's <code>env</code>:</p>
+<ul>
+<li>Its hooks start <code>/bin/sh</code> by absolute path. They unset the variables that make Python or a library
+  load other code or read a file they name. These are: every <code>PYTHON*</code>, <code>LD_*</code>, <code>DYLD_*</code>,
+  <code>OPENSSL_*</code>, <code>MALLOC_*</code> and macOS <code>Malloc*</code> variable; <code>__PYVENV_LAUNCHER__</code> (macOS framework,
+  conda and Homebrew Pythons read it even with <code>-I</code>); <code>GCONV_PATH</code>, <code>LOCPATH</code>, <code>NLSPATH</code>,
+  <code>GLIBC_TUNABLES</code>, <code>HOSTALIASES</code>, <code>LOCALDOMAIN</code>, <code>RES_OPTIONS</code>, <code>RESOLV_HOST_CONF</code>, <code>NIS_PATH</code>,
+  <code>TZDIR</code> and <code>GETCONF_DIR</code>; and a <code>TZ</code> that names a file (<code>/...</code>, <code>:/...</code>; a zone name stays).
+  <code>/bin/sh</code> and awk read the loader's and allocator's variables and <code>GCONV_PATH</code>/<code>LOCPATH</code> before
+  they are unset; <code>doctor</code> notes a project that sets them. A phiward whose Python needs <code>PYTHONPATH</code>
+  or <code>LD_LIBRARY_PATH</code> cannot start after the clean-up, so every call is refused; <code>doctor</code> says so.
+  The variables are listed by <code>/usr/bin/awk</code> (by absolute path). When awk cannot run, the hook
+  refuses every call (exit 2) instead of running with them. This is a list of known names, not an
+  allow list: the hook itself reads <code>XDG_*</code>, <code>CLAUDE_CONFIG_DIR</code>, <code>KRB5*</code> and the variables an SSH
+  setup uses. The user wiring then runs phiward's Python isolated (<code>-I</code>).</li>
+<li>The plugin's and <code>install --project</code>'s hooks run <code>phiward</code> by name. A project <code>env.PATH</code> could
+  make them run another program called <code>phiward</code>, which may allow every call: the refusal of <code>PATH</code>
+  below comes from phiward, which then never starts. For real data, wire your user settings (<code>(cd ~
+  &amp;&amp; phiward install claude --user --write)</code>: absolute paths, <code>-I</code>); <code>doctor --headless</code> requires
+  that wiring.</li>
+<li><code>LD_*</code> and <code>DYLD_*</code> reach the shell and awk before they are unset: a project that sets them can
+  load code there. They are not refused (projects set <code>LD_LIBRARY_PATH</code> for their builds); <code>doctor</code>
+  notes them.</li>
+<li>The hook refuses every tool call, and names the file, when a project's settings set one of the
+  variables below, or when a project settings file does not parse (an empty one is <code>{}</code>). <code>doctor</code>
+  names them too. The refusal comes after such a shell has run: it tells you, it does not undo.</li>
+<li><code>PHIWARD_*</code>, <code>KRB5*</code>, <code>USER</code>, <code>LOGNAME</code>, <code>CLAUDE_PROJECT_DIR</code>;</li>
+<li><code>PATH</code> (it chooses the <code>phiward</code> the plugin's and project hooks start);</li>
+<li><code>CLAUDE_CODE_SHELL_PREFIX</code> and <code>CLAUDE_CODE_SHELL</code> (a project's would win over yours);</li>
+<li>a variable that makes the shell run code (<code>SHELLOPTS</code>, <code>BASHOPTS</code>, <code>PS4</code>, <code>BASH_ENV</code>, <code>ENV</code>,
+    <code>PROMPT_COMMAND</code>, <code>IFS</code>, <code>CDPATH</code>, <code>GLOBIGNORE</code>, <code>BASH_FUNC_*</code>).</li>
+<li>The hook reads the settings of every project a call may belong to: <code>$CLAUDE_PROJECT_DIR</code>, and
+  every folder at or above the call's own folder that holds <code>.claude</code> or <code>.git</code> (not the home
+  folder). So a submodule or a folder with its own <code>.claude</code> cannot hide the project's settings. A
+  redirect in any of them refuses every call. A project <code>env</code> that points <code>CLAUDE_PROJECT_DIR</code>
+  elsewhere cannot hide its own settings that way. The shell counts as confined only when
+  <code>$CLAUDE_PROJECT_DIR</code> is the call's folder or above it (letter case as the volume stores it), and
+  the named project and every project folder in it above the call confine it. Folders above the
+  named project do not decide it. A call in a folder added outside the project gets the best-effort
+  check below.</li>
+<li>Claude Code itself ignores <code>HOME</code>, <code>TMPDIR</code>, the <code>XDG_*</code> family and <code>CLAUDE_CONFIG_DIR</code> in a
+  project's <code>env</code>.</li>
+<li>Later: hooks in Claude Code's exec form (<code>args</code>, no shell) would remove the shell; a Claude Code
+  older than May 2026 ignores <code>args</code> and would run the hook's program without them, so phiward does
+  not write that form yet.</li>
+</ul>
+<p><strong>Masking never trades a name for a count.</strong> A folder a protected pattern matches now is masked as a
+whole path, spaces and all. That includes <code>'</code>, <code>(</code> and <code>&amp;</code>, which a pattern's wildcard at its end
+stops at. A wildcard with more of the pattern after it, as in <code>runs/*/panel</code> or <code>phi_*_raw</code>, takes
+them all. The longest such folder wins (<code>phi_Ann Zorroquux</code> over <code>phi_Ann</code>), compared as written
+(letter case and Unicode form included: <code>Straße</code>). The text after it stays only where no name can go
+on: a <code>/</code>, a tab, the line's end, or another path after a space. It also stays after <code>:</code> and counts
+with at most a plain unit each, to a tab or the end (<code>phi_A: 12 reads, 3 errors</code>). Otherwise the
+mask runs to the end of the line. Numbers after a space are masked (<code>phi_Ann 4471</code> may be a longer
+name). A match of a pattern whose wildcard is at its end, that no folder on disk covers and whose
+wildcard meets one of <code>' "</code> &lt; &gt; | ; &amp; ( )`, also runs to the end of the line.</p>
+<p>When a path goes on inside a root or a match (<code>&lt;root&gt;/x</code>) and no folder on disk covers it, the text
+after it stays only where the name has clearly ended: the line's end, a tab, or spaces and another
+path (<code>cp &lt;root&gt;/a /tmp/b</code>). Anything else masks to the next tab or the line's end. So no part of a
+name that is not on disk (made during the run) leaks, whatever it holds: a word after a space
+(<code>&lt;root&gt;/New Person 7</code>), quotes and brackets (<code>&lt;root&gt;/O'Brien</code>, <code>'&lt;root&gt;/O' Brien'</code>, <code>(&lt;root&gt;/Ann)
+Zorro</code>), separators (<code>&lt;root&gt;/Doe; Jane</code>, <code>&lt;root&gt;/Doe, Jane</code>). Ordinary text after such a path is
+lost with it (<code>cat '&lt;root&gt;/x' done</code> shows <code>cat '&lt;PROTECTED&gt;</code>). The rule makes no guess about quotes
+or brackets, so it holds by construction; the test suite checks it on random names
+(<code>tests/test_v2_properties.py</code>). One known gap: a folder whose name ends in a space (<code>&lt;root&gt;/Cat
+/x</code>) reads as a path, then another path.</p>
+<p>Other spellings of the same path are read plainly: a JSON-escaped slash (<code>\/</code>), <code>//</code>, <code>/./</code>, and, in
+the hook, a backslash-newline (bash and Python join the two lines). Where that makes a protected
+path, the sanitizer prints the line in the plain spelling.</p>
+<p>The hook and the sanitizer find a protected path written in free text (code in <code>python -c</code>,
+heredocs, <code>echo</code>) the same way, with no regex over the patterns. A root (and a pattern with no <code>*</code>)
+is found as text, in its NFC, NFD and NFKC forms too, and every match counts. On macOS the text and
+the roots are case-folded as names are (<code>İ</code>, <code>ß</code> included: <code>Straße</code> is <code>STRASSE</code>). A pattern is
+found by its literal start (the parts before the first <code>*</code>), then compared part by part with its own
+glob. A part before the last ends at the next <code>/</code>. The last part may end at any place before the
+next <code>/</code>, tab or line end where it matches. The hook takes the first place that counts. A match
+whose wildcards hold <code>;</code>, <code>&amp;</code> or <code>|</code> counts only when that path exists on disk (<code>runs/R&amp;D/panel</code>;
+not <code>ls phi_a; echo x_raw</code>, which is two commands). After 256 such disk checks in one command the
+command is refused. The sanitizer takes the longest place. Each step stays inside one part of the
+text, so the time grows with the text's length, not faster. A hook that is slower than its timeout
+refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p>
+<h2 id="what-is-not-protected">What is not protected<a class="headerlink" href="#what-is-not-protected" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Data that a gateway command encodes on purpose, or content that is not an identifier, printed
+  through <code>phiward run</code>. Write scripts that print aggregates.</li>
+<li>Data a granted write place, the network or a copy remote carries away (see above).</li>
+<li>Code that the agent writes and the operator later runs outside the guards: shell startup files,
+  git hooks, scripts. Read such code before you run it. (The broker itself runs only the phiward
+  code and the system <code>rsync</code>/<code>ssh</code>; it reads the repo config, names files and pack files only as
+  plain files, never through a link, and never blocks on them. The user config may be a link: it is
+  yours.)</li>
+<li>Protection that comes only from a repo config. The agent can edit its repository.</li>
+<li>Copies outside the protected folders: shell history, Spotlight, backups, editors' caches.</li>
+<li>The name of a link's target: <code>ls -l</code> and <code>readlink</code> on a link in an open folder show it.</li>
+<li>A user who turns the guards off, and a repository that does so where the install is not managed
+  (<code>disableAllHooks</code>, <code>excludedCommands</code>).</li>
+<li>Native Windows: there is no confinement.</li>
+</ul>
+<h2 id="known-limits">Known limits<a class="headerlink" href="#known-limits" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>A gateway command's leftover processes (macOS).</strong> A request ends when its command ends, and the
+  broker ends the command's process group; a stop of the broker ends every running request and
+  removes its scratch folder. A process that leaves the group (<code>setsid</code>, a daemon) keeps running on
+  macOS until it exits, in the gateway profile: it can read protected data, but has no network, no
+  write place (its scratch is removed) and no way to send output back. On Linux the PID namespace
+  ends it with the request.</p>
+</li>
+<li>
+<p><strong>Git's control files.</strong> Claude Code runs git outside its sandbox: about a hundred times in a
+  short session (a check in the real app, 2026-11), at the start, for its status and diff views, and
+  to make worktrees. Most of these calls turn hooks and <code>core.fsmonitor</code> off, but not all (<code>git diff
+  --name-only HEAD</code> does not), and a fetch reads <code>credential.helper</code> and <code>core.sshCommand</code> from the
+  repository's config. The shell sandbox keeps the project's <code>.git/config</code> and <code>.git/hooks</code> from
+  being written, not git's other control files. So a confined shell can make git run a command with
+  your rights when Claude Code next runs git in the project: through a <code>commondir</code> in <code>.git</code>, a
+  submodule's own config under <code>.git/modules/</code>, or a nested repository staged into the index. What
+  reduces it:</p>
+</li>
+<li>The file tools may not write inside any <code>.git</code> folder (rule 1 of "What Claude Code runs as code"
+    above).</li>
+<li>On macOS, with Claude Code 2.1.236 or newer, <code>install</code> also denies the shell writes to a <code>.git</code>
+    folder's <code>config</code>, <code>config.worktree</code>, <code>commondir</code> and <code>hooks</code> (also those of its first-level
+    submodules and worktrees), in every repository under your home folder. The cost: in the agent's
+    shell there, <code>git init</code>, <code>git clone</code>, <code>git submodule</code>, <code>git worktree add</code>, <code>git remote add</code> and
+    <code>git push -u</code> (which write the repository's config) fail, and so do tools that clone into your
+    home folder (pre-commit, git dependencies of cargo, uv or npm). Claude Code's own worktrees are
+    made outside it. Not covered by these rules: a <code>.git</code> folder renamed, changed and renamed back
+    (a rule on <code>.git</code> itself would deny every write inside it).</li>
+<li>A wrapped MCP server's profile keeps the project's <code>.claude</code>, <code>.vscode</code> and <code>.git</code> folders
+    read-only. On macOS also <code>.idea</code>, <code>.gitmodules</code>, <code>.ripgreprc</code> and any <code>.git</code> made while it runs.
+    On Linux only the <code>.claude</code>, <code>.vscode</code> and <code>.git</code> folders that exist when it starts; <code>.idea</code>,
+    <code>.gitmodules</code>, <code>.ripgreprc</code> and a new <code>.git</code> are not covered there.</li>
+<li><code>doctor</code> names a <code>commondir</code> in the project's <code>.git</code>, and a <code>.git</code> file that leads to a folder
+    the agent can write.</li>
+</ul>
+<p>Not covered: Linux (its sandbox has no wildcard write rules), projects outside the home folder, a
+  nested repository staged into the index, submodules below the first level, and older Claude Code.
+  Do not run git yourself in a project the agent changed without looking at what <code>git status</code> lists,
+  and read <code>phiward doctor</code>'s warnings.</p>
+<ul>
+<li><strong>Claude Code's own PATH.</strong> Claude Code starts an MCP server whose entry names its program without
+  a path (<code>npx</code>, <code>uvx</code>) by looking it up on its PATH, outside every sandbox. The agent chooses what
+  runs with your rights when a folder of that PATH that it can write comes ahead of the real
+  program. Such a folder is the project's <code>.venv/bin</code> of an activated environment, a relative entry,
+  a folder the sandbox's <code>allowWrite</code> or <code>additionalDirectories</code> opens, or the temp folder. phiward
+  cannot change the PATH Claude Code starts with; <code>doctor</code> names each such entry. Start Claude Code
+  with those folders off PATH, or give the entry the program's full path. A wrapped entry names the
+  launcher by its full path, so this does not reach it.</li>
+<li><strong>Only the output is masked.</strong> A gateway command's arguments, environment and open files are
+  visible to other processes of the same user: <code>ps</code>, <code>lsof</code>, <code>/proc</code>. Under <code>launch</code> (Mode B) the
+  session cannot see other processes. In Mode A it depends on whether Claude Code's sandbox hides
+  process information, which phiward does not check; in a plugin-only session, nothing hides them.
+  Keep names and records out of command arguments: let the command read them from the protected
+  files.</li>
+<li><strong>A repo config's roots are listed by the broker.</strong> A repo config may add protected roots and
+  patterns anywhere (it can only add protection), and the agent can edit it. The broker lists what
+  they name to mask it, outside every sandbox. So an agent can learn whether a name exists in a
+  folder it cannot read (a root over <code>~/.ssh</code> masks the names there). A wide pattern makes each
+  request walk many folders before it starts.</li>
+<li><strong>Masking can confirm a guess.</strong> A name under a protected root that the agent prints itself comes
+  back masked, so an agent can test whether a name it guessed or saw elsewhere exists there, one
+  name at a time. Masking hides names; it does not keep a name the agent already holds a secret.</li>
+<li><strong>Code the agent writes can print protected data encoded.</strong> Masking hides names and identifiers,
+  not other content. Without <code>[broker] commands</code>, a gateway command may be a script the agent wrote,
+  which can read a record and print it in a form masking does not catch (base64, digits spelled
+  out). With <code>[broker] commands</code> set to your own programs, the agent can only run those on protected
+  data. You approve them as they are (<code>phiward pin</code>); the broker runs none whose content differs,
+  and stops when one changes while it runs. Approval covers each listed file, and every file in a
+  listed folder and its subfolders (up to 2000 files); it does not cover other files a listed
+  program loads from elsewhere (a library, a helper script in another folder). Keep a script's
+  helpers in its listed folder. A listed program that runs other code it is given (an interpreter, a
+  shell, <code>git</code>, <code>find</code>, <code>make</code> and the like) undoes the list; <code>doctor</code> warns about them. The list
+  does not limit what a listed program prints.</li>
+<li><strong>Exit status.</strong> The agent sees only success or failure (<code>exit=0</code> or <code>exit=1</code>; 130 when
+  cancelled); the real status goes to the broker's log, which no session can read. One output note
+  carries a count (<code>[N more identical line(s)]</code>), which the command chooses. A failure is still one
+  bit per call.</li>
+<li><strong>Without kernel confinement</strong>, the hook checks command text only and can miss a spelling. A line
+  that changes how bash finds commands or folders (<code>PATH</code>, <code>CDPATH</code>, <code>HOME</code>, <code>BASH_ENV</code>, <code>hash</code>,
+  <code>shopt</code>, <code>alias</code>, set by any means) is unresolved there (deny by default).</li>
+<li><strong>Patterns</strong> in Claude Code's sandbox: on macOS (Claude Code 2.1.236 or newer, after <code>install
+  claude --user --write</code>) a pattern is in denyRead and denyWrite, and the shell can count as
+  confined. The hook cannot run <code>claude --version</code>: its step says to run install in a terminal where
+  it prints 2.1.236 or newer (install reads the version there); <code>doctor</code> knows the version and gives
+  the exact step. On Linux the sandbox cannot deny writes to a wildcard path, and it expands a
+  pattern when a command starts. So a pattern is in denyRead only, as an extra layer, and the shell
+  does not count as confined: the hook refuses shell commands (or, with <code>[shell] best_effort</code>,
+  checks their text, best effort). For the hook alone (without <code>launch</code>) on Linux, a folder that
+  matches a pattern after a command started is covered from the next command on. Under <code>launch</code> on
+  Linux, a match made after the start is not in the session's view, except inside a folder that can
+  be entered but not listed (docs/launch.md).</li>
+<li><strong>Claude Code's sandbox on Linux</strong> (bubblewrap): a denied path is hidden at its real place, so a
+  link to it (<code>~/work -&gt; /data/...</code>) is covered too. A path that does not exist when a command
+  starts is not hidden in that command, only from the next one on. phiward's probe of the sandbox
+  engine (<code>@anthropic-ai/sandbox-runtime</code> 0.0.81) passed on a RHEL 8 HPC login node with bubblewrap
+  0.4.0, for one user without admin rights. It showed: a root under <code>/scratch</code> hidden by its real
+  path, through a home link and by a wildcard; settings files and startup files not writable; no
+  direct network. Claude Code needs <code>bwrap</code> and <code>socat</code> there (<code>doctor</code> checks them).</li>
+<li><strong>A shell that no kernel confines</strong> (Claude Code's sandbox off or not there): the hook refuses its
+  commands, except a phiward command written whole (the gateway, <code>doctor</code>, <code>check</code>). This covers
+  GitHub Copilot, which runs the hook without a sandbox. With <code>[shell] best_effort</code> (user config
+  only), the hook checks the text instead, which is best effort (below): a spelling it misses is a
+  known limit of that mode, not a defect of the refusal.</li>
+<li><strong>Tools that run commands.</strong> A tool whose name says it runs commands (<code>write_bash</code>,
+    <code>run_in_terminal</code>, <code>run_command</code>, <code>executeCode</code>, <code>start_process</code>) is judged as such a shell,
+    unless its MCP server is wrapped in <code>phiward launch --</code>: one whole gateway call in one exact
+    form, nothing else. Only Claude Code's own Bash and Monitor can count as confined. A tool of a
+    bare local MCP server whose name does not say so gets the text check only, which is not a
+    boundary: the server runs with the operator's rights (gap 3). When a server counts as wrapped,
+    and the limits of that:
+    <a href="#how-the-hook-trusts-a-wrapped-mcp-server">How the hook trusts a wrapped MCP server</a>.</li>
+<li><strong>The exempt commands</strong> trust what the shell makes of the bare name <code>phiward</code>: the PATH (keep
+    folders the agent can write off it) and what the shell runs before a command. No file tool may
+    write the bash and zsh startup files, the files <code>$BASH_ENV</code> and <code>$ENV</code> name, or Claude Code's
+    shell snapshots, so no <code>phiward</code> function or alias can be planted there. Not covered: a file
+    they source in turn (a plugin framework's folder), which changes the next session's snapshot.</li>
+<li><strong>Before the first setup</strong> (no protected path yet) the refusal does not apply: the hidden list
+    is then guarded by the text check only, which is best effort.</li>
+<li><strong>Hooks fail open</strong> in most tools by default. Claude Code (<code>onFailure: "block"</code>) and Cursor
+  (<code>failClosed</code>) have a switch. No tool documents whether a hook deny still applies in its bypass or
+  auto-approve mode.</li>
+<li><strong>Managed settings</strong> are the only hook settings a repository cannot change.</li>
+<li><strong>Long-lived shells</strong> that started outside the confinement stay outside it.</li>
+<li><strong>Linux</strong> needs Landlock ABI 2 or newer for the gateway, and bubblewrap must be able to start
+  (AppArmor on Ubuntu 24.04 can block it).</li>
+<li><strong>The sanitizer</strong> does not mask entry names shorter than 4 characters (6 when only digits) or
+  names that are common words of its stop list (<code>patient</code>, <code>normal</code>, <code>bam</code>, ...), and it stops
+  (fails closed) when the roots hold more entries than <code>inventory_limit</code>. A name with spaces (<code>Doe
+  Jane 1970</code>) is masked whole, after a root, under a pattern (<code>phi_*</code> matches <code>phi_Doe Jane</code>) and in
+  escaped output (<code>Doe\ Jane</code>, from <code>ls -b</code>); the masked output shows an escaped space as a plain
+  space.</li>
+<li><strong><code>names_from</code> files</strong> are themselves protected data. Keep them inside a protected root.</li>
+<li><strong>A git work tree that holds a root</strong> is closed to the agent's git.</li>
+<li><strong>Claude Code settings in a write place.</strong> The gateway may not write a <code>.claude</code> folder: on macOS
+  by its profile, anywhere. On Linux only a <code>.claude</code> folder directly in a write place is read-only;
+  one deeper down is writable, and gateway code can make a new one. Use write places that are not
+  project folders. A <code>write_to</code> entry that holds a <code>.claude</code> folder is skipped (at every load;
+  <code>doctor</code> counts it).</li>
+<li><strong>Remote copies</strong> run the system <code>ssh</code> through your shared connection (pushes and pulls are tar
+  streams; <a href="../hpc/">hpc.md</a>); local copies run the system <code>rsync</code> or <code>cp</code>. The remote host itself is
+  trusted with what is copied there.</li>
+<li><strong>The Python that runs phiward</strong> is guarded: the agent may not write its prefix, the <code>phiward</code>
+  launcher found on <code>PATH</code> (the link itself and the file it points to) or the user site folder.
+  Install phiward in a folder of its own (<code>uv tool</code>, <code>pipx</code>).</li>
+<li><strong>Another account in your group</strong> is not the agent, and the goals do not cover it, but phiward
+  makes its own Python safe from it and says when it is not. One rule decides "another account can
+  change it": a file and each folder above it are yours or root's and no group or other account can
+  write them. Inside your home folder the folders are judged up to the home folder; outside it up to
+  <code>/</code>, where a sticky folder (<code>/tmp</code>) is fine for your own entry. A link is judged by its folder,
+  then its target. The one exception is Homebrew's own folders on macOS, which the <code>admin</code> group may
+  write (its members can use sudo already). The walk follows the path as the kernel does, one link
+  at a time. It knows the home folder by identity (a <code>/home</code> that is a link is fine). A folder above
+  the home folder counts only off the way home. phiward does not try to tell your private group from
+  a shared one: ACLs, accounts it cannot list (LDAP) and NFS made every such guess unreliable.</li>
+<li><strong>What <code>install</code> fixes.</strong> <code>install</code> (and so <code>setup</code>) compiles phiward's Python and makes what
+    you own of it writable by you alone: the venv, the standard library, <code>lib-dynload</code>, the
+    interpreter, <code>pyvenv.cfg</code>, the folders above them up to your home folder, and the <code>PATH</code> folder
+    of the <code>phiward</code> link. It never changes your home folder or anything outside it (a Homebrew or
+    system Python, a lab share). For those it gives the step. For your home folder it is <code>chmod go-w
+    ~</code>. For what is yours outside it, it is <code>chmod go-w</code> on exactly the files and folders on the way
+    that the check names, and one command per folder of phiward's Python, run from inside it. Or
+    else install phiward on uv's own Python.</li>
+<li>
+<p><strong>That one command</strong> works in this order. A <code>cd</code> that fails runs nothing.</p>
+<ol>
+<li>It fixes the modes of what the check judges there, with <code>find</code>: your own entries, no link,
+   never <code>chmod -R</code>. For the standard library it leaves out its own packages folder (a folder or
+   a link of that name: the base Python's site-packages, which a venv's Python does not read).</li>
+<li>It compiles the folder, as <code>install</code> does inside your home folder, so no later start writes a
+   group-writable <code>__pycache__</code> there. Python runs with <code>-I -S</code> (no <code>.pth</code> runs), and runs from
+   the folder only what phiward's Python runs anyway.</li>
+<li>It fixes the modes again: a default ACL can make a new <code>__pycache__</code> group-writable.</li>
+</ol>
+<p>Where a folder cannot be read or changed, Python compiles anyway and the check names what is
+left. If the same step fails again, the fault is not a mode (a flag, an ACL, a read-only file
+system). phiward's own package outside your home folder gets the same one command for its
+folder. So <code>launch</code> and the session note may give it too, and <code>doctor</code> may show the command for
+the whole venv beside it (which covers the package's). Where a Homebrew folder of yours is in
+such a folder, the <code>find</code> also clears its admin group's write bit, which the check allows.
+  - <strong>What <code>doctor</code> and each start check.</strong> <code>doctor</code> checks all of that. Every start of <code>launch</code> and
+of a wrapped server checks phiward's own package (its hashes, its modes and the folders above
+it) and the venv's start-up files. It refuses:
+- a <code>.pth</code> that runs code, unless it is known (an install record listing it proves nothing);
+- a <code>.pth</code> that is not plain ASCII or is over 1 MiB (no Python version may read it differently);
+- a <code>.pth</code> path line that does not lead into the venv (or, for a pipx venv, pipx's own shared
+  libraries), or that does not lead to a folder (a zip there could hold start-up code);
+- a <code>sitecustomize</code> or <code>usercustomize</code> in any form (a <code>.py</code>, a <code>.pyc</code>, a package, an extension
+  module), in the venv or in a folder a <code>.pth</code> line adds. Python imports it at every start; the
+  step removes it;
+- a venv whose <code>pyvenv.cfg</code> lets Python read the base Python's and your own site folders.
+  - <strong>How <code>pyvenv.cfg</code> is read:</strong> as <code>site.py</code> reads it. The one next to the interpreter comes
+first, line by line. The last line wins, and a file without the line counts as reading them
+(Python's default). A <code>pyvenv.cfg</code> next to a system interpreter (<code>/usr/bin/pyvenv.cfg</code>) makes
+that Python a venv for phiward as it does for <code>site.py</code>. On macOS <code>site.py</code> takes the
+interpreter from <code>__PYVENV_LAUNCHER__</code> when it is set. Whoever sets phiward's environment is not
+the agent, so the check reads the one <code>sys.executable</code> names.
+  - <strong>The reinstall step</strong> names the tool that installed phiward, read from the file that tool keeps
+in its venv (<code>uv-receipt.toml</code>, <code>pipx_metadata.json</code>), at the running version: <code>uv tool install
+--force --reinstall</code>, or <code>pipx reinstall</code>, then <code>pipx install --force</code>. Each restores a changed
+file and removes a planted one. Known limit: a file of the base Python that is missing (a link
+loop in its standard library) gets the reinstall step, which does not restore it.
+  - <strong>What a check reports.</strong> The problems are kept by kind, in the order the step reads them, at
+most 50 of each. So a line the step needs first is never pushed out by many lines of a later
+kind, and the check stays linear on a tree of any size. Each problem names the fault itself and
+whether it is inside your home folder, as the walk found it. One round names every fault of
+yours outside your home folder, so one step fixes them. A refusal shows the lines its step fixes
+(a folder's one line first) and how many more there are. <code>doctor</code> shows a second WARNING for the
+rest of phiward's Python only when its step differs from the package's. A check that gives no
+answer (it did not finish in time, or could not run) says so, in the same words in <code>doctor</code>,
+<code>launch</code> and the session note. Its step is to start again, then to reinstall.
+  - <strong>What is read and walked.</strong> The package check, like the full check, names every fault of yours
+outside your home folder in one round. It reads a file with a mode fault too, so a changed file
+is in its list in the same round. Inside your home folder its step is then the reinstall;
+<code>phiward install</code> then fixes the modes, which a reinstall with umask 002 leaves group-writable
+again. It reads a file only if it is a regular file, never waiting on one (the install record,
+<code>pyvenv.cfg</code> and the <code>.pth</code> files too). Every folder phiward's Python reads is walked, however a
+<code>.pth</code> line spells it (a link, <code>..</code>). One rule, by identity, decides what each folder of the
+walk covers. Only the standard library leaves out its own packages folder. A Python without a
+venv (pip into conda or a system Python) is judged for its interpreter, standard library and
+lib-dynload only, not its site-packages: install phiward with uv or pipx.
+  - <strong>Links.</strong> A link inside phiward's Python is judged where it leads: the way there and the
+target. A link that leads nowhere yet is judged by the deepest folder on its way. Left out: the
+standard library's own packages link, with that folder. <code>install</code> fixes what the check names of
+a link inside your home folder (every folder of a chain, the target, that deepest folder), and
+judges it again after each change. The contents of a linked folder are not walked: anyone who
+could plant such a link could change the standard library itself, which is not hashed either.
+  - A check that runs inside the code it checks cannot stop an account that changed that code first;
+that is why <code>install</code> makes the files safe and <code>doctor</code> checks them all.
+  - Not checked: ACLs (mode bits do not show them, on macOS or NFSv4), and dynamic libraries loaded
+from elsewhere (for example Homebrew's OpenSSL).
+- <strong>What Claude Code protects by itself:</strong> its sandbox keeps commands from writing "most of"
+  <code>~/.claude</code> (or <code>$CLAUDE_CONFIG_DIR</code>), <code>~/.claude.json</code> and the credentials file, even under an
+  <code>allowWrite</code> that covers them. The docs give no exact list and no version for it. phiward refuses
+  the settings that the docs say remove this protection (<code>filesystem.disabled</code>,
+  <code>allowNestedUserNamespaces</code>), and adds nothing of its own there. On Linux a <code>denyWrite</code> path that
+  does not exist yet becomes a read-only placeholder file, which could block a plugin install.
+- <strong>Scripts that Claude Code settings name</strong> (a hook's command, <code>statusLine</code>, <code>apiKeyHelper</code>) run
+  with your full rights. Keep them under a <code>hooks/</code> folder of <code>~/.claude</code> or of the project's
+  <code>.claude</code> (the hook asks before a file tool writes there, and Claude Code's sandbox denies its
+  shell), or in a folder no session writes; never elsewhere in a project.
+- <strong>Not tested by phiward's own checks:</strong> Claude Code's real sandbox. The checks never run the real
+  <code>claude</code>; the first check after an install is yours (<a href="../releasing/">releasing.md</a>).
+- <strong>The spool folder</strong> is writable by the agent: it can fill it or move it, which stops the gateway
+  (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
+  run a command through a shell.
+- <strong>The broker's status file</strong> only adds protection to the agent's side. On Linux, if it does not
+  exist when an agent shell starts, that shell can create it in its way; the agent's own config
+  still applies, and <code>doctor</code> reports a mismatch.
+- <strong>The gateway is not a container.</strong> It sees the whole file system read-only, the roots included;
+  it writes only to the places listed above.</p>
+</li>
+</ul>
+<h2 id="gaps-of-the-hook-alone">Gaps of the hook alone<a class="headerlink" href="#gaps-of-the-hook-alone" title="Permanent link">&para;</a></h2>
+<p>These apply when only phiward's hook runs, without Claude Code's sandbox (Mode A) or <code>launch</code> (Mode
+B). Each gap was found by a review. <strong>Confirmed</strong> means a probe on made-up data showed it; <strong>not
+verified</strong> or <strong>from reading the code</strong> means it was not shown by a probe.</p>
+<p><strong>The agent tool itself</strong>
+1. <strong>File tools are checked by path, then used by path.</strong> A link swapped in between can give a Read
+   the content of a protected file (confirmed by a simulation, not through Claude Code). Spellings
+   the hook does not resolve also pass it: <code>/.vol/&lt;dev&gt;/&lt;inode&gt;/...</code> and <code>/System/Volumes/Data/...</code>
+   on macOS (confirmed), and accented names in the other Unicode form (confirmed).
+2. <strong>The hook's list of files the agent may not write is incomplete.</strong> It refuses file-tool writes
+   to phiward's own files (compared as the file system compares names, and by device and inode), and
+   to Claude Code's <code>settings*.json</code>, <code>.mcp.json</code> and <code>~/.claude.json</code>. It asks before a file tool
+   writes what Claude Code runs as code (hooks, skills, plugins: rule 2 above). It cannot know every
+   file another tool runs later. In Mode A, Claude Code's own permission rules (<code>install</code> writes
+   <code>Edit</code> deny rules for phiward's files) and its sandbox cover more.
+3. <strong>MCP servers and the tool's hooks run outside the kernel profile.</strong> A local MCP server runs with
+   your rights unless it is wrapped in <code>phiward launch --</code>. The hook sees only what a tool is asked
+   to do, never what it returns. So a tool that returns your terminal text or a file can show
+   protected data. A published server (<code>@modelcontextprotocol/server-filesystem</code> 2.3.0) wrapped this
+   way read ordinary files and could neither read nor list a protected folder (Linux; confirmed).</p>
+<p><strong>The agent's confined shell (Claude Code's sandbox)</strong>
+4. <strong>It can write files the operator or a later unconfined tool runs</strong>: shell startup files,
+   <code>~/.ssh/config</code>, <code>~/.gitconfig</code>, <code>.git/config</code> and <code>.git/hooks</code>, LaunchAgents, programs in PATH
+   folders, <code>~/.claude.json</code> (user-scope MCP servers), <code>~/.claude/hooks</code>, plugins, <code>.mcp.json</code>.
+   Under Claude Code's sandbox, writes are limited to its allowed folders (the project, the
+   temporary folder, the broker's spool). Claude Code's documentation says the sandbox also denies
+   writes to <code>.claude</code> settings files and <code>.mcp.json</code> in the working folder and the folders above
+   it, shell startup files, <code>.gitconfig</code> and <code>.git/hooks</code> and <code>.git/config</code> in the working folder,
+   and most of <code>~/.claude</code>. phiward's HPC probe confirmed this for the sandbox engine with explicit
+   entries, not for Claude Code's own list.
+5. <strong>Keystroke injection</strong>: from a confined shell, a program can queue keystrokes into the terminal
+   that started it (TIOCSTI; confirmed under a profile like phiward's old one, not tested under
+   Claude Code's own sandbox).
+6. <strong>Unconfined programs it can reach</strong>, unless the sandbox blocks them: unix sockets (tmux, ssh
+   connection sharing, ssh-agent, systemd, job schedulers), IDE extensions, <code>open</code> / LaunchServices,
+   Spotlight (<code>mdfind</code>), Claude in Chrome (from the reviews; a unix-socket server was confirmed, the
+   others <strong>not verified</strong>).
+7. <strong>Pattern forms the kernel does not enforce</strong>: a <code>?</code> or <code>[...]</code> that must match a non-ASCII
+   character, and some class forms (<code>[!-x]</code>, ranges across <code>/</code>) (confirmed). Use roots, or patterns
+   with <code>*</code> and ASCII names only.
+8. <strong>A root spelled <code>/System/Volumes/Data/...</code></strong> in the config is not denied by Seatbelt on its
+   normal path (confirmed). Write roots in their normal form.
+9. <strong>Other names of a protected file</strong>: an existing hard link outside a root is readable (confirmed
+   on macOS). On macOS, other mounts of the same data are not detected: list each mount path as a
+   root. On Linux, other mounts of the same file system are not covered by the hook alone, and a
+   guard file that does not exist yet (for example a user site folder) is not protected (from
+   reading the code).</p>
+<p><strong>The trusted side (broker, hook, doctor, install, git hooks)</strong>
+10. <strong>The base Python</strong> that phiward runs on is not a guard folder (with uv, Homebrew, pyenv or
+    conda it is user-writable) (confirmed).
+11. <strong><code>doctor</code>'s self-test runs <code>true</code> found on PATH</strong> without a restriction (confirmed).
+12. <strong><code>install --project --write</code></strong> writes its backup and temporary file through links that may be
+    planted in the project (confirmed).
+13. <strong>The git hook's fallback</strong> (<code>python3 -m phiward</code>) can import a planted package from the
+    repository (confirmed).
+14. <strong>Programs and their settings</strong>: Linux finds <code>bwrap</code> on PATH (confirmed); a remote copy's
+    <code>rsync</code> reads <code>~/.popt</code> on Linux (confirmed in Docker); an operator <code>ssh_config</code> may <code>Include</code>
+    or <code>Match exec</code> files the agent can write, and ssh reads <code>~/.ssh/known_hosts</code> and <code>id_*</code> (from
+    reading the code).
+15. <strong>The start environment</strong> of the broker, <code>doctor</code> and <code>setup</code> comes from the operator's shell
+    startup files (see gap 4) (from reading the code).</p>
+<p><strong>On a cluster</strong>
+16. <strong>Job submission</strong> (<code>sbatch</code>, <code>srun</code>) from the agent's shell runs jobs outside any profile, on
+    nodes that see the same data (from reading the design; not probed).
+16b. <strong>Protection follows the path</strong> (confirmed on Linux, by design on macOS): a protected folder
+     that the operator moves outside its protected path, into a folder a session can see, is
+     readable there, during a session or after it.</p>
+<p><strong>Smaller path and trusted-side gaps</strong>
+17. Each smaller, all real:
+    - grant checks compare paths as raw text, so a case twin of <code>~/.ssh</code> or of a root's parent
+      passes the <code>write_to</code> check (confirmed);
+    - a root written in NFD Unicode form is not masked by the sanitizer (confirmed);
+    - entry names that are not valid UTF-8 are not masked on Linux (confirmed);
+    - a <code>.git</code> file (worktree, submodule) makes the gitfile, not the real object store, the derived
+      root (from reading the code);
+    - Claude Code settings are read following links and can block on a FIFO; the "confined"
+      relaxation trusts project settings that phiward does not deny;
+    - the plugin's and <code>install --project</code>'s hooks run the first <code>phiward</code> found on PATH (the user
+      wiring names phiward's own Python by its full path);
+    - git is found on PATH, and the pre-commit hook runs <code>git diff</code> without <code>--no-textconv</code>, with
+      <code>core.fsmonitor</code> and <code>core.hooksPath</code> read from the repository;
+    - with a <code>pip --user</code> install, the launcher folder is on <code>sys.path</code>;
+    - user pack files and <code>names_from</code> files outside the roots are not guard files, so masking can
+      be weakened.</p>
+<h2 id="reduce-the-risk-every-mode">Reduce the risk (every mode)<a class="headerlink" href="#reduce-the-risk-every-mode" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>If the agent reads untrusted input</strong> (web pages, issues, other people's repositories, MCP
+   tools), <strong>use Mode B</strong> (<code>phiward launch</code>), or run it as a separate user, or on a machine, with no
+   protected data.</li>
+<li>Install phiward with <code>uv tool</code> or <code>pipx</code>, and keep its Python out of the agent's reach.</li>
+<li>Prefer roots; in patterns use only <code>*</code> and ASCII names. Write roots in their normal form (not
+   <code>/System/Volumes/Data/...</code>). Avoid hard links and second mounts of protected data.</li>
+<li>Give no write places, no network and no copy remotes unless you need them; keep write places away
+   from project folders.</li>
+<li>Use only MCP servers, plugins and hooks you trust.</li>
+<li>Run <code>install --project</code> only in a project you created.</li>
+<li>Run the agent in a terminal that holds nothing else; do not leave tmux, ssh connection sharing,
+   ssh-agent or other socket services open to it.</li>
+<li>Do not run agents on a cluster login node that can submit jobs against protected data.</li>
+<li>After agent sessions, review: shell startup files, <code>~/.ssh/config</code>, <code>~/.gitconfig</code>, <code>.git/config</code>
+   and <code>.git/hooks</code>, LaunchAgents, programs in PATH folders, <code>~/.claude.json</code>, <code>~/.claude/hooks</code>,
+   <code>~/.claude/plugins</code>, and the project's <code>.claude/</code> and <code>.mcp.json</code>.</li>
+</ol>
+<h2 id="mode-a-a-claude-code-session">Mode A: a Claude Code session<a class="headerlink" href="#mode-a-a-claude-code-session" title="Permanent link">&para;</a></h2>
+<p><code>phiward install claude</code> wires the session. Bash (and Monitor) runs in Claude Code's own sandbox,
+which denies protected roots and the hidden list. The file tools are refused them by phiward's hook
+and by Claude Code's permission deny rules (both resolve links). A start-of-session note tells the
+agent the rules. Tested in the desktop app: reads of protected data and of a made-up credential by
+the Read tool and by <code>cat</code> were refused, <code>ssh</code> to HPC failed, a Keychain-backed GitHub token was not
+reachable from the session's Bash, and ordinary work was unaffected. What it does not do:</p>
+<ul>
+<li>the file tools are refused inside Claude Code, not by the kernel: a spelling that both the
+  permission rules and the hook miss reads the file;</li>
+<li>hooks and MCP servers that are not wrapped in <code>phiward launch --</code> run with your rights;</li>
+<li>credentials that are not files (the macOS Keychain in general, Kerberos caches kept by the macOS
+  credential service or the Linux kernel keyring or KCM, tokens in your environment) are not hidden
+  by a file list; <code>doctor</code> warns about ticket caches that are not files;</li>
+<li><strong>only sessions that load the wiring are protected:</strong> project wiring applies only to a session
+  opened in that folder; wire your user settings (<code>--user</code>) so every session is covered;</li>
+<li>a repository can turn the phiward plugin off unless managed settings force it on;</li>
+<li>a gateway command may write files that run later (<code>.git/hooks</code>, <code>.mcp.json</code>, <code>.envrc</code>) inside a
+  <code>write_to</code> folder or a copy's destination; give <code>write_to</code> folders that are not projects, and read
+  what lands there before you run anything from it. Protected roots themselves are read only for the
+  gateway;</li>
+<li>on Linux, a <code>run --write-to</code> command can write a <code>.claude</code> folder below the top of its <code>write_to</code>
+  folder (bubblewrap makes only the top one read only); do not open a Claude Code session inside a
+  <code>write_to</code> folder;</li>
+<li>the hook reads the config that its environment names (<code>HOME</code>, <code>PHIWARD_CONFIG</code>, <code>XDG_CONFIG_HOME</code>,
+  <code>CLAUDE_CONFIG_DIR</code> and the spool and cache variables). A project whose settings set a
+  <code>PHIWARD_*</code> variable in <code>env</code> (a repository you clone can) makes the hook refuse every tool call,
+  and <code>doctor</code> names it. Claude Code ignores <code>HOME</code>, <code>XDG_*</code> and <code>CLAUDE_CONFIG_DIR</code> there. Claude
+  Code's sandbox and the hook refuse Bash and file-tool writes to those settings. The
+  hook does not check its config against the broker's;</li>
+<li>another session's gateway replies in the spool can be changed by the agent (it is the same user):
+  a forged reply leaks nothing, but it can mislead you or another agent;</li>
+<li><strong>the first setup:</strong> before your config exists, nothing protects it. If the agent writes the first
+  config (<code>/phiward:setup</code>, <code>setup --first-run</code>), you trust that session to write what you said; see
+  <a href="../setup/#the-guided-first-run">setup.md</a>.</li>
+</ul>
+<h3 id="how-the-hook-trusts-a-wrapped-mcp-server">How the hook trusts a wrapped MCP server<a class="headerlink" href="#how-the-hook-trusts-a-wrapped-mcp-server" title="Permanent link">&para;</a></h3>
+<p>Claude Code starts a server when a session starts and keeps it running. So a server wrapped in the
+config afterwards still runs bare. After <code>phiward mcp wrap</code>, start Claude Code again; <code>/resume</code>,
+<code>/clear</code> and compaction change nothing.</p>
+<p><strong>Which server a tool belongs to.</strong> The hook learns it from Claude Code itself (<code>mcp_server.source</code>,
+2.1.274 and newer; Claude Code's docs say to base trust on it, not on the name). It reads that one
+scope's entry: <code>.claude.json</code> or <code>.mcp.json</code>, or a plugin's installed files. The agent cannot write
+<code>.claude.json</code> or <code>.mcp.json</code>: the file tools refuse them, and the sandbox denies them to Bash. The
+app's own servers (<code>sdk</code>) and every source phiward does not read count as bare. So a repository's
+<code>.mcp.json</code> cannot speak for a server of the app's that has the same name. Without a source (an
+older Claude Code, Copilot) only <code>~/.claude.json</code> counts and <code>.mcp.json</code> servers are bare. A config
+file that cannot be read strictly makes its scope bare. A config entry phiward cannot read (<code>args</code>
+that is not a list of strings) counts as bare, and does not change how the others are read.</p>
+<p><strong>The record.</strong> Each <code>phiward launch</code> keeps a record of its own process in <code>~/.phiward/launched</code>
+while it runs: process id, start time, parent, a hash of what it runs (its command), and a hash of
+what its profile hides (the hidden list, the roots and the patterns). It is a guard folder: the
+agent cannot write it, its confined server can read it but not write it, and neither it nor
+<code>~/.phiward</code> may be a link. The hook trusts a wrapped entry only while a live launcher of its
+command is a child of the hook's own Claude Code. A launcher the agent starts from Bash has the
+sandboxed shell as its parent, never an ancestor of the hook. The hook takes the nearest of its own
+ancestors (up to four) with launcher children as its Claude Code. So a Claude Code started inside
+another's Bash is best effort (its environment is the agent's). The hook also trusts a record only
+when its profile hash is the one the hook would build itself. An entry counts as bare when its
+<code>env</code> changes the hidden list (<code>KRB5CCNAME</code>, <code>KRB5_CONFIG</code>), or when the config or your credentials
+changed since the server started. It stays bare until Claude Code starts it again.</p>
+<p><strong>Plugins and configured servers.</strong> A launcher also notes a hash of its <code>CLAUDE_PLUGIN_ROOT</code>, which
+Claude Code exports only to a plugin's stdio server.
+- A configured server needs a launcher without one, started with its entry's own id (<code>phiward launch
+  --entry ID</code>, which <code>wrap</code> writes). That id is its launch hash. So one launcher never vouches for
+  two entries, and no entry is parsed for what else it might start. An id found twice, anywhere in
+  the config files' strings, is trusted for nothing (decoded JSON: a copy of the entry, in any
+  wrapper, makes both untrusted).
+- A plugin's server needs a launcher of its own copy's folder (any copy that applies to this
+  project). A plugin's launcher counts only for that plugin's copy, never for a configured server.
+  So a plugin never vouches for your server, and a broken or disabled plugin does not affect it. A
+  plugin's entries carry no ids (the plugin's author writes them). There the hook counts every entry
+  of the copy that may start a launcher with the command, also through <code>nice</code>, <code>env</code> or a shell's
+  <code>-c</code> text (every <code>launch</code> word, split at <code>;</code>, <code>&amp;&amp;</code> and <code>|</code>). Counting too many only asks for more
+  launchers.
+- A launcher with any <code>CLAUDE_PLUGIN_*</code> variable but no plugin folder is trusted for nothing. If
+  Claude Code itself was started with a <code>CLAUDE_PLUGIN_*</code> variable set, its configured servers'
+  launchers carry it and are not trusted. A configured entry whose <code>env</code> sets <code>CLAUDE_PLUGIN_ROOT</code>
+  or <code>CLAUDE_PLUGIN_DATA</code> counts as bare.</p>
+<p><strong>How an entry is compared.</strong> Folders are compared as they really lead. A plugin's entry is filled
+in exactly as Claude Code fills it (checked with Claude Code 2.1.318): the folder as the registry
+has it, the data folder without a trailing <code>/</code>. Its <code>${CLAUDE_PLUGIN_DATA}</code> is filled in as
+<code>~/.claude/plugins/data/&lt;id&gt;</code>. A launcher of another fill does not count. A configured entry's
+placeholders are filled in without the hook's own plugin variables. An entry whose command holds
+<code>${VAR}</code> is compared as the hook fills it in, and a mismatch counts as bare. The launcher itself
+counts only when the entry's command is, by its full path, the launcher phiward's install record
+lists (a guard file). <code>phiward</code> by name never counts, since Claude Code looks it up on its own
+<code>PATH</code> when it starts the server. A source checkout has no record. There the launcher is the
+<code>phiward</code> found in the <code>PATH</code> folders the agent cannot write (the broker's rule, and none inside
+<code>$CLAUDE_PROJECT_DIR</code>).</p>
+<p><strong>Why the records are safe.</strong> Claude Code's sandbox denies all of <code>~/.phiward</code> to Bash, after
+<code>phiward install claude --write</code> writes it into <code>denyWrite</code>. Until then <code>doctor</code> says the shell is
+not confined, and the hook refuses shell commands other than gateway calls. The shell counts as
+confined only with that entry, and with no <code>allowWrite</code> that re-opens part of it. <code>denyWrite</code> holds
+inside writable folders. So neither a session opened in the home folder, nor <code>--add-dir ~</code>, nor an
+<code>allowWrite</code> can write, rename or replace the records or wrap's backups. <code>phiward mcp wrap</code> keeps
+its backups only in <code>~/.phiward/backups</code>, a guard folder: nothing beside a config file is ever shown
+as the operator's original. The spool, the one folder the agent must write, lives outside it
+(<code>~/.phiward-spool</code>). <code>install</code> makes the folders up front. So bubblewrap, which protects only paths
+that exist, covers them from the first session on.</p>
+<p><strong>A server reached by URL</strong> counts as remote only when the URL surely names another machine. The URL
+must be plain ASCII with no <code>\</code>, no user part and no <code>%</code> in the host. The host must not be this
+machine: <code>127.0.0.1</code> in any spelling, <code>0177.1</code>, <code>[::1]</code>, <code>[::ffff:127.0.0.1]</code>, <code>localhost</code>,
+<code>*.localhost</code>, a link-local address, this machine's host name, a name <code>/etc/hosts</code> maps to it.
+Claude Code reads URLs with Node's parser, which accepts many more spellings; any URL phiward cannot
+read this strictly counts as this machine. A server on this machine (an IDE's) runs outside Claude
+Code: phiward cannot wrap it (<code>phiward mcp wrap</code> leaves it alone and says so), and its command tools
+may make only gateway calls. Not recognised: a DNS name that points at this machine, and this
+machine's own network address (<code>10.x</code>, <code>192.168.x</code>); such a "remote" server counts as remote.</p>
+<h2 id="mode-b-phiward-launch">Mode B: <code>phiward launch</code><a class="headerlink" href="#mode-b-phiward-launch" title="Permanent link">&para;</a></h2>
+<p><code>phiward launch --tool claude</code> runs the whole agent tool, and every child it starts, in the kernel
+profile: its file tools, MCP servers and hooks are confined too, so the hook is no longer the guard
+for them. What changes for the operator:</p>
+<p><strong>Files that run later.</strong> A coding agent must write in the project, and you later run what is there:
+tests, builds, scripts, git with its hooks and config, editor tasks, git hook managers (<code>.husky/</code>,
+lefthook). No sandbox can tell a planted hook from a real change. <code>launch</code> makes the common places
+read-only (git control files of every repository it finds at start, <code>.claude</code> and <code>.vscode</code>
+settings, <code>.mcp.json</code>) and, on Linux, reports git control files a session changed, but the class
+cannot be closed by a list. <strong>The rule:</strong> treat everything in the project as written by the agent.
+Run project commands inside <code>launch</code> (<code>phiward launch -- git status</code>, <code>phiward launch -- make
+test</code>), or read the change before you run it outside.</p>
+<p><strong>Known open items in this phase:</strong>
+- the network is open under <code>launch</code> (a proxy for listed hosts is planned; <code>[network] limit</code> covers
+  Mode A's shell commands only). The agent cannot read protected data under <code>launch</code>, so this
+  matters for credentials and for gateway output;
+- the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
+  <code>ANTHROPIC_</code>/<code>CLAUDE_</code> ones); add more with <code>[launch] pass_env</code> in the user config, knowing that
+  whatever you pass is readable by the agent;
+- macOS: the Keychain stays reachable (Claude Code keeps its own login there); items whose access
+  list trusts <code>security</code> or <code>git credential-osxkeychain</code> can be read; other apps' preferences are
+  readable;
+- macOS: only the session's own terminal can be read or written. Tools that open new terminals
+  (<code>script</code>, <code>tmux</code>, <code>expect</code>) do not work yet. When xcrun's cache is stale, the <code>/usr/bin</code> tools
+  print a cache warning (the cache is never written under <code>launch</code>). The per-user temp folder is
+  writable (the compiler uses it);
+- both systems: git control files are covered for the repositories found when <code>launch</code> starts (top,
+  nested, submodules; up to 50,000 entries, skipping <code>node_modules</code>, <code>.venv</code> and similar).
+  Repositories created during a session, nested <code>.claude</code>, <code>.vscode</code>, <code>.mcp.json</code> files and git hook
+  managers (<code>.husky/</code>) are not: see the rule above. <code>.claude/settings.local.json</code> is read-only (it
+  can hold hooks), so Claude Code's "don't ask again" answers do not stay in the project under
+  <code>launch</code>;
+- Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
+  Unix sockets made after <code>launch</code> starts, or with relative paths, are not covered. Missing settings
+  files are made as read-only <code>{}</code> placeholders in the project. After a session, <code>launch</code> reports
+  git control files that changed;
+- HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
+  Kerberos ticket caches (the one <code>KRB5CCNAME</code> names, <code>krb5cc*</code> files in the shared temp folders,
+  <code>/run/user/&lt;uid&gt;</code> on Linux), <code>~/.ssh</code>, the SSH agent, or the shared SSH connection's socket. So
+  the agent cannot log in to HPC itself and read data there unmasked. HPC work goes through the
+  gateway, which the operator's broker runs over the operator's shared SSH connection
+  (<a href="../hpc/">hpc.md</a>): <code>phiward run --remote</code> and <code>phiward copy</code> (tested against a real cluster).
+  Protected data on HPC storage mounted on the Mac needs its mount path in the protected roots.
+- carry-over: each session gets a fresh config folder, built from a trusted copy and thrown away at
+  exit. Nothing is shared between sessions. Instruction changes go to quarantine (<code>phiward carryover
+  show | accept ID</code>, <code>add PATH</code>). Every file the session changed in the project is listed,
+  instructions for models first. Auto memory is off unless <code>--memory</code>. Nothing is ever killed: on
+  macOS a process a session leaves behind keeps running, but what it writes does not reach a later
+  session (tests/test_v2_s17.py, test_18);
+- a fresh config folder for the tool: your normal Claude Code memory, skills, plugins and MCP
+  servers are not there until you add them (<code>phiward carryover add</code>), and a login token is needed
+  (<a href="../launch/">launch.md</a>).</p>
+<p><strong>Recorded limits (beta).</strong> These stay open in the beta. Each one belongs to the class "files that
+run later" or to the macOS process model:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Limit</th>
+<th>What reduces it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L1</td>
+<td>macOS: other folders that a later plain run reads as settings (for example a nested <code>.claude</code>) can be made in the project. <code>launch</code> makes <code>.claude</code> at start and refuses to make <code>.vscode</code>, so these two cannot become links.</td>
+<td>The rule above.</td>
+</tr>
+<tr>
+<td>L2</td>
+<td>Linux: a missing <code>.vscode</code> folder can be made, with files in it. <code>launch</code> makes placeholders only in a <code>.vscode</code> that exists.</td>
+<td>The rule above.</td>
+</tr>
+<tr>
+<td>L3</td>
+<td><code>.claude/settings.local.json</code> is read-only, but a plain run outside <code>launch</code> still reads whatever was in it before the session.</td>
+<td>Read it once before the first <code>launch</code>.</td>
+</tr>
+<tr>
+<td>L4</td>
+<td>macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also <strong>read</strong> <code>/private/tmp</code> (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's <code>RtmpXXXX</code>, Python temp files, other Claude Code sessions' scratch).</td>
+<td>Do not run tools that load code from TMPDIR; keep protected data out of temp folders.</td>
+</tr>
+<tr>
+<td>L5</td>
+<td>macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; <code>launch</code> never ends a process. Its session folder is moved to <code>trash/</code> and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read).</td>
+<td>Close the terminal after a session; a separate macOS user for the agent (not part of this release).</td>
+</tr>
+<tr>
+<td>L6</td>
+<td>Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions: no transcripts, no login, no caches, no history. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain <code>claude</code> uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of <code>.claude.json</code>, go to quarantine; only what you accept (<code>phiward carryover accept</code>) or add yourself (<code>phiward carryover add PATH</code>) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild (<a href="../launch/">launch.md</a>). Login: a fresh folder means a new login each time, unless you set <code>CLAUDE_CODE_OAUTH_TOKEN</code> (from <code>claude setup-token</code>) or <code>ANTHROPIC_API_KEY</code>, which the agent can read. Project memory (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/rules/</code> in the project) is reported, not put back.</td>
+<td>Read the quarantine and the project report before you accept or run anything.</td>
+</tr>
+<tr>
+<td>L7</td>
+<td>Names that a gateway command makes while it runs are not in that run's inventory, so they are not masked in its own output. The next call sees them.</td>
+<td>Print aggregates, not names (rule 3 of the agent rules in a project's <code>AGENTS.md</code>).</td>
+</tr>
+<tr>
+<td>L9</td>
+<td><code>claude --bare</code> and an Agent SDK app with <code>settingSources: []</code> load none of phiward's wiring (hook, sandbox block, deny rules), and nothing says so.</td>
+<td>Do not use <code>--bare</code> on protected work; load the user settings in an SDK app or pass <code>phiward install claude --json</code> as its settings, or run it under <code>phiward launch</code> (<a href="../unattended/">unattended.md</a>).</td>
+</tr>
+<tr>
+<td>L10</td>
+<td>Linux: a folder of thousands of entries above a protected folder makes <code>launch</code> show that folder whole, with its protected entries masked (the view must fit in bwrap's 9000 arguments). There, a protected entry made or replaced after the start is not hidden. <code>launch</code> says how many folders it shows whole, and refuses when the folder that holds a protected root would have to be shown whole (it would list the root's name).</td>
+<td>Protect large data folders as roots, not one entry each among many; keep new protected data in folders that exist before the session.</td>
+</tr>
+<tr>
+<td>L8</td>
+<td>Two sessions in one project share its write places: one can plant files that the other runs. Not confirmed in a test.</td>
+<td>Several sessions may run side by side; prefer one per project when one of them reads untrusted input.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../modes/" class="md-footer__link md-footer__link--prev" aria-label="Previous: The two modes">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                The two modes
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../developer/" class="md-footer__link md-footer__link--next" aria-label="Next: For contributors">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                For contributors
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

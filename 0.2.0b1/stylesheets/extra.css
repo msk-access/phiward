@@ -1,0 +1,15 @@
+/* phiward's colours: deep indigo (gbcms uses teal) */
+:root {
+  --md-primary-fg-color: #3949AB;
+  --md-primary-fg-color--light: #7986CB;
+  --md-primary-fg-color--dark: #283593;
+  --md-accent-fg-color: #3949AB;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #3949AB;
+  --md-primary-fg-color--light: #7986CB;
+  --md-primary-fg-color--dark: #283593;
+  --md-accent-fg-color: #9FA8DA;
+  --md-typeset-a-color: #9FA8DA;
+}

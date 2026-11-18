@@ -1,0 +1,2247 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b1/configuration/">
+      
+      
+        <link rel="prev" href="../setup/">
+      
+      
+        <link rel="next" href="../glossary/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Configuration - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-files-are" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the files are
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-may-set-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may set what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Every key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#protected_paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [protected_paths]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [sanitize]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [copy]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [remote]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [launch]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [broker]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [network]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#git" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [git]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#keys-that-are-gone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys that are gone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [shell]
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP servers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#which-server-a-tool-belongs-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which server a tool belongs to
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-repo-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The repo config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail closed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#derived-protected-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Derived protected folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-files-are" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the files are
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-may-set-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may set what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Every key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#protected_paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [protected_paths]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [sanitize]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [copy]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [remote]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [launch]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [broker]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [network]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#git" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [git]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#keys-that-are-gone" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys that are gone
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [shell]
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP servers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#which-server-a-tool-belongs-to" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which server a tool belongs to
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-repo-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The repo config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fail-closed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fail closed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#derived-protected-folders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Derived protected folders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-reference">Configuration reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h1>
+<p>This page lists every config key, file place and environment variable. For a first setup, use
+<code>phiward setup</code> (<a href="../setup/">setup.md</a>); it writes the keys that matter most.</p>
+<h2 id="where-the-files-are">Where the files are<a class="headerlink" href="#where-the-files-are" title="Permanent link">&para;</a></h2>
+<p>phiward reads two files and combines them.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Place</th>
+<th>Who writes it</th>
+<th>Commit it?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User config</td>
+<td><code>$PHIWARD_CONFIG</code>, else <code>$XDG_CONFIG_HOME/phiward/config.toml</code>, else <code>~/.config/phiward/config.toml</code></td>
+<td>the operator (<code>phiward setup</code>, or by hand)</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Repo config</td>
+<td><code>.phiward.toml</code>, the first one found from the working folder upward</td>
+<td>the repository's maintainers (the agent can edit it too)</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>With no config and no protected paths, the guards do nothing. If <code>$PHIWARD_CONFIG</code> names a
+file that does not exist, the config is bad (see <a href="#fail-closed">Fail closed</a>).</p>
+<p>phiward also uses these places. You do not configure them in a file.</p>
+<table>
+<thead>
+<tr>
+<th>Place</th>
+<th>What it is</th>
+<th>The agent may</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>~/.cache/phiward</code> (or <code>$XDG_CACHE_HOME/phiward</code>)</td>
+<td>the gateway's scratch folders, while commands run</td>
+<td>not read or write it</td>
+</tr>
+<tr>
+<td><code>~/.phiward-spool</code> (or <code>$PHIWARD_SPOOL</code>)</td>
+<td>requests from clients to the broker</td>
+<td>write requests (it must)</td>
+</tr>
+<tr>
+<td><code>~/.phiward/broker.json</code></td>
+<td>the broker's status: the config, cache folder, roots and patterns it uses</td>
+<td>not write it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="who-may-set-what">Who may set what<a class="headerlink" href="#who-may-set-what" title="Permanent link">&para;</a></h2>
+<p>The agent can edit a repo config, and it chooses the folder that a gateway request comes from.
+So a repo config may only <strong>add protection</strong>. Everything that <strong>widens or changes</strong> what a
+gateway command can do comes from the user config only.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>User config</th>
+<th>Repo config</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[protected_paths] roots</code>, <code>patterns</code></td>
+<td>yes</td>
+<td>yes, adds (the gateway cannot write a repo-only root)</td>
+</tr>
+<tr>
+<td><code>[protected_paths] unresolved</code></td>
+<td>yes</td>
+<td>only stricter</td>
+</tr>
+<tr>
+<td><code>[protected_paths] snapshot_names</code></td>
+<td>yes</td>
+<td>yes, adds</td>
+</tr>
+<tr>
+<td><code>[sanitize] packs</code></td>
+<td>yes (built-in names and pack files)</td>
+<td>built-in names only; pack files are ignored</td>
+</tr>
+<tr>
+<td><code>[sanitize] names_from</code>, <code>patterns</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[sanitize] inventory_limit</code></td>
+<td>yes</td>
+<td>only lower</td>
+</tr>
+<tr>
+<td><code>[copy] remotes</code>, <code>ssh_config</code>, <code>push_limit_gib</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[sanitize] table</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[remote] hosts</code>, <code>commands</code>, <code>roots</code>, <code>use_shared_connection</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[launch] pass_env</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[broker] write_to</code>, <code>net</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[network] limit</code>, <code>allowed_domains</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+<tr>
+<td><code>[broker] commands</code></td>
+<td>yes</td>
+<td>narrows: a program must be in every list that is set</td>
+</tr>
+<tr>
+<td><code>[broker] max_output_lines</code></td>
+<td>yes</td>
+<td>only lower</td>
+</tr>
+<tr>
+<td><code>[git] protected_branches</code></td>
+<td>yes</td>
+<td>yes, adds</td>
+</tr>
+<tr>
+<td><code>[shell] best_effort</code></td>
+<td>yes</td>
+<td>ignored</td>
+</tr>
+</tbody>
+</table>
+<p>A repo config that sets an ignored key is not an error. <code>phiward doctor</code> lists the ignored
+keys.</p>
+<h2 id="every-key">Every key<a class="headerlink" href="#every-key" title="Permanent link">&para;</a></h2>
+<p>An example user config with every key:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[protected_paths]</span>
+<span class="c1"># Folders that the agent must never read. Absolute, or starting with ~/ or $HOME.</span>
+<span class="c1"># No "..", no "$" variable other than $HOME (or ${HOME}), no wildcard (* ? [).</span>
+<span class="c1"># Each should exist.</span>
+<span class="n">roots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/data/patients"</span><span class="p">,</span><span class="w"> </span><span class="s2">"~/data/study-a"</span><span class="p">]</span>
+
+<span class="c1"># Glob patterns for protected places. Absolute, or starting with ~/ or $HOME. "*" matches inside</span>
+<span class="c1"># one path part ("?" and "[...]" are refused).</span>
+<span class="c1"># Prefer roots: Claude Code's sandbox cannot take patterns.</span>
+<span class="n">patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/projects/*/inputs/patient"</span><span class="p">]</span>
+
+<span class="c1"># More folder names that hold snapshots of a root (protected too). The usual ones (.snapshot,</span>
+<span class="c1"># .snapshots, .zfs, ~snapshot) are always found.</span>
+<span class="n">snapshot_names</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">".backups"</span><span class="p">]</span>
+
+<span class="c1"># What the hook's text check does with a variable it cannot see: "allow", "ask" or "deny".</span>
+<span class="c1"># Default "deny". Used only where the shell is not kernel-confined.</span>
+<span class="n">unresolved</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"deny"</span>
+
+<span class="k">[sanitize]</span>
+<span class="c1"># Pattern packs. A name without "/" is a built-in pack ("genomics", "msk", "dates").</span>
+<span class="c1"># A name with "/" is the path of your own pack file. Default ["genomics"].</span>
+<span class="n">packs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"genomics"</span><span class="p">]</span>
+
+<span class="c1"># Index files whose paths hold names to mask (&lt;NAME&gt;): lines of tab-separated fields; each</span>
+<span class="c1"># field with a "/" is a path, and its parts (and their dash pieces) are masked. Keep the files</span>
+<span class="c1"># inside a protected root: the list is protected data, and elsewhere the agent can read it.</span>
+<span class="n">names_from</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/data/patients/.names.txt"</span><span class="p">]</span>
+
+<span class="c1"># Extra rules, each 'REGEX =&gt; &lt;PLACEHOLDER&gt;'.</span>
+<span class="n">patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'\bPT-\d{6}\b =&gt; &lt;SAMPLEID&gt;'</span><span class="p">]</span>
+
+<span class="c1"># The most entries the sanitizer lists under the roots. Default 200000.</span>
+<span class="n">inventory_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200000</span>
+
+<span class="c1"># Whether `--table` may be used (it lets bare numbers through). Default false.</span>
+<span class="n">table</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+
+<span class="k">[copy]</span>
+<span class="c1"># Places on other machines that `phiward copy` may copy to or from: "host:/absolute/prefix".</span>
+<span class="n">remotes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cluster:/data/work/study-a"</span><span class="p">]</span>
+<span class="c1"># The ssh config every HPC request uses (it names the host's ControlPath; see hpc.md).</span>
+<span class="n">ssh_config</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"~/.config/phiward/ssh_config"</span>
+<span class="c1"># A push larger than this many GiB is refused: copy it yourself. Default 5.</span>
+<span class="n">push_limit_gib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+
+<span class="k">[remote]</span>
+<span class="c1"># Hosts `phiward run --remote` may name, programs it may run there, protected paths there.</span>
+<span class="n">hosts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cluster"</span><span class="p">]</span>
+<span class="n">commands</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"squeue"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sacct"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sinfo"</span><span class="p">]</span>
+<span class="n">roots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/data/protected"</span><span class="p">]</span>
+<span class="c1"># Join your shared SSH connection (no request reads a key or ticket). Default true.</span>
+<span class="n">use_shared_connection</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+
+<span class="k">[launch]</span>
+<span class="c1"># Extra environment variables passed to a `phiward launch` session (the agent can read them).</span>
+<span class="n">pass_env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[]</span>
+
+<span class="k">[broker]</span>
+<span class="c1"># Folders where `phiward run --write-to DIR` may write (DIR is one of them or inside one).</span>
+<span class="c1"># Each must be a real, existing folder. Default: none.</span>
+<span class="n">write_to</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/projects/study-a/results"</span><span class="p">]</span>
+
+<span class="c1"># Whether `phiward run --net` gets the network. Default false.</span>
+<span class="n">net</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+
+<span class="c1"># The most lines of a gateway command's output that the agent sees. Default 2000.</span>
+<span class="n">max_output_lines</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2000</span>
+<span class="c1"># The programs gateway commands may run (default: any). Set it for real patient data. A listed</span>
+<span class="c1"># program starts in a private folder, not in the agent's: paths are given in full.</span>
+<span class="c1"># commands = ["@genomics", "~/pipelines/bin/"]</span>
+
+<span class="k">[git]</span>
+<span class="c1"># Branches that `git push` must not change (the pre-push hook).</span>
+<span class="n">protected_branches</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"main"</span><span class="p">,</span><span class="w"> </span><span class="s2">"release"</span><span class="p">]</span>
+
+<span class="k">[network]</span>
+<span class="c1"># Shell commands in Claude Code sessions reach only these hosts (Mode A). Default false.</span>
+<span class="n">limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<span class="n">allowed_domains</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"github.com"</span><span class="p">,</span><span class="w"> </span><span class="s2">"pypi.org"</span><span class="p">]</span>
+
+<span class="k">[shell]</span>
+<span class="c1"># Take the hook's text check where Claude Code's sandbox does not confine the shell. Default</span>
+<span class="c1"># false: then such a shell runs only gateway calls.</span>
+<span class="n">best_effort</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</code></pre></div>
+<h3 id="protected_paths"><code>[protected_paths]</code><a class="headerlink" href="#protected_paths" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>roots</code></strong> (list of folders). Claude Code's sandbox (as <code>install</code> writes it) denies the
+  agent's shell every read and write of each root, and the hook refuses the file tools. The
+  gateway can read every root. It writes only in <code>[broker] write_to</code> folders, which may sit
+  inside a root.</li>
+<li><strong><code>patterns</code></strong> (list of globs). Like roots, for places that are spread out. <code>*</code> matches any run
+  of characters in one path part, names that start with a dot included; it is the only wildcard.
+  <code>?</code>, <code>[...]</code> and any character outside printable ASCII are refused (the config is then bad, and
+  the message suggests a rewrite): give such names as roots. On macOS, letter case does not matter.
+  Every part of phiward (hook, the gateway and <code>launch</code> profiles, sanitizer, settings check)
+  uses this one meaning. On Linux, Claude Code's sandbox cannot hold patterns, so with patterns
+  the hook refuses shell commands other than gateway calls; the gateway and <code>launch</code> cover the
+  folders that match when they start. A match reached through a link
+  is neither hidden on that path nor a gateway write place.</li>
+<li><strong><code>snapshot_names</code></strong> (list of folder names). Snapshot folders next to a root or above it
+  hold old copies of protected files. <code>.snapshot</code>, <code>.snapshots</code>, <code>.zfs</code> and <code>~snapshot</code> are found
+  without this key; add your site's name here if it differs. Each one found becomes a protected
+  folder. A repo config may add names too (it only adds protection). On Linux, other mounts of
+  the same file system that show a root (bind mounts, a second mount of one share) are protected
+  the same way.</li>
+<li><strong><code>unresolved</code></strong> (<code>"allow"</code>, <code>"ask"</code> or <code>"deny"</code>; default <code>"deny"</code>). Where the shell is not
+  kernel-confined, the hook checks command text only. This is what it does with a <code>$VARIABLE</code> or
+  text it cannot parse. When the tool cannot ask (Claude Code in a bypass or "don't ask" mode),
+  <code>"ask"</code> becomes a deny.</li>
+</ul>
+<h3 id="sanitize"><code>[sanitize]</code><a class="headerlink" href="#sanitize" title="Permanent link">&para;</a></h3>
+<p>The sanitizer filters everything a gateway command prints, the output of
+<code>phiward sanitize</code>, and what the git hooks check. It always masks protected paths
+(<code>&lt;PROTECTED&gt;</code>). For <code>run</code> and <code>copy</code> it also masks the name of every entry under the roots
+(<code>&lt;ENTRY&gt;</code>); <code>sanitize</code> and the git hooks do not list the roots, so they do not. These keys add
+to that.</p>
+<p>In text mode (without <code>--table</code>) the <code>genomics</code> pack masks positions and long numbers
+(<code>&lt;LOCUS&gt;</code>, <code>&lt;NUM&gt;</code>, for example any run of 5 or more digits). Table mode (<code>--table</code>) keeps them,
+so a record number in a table would pass: it is off unless you turn it on with <code>table = true</code>
+(user config only). Turn it on only when identifiers in your data are caught by a pack or a
+pattern, not by the number rule.</p>
+<p>An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
+one that is a common word of the built-in stop list (for example <code>patient</code>, <code>normal</code>, <code>tumour</code>,
+<code>bam</code>, <code>runs</code>, <code>test</code>).</p>
+<ul>
+<li><strong><code>packs</code></strong> (list). Built-in packs are <code>genomics</code> (the default) and <code>msk</code> (one institution's
+  identifiers; an example, not a default). A pack file has the lists <code>paths</code>, <code>identifiers</code>,
+  <code>positions</code> and <code>keep_files</code>; the format is at the top of
+  <code>phiward/packs/genomics.toml</code> in the installed package. A pack file must be a regular
+  file, not a link.</li>
+<li><strong><code>names_from</code></strong> (list of files). Index files: each line is tab-separated fields; in each field
+  that holds a <code>/</code>, every path part of 4 or more characters, the part before its first dot, and
+  its <code>-</code>/<code>_</code>/<code>.</code> pieces are masked as <code>&lt;NAME&gt;</code> (never a stop word or a bare number). A file
+  must be a regular file, not a link. Keep these files inside a protected root: elsewhere the
+  agent can read the list. <code>--names-from FILE</code> on <code>run</code> follows the same rules, and its file
+  must be inside a protected path of the user config: the broker reads it outside the sandbox,
+  and a file elsewhere would let the agent test what it holds.</li>
+<li><strong><code>table</code></strong> (true or false, default false; user config only). Whether <code>--table</code> may be used.</li>
+<li><strong><code>patterns</code></strong> (list). Each entry is <code>REGEX =&gt; &lt;PLACEHOLDER&gt;</code>.</li>
+<li><strong><code>inventory_limit</code></strong> (whole number, default 200000). The sanitizer lists every entry under the
+  roots each time a gateway command starts. With more entries than this, it stops (fails
+  closed). Raise it for a very large root, or narrow the root.</li>
+</ul>
+<p>Built-in packs: <code>genomics</code> (the default), <code>msk</code>, and <code>dates</code> (v0.2, off by default: dates and
+times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code> prints).</p>
+<h3 id="copy"><code>[copy]</code><a class="headerlink" href="#copy" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>remotes</code></strong> (list of <code>host:/absolute/prefix</code>). <code>phiward copy</code> may use a place under one
+  of these as a source or a destination. <code>..</code> is refused. How pushes and pulls work:
+  <a href="../hpc/#phiward-copy">hpc.md</a>.</li>
+<li><strong><code>push_limit_gib</code></strong> (whole number, default 5; user config only). A push larger than this is
+  refused: copy it yourself.</li>
+<li><strong><code>ssh_config</code></strong> (a file; default none). The ssh config that every HPC request uses
+  (<code>ssh -F FILE</code>, never <code>~/.ssh/config</code> unless you name it), with the system <code>ssh</code> from
+  <code>/usr/bin</code>, <code>/bin</code>, <code>/usr/sbin</code> or <code>/sbin</code>, never from your <code>PATH</code>, and <code>ProxyCommand</code>,
+  <code>ProxyJump</code> and <code>LocalCommand</code> off, <code>BatchMode=yes</code>. It must name the host's <code>ControlPath</code>
+  (the shared connection, <a href="../hpc/">hpc.md</a>). Keep it outside <code>~/.ssh</code>; it becomes a guard file
+  (the agent may not write it). An <code>Include</code> in it would read files the agent may write. The
+  value must be absolute (or start with <code>~/</code>).</li>
+</ul>
+<h3 id="remote"><code>[remote]</code><a class="headerlink" href="#remote" title="Permanent link">&para;</a></h3>
+<p>For <code>phiward run --remote HOST -- CMD</code> (<a href="../hpc/">hpc.md</a>). User config only.
+- <strong><code>hosts</code></strong> (list): the hosts a remote run may name.
+- <strong><code>commands</code></strong> (list): the programs it may run there, as bare names. The default is empty,
+  which refuses every remote run. Nothing confines a command on the remote side: this list is
+  what limits its effects.
+- <strong><code>roots</code></strong> (list of absolute paths on the remote): masked in the output as <code>&lt;PROTECTED&gt;</code>.
+- <strong><code>use_shared_connection</code></strong> (<code>true</code> or <code>false</code>; default <code>true</code>). Every HPC request joins your
+  shared SSH connection and reads no credential (<a href="../hpc/">hpc.md</a>). <code>false</code>: ssh logs in itself,
+  so requests can read your key or ticket and have the network.</p>
+<h3 id="launch"><code>[launch]</code><a class="headerlink" href="#launch" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>pass_env</code></strong> (list): environment variables passed to a launched tool besides the built-in
+  allow-list. The agent can read whatever you pass.</li>
+</ul>
+<h3 id="broker"><code>[broker]</code><a class="headerlink" href="#broker" title="Permanent link">&para;</a></h3>
+<p>The grants. Nothing asks the operator at run time: what is not written here is refused.</p>
+<ul>
+<li><strong><code>write_to</code></strong> (list of folders; default none). With exactly one folder here, gateway commands
+  may write in it without <code>--write-to</code> (the default results folder). <code>phiward run --write-to DIR</code> is allowed only
+  when DIR resolves to one of these folders or a folder inside one. When the config loads, each
+  entry is checked:</li>
+<li>an entry that does not exist yet is skipped (<code>doctor</code> counts it);</li>
+<li>an entry reached through a link is skipped (<code>doctor</code> counts it): whoever can change the link
+    would choose the place. Name the real folder;</li>
+<li>an entry that is <code>/</code>, the home folder or above it, in a dot-folder of the home folder, in
+    <code>~/Library</code> or a <code>PATH</code> folder, above a protected root, in a derived protected folder or a
+    pattern match, that holds a names or pack file of the config, that holds a <code>.claude</code>
+    folder, or that holds or is inside a phiward file or folder (the config, the code, the
+    spool, the status file, the interpreter folder) is a problem: the config is bad.</li>
+<li>an entry <strong>inside</strong> a protected root is fine: gateway commands write only in <code>write_to</code>
+    folders (protected roots are read only for them), and what they write there stays
+    protected.</li>
+<li><strong><code>net</code></strong> (<code>true</code> or <code>false</code>; default <code>false</code>). With <code>true</code>, <code>phiward run --net</code> gets the
+  network. On macOS it may also look up DNS; local unix sockets stay blocked (an SSH agent's or
+  a shared connection's socket would log in to HPC as you). On Linux it gets the host network
+  (unix sockets stay blocked).</li>
+<li><strong><code>commands</code></strong> (list; default: not set, so any program may run). The programs that
+  <code>phiward run</code> may run on protected data. An entry is:</li>
+<li>a bare name: a program found on the broker's <code>PATH</code> by that name, called by that name
+    (<code>wc</code>, not <code>/usr/bin/wc</code>);</li>
+<li><code>@genomics</code> or <code>@counts</code>: a built-in list (<code>samtools</code>, <code>bedtools</code>, <code>tabix</code>, <code>bgzip</code>,
+    <code>mosdepth</code>, <code>seqkit</code>, <code>wc</code>, <code>uniq</code>, <code>cut</code>, <code>du</code>, checksums, <code>ls</code>, <code>file</code>, <code>stat</code>, <code>head</code>,
+    <code>tail</code>, <code>zcat</code>, <code>gzip</code>, <code>gunzip</code>; <code>@counts</code> is the counting part). None of them runs other
+    code it is given. <code>fastqc</code>, <code>multiqc</code>, <code>bcftools</code> and <code>sort</code> are left out on purpose: each
+    can be told to start another program or load a library;</li>
+<li>a path: one file, for example your own script, written as its real path: a path with a
+    link on it lists nothing (<code>phiward pin</code> and <code>doctor</code> say so), because what is checked and
+    what starts must be the same file. List a link by its name instead (a multi-call program
+    such as busybox then acts as that name), or list its folder. A script's <code>#!</code> interpreter
+    is not part of what you approve: point it at an interpreter the agent cannot change;</li>
+<li>a folder (ending in <code>/</code>): every program in it, for example <code>~/pipelines/bin/</code>, called by
+    its path or its name in that folder (a link in the folder runs as that link, as in
+    Homebrew's <code>bin</code>).</li>
+</ul>
+<p>What runs is always the entry of your user config that lists it, never a link of the
+  agent's: a repo config's list can only narrow yours.</p>
+<p>When it is set, any other program is refused. You approve the listed programs as they are:
+  <code>phiward setup</code> does it when it writes the config, and <code>phiward pin</code> does it again. The broker
+  runs no listed program whose content differs from what you approved, and stops when one
+  changes while it runs. After you update a listed program, check it and run <code>phiward pin</code>, then
+  restart the broker. Approval covers every file of a listed folder and its subfolders, so keep
+  a script's helpers there; a folder with more than 2000 files is never approved. Files and
+  folders named by path, and listed programs you own, are protected from agent writes
+  (<code>(cd ~ &amp;&amp; phiward install claude --user --write)</code>). <code>pin</code> and <code>doctor</code> find the programs on the running
+  broker's <code>PATH</code>, and name any that are new, changed or not installed. <strong>Set it when you work with real patient data</strong>: without it, code
+  that the agent writes can run on protected data and print what it reads in a form masking
+  does not catch (for example encoded). A program that runs other code it is given (an
+  interpreter, a shell, <code>git</code>, <code>find</code>, <code>xargs</code>, <code>make</code>, <code>sort</code>, a workflow engine) undoes the
+  list: list your own scripts, kept outside the projects the agent works in, instead.
+  <code>phiward doctor</code> warns about such entries. A repo config may set its own list too; a program must then be in both.
+  <code>run --remote</code> has its own list (<code>[remote] commands</code>).
+- <strong><code>max_output_lines</code></strong> (whole number, default 2000). The most lines of a gateway command's
+  output (<code>run</code>, <code>run --remote</code> and <code>copy</code>) that the agent sees. The lines after that are
+  counted, not shown, and a last line says how many were withheld. A notice such as
+  <code>[3 more identical line(s)]</code> counts as a line. A repo config may only lower this value. To
+  see more, write the results to a file in a <code>write_to</code> folder inside a protected root, and
+  print a summary.</p>
+<p>A grant gives code that the agent chooses that capability. To keep the gateway as closed as
+possible, leave <code>write_to</code> empty and <code>net</code> false (and <code>[copy] remotes</code> empty); this still is not
+a defence against a hijacked agent. See <a href="../threat-model/">threat-model.md</a>.</p>
+<h3 id="network"><code>[network]</code><a class="headerlink" href="#network" title="Permanent link">&para;</a></h3>
+<p>The network of the shell commands that an agent runs in a Claude Code session (Mode A). With
+<code>limit = true</code>, <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> writes Claude Code's own
+<code>sandbox.network.strictAllowlist</code> and <code>allowedDomains</code> into your user settings: shell commands
+then reach only the listed hosts, and are refused all others without a question. A repository's
+settings cannot add hosts or proxy ports (Claude Code ignores them while the user settings set
+<code>strictAllowlist</code>). They can still take a command out of the sandbox
+(<code>sandbox.excludedCommands</code>), and an excluded command reaches any host: <code>phiward doctor</code> warns
+then. Needs Claude Code 2.1.285 or newer.</p>
+<p><strong>Each listed host is a way out.</strong> Code the agent writes can send what it reads to any listed
+host, for example in a gist, an issue or a push to <code>github.com</code>. Claude Code's proxy decides by
+the host name the client gives, so a host behind a shared front (a CDN) can reach others behind
+it. A shared host by its exact name (<code>raw.githubusercontent.com</code>, <code>s3.amazonaws.com</code>) serves
+anyone's content, so it is a way out to every account behind it; phiward refuses only the
+wildcard forms. List only the hosts you need, and as narrowly as you can.</p>
+<ul>
+<li><strong><code>limit</code></strong> (true or false, default false). <code>setup</code> asks, and suggests yes for real data.</li>
+<li><strong><code>allowed_domains</code></strong> (list): the hosts shell commands may reach, for example <code>github.com</code>,
+  <code>*.pypi.org</code> (every subdomain) or <code>github.com:443</code> (one port). Not <code>*</code>, not a URL, and not a
+  wildcard over a top-level or two-part public suffix (<code>*.com</code>, <code>*.co.uk</code>) or over, or below, a
+  common shared hosting name where anyone can have a site (<code>*.github.io</code>, <code>*.amazonaws.com</code>,
+  <code>*.s3.amazonaws.com</code>, <code>*.vercel.app</code>, ...). This is a short list, not the whole public suffix list: check a
+  wildcard yourself. Empty: no host at all. Hosts of <code>WebFetch(domain:...)</code> allow rules in your user settings count too.</li>
+</ul>
+<p>What it does not limit: Claude Code's own connection to the model provider, the WebFetch and
+WebSearch tools, MCP servers, hooks, and Mode B (<code>phiward launch</code>). <code>install</code> only adds: to
+remove a host, or to open the network again, edit <code>sandbox.network</code> in
+<code>~/.claude/settings.json</code> yourself. <code>phiward doctor</code> shows how many hosts are open and names
+hosts in the settings that the config no longer lists.</p>
+<h3 id="git"><code>[git]</code><a class="headerlink" href="#git" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>protected_branches</code></strong> (list). The pre-push hook refuses a push that changes or deletes one.</li>
+</ul>
+<h3 id="keys-that-are-gone">Keys that are gone<a class="headerlink" href="#keys-that-are-gone" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Gone since</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[broker] confirm</code></td>
+<td>0.0.x</td>
+<td>Remove it. Grants are <code>write_to</code> and <code>net</code>.</td>
+</tr>
+<tr>
+<td><code>[broker] prompt</code></td>
+<td>0.0.x</td>
+<td>Remove it. Nothing asks at run time.</td>
+</tr>
+</tbody>
+</table>
+<p>A file that still sets one is a bad config, with a message that says this. <code>phiward setup</code>
+drops them.</p>
+<h3 id="shell"><code>[shell]</code><a class="headerlink" href="#shell" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">[shell]</span>
+<span class="n">best_effort</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">     </span><span class="c1"># default false; user config only</span>
+</code></pre></div>
+<p>A shell is <strong>confined</strong> when the kernel decides what its commands can read: Claude Code's
+sandbox, as <code>install claude --user --write</code> sets it. <code>phiward doctor</code> says whether it holds,
+and why not.</p>
+<p>By default, phiward's hook refuses every command of a shell that is not confined. Only a
+phiward command written as the whole command runs there:</p>
+<ul>
+<li>the gateway: <code>phiward run -- CMD ...</code> and <code>phiward copy SRC... DST</code>;</li>
+<li><code>phiward doctor</code> and <code>phiward check -- CMD</code> (<code>check</code> answers as if the command ran in the
+  sandbox).</li>
+</ul>
+<p>The refusal says how to fix it. This applies once protected paths are set; before the first
+setup, only the hidden list is checked, by the text check (best effort).</p>
+<p><strong><code>best_effort = true</code></strong> keeps the old behaviour: a shell command that no kernel confines gets
+the hook's text check instead of a refusal. That check cannot read shell text completely
+(<a href="../threat-model/">threat model</a>), so use it only where Claude Code's sandbox cannot run
+(GitHub Copilot, which runs phiward's hook without it; a Linux machine without a usable
+bubblewrap). For real data there, prefer <code>phiward launch</code>. <code>doctor</code> warns while it is on. Only your user config can set it.</p>
+<p><code>[shell] strict</code> and <code>[shell] commands</code> (strict mode, removed before release) still load and
+do nothing: the default refusal replaces strict mode. Remove them when you next edit the file.</p>
+<h2 id="mcp-servers">MCP servers<a class="headerlink" href="#mcp-servers" title="Permanent link">&para;</a></h2>
+<p>An MCP server is a program Claude Code starts, outside its sandbox, with your rights. phiward
+judges a server's tools by what confines them, not by guessing from their fields. <code>phiward mcp
+list</code> shows what each of your servers is and what to do about it; <code>phiward mcp wrap NAME</code> wraps
+one (<a href="../modes/#wrap-an-mcp-server-mode-a">modes.md</a>).</p>
+<ul>
+<li>A tool of a server <strong>wrapped</strong> in <code>phiward launch --</code> runs in phiward's kernel profile: it works
+  as usual, with the text check of its input. The hook trusts it as wrapped only while it really
+  runs so: each <code>phiward launch</code> keeps a record of its own process, and the hook looks for a live
+  one started with the entry's own id under its own Claude Code. So after <code>phiward mcp wrap</code>, start
+  Claude Code again; <code>/resume</code>, <code>/clear</code> and compaction change nothing. A wrapped entry whose <code>env</code>
+  sets PATH, HOME, <code>PHIWARD_*</code>, <code>XDG_*</code>, <code>PYTHON*</code>, <code>LD_*</code> or <code>DYLD_*</code>, or that has a <code>cwd</code>, counts
+  as not wrapped: those change what runs. How the hook tells:
+  <a href="../threat-model/#how-the-hook-trusts-a-wrapped-mcp-server">threat-model.md</a>.</li>
+<li>A tool whose <strong>name</strong> says it runs commands on this machine (<code>run_in_terminal</code>, <code>write_bash</code>,
+  <code>run_command</code>, <code>execute_command</code>, <code>executeCode</code>, <code>start_process</code>, <code>run_python</code>, <code>send_keys</code>,
+  <code>interact_with_process</code>), from any other server or from Copilot, may make only one whole
+  gateway call: one <code>command</code> (or <code>cmd</code>, <code>script</code>, <code>input</code>) string or one <code>argv</code> list, with no
+  other options than a description, a title, a timeout (a number), a background flag (true or
+  false) or this folder as <code>cwd</code>. Everything else is refused, and the refusal says what to do
+  for that kind of server. JavaScript in a browser (a tool or server named for the browser:
+  Chrome's <code>execute_javascript</code>) is not a shell, and neither is a name that only reads
+  (<code>read_terminal</code>, <code>search_shell_history</code>) or a terminal tool given only a folder or a title
+  (<code>open_terminal_tab</code>). A local query tool (<code>execute_sql</code>) is: a local database can run
+  commands. Its remote server's tools work. Container exec (<code>docker_exec</code>) is a shell too. The
+  desktop app's own <code>_consent</code> field (true or false) does not count as an option; any other
+  field does.</li>
+<li>With <code>[shell] best_effort</code> on, such a tool gets the text check in place of the exact form,
+  as Bash does (Copilot's <code>run_in_terminal</code> is its shell).</li>
+<li><strong>Every other tool</strong> (a docs query, a coupon <code>code</code>, a Slack message) works, with every
+  string of its input checked for protected paths, also percent-decoded (a <code>file://</code> URL), and
+  a string that looks like a path (a <code>/</code>, <code>~</code>, or a file name with an extension) by where it
+  really leads, from this folder and from the project folder (a link into a protected folder,
+  or a new file in one). Such a string may not name the files that control the guards either
+  (<code>.mcp.json</code>, Claude Code's settings, phiward's own files), since a local server could write
+  them; a web address (<code>https://...</code>) and the input of a remote server may, since nothing here
+  is written. A web address is still followed as a path (a local server may join it to its
+  folder, where a link may be named <code>https:</code>). One that climbs above its host
+  (<code>https://x/../../f</code>, <code>https://../f</code>, also percent-encoded), or one whose scheme names
+  something in this folder or the project folder (a file or link <code>https:</code>), may not name those
+  files either. A link made after the check (by a Bash call in the same turn), or in a folder
+  the server joins paths to that is neither of these, is not seen. This check cannot be complete: the server may start from another
+  folder, or a link may change after the check. Wrapping is the boundary.
+  For a bare local server this text check is not a boundary: the server itself can read what
+  you can. <code>doctor</code> names such servers; wrap
+  the ones you use with protected data nearby.</li>
+</ul>
+<h3 id="which-server-a-tool-belongs-to">Which server a tool belongs to<a class="headerlink" href="#which-server-a-tool-belongs-to" title="Permanent link">&para;</a></h3>
+<p>Claude Code 2.1.274 and newer tells the hook each MCP
+tool's server and where its definition came from (<code>mcp_server.source</code>). phiward reads that
+scope's entry, by its exact name:</p>
+<table>
+<thead>
+<tr>
+<th>source</th>
+<th>phiward reads</th>
+<th>its tools</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>local</code>, <code>project</code>, <code>user</code></td>
+<td><code>~/.claude.json</code> (this project's entry, or the top level) or the project's <code>.mcp.json</code></td>
+<td>wrapped or remote: as such; else bare</td>
+</tr>
+<tr>
+<td><code>plugin</code></td>
+<td>the plugin's installed <code>.mcp.json</code> or <code>plugin.json</code>, in the copies that apply to this project (one installed for another project does not; a local or project copy before a user one); an entry of this plugin phiward cannot read makes it bare, other plugins' entries are not read</td>
+<td>wrapped (the plugin itself runs it under <code>phiward launch</code>) or remote: as such; else bare (<code>phiward mcp wrap</code> does not change a plugin's files: they are replaced on update)</td>
+</tr>
+<tr>
+<td><code>claudeai</code> (a claude.ai connector)</td>
+<td>nothing</td>
+<td>remote</td>
+</tr>
+<tr>
+<td><code>sdk</code> (the app's own servers, such as the desktop app's <code>terminal</code>) and any other source</td>
+<td>nothing</td>
+<td>bare</td>
+</tr>
+</tbody>
+</table>
+<p>A server reached by URL counts as remote only when its URL surely names another
+machine; any URL phiward cannot read strictly counts as this machine. A server on this
+machine (an IDE's) runs outside Claude Code, so phiward cannot wrap it, and its command tools
+may make only gateway calls. A config entry phiward cannot read (<code>args</code> that is not a list
+of strings) counts as not wrapped, and does not change how the others are read. The detail:
+<a href="../threat-model/#how-the-hook-trusts-a-wrapped-mcp-server">threat-model.md</a>.</p>
+<p>A config file of another scope cannot speak for the server, however it names it. With an
+older Claude Code (and with Copilot) the hook knows only the tool's name: then only your own
+config (<code>~/.claude.json</code>) can make a server wrapped or remote, and a server of <code>.mcp.json</code>
+counts as bare. <code>doctor</code> warns when Claude Code is too old. To see what your Claude Code
+sends, run <code>bash tools/check-claude-mcp-source.sh</code> from a phiward checkout (it runs <code>claude
+-p</code> once, in a temporary project, and changes no settings of yours).</p>
+<h2 id="the-repo-config">The repo config<a class="headerlink" href="#the-repo-config" title="Permanent link">&para;</a></h2>
+<p><code>.phiward.toml</code> uses the same sections and keys, with the limits in
+<a href="#who-may-set-what">Who may set what</a>. An example:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[protected_paths]</span>
+<span class="n">roots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/data/study-a"</span><span class="p">]</span>
+
+<span class="k">[sanitize]</span>
+<span class="n">packs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"genomics"</span><span class="p">]</span>
+
+<span class="k">[git]</span>
+<span class="n">protected_branches</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"main"</span><span class="p">]</span>
+</code></pre></div>
+<p>Do not rely on a repo config alone for protection: the agent can edit its repository. Put the
+roots that matter in the user config.</p>
+<h2 id="fail-closed">Fail closed<a class="headerlink" href="#fail-closed" title="Permanent link">&para;</a></h2>
+<p>A config file that cannot be read, does not parse, has an unknown section or key, has a bad
+value, sets a key that is gone, or has a <code>write_to</code> entry that may not be granted, is a <strong>bad
+config</strong>. A repo config must also be a regular file, not a link, and not inside a protected
+path. With a bad config, every guarded action is refused until you fix it: the hook,
+<code>phiward run</code> and <code>copy</code> all refuse. <code>phiward doctor</code> prints the problem.
+For a repo config, the message the agent sees quotes nothing from the file (it may be a link
+into a protected folder); <code>phiward doctor --show-paths</code>, in your own terminal, shows why.</p>
+<h2 id="derived-protected-folders">Derived protected folders<a class="headerlink" href="#derived-protected-folders" title="Permanent link">&para;</a></h2>
+<p>When there is at least one protected path, two more folders are protected without being in the
+config:</p>
+<ul>
+<li>the cache folder (it holds the gateway's scratch folders while commands run);</li>
+<li>the <code>.git</code> of a work tree that holds a root (git keeps copies of its files there). The agent
+  then cannot use git in that work tree. Keep protected data outside the repositories that the
+  agent works in.</li>
+</ul>
+<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
+<p>Set these in the shell where you start the agent tool <strong>and</strong> in the shell where you start the
+broker, with the same values. <strong>The Claude Code desktop app does not see variables you set in a
+terminal:</strong> for Mode A, keep the default places and do not set <code>PHIWARD_CONFIG</code> or
+<code>PHIWARD_SPOOL</code> (or set them in the <code>env</code> block of the Claude Code settings and for the broker
+service alike). <code>doctor</code> warns when the broker uses another config, cache folder
+or set of roots.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PHIWARD_CONFIG</code></td>
+<td>The user config file. Must name an existing file.</td>
+</tr>
+<tr>
+<td><code>XDG_CONFIG_HOME</code></td>
+<td>The base of the default user config place.</td>
+</tr>
+<tr>
+<td><code>XDG_CACHE_HOME</code></td>
+<td>The base of the cache folder.</td>
+</tr>
+<tr>
+<td><code>PHIWARD_SPOOL</code></td>
+<td>The broker's spool folder (default <code>~/.phiward-spool</code>).</td>
+</tr>
+<tr>
+<td><code>PHIWARD_BROKER_WAIT</code></td>
+<td>Seconds a client waits for the broker to claim its request (default 10).</td>
+</tr>
+<tr>
+<td><code>PHIWARD_DEV</code></td>
+<td><code>1</code>: <code>launch</code> and <code>install --user --write</code> work from a source checkout, without phiward's check of its own installed files. For development only.</td>
+</tr>
+<tr>
+<td><code>CLAUDE_PROJECT_DIR</code></td>
+<td>Set by Claude Code for hooks. Without it, the hook cannot find the project settings, so it does not treat the shell as confined.</td>
+</tr>
+<tr>
+<td><code>CLAUDE_CONFIG_DIR</code></td>
+<td>Claude Code's user settings folder (default <code>~/.claude</code>). When it is set, Claude Code reads <code>.claude.json</code> (its user and local MCP servers) from it in place of <code>~/.claude.json</code>, and so do <code>mcp list</code>, <code>wrap</code>, <code>doctor</code> and the hook.</td>
+</tr>
+</tbody>
+</table>
+<p>The broker does not pass the agent's environment to gateway commands. A command gets only
+<code>PATH</code>, <code>HOME</code>, <code>USER</code>, <code>LOGNAME</code>, <code>LANG</code>, <code>LC_*</code>, <code>TZ</code> and <code>TERM</code> from the broker's own
+environment, and <code>TMPDIR</code> set to its private scratch folder.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../setup/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Setup in detail">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Setup in detail
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../glossary/" class="md-footer__link md-footer__link--next" aria-label="Next: Glossary">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Glossary
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

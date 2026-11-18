@@ -1,0 +1,1513 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b1/launch/">
+      
+      
+        <link rel="prev" href="../unattended/">
+      
+      
+        <link rel="next" href="../setup/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Mode B: phiward launch - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mode-b-the-agent-tool-under-phiward-launch" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Mode B: phiward launch
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Once
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a session can and cannot do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-session-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a session ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux-the-sessions-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: the session's view
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-in-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits in this release
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Once
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a session can and cannot do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-session-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a session ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux-the-sessions-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: the session's view
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-in-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits in this release
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="mode-b-the-agent-tool-under-phiward-launch">Mode B: the agent tool under <code>phiward launch</code><a class="headerlink" href="#mode-b-the-agent-tool-under-phiward-launch" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>For:</strong> people who run the agent in a terminal and want the whole tool confined.</li>
+<li><strong>Before:</strong> the <a href="../quickstart/">quick start</a>, steps 1 and 2.</li>
+<li><strong>You will have:</strong> sessions in phiward's kernel profile, with settings you approve.</li>
+</ul>
+<p><code>phiward launch --tool claude</code> runs <strong>the whole agent tool</strong>, and everything it starts,
+inside the kernel profile: its file tools, shell, MCP servers and hooks. The tool cannot read your
+protected data, whatever the model asks it to do. You work with protected data through the
+gateway (<code>phiward run</code>, <code>phiward copy</code>), which masks what comes back. This is the
+strongest mode (Mode B). A normal Claude Code session wired by the hook (Mode A) is the other;
+<a href="../modes/">modes.md</a> compares them.</p>
+<p>Tested with the real Claude Code on macOS: reads of protected data by the file tools and the shell
+were refused, and the gateway returned masked output. Mode B is for the terminal: driving a
+<code>launch</code> session from the desktop app with Remote Control is not tested yet.</p>
+<p>How a session's settings stay trusted:</p>
+<pre class="mermaid"><code>flowchart TD
+  A["The trusted copy (what you added with carryover add)"] --&gt; B["A fresh folder for this session"]
+  B --&gt; C["The session runs in the kernel profile"]
+  C --&gt; D["What it changed goes to quarantine"]
+  D --&gt; E{"phiward carryover show: you read it"}
+  E --&gt;|"accept"| A
+  E --&gt;|"leave it"| F["Not used by later sessions"]</code></pre>
+<h2 id="once">Once<a class="headerlink" href="#once" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Install and set up: steps 1 and 2 of the <a href="../quickstart/">quick start</a>.</li>
+<li>A login token, because each session starts in a fresh config folder: run <code>claude setup-token</code>
+   in a plain terminal, open the URL, approve, and keep the token it prints. Then, in the terminal
+   where you start sessions:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CLAUDE_CODE_OAUTH_TOKEN</span><span class="o">=</span><span class="s1">'&lt;the token&gt;'</span>
+</code></pre></div>
+<p>The agent can read this variable, like an API key. Revoke it in your Claude account settings
+   when you no longer need it.
+3. The broker must run (for <code>run</code> and <code>copy</code>): best as a login service
+   (<a href="../setup/#5-start-the-broker">setup.md</a>), or <code>phiward broker</code> in a terminal of its own.</p>
+<h2 id="every-session">Every session<a class="headerlink" href="#every-session" title="Permanent link">&para;</a></h2>
+<p>From the project folder:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>launch<span class="w"> </span>--tool<span class="w"> </span>claude
+</code></pre></div>
+<ul>
+<li><code>--memory</code>: turn Claude Code's auto memory on. It then lives in the session's folder, and its
+  changes go to quarantine like any other instruction.</li>
+<li><code>launch</code> refuses to start in <code>/</code>, your home, a folder above or inside protected data, a dot
+  folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder.</li>
+<li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
+  threat model).</li>
+</ul>
+<h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Can</th>
+<th>Cannot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Files</td>
+<td>read and write the project; write its own session folder and the spool</td>
+<td>read protected roots, patterns or derived folders (<code>.git</code>, snapshots, and on Linux other mounts of the same data); read credentials (<code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.claude</code>, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's <code>write_to</code> folders; write anywhere else</td>
+</tr>
+<tr>
+<td>Settings that run later</td>
+<td></td>
+<td>change <code>.mcp.json</code>, <code>.claude/settings*.json</code>, <code>.vscode</code> settings, or git control files (hooks, config) in the project. On Linux a git control file that is missing at the start (<code>commondir</code>) can be made; the report at the end names it. A wrapped MCP server (<code>--entry</code>) cannot write the project's <code>.git</code> folders, <code>.claude</code> or <code>.vscode</code>; on macOS also <code>.idea</code>, <code>.gitmodules</code>, <code>.ripgreprc</code> or a new <code>.git</code> (on Linux a name missing at the start can be made)</td>
+</tr>
+<tr>
+<td>Processes</td>
+<td>run any program in the profile</td>
+<td>read other terminals, signal processes outside, inject keystrokes, open or script other apps</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>open in this release (see Limits)</td>
+<td>reach outside unix sockets (the SSH agent, your shared SSH connection, docker)</td>
+</tr>
+<tr>
+<td>Protected data</td>
+<td><code>phiward run -- CMD</code> (masked output), <code>phiward copy</code> (no names printed)</td>
+<td>anything else</td>
+</tr>
+</tbody>
+</table>
+<h2 id="when-a-session-ends">When a session ends<a class="headerlink" href="#when-a-session-ends" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The session's folder is thrown away.</strong> Each session starts from a trusted copy in
+  <code>~/.phiward/carryover/claude/</code>, which no session can read or write. Nothing is shared
+  between sessions: no transcripts, no login, no caches.</li>
+<li><strong>Instruction changes go to quarantine.</strong> These are files Claude Code reads as instructions
+  or settings (<code>CLAUDE.md</code>, <code>rules/</code>, <code>skills/</code>, <code>agents/</code>, <code>commands/</code>, <code>plugins</code> you install,
+  <code>settings.json</code>), and the MCP and permission keys of <code>.claude.json</code>. The exit message lists
+  them:</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>carryover<span class="w"> </span>show<span class="w"> </span>--tool<span class="w"> </span>claude
+phiward<span class="w"> </span>carryover<span class="w"> </span>accept<span class="w"> </span>ID<span class="w"> </span><span class="o">[</span>ITEM...<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude
+phiward<span class="w"> </span>carryover<span class="w"> </span>add<span class="w"> </span>PATH<span class="w"> </span><span class="o">[</span>--as<span class="w"> </span>NAME<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">   </span><span class="c1"># your own CLAUDE.md, a skill</span>
+phiward<span class="w"> </span>carryover<span class="w"> </span>status<span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">                 </span><span class="c1"># sizes; what is safe to delete</span>
+</code></pre></div>
+<p><code>accept ID settings.json</code> takes the whole <code>settings.json</code> as the session left it; <code>show</code> lists
+  the keys that changed, and for <code>.claude.json</code> the value <code>accept</code> writes, so read it first.
+  Items you do not name stay in quarantine. <code>add ~/.claude.json</code> takes only its MCP servers,
+  trust and allowed-tools keys, never the login or the history; an MCP server's <code>env</code> and
+  header values there are readable by the agent.
+- <strong>The project report.</strong> It lists every file the session changed that is read as instructions
+  for models (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/</code>), every file that runs later (git control
+  files of any repository, hooks, build files, <code>.pth</code>, scripts, executables) and every settings
+  file. Other changed files are named when there are 10 or fewer, and otherwise only counted;
+  code under <code>.venv</code> or <code>node_modules</code> is in that count. In a very large project it says so, and
+  past its limit checks only the first three kinds (dot folders such as <code>.claude</code> first); past
+  2,000,000 entries it checks nothing more. <strong>Treat everything in the project as written
+  by the agent</strong>, and read it before you run anything outside <code>launch</code>.
+- <strong>Anything under <code>~/.phiward</code> may be deleted at any time</strong> (a disk quota, an HPC purge, or
+  you). The next start rebuilds from what is left, and it never trusts a folder a session could
+  write. <code>carryover status</code> says what each deletion costs.</p>
+<h2 id="hpc">HPC<a class="headerlink" href="#hpc" title="Permanent link">&para;</a></h2>
+<p>See <a href="../hpc/">hpc.md</a>: HPC through your Kerberos ticket and mounts, <code>copy</code> to approved remotes, and
+<code>run --remote</code> for commands on HPC.</p>
+<h2 id="linux-the-sessions-view">Linux: the session's view<a class="headerlink" href="#linux-the-sessions-view" title="Permanent link">&para;</a></h2>
+<p>On Linux the session sees a snapshot of the file system. Every folder above a protected path or
+a credential (for example <code>/</code>, <code>/home</code>, your home) is rebuilt for the session from the entries it
+held at the start, without the protected ones. A protected folder replaced at its path, and a
+pattern match, credential or ticket cache made after the start, are not in the view.</p>
+<p>What this costs:
+- An entry the host adds to one of those folders after the start (a new folder in your home) is
+  seen only by the next session. A file the host replaces there (an editor saving <code>~/.gitconfig</code>)
+  stays as it was for the session.
+- A folder that is missing from the view cannot be made: <code>mkdir ~/.ssh</code> fails (read-only).
+- A folder that can be entered but not listed (mode 711, common on HPC) cannot be rebuilt. It is
+  shown whole, with the protected roots and credentials in it masked; one made in it later is not
+  hidden.
+- On Linux the view must fit in bwrap's 9000 arguments, about three for each entry it rebuilds. A
+  protected folder below a folder of thousands of entries (a large data folder) would need more,
+  so <code>launch</code> shows such folders whole instead, those that save the most first, and says before
+  the tool starts how many folders it shows whole. In those folders, as in a 711 folder, a
+  protected entry made or replaced after the start is not hidden. A folder shown whole lists its
+  masked entries by name, so the folder that holds a protected root, or where a pattern's <code>*</code>
+  names the protected entries, is never shown whole: if the view cannot fit then, <code>launch</code>
+  refuses, and you protect that folder as a root instead (<code>/data/study</code> rather than
+  <code>/data/study/&lt;name&gt;</code>). <code>launch</code> also counts bwrap's whole command line before it starts and
+  says so when it is too long. A pattern whose <code>*</code> falls on a folder that cannot be listed cannot
+  cover it: <code>launch</code> refuses, and you protect that folder as a root instead.
+- A pattern follows a linked folder only in its literal part (<code>/data/...</code> through <code>/data -&gt;
+  /gpfs/...</code>), not at a <code>*</code> level: a match reached through a link there is hidden at the link
+  only. Protect the target as a root.</p>
+<p><strong>Protection follows the path, on Linux and macOS.</strong> A protected folder that you move into a
+folder the session can see is readable there, during a session or after it.</p>
+<h2 id="self-check">Self-check<a class="headerlink" href="#self-check" title="Permanent link">&para;</a></h2>
+<p>It also reports start-up files next to phiward (<code>.pth</code>, <code>sitecustomize</code> in any form) that no install
+record lists, or that changed since install. One it cannot check: <code>_virtualenv.py</code>, which uv's
+and virtualenv's environments add and no record lists.</p>
+<p><code>launch</code> checks its own installed files against the installer's record first, in a separate
+Python that reads no compiled files. A changed file, a compiled file that does not match its
+source, or a file the record does not list makes it refuse: reinstall. Without a record (a source
+checkout or an editable install) it refuses unless <code>PHIWARD_DEV=1</code> is set. It cannot find code
+that changes the launcher itself so that the check is skipped, and it trusts the installer's
+record: a process running as you that changes a file <strong>and</strong> its record line is not found. It
+is meant to catch what a session without <code>launch</code> left behind by mistake or by a careless agent;
+when in doubt, reinstall: the step names the command for the tool that installed phiward.</p>
+<h2 id="limits-in-this-release">Limits in this release<a class="headerlink" href="#limits-in-this-release" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Not hidden:</strong> shell start-up files (<code>~/.zshrc</code>, which may export tokens), <code>~/.gitconfig</code>
+  (which may hold an <code>http.extraheader</code>), and, on macOS, Keychain items whose access list trusts
+  the <code>security</code> tool (the session can reach the Keychain service). Keep tokens out of start-up
+  files; prefer Mode A's test result for Keychain-backed tokens until Mode B is checked.</li>
+<li><strong>Git control files are read-only</strong> for the repositories found at the start, so <code>git remote
+  add</code>, <code>git config</code>, <code>git submodule update --init</code>, <code>git worktree add</code> and <code>git push -u</code> fail
+  inside <code>launch</code> (and <code>git switch</code> to a remote branch, <code>git branch -u</code>, <code>-m</code> and <code>-d</code> cannot
+  record their settings: <code>git switch</code> still prints "set up to track" but does not); run them in
+  your own terminal. A repository the session makes is not
+  read-only, but its control files are listed in the exit report as files that run later.</li>
+<li><strong>Linux: a launch inside a session</strong> wraps itself in bubblewrap again. A host that forbids a
+  user namespace inside bubblewrap (seen on GitHub's Ubuntu 24.04 runners) refuses it, and nothing
+  runs.</li>
+</ul>
+<p>Read <a href="../threat-model/">threat-model.md</a> (Mode B, limits L1–L8). In short:
+- <strong>The network is open.</strong> A session cannot read protected data, so it cannot send it. But it
+  can carry out what it can read: gateway output (masked), the login token, the project.
+- <strong>macOS:</strong> a process that leaves the tool's process tree keeps running after the session
+  (L5). It can no longer change what a later session reads, but it can write the project. Close
+  the terminal after a session.
+- <strong>macOS:</strong> the Keychain and the per-user temp folder are shared with your own tools.
+- <strong>Masking covers names and identifiers, not content.</strong> Through the gateway, print counts and
+  summaries, not records (rule 3 of the agent rules that <code>phiward init</code> adds to <code>AGENTS.md</code>). Dates can be masked with the <code>dates</code> pack.
+- <code>tmux</code>, <code>script</code> and other tools that open a new terminal do not work yet.
+- Other tools than Claude Code run under <code>launch -- PROGRAM</code> with the boundary, but without a
+  per-session config folder (no adapter yet).</p>
+<p>Next: what Mode B does not cover is in <a href="../threat-model/#mode-b-phiward-launch">the threat model</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../unattended/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Agents with nobody watching">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Agents with nobody watching
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../setup/" class="md-footer__link md-footer__link--next" aria-label="Next: Setup in detail">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Setup in detail
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
