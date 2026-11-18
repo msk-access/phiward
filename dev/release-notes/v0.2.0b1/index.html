@@ -1199,6 +1199,14 @@ Code's help through <code>/phiward:setup</code>, or by hand), and check it.</p>
 <p>All limits are in <a href="../../threat-model/">docs/threat-model.md</a>, with a summary for reviewers at
 the top. The main ones:</p>
 <ul>
+<li><strong>Identifiers inside files need a pack or patterns.</strong> Out of the box, masking inside file
+  contents covers only sequence and alignment file names, read names and loci (the <code>genomics</code>
+  pack). Subject and sample identifiers inside files are masked only with a pack that has them
+  (the <code>msk</code> example), your own <code>[sanitize] patterns</code> or <code>names_from</code>. The gateway masks entry
+  names under the protected roots (4 characters or longer). Planned for 0.2.0b2: setup asks,
+  doctor warns, and the output says what was masked
+  (<a href="https://github.com/msk-access/phiward/issues/3">#3</a>,
+  <a href="https://github.com/msk-access/phiward/issues/5">#5</a>).</li>
 <li><strong>The network is open by default.</strong> <code>[network] limit</code> (asked by <code>setup</code>) limits the shell
   commands of a Mode A session to listed hosts; WebFetch, MCP servers and Mode B stay open. The
   agent cannot read protected data, but it can send
