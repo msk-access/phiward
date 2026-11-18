@@ -31,8 +31,15 @@ def env():
     return dict(os.environ, PYTHONPATH=SRC)
 
 
-def launch(tree, code, tool="claude"):
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", tool, "--", PY, "-c", code],
+def launch(tree, code, tool="claude", recursion_limit=None):
+    """`phiward launch` running `code` as the tool. With `recursion_limit`, launch's own process
+    (which removes what the session left at its end) gets that recursion limit; the tool is a
+    child of it and keeps the default."""
+    start = ["-m", "phiward"]
+    if recursion_limit:
+        start = ["-c", f"import runpy, sys; sys.setrecursionlimit({recursion_limit}); "
+                       "runpy.run_module('phiward', run_name='__main__', alter_sys=True)"]
+    r = subprocess.run([PY, *start, "launch", "--tool", tool, "--", PY, "-c", code],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     return r.returncode, r.stdout, r.stderr
@@ -140,11 +147,14 @@ def test_17_6_a_locked_file_does_not_break_later_launches(tree):
 @pytest.mark.slow
 @needs_confine
 def test_17_7_a_deep_tree_does_not_break_the_end(tree):
+    # 600 levels under a recursion limit of 300: a remover that recurses once per level fails, on
+    # every Python version (macOS takes about 0.5 s for 600 levels and 15 s for 1500)
     code, out, err = launch(tree, f"import os\nos.mkdir(os.path.join({CFG}, 'skills'))\n"
                                   f"os.chdir(os.path.join({CFG}, 'skills'))\n"
-                                  "for i in range(1500):\n    os.mkdir('d')\n    os.chdir('d')\nprint('MADE')")
+                                  "for i in range(600):\n    os.mkdir('d')\n    os.chdir('d')\nprint('MADE')",
+                            recursion_limit=300)
     assert "MADE" in out and "Traceback" not in err, err
-    code, out, err = launch(tree, "print('AGAIN')")
+    code, out, err = launch(tree, "print('AGAIN')", recursion_limit=300)
     assert "AGAIN" in out and "could not be removed" not in err, err
 
 
