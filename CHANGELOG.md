@@ -40,3 +40,10 @@ stays as an alias during the beta.
 ### Limits
 What phiward does not protect, and every known gap, is in
 [docs/threat-model.md](docs/threat-model.md).
+- Out of the box, masking inside file contents covers only sequence and alignment file names,
+  read names and loci (the `genomics` pack). Subject and sample identifiers inside files are
+  masked only with a pack that has them (the `msk` example), your own `[sanitize] patterns` or
+  `names_from`. The gateway masks entry names under the protected roots (4 characters or
+  longer). Planned for 0.2.0b2: setup asks, doctor warns, and the output says what was masked
+  ([#3](https://github.com/msk-access/phiward/issues/3),
+  [#5](https://github.com/msk-access/phiward/issues/5)).

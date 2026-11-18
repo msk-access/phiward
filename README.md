@@ -66,6 +66,13 @@ newer, macOS or Linux, and Claude Code 2.1.295 or newer.
 
 - Masking hides names and identifiers, not other content: through the gateway, print counts and
   summaries, not records.
+- Out of the box, masking inside file contents covers only sequence and alignment file names,
+  read names and loci (the `genomics` pack). Subject and sample identifiers inside files are
+  masked only with a pack that has them (the `msk` example), your own `[sanitize] patterns` or
+  `names_from`. The gateway masks entry names under the protected roots (4 characters or
+  longer). Planned for 0.2.0b2: setup asks, doctor warns, and the output says what was masked
+  ([#3](https://github.com/msk-access/phiward/issues/3),
+  [#5](https://github.com/msk-access/phiward/issues/5)).
 - In Mode A, the file tools are refused inside Claude Code, not by the kernel; hooks and MCP
   servers that are not wrapped run with your rights; credentials that are not files (the macOS
   Keychain, some Kerberos caches, tokens in your environment) are not hidden by a file list.
