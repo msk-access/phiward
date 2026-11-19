@@ -1631,6 +1631,9 @@ confined, with its output sanitized). Keep tools out of folders a project opens.
 <p>"Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
 processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.</p>
 <p>The sanitizer masks protected paths, entry names under the roots, and identifiers from the packs.
+Out of the box, only file names, read names and loci are masked inside file contents; <code>phiward
+doctor</code> warns until a pack or rule for subject identifiers is on, or <code>subjects = "none"</code> is
+recorded.
 This stops <strong>accidental</strong> leaks from ordinary tools (<code>ls</code>, <code>find</code>, error messages, tracebacks). It
 also covers a name that a tool writes with escapes: git's octal quoting (<code>\303\274</code>), JSON's and
 Python's <code>\u00fc</code> and <code>\xfc</code>, and a URL's <code>%C3%BC</code>. A line whose decoded form holds a name is withheld.

@@ -699,6 +699,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#question-8-subject-and-sample-identifiers-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 8: subject and sample identifiers ([sanitize])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-hpc-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1446,6 +1457,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#question-8-subject-and-sample-identifiers-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Question 8: subject and sample identifiers ([sanitize])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#the-hpc-questions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1715,8 +1737,10 @@ install whose path holds the version (phiward in a Homebrew Python's own site fo
    yes is suggested; with yes, <code>git push</code> and <code>pip install</code> fail until you list their hosts),
    and asks about HPC.</li>
 <li><strong>Made-up data</strong>: your folders and a results folder; any program may run.</li>
-<li><strong>Every setting</strong>: the <a href="#question-1-protected-roots">questions below</a>, one by one.</li>
 </ol>
+<p>Every profile also asks which rules mask subject and sample identifiers (<a href="#question-8-subject-and-sample-identifiers-sanitize">Question
+8</a>).
+3. <strong>Every setting</strong>: the <a href="#question-1-protected-roots">questions below</a>, one by one.</p>
 <p><code>phiward setup --from team.toml</code> starts from a team template (a config file with shared
 settings); its settings fill in what your config does not have, and lists are joined with
 yours. A template may set only shared settings: the program list (by name or <code>@</code> list, not by
@@ -1837,6 +1861,19 @@ Code's own sandbox enforces it). Commands that need the network fail until their
 listed: <code>git push</code> needs <code>github.com</code> (or your git server), <code>pip install</code> needs <code>*.pypi.org</code>
 and <code>files.pythonhosted.org</code>. Claude Code itself, WebFetch and MCP servers are not limited by
 it. Each listed host is a way out, so list few. Choice 1 asks this too, with yes suggested.</p>
+<h3 id="question-8-subject-and-sample-identifiers-sanitize">Question 8: subject and sample identifiers (<code>[sanitize]</code>)<a class="headerlink" href="#question-8-subject-and-sample-identifiers-sanitize" title="Permanent link">&para;</a></h3>
+<p>The gateway masks the names of files and folders under your protected roots, and the <code>genomics</code>
+pack masks sequence file names, read names and loci. A patient, sample or donor ID inside a
+file, or in a name outside the roots, is masked only by a rule for its form. Choose:</p>
+<ol>
+<li>Your data holds no such IDs beyond the names under the roots: setup records
+   <code>subjects = "none"</code>. This is never the default: type 1 each time.</li>
+<li>The <code>msk</code> pack: one institution's forms. It is an example; copy it for another institution.</li>
+<li>Your own rules, one per line (<code>[sanitize] patterns</code>), each checked as you type it.</li>
+</ol>
+<p>Every profile asks this (in choice 3 it is numbered 8). Setup keeps <code>genomics</code> in any pack
+list it writes, also on a re-run over a list you wrote without it. Until one of these is set,
+<code>phiward doctor</code> warns.</p>
 <h3 id="the-hpc-questions">The HPC questions<a class="headerlink" href="#the-hpc-questions" title="Permanent link">&para;</a></h3>
 <p>Choices 1 and 3 then ask whether you work with an HPC cluster. With yes, they ask for its short
 name, its login host, your user name and work folder there, and the cluster folders to mask.
@@ -1864,8 +1901,9 @@ lines to add to your own <code>~/.ssh/config</code> (<a href="../hpc/#one-time-s
 <li>It prints the next steps: what you did not say yes to, then <code>phiward doctor</code> in a project
    folder.</li>
 </ol>
-<p><code>setup</code> keeps the other sections of an existing file (<code>[sanitize]</code>, <code>[git]</code>, <code>unresolved</code>), but
-not its comments; the <code>.bak</code> file of this run has them. To set those other keys, edit the file by hand; see
+<p><code>setup</code> keeps the other sections of an existing file (<code>[git]</code>, <code>unresolved</code>) and the other
+<code>[sanitize]</code> keys; it writes <code>[sanitize] subjects</code>, <code>packs</code> or <code>patterns</code> from Question 8. It
+does not keep comments; the <code>.bak</code> file of this run has them. To set those other keys, edit the file by hand; see
 <a href="../configuration/">configuration.md</a>.</p>
 <h2 id="4-wire-the-agent-tool">4. Wire the agent tool<a class="headerlink" href="#4-wire-the-agent-tool" title="Permanent link">&para;</a></h2>
 <p>There are two modes (<a href="../modes/">modes.md</a>). <strong>Mode A</strong>, a normal Claude Code session (the
@@ -2115,6 +2153,9 @@ pins; <code>pin</code> ends by printing the command: <code>(cd ~ &amp;&amp; phiw
 <li>for Claude Code: each settings level, whether phiward is wired with <code>onFailure: "block"</code>,
   and whether the sandbox confines the shell (and if not, why not).</li>
 </ul>
+<p>One WARNING says that your user config enables no pack that masks subject or sample
+identifiers: add one with <code>phiward setup</code> (Question 8), or record <code>[sanitize] subjects = "none"</code>.
+A repo's <code>.phiward.toml</code> cannot clear it.</p>
 <p>Fix each line that starts with PROBLEM or WARNING (<code>doctor</code> exits with 0 even when there are
 WARNING lines). It also warns when the current folder is inside or above a protected path.</p>
 <p><code>doctor</code> shows the protected paths only as counts; add <code>--show-paths</code> to list them. It always
@@ -2144,7 +2185,9 @@ settings (by hand).</p>
 <p>A repository can commit <code>.phiward.toml</code>. It can only add protection: more roots and
 patterns, built-in packs, protected branches, a stricter <code>unresolved</code>, a lower
 <code>inventory_limit</code>. It cannot grant anything: <code>write_to</code>, <code>net</code>, <code>remotes</code>, sanitize rules and
-pack files come from the user config only. A root that only a repo config adds is protected from
+pack files come from the user config only. A repo config or a template cannot set
+<code>[sanitize] subjects</code>, and a pack a repo config adds masks but does not clear doctor's warning
+about subject identifiers. A root that only a repo config adds is protected from
 the agent, but gateway commands cannot write to it. See
 <a href="../configuration/#the-repo-config">configuration.md</a>.</p>
 <h3 id="git-hooks">Git hooks<a class="headerlink" href="#git-hooks" title="Permanent link">&para;</a></h3>

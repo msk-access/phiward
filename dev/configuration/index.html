@@ -1573,7 +1573,7 @@ gateway command can do comes from the user config only.</p>
 <td>built-in names only; pack files are ignored</td>
 </tr>
 <tr>
-<td><code>[sanitize] names_from</code>, <code>patterns</code></td>
+<td><code>[sanitize] names_from</code>, <code>patterns</code>, <code>subjects</code></td>
 <td>yes</td>
 <td>ignored</td>
 </tr>
@@ -1669,6 +1669,10 @@ keys.</p>
 
 <span class="c1"># Extra rules, each 'REGEX =&gt; &lt;PLACEHOLDER&gt;'.</span>
 <span class="n">patterns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s1">'\bPT-\d{6}\b =&gt; &lt;SAMPLEID&gt;'</span><span class="p">]</span>
+
+<span class="c1"># Or your record that the protected data holds no subject or sample IDs beyond the names</span>
+<span class="c1"># under the roots (phiward doctor warns until a rule masks them or this is set):</span>
+<span class="c1"># subjects = "none"</span>
 
 <span class="c1"># The most entries the sanitizer lists under the roots. Default 200000.</span>
 <span class="n">inventory_limit</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">200000</span>
@@ -1787,6 +1791,11 @@ one that is a common word of the built-in stop list (for example <code>patient</
   --check</code> counts them. To check that your rules match your data, run a command over it: the
   note at the end of <code>phiward run</code> counts the placeholders shown and says when no identifier
   placeholder was shown.</li>
+<li><strong><code>subjects</code></strong> (user config only). Only <code>"none"</code>: your record that the protected data holds no
+  subject or sample identifiers beyond the names under the roots. Without it, and without a
+  rule that masks them (the <code>msk</code> pack, a pack file of your own with an identifier rule whose
+  placeholder is not <code>&lt;BAMFILE&gt;</code>, <code>&lt;READ&gt;</code> or <code>&lt;DATE&gt;</code>, <code>patterns</code> or <code>names_from</code>), <code>phiward doctor</code> warns. <code>phiward setup</code> asks; <code>"none"</code> is never
+  its default. A repo config or a team template cannot set it.</li>
 <li><strong><code>inventory_limit</code></strong> (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.</li>

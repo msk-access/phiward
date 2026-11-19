@@ -1186,7 +1186,8 @@ time in your user config, and what they do not allow is refused. The limits of e
 <div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>doctor<span class="w"> </span>--headless
 </code></pre></div>
 <p>It exits with 0 when a Claude Code session in this folder would be guarded, and with 1 and the
-reasons when not. Put it first in the script. It checks that:</p>
+reasons when not. Put it first in the script. A NOTE line (for example, that no rule masks
+subject identifiers) does not change the exit status. It checks that:</p>
 <ul>
 <li>your user (or managed) settings run phiward's isolated hook on every tool. That is the <code>/bin/sh -c
   '...; exec &lt;python&gt; -I -m phiward hook claude'</code> that <code>phiward install claude --user --write</code>

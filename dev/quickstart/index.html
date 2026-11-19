@@ -1333,6 +1333,8 @@ safe defaults for you:
 - no network for gateway commands;
 - shell commands in Claude Code reach only the hosts you list (Enter says yes). <code>git push</code> and
   <code>pip install</code> from a session fail until you list their hosts, such as <code>github.com</code>;
+- which rules mask subject and sample IDs inside your files: none (type 1; there is no
+  default), the <code>msk</code> example pack, or your own patterns;
 - if you use an HPC cluster: its short name, login host, your user name and work folder.
   <code>setup</code> writes phiward's ssh config and prints the lines to add to your <code>~/.ssh/config</code>.</p>
 <p>At the end it shows the whole config. Nothing is written until you say yes; then it writes the
