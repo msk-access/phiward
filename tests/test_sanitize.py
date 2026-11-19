@@ -174,6 +174,16 @@ def test_placeholder_words_never_become_name_tokens():
     assert {t.lower() for t in toks} == {"real_thing9", "real", "thing9"}
 
 
+def test_date_is_a_placeholder_word(tmp_path):
+    # the dates pack writes <DATE>: a names file with a path part `date` must not turn it into
+    # another placeholder (`<<NAME>>`)
+    p = tmp_path / "runs.tsv"
+    p.write_text("1\t/x/date/FAKE-PT-0001.bam\n")
+    san = Sanitizer.from_config(config.Config(packs=["genomics", "dates"]), [str(p)])
+    assert "date" not in {t.lower() for t in san.tokens}
+    assert san.clean("seen 2024-03-05 ok") == "seen <DATE> ok"
+
+
 def test_names_file_without_token_fails_closed(tmp_path):
     p = tmp_path / "empty.tsv"
     p.write_text("1\t/x/bam/sampleid\nno slash here at all\n")

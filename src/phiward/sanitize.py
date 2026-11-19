@@ -73,7 +73,7 @@ line counts the lines read and changed.
 """
 
 PLACEHOLDER_WORDS = {"protected", "entry", "name", "sampleid", "cmoid", "bamid", "read", "locus", "num",
-                     "donor", "patientpath", "clinicalpath", "bamfile"}
+                     "donor", "patientpath", "clinicalpath", "bamfile", "date"}
 # Words that carry no identity and appear in many paths: never a name token.
 STOP_WORDS = {"data1", "share", "analysis", "star", "aligned", "sortedbycoord", "bam", "bams",
               "tumour", "normal", "inputs", "patient", "runs", "test", "scratch", "home",

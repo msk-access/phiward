@@ -18,6 +18,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- `date` is a placeholder word: a names file with a path part `date` no longer turns the dates
+  pack's `<DATE>` into `<<NAME>>`.
 - Two tests of the output cap restart the broker after changing the config, so they test the
   cap; before, every run in them was refused and their bounds held trivially.
 
