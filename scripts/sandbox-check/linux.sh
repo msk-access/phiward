@@ -32,7 +32,10 @@ stop() {
   ids=$(docker ps -aq --filter "label=$label") || return 0
   [ -z "$ids" ] || docker rm -f $ids >/dev/null 2>&1 || true
 }
-trap 'stop; exit 130' INT TERM
+# a signal stops this run's container (so the session ends), then exits 128 + the signal
+trap 'stop; exit 130' INT
+trap 'stop; exit 143' TERM
+trap 'stop; exit 129' HUP
 mkdir "$work/src" "$work/out"
 chmod 777 "$work/out"  # the container's tester writes there; $work itself is private
 git -C "$repo" archive HEAD | tar -x -C "$work/src"
@@ -42,12 +45,16 @@ docker build -q -t "$image" --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION:-}" "$h
 id=$(docker image inspect -f '{{.Id}}' "$image")
 modes=${MODES:-A B}
 tty=""
-[ -n "$stub" ] || tty=-it
+input=/dev/null
+[ -n "$stub" ] || { tty=-it; input=/dev/tty; }
 code=0
+# in the background (the terminal given explicitly for a real run), so a signal to this script is
+# handled at once
 docker run --rm $tty --user tester --privileged --security-opt no-new-privileges \
   --label "$label" \
   -e "SBX_IMAGE=$id" -e "MODES=$modes" \
   -v "$work/src:/repo:ro" -v "$work/out:/out" \
-  "$image" sh /repo/scripts/sandbox-check/inside.sh $stub || code=$?
+  "$image" sh /repo/scripts/sandbox-check/inside.sh $stub < "$input" &
+wait $! || code=$?
 echo "output in $work/out"
 exit $code

@@ -80,20 +80,28 @@ Then push `main`, `develop` and the tag.
    container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
    hook and a home folder on your machine. (That refusal looks for the container's marks,
    `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
-   The check's home folder is always removed at the end. Only the report and, per mode, the
+   A token you set in the environment is read once and unset at the start: only the claude
+   process gets it. The check's home folder and its judge's folder are removed at the end, also
+   after Ctrl-C, SIGTERM or a closed terminal; if one cannot be removed, the check names it and
+   exits non-zero. A `kill -9` of `check.sh` or `launch.py` skips that: the session may keep
+   running, and the folders stay (remove them yourself). Only the report and, per mode, the
    stream and the facts are kept, redacted in memory: with `KEEP=1` in a folder of their own
    (`phiward-sbx-kept-*` next to it), and with `linux.sh` in its output folder. If the token's
    value is still in any of them, nothing is kept ("redaction failed: nothing kept").
    A process the session starts in a session of its own (`setsid`) can outlive the check; its
-   folder is removed all the same, so nothing it writes is kept.
+   folders are removed all the same, so nothing it writes is kept.
+   The stream reaches `launch.py` through a pipe, and `launch.py` writes it, after the session
+   is stopped, into the judge's folder: next to the home folder, outside the folders the check
+   gives the session. The check does not prove that the sandbox cannot write there; a process
+   left running in a session of its own could, before the judge reads it.
    On Linux, Mode B ends INCONCLUSIVE for now: the wrapped MCP server cannot start inside a
    `launch` session there (its own launch cannot write the read-only `~/.phiward` for its
    carry-over). The judge names that cause. Until it is fixed, Mode B on Linux is proven only
    in its other items.
    What the session writes in its project folder (`results.txt`, `server.out`) a model could
-   forge, line by line. The checks made outside the session cannot be forged: a probe's file on
-   the host, the settings file's hash, the marker or the token in the stream, and the
-   transcript's tool calls. Read a PASS with that in mind.
+   forge, line by line. The checks made outside the session are harder to forge: a probe's file
+   on the host, the settings file's hash, the marker or the token in the stream, and the
+   transcript's tool calls (with the limit above). Read a PASS with that in mind.
    Run the real check when phiward's Claude Code wiring (`install.py`, `claude_settings.py`,
    `fasthook.py`, `mcp.py`, `wholetool.py`) or the lowest Claude Code version it supports
    changed since the last release; otherwise skip it.

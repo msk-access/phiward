@@ -7,14 +7,19 @@
 # (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
-# The operator runs it, in a terminal: it asks only for a token (set CLAUDE_CODE_OAUTH_TOKEN, or
-# paste the one `claude setup-token` prints). The token goes only to the claude process, never
-# into a file or a command line, and every kept file is redacted. A run without a terminal is
-# refused, and so is a token from the environment inside a Claude Code session (CLAUDECODE).
-# Nothing of your own setup is read or changed. The whole home folder is removed at the end,
-# always. What is kept: the report, and per mode the stream and the facts, redacted in memory and
-# written only if no token is left (else nothing is kept): with KEEP=1 in a folder of their own
-# next to it, with SBX_OUT there (the container's /out).
+# The operator runs it, in a terminal: it asks only for a token (set CLAUDE_CODE_OAUTH_TOKEN or
+# ANTHROPIC_API_KEY, or paste the one `claude setup-token` prints). A token from the environment
+# is read once and both variables are unset at the start, so no other program of the check gets
+# it; the token reaches only the claude process (through launch.py's stdin), never a file or a
+# command line, and every kept file is redacted. A run without a terminal is refused, and so is
+# a token from the environment inside a Claude Code session (CLAUDECODE).
+# Nothing of your own setup is read or changed. The home folder and the judge's folder (next to
+# it, outside the folders the session is given: the stream, the facts, doctor's output, the
+# report) are removed at the end; if one cannot be, the check says so, names it, and exits
+# non-zero. A `kill -9` of check.sh or launch.py skips that: the session may keep running, and
+# the folders stay. What is kept: the report, and per mode the stream and the facts, redacted in
+# memory and written only if no token is left (else nothing is kept): with KEEP=1 in a folder of
+# their own next to it, with SBX_OUT there (the container's /out).
 #   --stub     a stand-in claude (stub/claude) and a made-up token: tests the plumbing, never
 #              Claude Code. It runs only in the Linux container (linux.sh --stub); elsewhere it
 #              is refused, as it would plant a git hook on a real machine.
@@ -45,8 +50,16 @@ else
   # a tripwire, not a gate: anyone can set SBX_IMAGE
   [ -e /.dockerenv ] || [ -n "$SBX_IMAGE" ] || { echo "sandbox-check: --stub runs only in the container: sh scripts/sandbox-check/linux.sh --stub" >&2; exit 2; }
   [ -z "$REMOTE" ] || { echo "sandbox-check: REMOTE is for a real run, not --stub" >&2; exit 2; }
-  unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
 fi
+# a token from the environment: read once, then both variables unset, so uv, install, doctor and
+# the broker never get it; launch.py gets it on stdin (an API key as ANTHROPIC_API_KEY=VALUE)
+token=""
+if [ -z "$stub" ]; then
+  if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then token=$CLAUDE_CODE_OAUTH_TOKEN
+  elif [ -n "$ANTHROPIC_API_KEY" ]; then token="ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
+  fi
+fi
+unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
 modes=${MODES:-A B}
 for m in $modes; do
   case $m in A|B) ;; *) echo "sandbox-check: MODES holds A and B only" >&2; exit 2 ;; esac
@@ -94,27 +107,47 @@ printf '%s\n' "$homes" | while IFS= read -r real_home; do
 done || exit 2
 if [ -n "$REMOTE" ]; then
   case $REMOTE_DIR in /*) ;; *) echo "sandbox-check: REMOTE needs REMOTE_DIR, an absolute path to a new, empty folder there" >&2; exit 2 ;; esac
-  case $REMOTE$REMOTE_DIR in *[!A-Za-z0-9._/@-]*) echo "sandbox-check: REMOTE and REMOTE_DIR may hold only letters, digits and ._/@-" >&2; exit 2 ;; esac
+  case $REMOTE$REMOTE_DIR${REMOTE_HOSTNAME:-}${REMOTE_USER:-} in *[!A-Za-z0-9._/@-]*) echo "sandbox-check: REMOTE, REMOTE_DIR, REMOTE_HOSTNAME and REMOTE_USER may hold only letters, digits and ._/@-" >&2; exit 2 ;; esac
 fi
 
-token=""
 tty_mode=""
 H=""
+J=""
 py=""
 broker=""
+lpid=""
 cleanup() {
+  st=$?
+  set +e  # a failure here must not cut the cleanup short
   [ -n "$tty_mode" ] && stty "$tty_mode" < /dev/tty 2>/dev/null
   [ -n "$broker" ] && kill "$broker" 2>/dev/null
-  # always: nothing of the home folder is kept. After a short wait, so that a process the session
-  # left behind (one in a session of its own outlives the stop) has less time to write again
-  if [ -n "$H" ]; then sleep 2; rm -rf "$H"; rm -rf "$H" 2>/dev/null; fi
-  return 0
+  # nothing of the home folder or the judge's folder is kept. After a short wait, so that a
+  # process the session left behind (one in a session of its own outlives the stop) has less
+  # time to write again; folders the session made unwritable are made writable first
+  left=""
+  for d in "$H" "$J"; do
+    [ -n "$d" ] || continue
+    sleep 2
+    chmod -R u+rwX "$d" 2>/dev/null
+    rm -rf "$d" 2>/dev/null
+    [ -e "$d" ] && left="$left $d"
+  done
+  if [ -n "$left" ]; then
+    echo "sandbox-check: the run folder could not be removed: remove it yourself:$left" >&2
+    [ "$st" = 0 ] && st=2
+  fi
+  exit "$st"
+}
+# a signal is forwarded to launch.py, which stops the session; then the cleanup runs
+stopped() {
+  if [ -n "$lpid" ]; then kill -"$1" "$lpid" 2>/dev/null; wait "$lpid" 2>/dev/null; fi
+  exit "$2"
 }
 trap cleanup EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-trap 'exit 129' HUP
-if [ -z "$stub" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+trap 'stopped INT 130' INT
+trap 'stopped TERM 143' TERM
+trap 'stopped HUP 129' HUP
+if [ -z "$stub" ] && [ -z "$token" ]; then
   echo "In another terminal, run:  claude setup-token"
   printf "then paste the token here (it is not shown): "
   tty_mode=$(stty -g < /dev/tty)
@@ -127,6 +160,9 @@ if [ -z "$stub" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_K
 fi
 
 H=$(mktemp -d "$sbx_base/phiward-sbx-XXXXXX")
+# the judge's folder: next to the home, outside the folders the session is given (its home, the
+# project, --add-dir); the stream, the facts, doctor's output and the report go there
+J=$(mktemp -d "$sbx_base/phiward-sbx-judge-XXXXXX")
 fail() { echo "sandbox-check: $1 failed:"; tail -20 "$2" 2>/dev/null; exit 2; }
 echo "building in $H ..."
 mkdir -p "$H/src" "$H/dist"
@@ -263,12 +299,12 @@ for _ in range(20):
 print(round(statistics.median(times)) if cmds else "no-hook")
 PY
 )
-phiward doctor > "$H/doctor-before.txt" 2>&1 || true
+phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 prompt="Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
 Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
 runs=""
 for m in $modes; do
-  R="$H/run-$m"
+  R="$J/run-$m"
   mkdir -p "$R"
   {
     echo "mode $m"
@@ -301,7 +337,11 @@ for m in $modes; do
     --max-turns 8 --max-budget-usd 1
   [ "$m" = B ] && set -- phiward launch --tool claude -- "$@"
   code=0
-  printf '%s\n' "$token" | "$py" "$here/launch.py" "$H" "$R" 300 -- "$@" || code=$?
+  # in the background, so a signal to this script is handled at once (forwarded to launch.py)
+  printf '%s\n' "$token" | "$py" "$here/launch.py" "$H" "$R" 300 -- "$@" &
+  lpid=$!
+  wait "$lpid" || code=$?
+  lpid=""
   [ "$code" = 0 ] || echo "note: claude exited with $code"
   after=$(sum "$H/.claude/settings.json")
   same=no; [ "$before" = "$after" ] && same=yes
@@ -335,17 +375,17 @@ for m in $modes; do
   } > "$R/facts.txt"
   runs="$runs $R"
 done
-phiward doctor > "$H/doctor-after.txt" 2>&1 || true
+phiward doctor > "$J/doctor-after.txt" 2>&1 || true
 echo
 code=0
-"$py" "$here/judge.py" "$H" "$marker" $runs > "$H/report.txt" 2>&1 || code=$?
+"$py" "$here/judge.py" "$H" "$marker" $runs > "$J/report.txt" 2>&1 || code=$?
 # what is kept and shown: the report, the streams and the facts, redacted in memory, written
 # outside the home folder only when no token is left in any of them
 out=-
 if [ -n "$SBX_OUT" ]; then out=$SBX_OUT
 elif [ -n "$KEEP" ]; then out=$(mktemp -d "$sbx_base/phiward-sbx-kept-XXXXXX")
 fi
-printf '%s\n' "$token" | "$py" "$here/launch.py" --keep "$out" "$H/report.txt" $runs || {
+printf '%s\n' "$token" | "$py" "$here/launch.py" --keep "$out" "$J/report.txt" $runs || {
   [ "$out" = - ] || [ -n "$SBX_OUT" ] || rmdir "$out" 2>/dev/null
   exit 3
 }

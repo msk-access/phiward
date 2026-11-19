@@ -677,7 +677,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   the real `claude`. The release check (`scripts/sandbox-check`, [releasing.md](releasing.md))
   does, on macOS and Linux, run by the operator: one session per mode, judged from its files.
   Its probe lines are written inside the session, so a model could forge them; the checks made
-  outside it (files on the host, the settings hash, the stream) cannot be forged. On Linux,
+  outside it (files on the host, the settings hash, the stream that `launch.py` writes after the
+  session) are harder to forge, but a process the session leaves running could still reach
+  them before the judge reads them. On Linux,
   Mode B stays INCONCLUSIVE while a wrapped MCP server cannot start inside `launch`.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
   `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
