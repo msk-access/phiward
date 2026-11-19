@@ -13,7 +13,8 @@ from phiward.sanitize import Sanitizer
 
 REAL = ["P-9990001-T01-IM6.bam", "sample_P-9990006-T01-IM6.bam", "AB123456-T.bam",
         "C-ABC123-L001-d.bam", "Doe Jane", "P-9990003 Doe Jane", "P-9990004.Roe Ann.bam",
-        "batchfolder", "Smith_P-9990005-T01-IM6", "DOE_JANE"]
+        "batchfolder", "Smith_P-9990005-T01-IM6", "DOE_JANE", "Ann.Doe.bam",
+        "P-9990021_Doe_Jane", "AB123499-T_sorted"]
 
 
 @pytest.fixture()
@@ -51,6 +52,10 @@ def test_an_id_shaped_name_reads_the_same_whether_or_not_it_exists(san, real, gu
     ("smith/; Smith_P-9990005-T01-IM6", ["Smith", "9990005"]),
     ("<DOE_JANE>", ["DOE_JANE"]),
     ("Doe Jane/doe-123456_jane-;x", ["Doe Jane"]),
+    # never less masked than before: a rule that does not fire in the line leaves the entry mask
+    ("Ann.Doe.bam_x", ["Ann", "Doe"]),
+    ("xP-9990021_Doe_Jane", ["Doe_Jane", "9990021"]),
+    ("AB123499-T_sorted", ["AB123499"]),
 ])
 def test_a_name_with_a_personal_part_stays_masked_whole(san, line, gone):
     out = san.clean(line)

@@ -281,11 +281,6 @@ class Sanitizer:
                                            {w.casefold() for w in stop})
                 except inventory.InventoryError as exc:
                     raise SanitizerError(str(exc))
-                # a name that a file or identifier rule matches whole is left to the rule: it
-                # then reads the same in output whether or not it exists under a root
-                whole = [re.compile(rx.pattern, rx.flags | re.IGNORECASE)
-                         for rx, _r in path_rules + id_rules]
-                ents = {e for e in ents if not any(rx.fullmatch(e) for rx in whole)}
             return cls(pset, path_rules, id_rules, pos_rules, keep, tokens, ents, known, roots)
         except SanitizerError:
             raise
@@ -322,7 +317,7 @@ class Sanitizer:
             # spaces; then the mark with the rest of the path (names, now placeholders, and
             # path characters) becomes one placeholder: no part of `Doe Jane/x` is left
             line = self._marked(line)
-        line = inventory.mask(line, self.entries)
+        line = self._entries(line)
         if self.protected is not None:
             # a mark and the rest of its path; one whose path goes on past the root or the
             # pattern (`<root>/New Person 7`) is followed by `_GOES_ON` for `_tail`
@@ -336,6 +331,43 @@ class Sanitizer:
         if not table:
             line = self._apply(self.pos_rules, line)
         return line
+
+    def _entries(self, line: str) -> str:
+        """Entry names as `<ENTRY>`; but where an entry name lies inside what a file or
+        identifier rule matches, that whole match becomes the rule's placeholder, as it would for
+        a name that does not exist. The same text is masked as before (or more): only which
+        placeholder it reads as changes."""
+        rx = self.entries
+        if rx is None:
+            return line
+        hits = [(m.start(), m.end()) for m in rx.finditer(line)]
+        if not hits:
+            return line
+        spans: List[Tuple[int, int, str]] = []
+        for rule, repl in self.path_rules + self.id_rules:
+            spans += [(m.start(), m.end(), repl) for m in rule.finditer(line)
+                      if m.end() > m.start() and _MARK not in m.group(0)
+                      and not (repl == KEEP_PLACEHOLDER and self.keep_files
+                               and self._kept(m.group(0)))]
+        parts: List[Tuple[int, int, str]] = []
+        for a, b in hits:
+            cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
+            parts.append(cover or (a, b, "<ENTRY>"))
+        parts.sort()
+        merged: List[List] = []
+        for a, b, r in parts:  # overlapping parts are joined; <ENTRY> wins a tie (more masked)
+            if merged and a < merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], b)
+                if r == "<ENTRY>" or merged[-1][2] != r:
+                    merged[-1][2] = "<ENTRY>"
+            else:
+                merged.append([a, b, r])
+        out, pos = [], 0
+        for a, b, r in merged:
+            out += [line[pos:a], r]
+            pos = b
+        out.append(line[pos:])
+        return "".join(out)
 
     def _marked(self, line: str) -> str:
         """Every protected root or pattern match as the mark. A pattern's wildcard may hold
