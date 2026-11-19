@@ -167,7 +167,7 @@ flowchart TD
   reads the protected roots. It writes only its scratch folder and the granted folders. It has
   no network unless granted.
 - Every line goes through `sanitize.Sanitizer`. Masking hides names and identifiers, not other
-  content.
+  content. With `--table`, `sanitize.Columns` reads the lines by column (fresh for each call).
 - The agent sees `exit=0` or `exit=1` only, and a note that counts the placeholders in the
   lines shown (`run_confined`). The real exit status and the counts go to the broker's log.
 - `phiward copy` and `phiward run --remote` take the same road (`copying.execute`,

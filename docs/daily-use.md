@@ -54,8 +54,15 @@ sandbox does not confine the shell, the hook refuses it.
 
 **Write scripts that print aggregates**: counts, summaries, tables. The sanitizer masks paths,
 entry names and identifiers. It does not mask other content. In text mode it also masks long
-numbers (`<NUM>`). `--table` keeps numbers, so it works only when the operator turned it on
-(`[sanitize] table = true`).
+numbers (`<NUM>`). `--table` reads CSV or TSV output by column: cells under an identifier header
+(`sample_id`, `MRN`, `Patient ID`, ...) show `<IDCOL>`, and numbers in the other columns are
+kept. It works only when the operator turned it on (`[sanitize] table = true`). One table per
+output: print its header as the first line, and give it an identifier column. When the first
+line is not such a header (a warning, a line of prose, a table with no identifier column), the
+whole output is masked as text. The first line that is not a row of the table (an empty line, a
+row with a quote or another field count, a row with no number, a second header) turns the rest
+into text: print one table per command. Under `chrom` and `pos` columns, both cells are
+shown (text mode masks `chr1 1234567` as one `<LOCUS>`).
 
 Exit codes: 0 when the command succeeded, 1 when it failed (whatever its own code); 2 for a
 refusal or a bad form; 3 for a config,
@@ -69,7 +76,7 @@ Options (before `--`):
 | `--write-to DIR` | Also allow writes into DIR. DIR must resolve to a `[broker] write_to` folder of the user config, or a folder inside one. |
 | `--net` | Allow the network. Needs `[broker] net = true` in the user config. |
 | `--names-from FILE` | Also mask the names in FILE, an index file: tab-separated fields, where each field with a `/` is a path whose parts are masked (see [configuration.md](configuration.md#sanitize)). Not a link, and inside a protected path. |
-| `--table` | Table mode: positions and numbers in cells are not masked. Only when the operator set `[sanitize] table = true`. |
+| `--table` | Read CSV/TSV output by column: cells under an identifier header are masked whole (`<IDCOL>`), numbers in other columns are kept; other lines are masked as text. Only when the operator set `[sanitize] table = true`. |
 
 Nothing asks the operator for a grant. A grant that is not in the user config is refused. The
 agent tool's permission mode does not change this.
@@ -152,7 +159,8 @@ some-producer 2>&1 | phiward sanitize
 `--names-from FILE`, `--check FILE` and `--check-table FILE` (report whether a file would
 change), and `--selftest` (run the built-in test lines). `--table` and `--check-table` need
 `[sanitize] table = true`, read from the caller's own config: in this form that is a
-convenience, not a guard. The hook does not accept this pipe form as a way to read protected
+convenience, not a guard. Here `--table` reads no columns: each line is masked for identifiers
+only, and numbers and positions are kept. The hook does not accept this pipe form as a way to read protected
 data: use `phiward run`.
 
 ## When a command is refused
