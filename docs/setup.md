@@ -545,7 +545,8 @@ covers the new root). The broker must run (step 5). Then, in a project folder:
 phiward run -- ls ~/phiward-trial
 ```
 
-This must print `<ENTRY>` in place of the file name, then `run done: exit=0 ...`.
+This must print `<ENTRY>` in place of the file name, a note that counts it, then
+`run done: exit=0 ...`.
 
 ```bash
 phiward run --net -- true

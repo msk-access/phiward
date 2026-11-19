@@ -5,6 +5,17 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ## [0.2.0b2] - unreleased
 
+### Added
+
+- `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
+  lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
+  placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.
+
+### Fixed
+
+- Two tests of the output cap restart the broker after changing the config, so they test the
+  cap; before, every run in them was refused and their bounds held trivially.
+
 ### Changed
 
 - The `genomics` pack's number rule masks a run of 5 or more digits next to a comma too

@@ -38,7 +38,7 @@ import os
 import re
 import sys
 from typing import (Any, BinaryIO, Dict, Iterable, List, Optional, Pattern, Sequence,
-                    TextIO, Tuple)
+                    Set, TextIO, Tuple)
 
 from phiward import _toml, config, inventory, paths, pathmatch
 
@@ -97,6 +97,30 @@ def fmt_n(n: int) -> str:
     if n < 1_000_000:
         return f"{n / 1000:.1f}k"
     return f"{n / 1_000_000:.1f}M"
+
+
+# identifier placeholders of the built-in packs that name no subject or sample (files, reads,
+# dates)
+NOT_SUBJECTS = frozenset({"<BAMFILE>", "<READ>", "<DATE>"})
+IDENTIFIER_NOTE_LINES = 20  # shown lines from which a run with no identifier placeholder says so
+
+
+def placeholder_note(counts: Dict[str, int], held: int, lines: int, identifiers: "Set[str]") -> str:
+    """The note at the end of a run, from the lines the agent was shown: how many placeholders
+    of each kind they hold and how many were withheld lines; and, from IDENTIFIER_NOTE_LINES
+    shown lines on, that none holds an identifier placeholder. "" when there is nothing to say.
+    Only fixed words, counts and the config's own placeholder names."""
+    kinds = [f"{fmt_n(n)} {p}" for p, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+    if held:
+        kinds.append(f"{fmt_n(held)} lines withheld by the sanitizer")
+    warn = ""
+    if lines >= IDENTIFIER_NOTE_LINES and not (set(counts) & identifiers):
+        warn = (f"in the {fmt_n(lines)} lines shown: if this data names subjects or samples, tell "
+                "the operator to check [sanitize] packs and patterns (phiward doctor)")
+    if kinds:
+        return "[placeholders in the lines shown: " + ", ".join(kinds) + \
+            (f"; no identifier placeholder {warn}" if warn else "") + "]"
+    return f"[no placeholder {warn}]" if warn else ""
 
 
 # ---- rules and packs ---------------------------------------------------------------------------
@@ -287,6 +311,19 @@ class Sanitizer:
             raise
         except Exception as exc:  # noqa: BLE001 - fail closed on anything
             raise SanitizerError(f"cannot build the sanitizer ({type(exc).__name__})")
+
+    def placeholders(self) -> "Set[str]":
+        """Every placeholder this sanitizer writes (computed when asked: remote roots are added
+        after the build)."""
+        rules = self.first_rules + self.path_rules + self.id_rules + self.pos_rules
+        return {r for _rx, r in rules} | {"<PROTECTED>", "<ENTRY>", "<NAME>"}
+
+    def identifier_placeholders(self) -> "Set[str]":
+        """The placeholders that stand for a subject, a sample or a protected name: identifier
+        and path rules (a patient's folder), names, entries and protected paths (not files,
+        reads, dates, positions or numbers)."""
+        return {r for _rx, r in self.path_rules + self.id_rules if r not in NOT_SUBJECTS} | \
+            {"<PROTECTED>", "<ENTRY>", "<NAME>"}
 
     def _apply(self, rules: Sequence[Rule], line: str) -> str:
         for rx, repl in rules:

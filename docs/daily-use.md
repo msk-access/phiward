@@ -39,7 +39,11 @@ the gateway profile and sends back the sanitized output. The command:
   found on the broker's `PATH` (the `PATH` of the terminal that started the broker).
 
 Every line it prints (stdout and stderr) goes through the sanitizer. A line longer than 64 KiB
-is withheld. At the end, `run` prints one line: `run done: exit=0`, or `exit=1` when the command failed.
+is withheld. At the end, `run` prints a note (when it has something to say) and one line. The note counts the placeholders in the lines
+shown, for example `[placeholders in the lines shown: 412 <SAMPLEID>, 60 <BAMFILE>]`, and the
+lines the sanitizer withheld. From 20 shown lines on, when none holds an identifier placeholder
+(a subject, a sample, a patient's folder, an entry or a protected path), it says so: tell the operator, who checks
+`[sanitize] packs` and `patterns` with `phiward doctor`. Then `run done: exit=0`, or `exit=1` when the command failed.
 The command's real exit status and the line counts go to the broker's log, which no session
 reads (a number the command chooses could carry data).
 
@@ -185,6 +189,7 @@ anything: the broker's log has the reason.
 
 | Message | Meaning | What to do |
 |---|---|---|
+| `[... no identifier placeholder in the N lines shown ...]` | 20 or more lines were shown and no rule masked a subject, a sample or a protected name in them. | If the data names subjects or samples, the operator checks `[sanitize] packs` and `patterns` (`phiward doctor`). |
 | `run refused: no phiward broker is running` | No broker, or its heartbeat is older than 10 s. | The operator starts the broker: `phiward broker` in a terminal, or the login service ([setup.md §5](setup.md#5-start-the-broker)). |
 | `run refused: the request could not be written to the broker's spool folder` | The client cannot write the spool. | The operator adds the spool folder to the tool's sandbox `allowWrite` (`phiward install claude` does it). |
 | `run refused: the phiward config cannot be used` | A bad config. | The operator runs `phiward doctor` (with `--show-paths` for a repo config, in their own terminal) and fixes the file. |

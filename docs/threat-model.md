@@ -505,7 +505,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - **Exit status.** The agent sees only success or failure (`exit=0` or `exit=1`; 130 when
   cancelled); the real status goes to the broker's log, which no session can read. One output note
   carries a count (`[N more identical line(s)]`), which the command chooses. A failure is still one
-  bit per call.
+  bit per call. The placeholder note at the end is counted from the lines shown, so it tells the
+  agent nothing those lines do not: it counts placeholders shown (a program can print one), not
+  substitutions, nothing past the cap, and only kinds, so an identifier partly masked by a number
+  rule (`P-<NUM>-T01-IM6`) is flagged only when no identifier placeholder appears in the output.
 - **Without kernel confinement**, the hook checks command text only and can miss a spelling. A line
   that changes how bash finds commands or folders (`PATH`, `CDPATH`, `HOME`, `BASH_ENV`, `hash`,
   `shopt`, `alias`, set by any means) is unresolved there (deny by default).

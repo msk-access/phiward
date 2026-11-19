@@ -206,7 +206,9 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
   So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git
   hook refuses a commit that holds them as it would an identifier, and `phiward sanitize
-  --check` counts them.
+  --check` counts them. To check that your rules match your data, run a command over it: the
+  note at the end of `phiward run` counts the placeholders shown and says when no identifier
+  placeholder was shown.
 - **`inventory_limit`** (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.
@@ -308,7 +310,8 @@ The grants. Nothing asks the operator at run time: what is not written here is r
 - **`max_output_lines`** (whole number, default 2000). The most lines of a gateway command's
   output (`run`, `run --remote` and `copy`) that the agent sees. The lines after that are
   counted, not shown, and a last line says how many were withheld. A notice such as
-  `[3 more identical line(s)]` counts as a line. A repo config may only lower this value. To
+  `[3 more identical line(s)]` counts as a line; the placeholder note after the output does
+  not, and counts only the lines shown. A repo config may only lower this value. To
   see more, write the results to a file in a `write_to` folder inside a protected root, and
   print a summary.
 
