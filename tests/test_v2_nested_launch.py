@@ -104,6 +104,12 @@ def _filter(errno_value: int, machine: str) -> bytes:
 def _under_filter(prog: bytes, argv, cwd=None):
     """Run argv in a bubblewrap that shares the whole file system, under the filter `prog`."""
     bwrap = shutil.which("bwrap")
+    # only the OUTER bubblewrap's failure to start means "no user namespaces here": a bubblewrap
+    # started inside it (the launch under test) may be refused, which is what some tests expect
+    first = subprocess.run([bwrap, "--dev-bind", "/", "/", "--", "true"], capture_output=True,
+                           text=True, timeout=60)
+    if first.returncode != 0:
+        pytest.skip("no user namespaces here")
     r, w = os.pipe()
     os.write(w, prog)
     os.close(w)
@@ -113,10 +119,7 @@ def _under_filter(prog: bytes, argv, cwd=None):
                            env=dict(os.environ, PYTHONPATH=SRC))
     finally:
         os.close(r)
-    out = p.stdout + p.stderr
-    if "create a new namespace" in out or "No permissions to create" in out:
-        pytest.skip("no user namespaces here")
-    return p.returncode, out
+    return p.returncode, p.stdout + p.stderr
 
 
 CONFINED = ("import os; from phiward import wholetool; "
