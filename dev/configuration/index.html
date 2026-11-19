@@ -1757,7 +1757,9 @@ keys.</p>
 (<code>&lt;ENTRY&gt;</code>); <code>sanitize</code> and the git hooks do not list the roots, so they do not. These keys add
 to that.</p>
 <p>In text mode (without <code>--table</code>) the <code>genomics</code> pack masks positions and long numbers
-(<code>&lt;LOCUS&gt;</code>, <code>&lt;NUM&gt;</code>, for example any run of 5 or more digits). Table mode (<code>--table</code>) keeps them,
+(<code>&lt;LOCUS&gt;</code>, <code>&lt;NUM&gt;</code>, for example any run of 5 or more digits, also next to a comma). A run
+joined to other digits by a dot keeps its digits, as in a decimal (<code>12345.678</code>, but also
+<code>1234567.7654321</code>). Table mode (<code>--table</code>) keeps them,
 so a record number in a table would pass: it is off unless you turn it on with <code>table = true</code>
 (user config only). Turn it on only when identifiers in your data are caught by a pack or a
 pattern, not by the number rule.</p>
