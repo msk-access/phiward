@@ -171,7 +171,7 @@ Copies may go:
 
 Give local paths in full: a local path with a `..` part, or one that starts with a quoted `~`,
 is refused. A push goes only under a `[remote] roots` folder, where remote output is masked;
-with no remote root, every push is refused (setup makes each copy remote's folder one). Locally,
+with no remote root, every push is refused (setup makes each new copy remote's folder one). Locally,
 what lands is inside a protected root. On the cluster it is masked only under `[remote] roots`,
 and a link there can carry a push outside one.
 

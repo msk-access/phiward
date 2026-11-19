@@ -127,8 +127,9 @@ refuse it.
 
 It can also let the agent write the first config: `phiward setup --first-run --root PATH
 [--root PATH ...] [--remote host:/path ...]`, with the paths that you type in chat. This works
-only while no config exists. It writes protected roots and copy remotes only, never a grant (no
-write places, no network). It refuses a `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` override
+only while no config exists. It writes protected roots and copy remotes only (each remote's
+folder also as a `[remote] root`, so a push can land there), never a grant (no write places, no
+network). It refuses a `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` override
 without a terminal.
 
 **When to use it, and what you trust.** Before your config exists, nothing protects the agent's

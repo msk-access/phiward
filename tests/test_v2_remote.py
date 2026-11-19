@@ -259,10 +259,10 @@ def test_doctor_warns_about_a_copy_remote_without_a_remote_root(tree, capsys, mo
     monkeypatch.chdir(tree / "repo")
     doctor.main([])
     out = capsys.readouterr().out
-    assert "WARNING: 1 copy remote(s) are not under [remote] roots" in out, out
+    assert "WARNING: 1 copy remote(s) are not entirely under [remote] roots" in out, out
     user_cfg('[remote]\nroots = ["/work"]\n')
     doctor.main([])
-    assert "not under [remote] roots" not in capsys.readouterr().out
+    assert "not entirely under [remote] roots" not in capsys.readouterr().out
 
 
 def test_setup_makes_each_copy_remote_a_remote_root(tree, tmp_path):
@@ -280,3 +280,21 @@ def test_setup_makes_each_copy_remote_a_remote_root(tree, tmp_path):
     assert code == 0, out[-800:]
     cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(cfg_path)))
     assert cfg.remotes == ["hpc-test:/work/me"] and cfg.remote_roots == ["/work/me"]
+
+
+def test_a_rerun_keeps_a_narrower_remote_root(tree, tmp_path):
+    from phiward import config
+    from test_v2_release_review import _drive_setup
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(f'[protected_paths]\nroots = ["{tree}/phi"]\n[copy]\nremotes = ["hpc-test:/work/me"]\n'
+                        '[remote]\nroots = ["/work/me/phi"]\n[sanitize]\nsubjects = "none"\n')
+    answers = ["3", "n", "",       # profile; keep the roots
+               "", "", "",         # patterns, write places, programs
+               "n",                # network for gateway commands
+               "n", "",            # copy remotes: keep them, add none
+               "n", "1", "n",      # shell network, subject identifiers, HPC
+               "y", "n", "n"]      # write, wire, service
+    code, out = _drive_setup(tree, answers, cfg_path)
+    assert code == 0, out[-800:]
+    cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(cfg_path)))
+    assert cfg.remote_roots == ["/work/me/phi"], cfg.remote_roots

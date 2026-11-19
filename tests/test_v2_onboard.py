@@ -37,6 +37,10 @@ def test_first_run_writes_roots_and_remotes_only(tree, monkeypatch):
     text = cfg.read_text()
     assert str(tree / "phi") in text and "hpc:/work/me" in text
     assert "write_to" not in text and "net" not in text
+    # a push lands only under [remote] roots: the remote's folder is one (masking, not a grant)
+    from phiward import config
+    c = config.load(str(tree / "repo"), env=dict(env, PHIWARD_CONFIG=str(cfg)))
+    assert c.remote_roots == ["/work/me"], text
 
 
 def test_first_run_refuses_when_a_config_exists(tree):
