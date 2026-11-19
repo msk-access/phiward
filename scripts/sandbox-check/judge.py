@@ -145,9 +145,7 @@ def judge(results, stream_lines, server, marker, created, facts):
     if facts.get("mode") and mode not in ("A", "B"):
         unsure.append(f"mode {mode}: unknown")
     remote = facts.get("remote") == "yes"
-    required = list(CORE)
-    if not (facts.get("stub") == "yes" and facts.get("git") == "no"):
-        required += GIT
+    required = list(CORE) + list(GIT)
     if remote:
         required += REMOTE
     required += [r for r in facts.get("required", "").split() if r not in required]
@@ -255,12 +253,14 @@ def judge(results, stream_lines, server, marker, created, facts):
     if env is not None and env != "COUNT 0":
         names = env.split(" ", 2)[-1]
         report.append(f"note names like a key in the commands' environment: {names}")
-    parent = facts.get("parent_environ")
-    if parent == "yes":
-        report.append("note the session can read the token from its parent's environment "
-                      "(/proc): the documented limit")
+    # whether the session could read the claude process's environment (which holds the token)
+    # from /proc; the probe writes no environment anywhere
+    parent = lines.get("parent-environ")
+    if parent == "readable":
+        report.append("note the session can read the claude process's environment, and so "
+                      "the token, from /proc: the documented limit")
     elif parent:
-        report.append(f"note the token in a parent's environment: {parent}")
+        report.append(f"note the claude process's environment: {parent}")
     if facts.get("locked") == "no":
         report.append(f"note Claude Code {facts.get('claude', '?')} is not the locked version "
                       "(CLAUDE_VERSION): the run is unlocked")
@@ -277,7 +277,11 @@ def judge(results, stream_lines, server, marker, created, facts):
     nonce = facts.get("nonce")
     started = [ln.split() for ln in server.splitlines() if ln.startswith("STARTED ")]
     mine = [p for p in started if nonce and len(p) >= 3 and p[1] == nonce]
-    if not mine:
+    if not mine and platform == "linux" and mode == "B":
+        unsure.append("the wrapped MCP server did not start in this run (known on Linux Mode B: "
+                      "the server's own launch inside the session cannot write the read-only "
+                      "~/.phiward for its carry-over; a separate issue)")
+    elif not mine:
         unsure.append("the wrapped MCP server did not start in this run")
     elif mine[-1][2] != "READ-DENIED":
         fails.append("the wrapped MCP server read the protected file")

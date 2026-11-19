@@ -64,7 +64,7 @@ def facts(platform="darwin", mode="A", **over):
     """The facts of a full run (check.sh writes them to RUN_DIR/facts.txt)."""
     f = {"platform": platform, "mode": mode, "landlock": "n/a" if platform == "darwin" else "3",
          "settings_same": "yes", "token_seen": "no", "token_in_env": "no",
-         "parent_environ": "n/a" if platform == "darwin" else "no", "nonce": NONCE,
+         "nonce": NONCE,
          "remote": "no", "stub": "no", "protected_file": PROT}
     f.update(over)
     return f
@@ -177,7 +177,7 @@ def test_a_stream_that_is_not_json_is_inconclusive_not_a_crash():
 
 LINUX = GOOD.replace("DENIED not-permitted", "DENIED read-only").replace(
     "read-protected DENIED read-only", "read-protected DENIED empty-view").replace(
-    "parent-environ n/a", "parent-environ saved")
+    "parent-environ n/a", "parent-environ unreadable")
 
 
 def test_linux_full_run_is_pass():
@@ -425,10 +425,10 @@ def test_facts_can_add_a_required_item_but_not_remove_one():
     assert run(results=results, required="control-write")[0] == judge.INCONCLUSIVE
 
 
-def test_a_stub_run_may_skip_the_git_probes():
+def test_no_fact_skips_the_git_probes():
+    """The stub runs only in the container now, with the git probes: no fact removes them."""
     results = GOOD.replace("control-commit OK\n", "").replace("git-hook DENIED refused\n", "")
-    assert run(results=results, stub="yes", git="no")[0] == judge.PASS
-    assert run(results=results, stub="no", git="no")[0] == judge.INCONCLUSIVE
+    assert run(results=results, stub="yes", git="no")[0] == judge.INCONCLUSIVE
 
 
 # the remote probes
@@ -500,10 +500,35 @@ def test_pulled_file_not_right_is_inconclusive(pulled):
 
 # the token in the parent's environment: the documented limit, a note only
 
-def test_parent_environ_yes_is_a_note_and_still_pass():
-    verdict, report = run(results=LINUX, platform="linux", parent_environ="yes")
+def test_claude_environ_readable_is_a_note_and_still_pass():
+    results = LINUX.replace("parent-environ unreadable", "parent-environ readable")
+    verdict, report = run(results=results, platform="linux")
     assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and "parent" in ln for ln in report)
+    assert any(ln.startswith("note") and "/proc" in ln and "documented limit" in ln
+               for ln in report)
+
+
+@pytest.mark.parametrize("value", ["unreadable", "not-found", "n/a"])
+def test_claude_environ_other_values_are_notes(value):
+    results = LINUX.replace("parent-environ unreadable", f"parent-environ {value}")
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.PASS, report
+
+
+def test_parent_environ_fact_is_not_used():
+    """The session writes no environment to disk now: an old fact changes nothing."""
+    verdict, report = run(results=LINUX, platform="linux", parent_environ="yes")
+    assert verdict == judge.PASS and not any("documented limit" in ln for ln in report)
+
+
+# Linux Mode B: the wrapped MCP server stays required, and the judge names the known cause
+
+def test_linux_mode_b_server_not_started_names_the_cause():
+    verdict, report = run(results=LINUX, platform="linux", mode="B", server="")
+    assert verdict == judge.INCONCLUSIVE
+    assert any("~/.phiward" in ln and ln.startswith("????") for ln in report), report
+    verdict, report = run(server="")
+    assert verdict == judge.INCONCLUSIVE and not any("~/.phiward" in ln for ln in report)
 
 
 # the overall line: PASS only if every mode and doctor passed
@@ -539,3 +564,80 @@ def test_redact_replaces_the_token_and_says_it_was_there(tmp_path):
     text = f.read_text()
     assert token not in text and text.count("<TOKEN>") == 2
     assert launch.redact(str(f), token) is False
+
+
+
+def _launch_module():
+    spec = importlib.util.spec_from_file_location("sbx_launch2", LAUNCH)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_redact_tree_redacts_every_file_but_the_python(tmp_path):
+    token = "FAKE-TOKEN-fedcba9876543210"
+    (tmp_path / "a").mkdir()
+    (tmp_path / "py").mkdir()
+    (tmp_path / "doctor-after.txt").write_text(f"x {token}\n")
+    (tmp_path / "a" / "b.txt").write_text(f"{token}\n")
+    (tmp_path / "py" / "c.txt").write_text("plain\n")
+    found = _launch_module().redact_tree(str(tmp_path), token)
+    assert sorted(found) == ["a/b.txt", "doctor-after.txt"]
+    for f in ("doctor-after.txt", "a/b.txt"):
+        assert token not in (tmp_path / f).read_text()
+
+
+CHILD = """import os, sys, time
+open(sys.argv[1], "w").write(str(os.getpid()))
+print(os.environ["CLAUDE_CODE_OAUTH_TOKEN"], flush=True)
+time.sleep(60)
+"""
+
+
+@pytest.mark.parametrize("sig", ["SIGINT", "SIGTERM"])
+def test_an_interrupted_launch_stops_claude_and_redacts(tmp_path, sig):
+    """Ctrl-C (or SIGTERM) on launch.py: the session is stopped, and the kept files are
+    redacted and the environment dumps removed, as after a normal end."""
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    token = "FAKE-TOKEN-0011223344556677"
+    home, run_dir = tmp_path / "h", tmp_path / "h" / "run-A"
+    (home / "proj").mkdir(parents=True)
+    run_dir.mkdir()
+    (home / "proj" / "env.txt").write_text(f"CLAUDE_CODE_OAUTH_TOKEN={token}\n")
+    child, pidfile = tmp_path / "child.py", tmp_path / "pid"
+    child.write_text(CHILD)
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")}
+    p = subprocess.Popen([sys.executable, str(LAUNCH), str(home), str(run_dir), "60", "--",
+                          sys.executable, str(child), str(pidfile)],
+                         stdin=subprocess.PIPE, env=env)
+    p.stdin.write((token + "\n").encode())
+    p.stdin.close()
+    stream = run_dir / "stream.jsonl"
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline and not (
+            pidfile.exists() and stream.exists() and token in stream.read_text()):
+        time.sleep(0.05)
+    assert token in stream.read_text()
+    p.send_signal(getattr(signal, sig))
+    assert p.wait(timeout=30) != 0
+    pid = int(pidfile.read_text())
+    time.sleep(0.2)
+    try:
+        os.kill(pid, 0)
+        alive = True
+    except ProcessLookupError:
+        alive = False
+    except PermissionError:
+        alive = True
+    assert not alive, "claude kept running"
+    assert token not in stream.read_text() and "<TOKEN>" in stream.read_text()
+    assert not (home / "proj" / "env.txt").exists()
+    assert (run_dir / "token-seen").read_text().strip() == "yes"
+    for root, _dirs, files in os.walk(home):
+        for f in files:
+            assert token not in open(os.path.join(root, f), errors="replace").read(), f
