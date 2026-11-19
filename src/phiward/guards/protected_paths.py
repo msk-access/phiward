@@ -590,8 +590,9 @@ def _expand_home_in_text(t: str, home: str) -> str:
 def _check_shell(action: Action, cfg: Config, pset: paths.ProtectedSet, home: str) -> Decision:
     cmd = action.command
     if gateway.is_operator_command(cmd):
-        return deny("`phiward setup`, `pin`, `carryover` and `broker` are the operator's once "
-                    "phiward is set up: ask the operator to run it in their own terminal.",
+        return deny("`phiward setup`, `pin`, `carryover`, `broker` and `pseudonymize` are the "
+                    "operator's once phiward is set up: ask the operator to run it in their own "
+                    "terminal.",
                     step="")
     call = gateway.parse_call(cmd)
     if call is not None:

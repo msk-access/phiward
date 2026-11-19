@@ -132,7 +132,9 @@ def not_whole(command: str) -> Optional[str]:
 # carryover: accepting a quarantined change makes it trusted
 # broker: once a config exists, the broker is the operator's (a service file the
 # agent wrote could run it, outside every sandbox, with a config of the agent's choosing)
-OPERATOR_ONLY = ("setup", "pin", "carryover", "broker")
+# pseudonymize: its key folder is hidden from every agent path; a run on the agent's file or
+# key name would confirm guessed IDs
+OPERATOR_ONLY = ("setup", "pin", "carryover", "broker", "pseudonymize")
 
 
 def is_operator_command(command: str) -> bool:
