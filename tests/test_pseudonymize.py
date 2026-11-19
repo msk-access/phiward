@@ -763,10 +763,12 @@ def test_an_id_in_another_column_is_refused(tree, ps):
         code, text = run(tree, base(tree, more=["--keep", "sample_id"]), extra=["note"])
         assert code == 2 and "column 3" in text, (note, text)
         nothing_written(tree)
-    # a longer number that only holds the digits is no match
-    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
-                [["9990001", "199900012"], ["9990002", "ok"]])
-    assert run(tree, base(tree))[0] == 0
+    # an ID of 5 or more characters inside a longer token counts (a sample name holds it)
+    for note in ("199900012", "P-9990001-T01", "x/9990002.bam"):
+        write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                    [["9990001", note], ["9990002", "ok"]])
+        assert run(tree, base(tree))[0] == 2, note
+        nothing_written(tree)
 
 
 def test_an_id_of_the_key_in_another_column_is_refused(tree, ps):
@@ -889,4 +891,68 @@ def test_a_format_character_in_a_coded_cell_is_refused(tree, ps, ch):
                 [["lab", "9990001"], ["lab", f"99900{ch}02"]])
     code, text = run(tree, base(tree))
     assert code == 2 and "column 2" in text, text
+    nothing_written(tree)
+
+
+# --- review round 2 ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("cmd", ['phiward run -- grep -c phiward "$f"', 'grep -rn phiward "$dir"',
+                                 "pip show phiward $Q", "echo phiward $HOME",
+                                 "pytest -k phiward $ARGS", "uv pip install phiward ${V}",
+                                 "phiward run -- grep -l phiward *.md",
+                                 "git log --grep phiward $(git rev-parse HEAD)",
+                                 "env FOO=1 phiward doctor", "timeout 10 phiward run -- ls",
+                                 "uv run phiward check -- ls", "phiward"])
+def test_ordinary_commands_that_name_phiward_are_allowed(cmd):
+    assert not gateway.is_operator_command(cmd), cmd
+
+
+@pytest.mark.parametrize("cmd", ["xargs phiward", "xargs -n 1 phiward < f",
+                                 "find . -name x -exec phiward {} \\;",
+                                 "find . -execdir phiward $X \\;",
+                                 "env phiward $X", "FOO=1 phiward $X", "command phiward *",
+                                 "exec phiward ${X}", "timeout 10 phiward $(cat f)",
+                                 "nice -n 5 phiward $X", "nohup phiward $X", "time phiward $X",
+                                 "uvx phiward $X", "uv run phiward $X", "pipx run phiward $X",
+                                 "python3 -m phiward $X", "python3 -mphiward $X",
+                                 "ls; phiward $X", "true && /usr/bin/phiward $X",
+                                 "echo $(phiward $X)"])
+def test_phiward_in_command_position_with_a_run_time_or_missing_subcommand_is_refused(cmd):
+    assert gateway.is_operator_command(cmd), cmd
+
+
+def test_a_kept_cell_with_a_format_character_is_refused(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["9990001", "a\u200bb"], ["9990002", "ok"]])
+    code, text = run(tree, base(tree))
+    assert code == 2 and "column 2" in text, text
+    nothing_written(tree)
+
+
+def test_an_id_written_in_other_unicode_forms_in_another_column_is_refused(tree, ps):
+    # fullwidth digits read as the MRN after NFKC
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["9990001", "\uff19\uff19\uff19\uff10\uff10\uff10\uff11"], ["9990002", "ok"]])
+    assert run(tree, base(tree))[0] == 2
+    nothing_written(tree)
+
+
+def test_a_short_id_refuses_only_a_whole_cell(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["12", "0.12"], ["13", "2020-12-01"], ["14", "12 mg"], ["15", "x"]])
+    assert run(tree, base(tree))[0] == 0
+    os.unlink(tree / "phi" / "out.tsv")
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"], [["12", " 12 "], ["15", "x"]])
+    assert run(tree, base(tree, new=False))[0] == 2
+
+
+@pytest.mark.parametrize("marker", [".claude", ".phiward.toml"])
+def test_an_input_inside_another_project_is_refused(tree, ps, marker):
+    """A project the agent may work in (its `.claude` settings can let it write anywhere in
+    it): an input below its top is refused, whatever the working folder."""
+    top = tree / "otherproj"
+    top.mkdir()
+    (top / marker).mkdir() if marker == ".claude" else (top / marker).write_text("")
+    p = write_table(top / "deep" / "in.tsv", ["mrn", "site"], [["9990001", "lab"]])
+    assert run(tree, base(tree, inp=p))[0] == 2
     nothing_written(tree)
