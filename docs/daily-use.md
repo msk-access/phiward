@@ -160,8 +160,9 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   any project (a folder with `.git`, `.claude` or `.phiward.toml` above the input), the temp
   folders, the sandbox's `allowWrite` and `additionalDirectories`,
   a `write_to` folder, the spool and `~/.phiward`. A column that is not coded may not hold an
-  ID of a coded column or of the key (an ID of 5 or more characters inside any word of a
-  cell, a shorter one as the whole cell), and no cell may hold an invisible format character. The output is a new file of the same kind inside a protected root of your user
+  ID of a coded column or of the key (an ID of 5 or more characters, not only digits, anywhere
+  in a cell; any other ID as the whole cell), and no cell may hold an invisible format
+  character. The output is a new file of the same kind inside a protected root of your user
   config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
 - The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
   or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;

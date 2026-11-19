@@ -756,24 +756,25 @@ def test_the_help_names_the_rules(ps):
 
 def test_an_id_in_another_column_is_refused(tree, ps):
     """A coded ID left in a kept or plain column would link its code to the real ID."""
-    for note in ("9990002", "see 9990002 again", "FAKE-PT-0001"):
+    for note in ("9990002", "see FAKE-PT-0001 again", "FAKE-PT-0001"):
         write_table(tree / "data" / "labs.tsv", ["mrn", "sample_id", "note", "value"],
                     [["9990001", "x", "a", "1"], ["9990002", "y", note, "2"],
                      ["FAKE-PT-0001", "z", "b", "3"]])
         code, text = run(tree, base(tree, more=["--keep", "sample_id"]), extra=["note"])
         assert code == 2 and "column 3" in text, (note, text)
         nothing_written(tree)
-    # an ID of 5 or more characters inside a longer token counts (a sample name holds it)
-    for note in ("199900012", "P-9990001-T01", "x/9990002.bam"):
+    # an ID of digits only counts as the whole cell: a longer number is no match
+    for note in ("19990001", "199900012", "0.9990001"):
         write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
                     [["9990001", note], ["9990002", "ok"]])
-        assert run(tree, base(tree))[0] == 2, note
-        nothing_written(tree)
+        assert run(tree, base(tree))[0] == 0, note
+        os.unlink(tree / "phi" / "out.tsv")
+        os.unlink(tree / "home" / ".phiward" / "backups" / "keys" / "labs.tsv")
 
 
 def test_an_id_of_the_key_in_another_column_is_refused(tree, ps):
     assert run(tree, base(tree, out=tree / "phi" / "o1.tsv"))[0] == 0
-    write_table(tree / "data" / "more.tsv", ["mrn", "note"], [["9990500", "was 9990003"]])
+    write_table(tree / "data" / "more.tsv", ["mrn", "note"], [["9990500", "9990003"]])
     assert run(tree, base(tree, new=False, inp=tree / "data" / "more.tsv"))[0] == 2
     assert not (tree / "phi" / "out.tsv").exists()
 
@@ -956,3 +957,25 @@ def test_an_input_inside_another_project_is_refused(tree, ps, marker):
     p = write_table(top / "deep" / "in.tsv", ["mrn", "site"], [["9990001", "lab"]])
     assert run(tree, base(tree, inp=p))[0] == 2
     nothing_written(tree)
+
+
+# --- review round 3 ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("ident,cell", [("FAKE PT 0001", "seen FAKE PT 0001 today"),
+                                        ("FAKE:0001", "ref=FAKE:0001"),
+                                        ("FAKE-PT-0001", "FAKE-\u200bPT-0001"),
+                                        ("FAKE-PT-0001", "\uff26\uff21\uff2b\uff25-PT-0001"),
+                                        ("FAKE-PT-0001", "fake-pt-0001.bam")])
+def test_a_long_id_anywhere_in_a_kept_cell_is_refused(tree, ps, ident, cell):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"], [[ident, cell], ["FAKE-PT-0009", "ok"]])
+    code, text = run(tree, base(tree), extra=["note"])
+    assert code == 2 and "column 2" in text, text
+    nothing_written(tree)
+
+
+def test_a_drawn_code_that_holds_a_long_id_is_skipped(tree, ps, monkeypatch):
+    # an ID that is a code itself: the code is never given to another ID
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [["S9999", "lab"], ["9990002", "lab"]])
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    assert run(tree, base(tree, more=["--keep-order"]))[0] == 0
+    assert "S9999" not in key_map(tree / "home", "labs").values()
