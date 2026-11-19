@@ -750,3 +750,143 @@ def test_the_help_names_the_rules(ps):
     for w in ("--new-key", "--columns", "--drop", "--keep", "--keep-order", "--prefix",
               "~/.phiward/backups/keys", "phiward run"):
         assert w in out.getvalue(), w
+
+
+# --- review round 1 ---------------------------------------------------------------------------
+
+def test_an_id_in_another_column_is_refused(tree, ps):
+    """A coded ID left in a kept or plain column would link its code to the real ID."""
+    for note in ("9990002", "see 9990002 again", "FAKE-PT-0001"):
+        write_table(tree / "data" / "labs.tsv", ["mrn", "sample_id", "note", "value"],
+                    [["9990001", "x", "a", "1"], ["9990002", "y", note, "2"],
+                     ["FAKE-PT-0001", "z", "b", "3"]])
+        code, text = run(tree, base(tree, more=["--keep", "sample_id"]), extra=["note"])
+        assert code == 2 and "column 3" in text, (note, text)
+        nothing_written(tree)
+    # a longer number that only holds the digits is no match
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["9990001", "199900012"], ["9990002", "ok"]])
+    assert run(tree, base(tree))[0] == 0
+
+
+def test_an_id_of_the_key_in_another_column_is_refused(tree, ps):
+    assert run(tree, base(tree, out=tree / "phi" / "o1.tsv"))[0] == 0
+    write_table(tree / "data" / "more.tsv", ["mrn", "note"], [["9990500", "was 9990003"]])
+    assert run(tree, base(tree, new=False, inp=tree / "data" / "more.tsv"))[0] == 2
+    assert not (tree / "phi" / "out.tsv").exists()
+
+
+@pytest.mark.parametrize("where", ["temp", "allow_write", "additional", "cwd"])
+def test_an_input_where_the_agents_sandbox_writes_is_refused(tree, ps, monkeypatch, where):
+    from phiward import claude_settings
+    place = tree / "agentw"
+    place.mkdir()
+    if where == "temp":
+        monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [str(place)])
+    elif where in ("allow_write", "additional"):
+        d = tree / "home" / ".claude"
+        d.mkdir(exist_ok=True)
+        data = ({"sandbox": {"filesystem": {"allowWrite": [str(place)]}}} if where == "allow_write"
+                else {"permissions": {"additionalDirectories": [str(place)]}})
+        (d / "settings.json").write_text(json.dumps(data))
+    else:
+        monkeypatch.chdir(place)  # the working folder, not a git repository
+    p = write_table(place / "sub" / "in.tsv", ["mrn", "site"], [["9990001", "lab"]])
+    assert run(tree, base(tree, inp=p))[0] == 2, where
+    nothing_written(tree)
+
+
+@pytest.mark.parametrize("cmd", ["python3 -mphiward pseudonymize --help",
+                                 "python3 -mphiward.cli setup",
+                                 "a=pseudo; b=nymize; phiward $a$b",
+                                 "phiward pseudonymi[z]e", "phiward pseudonym?ze",
+                                 "phiward `echo pseudonymize`", "phiward $(echo broker)",
+                                 "phiward \"$X\"", "phiward ${X:-setup}", "phiward pseudo{nymize,}"])
+def test_the_hook_catches_operator_commands_built_at_run_time(cmd):
+    assert gateway.is_operator_command(cmd), cmd
+
+
+@pytest.mark.parametrize("cmd", ["phiward run -- wc -l README.md", "phiward copy a ~/data/b",
+                                 "phiward doctor", "phiward check -- ls $HOME",
+                                 "python3 -m phiward run -- ls", "echo $X phiward"])
+def test_ordinary_phiward_commands_are_not_operator_commands(cmd):
+    assert not gateway.is_operator_command(cmd), cmd
+
+
+def test_a_key_with_another_link_is_refused(tree, ps):
+    k = _good_key(tree)
+    os.link(k, tree / "home" / "hard.tsv")
+    before = k.read_bytes()
+    assert run(tree, base(tree, new=False))[0] == 2
+    assert k.read_bytes() == before
+    assert not (tree / "phi" / "out.tsv").exists()
+
+
+def test_a_key_linked_after_it_was_read_is_not_appended(tree, ps, monkeypatch):
+    k = _good_key(tree)
+    before = k.read_bytes()
+    real = ps._read_key
+
+    def read_then_link(*a, **kw):
+        key = real(*a, **kw)
+        os.link(k, tree / "home" / "hard.tsv")
+        return key
+    monkeypatch.setattr(ps, "_read_key", read_then_link)
+    write_table(tree / "data" / "new.tsv", ["mrn", "site"], [["9990900", "a"]])
+    assert run(tree, base(tree, new=False, inp=tree / "data" / "new.tsv"))[0] == 2
+    assert k.read_bytes() == before
+    assert not (tree / "phi" / "out.tsv").exists()
+
+
+def test_the_key_folder_is_opened_part_by_part_without_links(tree, ps):
+    """`~/.phiward` a link to a folder of ours that holds a private backups folder: refused."""
+    home = tree / "home"
+    alt = tree / "alt"
+    os.rename(home / ".phiward", alt)
+    os.symlink(alt, home / ".phiward")
+    assert run(tree, base(tree))[0] == 2
+    assert not (alt / "backups" / "keys").exists()
+    nothing_written(tree)
+
+
+def test_an_output_in_a_write_to_folder_is_refused(tree, ps):
+    w = tree / "phi" / "w"
+    w.mkdir()
+    cfg = Path(os.environ["PHIWARD_CONFIG"])
+    cfg.write_text(cfg.read_text() + f'[broker]\nwrite_to = ["{w}"]\n')
+    assert run(tree, base(tree, out=w / "out.tsv"))[0] == 2
+    assert not (w / "out.tsv").exists()
+    nothing_written(tree)
+
+
+def test_the_output_folder_is_opened_without_links(tree, ps, monkeypatch):
+    """The folder checked is the folder written: a link put in its place after the check is
+    not followed."""
+    real = ps._out_place
+
+    def swap(*a, **kw):
+        got = real(*a, **kw)
+        os.rename(tree / "phi" / "sub", tree / "phi" / "sub-moved")
+        os.symlink(tree / "pub", tree / "phi" / "sub")
+        return got
+    monkeypatch.setattr(ps, "_out_place", swap)
+    assert run(tree, base(tree, out=tree / "phi" / "sub" / "out.tsv"))[0] == 2
+    assert not (tree / "pub" / "out.tsv").exists()
+    assert not (tree / "home" / ".phiward" / "backups" / "keys" / "labs.tsv").exists()
+
+
+def test_the_shuffle_is_the_systems_random(ps, monkeypatch):
+    import random
+    calls = []
+    monkeypatch.setattr(random.SystemRandom, "shuffle", lambda self, x: calls.append(type(self)))
+    ps._shuffle([1, 2, 3])
+    assert calls == [random.SystemRandom]
+
+
+@pytest.mark.parametrize("ch", ["​", "﻿", "‍", "⁠", "‮"])
+def test_a_format_character_in_a_coded_cell_is_refused(tree, ps, ch):
+    write_table(tree / "data" / "labs.tsv", ["site", "mrn"],
+                [["lab", "9990001"], ["lab", f"99900{ch}02"]])
+    code, text = run(tree, base(tree))
+    assert code == 2 and "column 2" in text, text
+    nothing_written(tree)
