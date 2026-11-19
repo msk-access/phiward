@@ -67,7 +67,8 @@ def _q(a):
 @needs_confine
 def test_a_gateway_call_works_through_the_broker(tree, broker):
     code, out = gate(tree, ["--", "ls", "../phi"])
-    assert code == 0 and "<ENTRY>" in out and "FAKE-PT" not in out
+    # FAKE-PT-0001.bam: the genomics rule masks a .bam name whether or not it exists
+    assert code == 0 and "<BAMFILE>" in out and "FAKE-PT" not in out
 
 
 @needs_confine
