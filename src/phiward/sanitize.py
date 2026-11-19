@@ -34,6 +34,7 @@ usage:
   phiward sanitize [--names-from FILE ...] --check-table FILE ...
 """
 
+import fnmatch
 import os
 import re
 import sys
@@ -73,7 +74,8 @@ line counts the lines read and changed.
 """
 
 PLACEHOLDER_WORDS = {"protected", "entry", "name", "sampleid", "cmoid", "bamid", "read", "locus", "num",
-                     "donor", "patientpath", "clinicalpath", "bamfile", "date"}
+                     "donor", "patientpath", "clinicalpath", "bamfile", "date",
+                     "idcol"}
 # Words that carry no identity and appear in many paths: never a name token.
 STOP_WORDS = {"data1", "share", "analysis", "star", "aligned", "sortedbycoord", "bam", "bams",
               "tumour", "normal", "inputs", "patient", "runs", "test", "scratch", "home",
@@ -482,6 +484,141 @@ class Sanitizer:
             return out
         except Exception:  # noqa: BLE001 - fail closed on anything
             return WITHHELD
+
+
+# ---- column mode (`phiward run --table` only) ---------------------------------------------------
+
+IDCOL = "<IDCOL>"
+# column headers that name an identifier, as `col_key` globs; `[sanitize] id_columns` (user config
+# only) adds to them. Broad on purpose: a numeric column such as `n_samples` shows <IDCOL>
+BUILTIN_ID_COLUMNS = (
+    "id", "id*", "*id", "*_ids", "*_id_*", "pt", "pt_*", "*_pt", "subj*", "*sample*", "*patient*",
+    "*subject*", "*donor*", "*mrn*", "*barcode*", "*accession*", "*specimen*", "*record*",
+    "*chart*", "*encounter*", "*visit*", "*ssn*", "*phone*", "*zip*", "*_no", "*number*", "case",
+    "case_*", "*_case", "*birth*", "*dob*")
+# an `[sanitize] id_columns` entry as written: a header or a glob
+ID_COLUMN_ENTRY = re.compile(r"[A-Za-z0-9 _.#*?\[\]!-]{1,64}")
+_HEADER_FIELD = re.compile(r"#?[A-Za-z_][A-Za-z0-9_ .()/%+\-]{0,63}")
+_NUMBER = re.compile(r"[-+]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?%?")
+_PCT_ESCAPE = re.compile(r"%[0-9A-Fa-f]{2}")
+NO_HEADER_NOTE = "[--table: no header line was found; the output was masked as text]"
+
+
+def col_key(name: str) -> str:
+    """A column header (or an `id_columns` entry) in the form globs are matched against: spaces
+    stripped, one leading `#` dropped, case folded, each run of spaces, `-` and `.` as `_`
+    (`Patient ID`, `sample-id`, `#Sample.ID` become `patient_id`, `sample_id`)."""
+    name = name.strip()
+    if name.startswith("#"):
+        name = name[1:].strip()
+    return re.sub(r"[ .\-]+", "_", name.casefold())
+
+
+class _Misfit(Exception):
+    """A row that cannot be read by column (it is masked as text)."""
+
+
+class Columns:
+    """Masks the lines of one `phiward run --table` output by column. A header is the first
+    line, or the line after an empty line, when it looks like one (`_header`); the rows under it
+    are masked as in table mode on the whole line, then each cell under an identifier header
+    becomes <IDCOL> and the positions rules run on each other cell that is not a plain number.
+    Every other line is masked as text (`Sanitizer.clean`). Made fresh for each run."""
+
+    def __init__(self, san: Sanitizer, extra_globs: Iterable[str] = ()):
+        self.san = san
+        self.globs = list(BUILTIN_ID_COLUMNS) + [col_key(g) for g in extra_globs]
+        # an ID cell that is exactly one of these is kept (the masks of the line already
+        # replaced it)
+        self.known = san.placeholders() | {IDCOL}
+        self.state = "start"  # "start": the next line may be a header; "table"; "none"
+        self.delim = "\t"
+        self.width = 0
+        self.is_id: List[bool] = []
+        self.headers = 0  # header lines found
+        self.rows = 0  # rows read by column
+
+    def reset(self) -> None:
+        """Text mode until the next empty line (after a line too long to read)."""
+        self.state = "none"
+
+    def line(self, text: str) -> str:
+        """The line as shown. Never raises."""
+        try:
+            norm = normalize(text)
+            if norm == "":
+                self.state = "start"
+                return self.san.clean(text)
+            if self.state == "start":
+                shown = self.san.clean(text)
+                if self._header(norm, shown):
+                    self.state = "table"
+                    self.headers += 1
+                else:
+                    self.state = "none"
+                return shown
+            if self.state == "table":
+                try:
+                    out = self._row(norm)
+                except _Misfit:
+                    return self.san.clean(text)
+                # the second pass: the shown row read again gives itself, else it is withheld
+                try:
+                    if normalize(out) != out or self._row(out, again=True) != out:
+                        return WITHHELD
+                except _Misfit:
+                    return WITHHELD
+                self.rows += 1
+                return out
+            return self.san.clean(text)
+        except Exception:  # noqa: BLE001 - fail closed on anything
+            self.state = "none"
+            return WITHHELD
+
+    def _header(self, norm: str, shown: str) -> bool:
+        if shown != norm:  # a field holds an identifier, a protected path or a name
+            return False
+        delim = "\t" if "\t" in norm else "," if "," in norm else ""
+        if not delim:
+            return False
+        fields = norm.split(delim)
+        if len(fields) < 2:
+            return False
+        rules = self.san.first_rules + self.san.path_rules + self.san.id_rules
+        for f in fields:
+            # a header field has a letter first, no quote, no run of 3 digits, and nothing a
+            # path or identifier rule matches: a first line of data is not a header
+            if not _HEADER_FIELD.fullmatch(f.strip()) or re.search(r"\d{3}", f) or \
+                    any(rx.search(f) for rx, _r in rules):
+                return False
+        self.delim, self.width = delim, len(fields)
+        self.is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
+        return True
+
+    def _mask(self, line: str) -> str:
+        return self.san._mask(line, table=True)
+
+    def _row(self, norm: str, again: bool = False) -> str:
+        """The row masked by column; `_Misfit` when it cannot be read so. `again`: the second
+        pass, where the masks of the whole line must change nothing."""
+        d, n = self.delim, self.width - 1
+        # a quoted CSV row is not parsed; and an escape has no form by column
+        if '"' in norm or "\\" in norm or _PCT_ESCAPE.search(norm) or norm.count(d) != n:
+            raise _Misfit()
+        # the masks of today's table mode, on the whole line (an entry name may hold the
+        # delimiter); a mask that ate a delimiter makes a misfit
+        m = self._mask(norm)
+        if m.count(d) != n or (again and m != norm):
+            raise _Misfit()
+        cells = m.split(d)
+        for i, c in enumerate(cells):
+            core = c.strip()
+            if self.is_id[i]:
+                if core and core not in self.known:
+                    cells[i] = IDCOL
+            elif not _NUMBER.fullmatch(core):
+                cells[i] = self.san._apply(self.san.pos_rules, c)
+        return d.join(cells)
 
 
 _MARK = "\x00"  # never in a line: normalize removes control characters
