@@ -8,7 +8,8 @@ touch protected data. The filter fails closed and never echoes a line that was n
 A line is masked in this order (a placeholder is written in angle brackets):
 1. protected paths of the config (roots, patterns, and the symlink-resolved spellings): <PROTECTED>;
    then, when the inventory is on, the name of every entry under the roots, wherever it
-   appears in the line (inventory.py): <ENTRY>;
+   appears in the line (inventory.py): <ENTRY>, or the placeholder of a file or identifier
+   rule whose match holds it (so it reads as a name that does not exist would);
    (before step 1, escape sequences and control characters are removed and the line is put in
    Unicode NFKC form, so a name cannot hide behind color codes or look-alike letters);
 2. the `paths` rules of the packs, then the `identifiers` rules of the packs, then the rules of
@@ -257,6 +258,8 @@ class Sanitizer:
             path_rules = [r for p in packs for r in p.paths]
             id_rules = [r for p in packs for r in p.identifiers]
             id_rules += [parse_rule(v, "[sanitize] patterns") for v in cfg.sanitize_patterns]
+            # identifiers in any letter case: entry names are matched in any case too
+            id_rules = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in id_rules]
             pos_rules = [r for p in packs for r in p.positions]
             keep = [k for p in packs for k in p.keep_files]
             # Stop words come from the built-in list only: a rule's placeholder must never
@@ -315,7 +318,7 @@ class Sanitizer:
             # spaces; then the mark with the rest of the path (names, now placeholders, and
             # path characters) becomes one placeholder: no part of `Doe Jane/x` is left
             line = self._marked(line)
-        line = inventory.mask(line, self.entries)
+        line = self._entries(line)
         if self.protected is not None:
             # a mark and the rest of its path; one whose path goes on past the root or the
             # pattern (`<root>/New Person 7`) is followed by `_GOES_ON` for `_tail`
@@ -329,6 +332,43 @@ class Sanitizer:
         if not table:
             line = self._apply(self.pos_rules, line)
         return line
+
+    def _entries(self, line: str) -> str:
+        """Entry names as `<ENTRY>`; but where an entry name lies inside what a file or
+        identifier rule matches, that whole match becomes the rule's placeholder, as it would for
+        a name that does not exist. The same text is masked as before (or more): only which
+        placeholder it reads as changes."""
+        rx = self.entries
+        if rx is None:
+            return line
+        hits = [(m.start(), m.end()) for m in rx.finditer(line)]
+        if not hits:
+            return line
+        spans: List[Tuple[int, int, str]] = []
+        for rule, repl in self.path_rules + self.id_rules:
+            spans += [(m.start(), m.end(), repl) for m in rule.finditer(line)
+                      if m.end() > m.start() and _MARK not in m.group(0)
+                      and not (repl == KEEP_PLACEHOLDER and self.keep_files
+                               and self._kept(m.group(0)))]
+        parts: List[Tuple[int, int, str]] = []
+        for a, b in hits:
+            cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
+            parts.append(cover or (a, b, "<ENTRY>"))
+        parts.sort()
+        merged: List[List] = []
+        for a, b, r in parts:  # overlapping parts are joined; <ENTRY> wins a tie (more masked)
+            if merged and a < merged[-1][1]:
+                merged[-1][1] = max(merged[-1][1], b)
+                if r == "<ENTRY>" or merged[-1][2] != r:
+                    merged[-1][2] = "<ENTRY>"
+            else:
+                merged.append([a, b, r])
+        out, pos = [], 0
+        for a, b, r in merged:
+            out += [line[pos:a], r]
+            pos = b
+        out.append(line[pos:])
+        return "".join(out)
 
     def _marked(self, line: str) -> str:
         """Every protected root or pattern match as the mark. A pattern's wildcard may hold
@@ -430,7 +470,7 @@ def _line_end(line: str, start: int) -> int:
 def _key(path: str) -> str:
     """A path as the known-folder set holds it: case folded where the volume ignores case."""
     return path.casefold() if paths.FOLD_CASE else path
-_AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<ENTRY>|{paths._PATH_CHAR})*)*")
+_AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<[A-Z][A-Z0-9_]*>|{paths._PATH_CHAR})*)*")
 normalize = inventory.normalize  # the form masking sees (escapes removed, NFKC)
 
 # the escapes ordinary tools write a name with: a run of bytes (git's `\303\274`, Python's

@@ -13,6 +13,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - `phiward copy` makes each local path absolute once, and every check and the copy itself use
   that path. A local path with a `..` part, or one that starts with `~` (quoted), or an empty
   one, is refused: give the full path.
+- Identifier rules (packs and `[sanitize] patterns`) match in any letter case, and the `msk`
+  pack's rules also match an ID right after `_`. Where a file or identifier rule matches the text
+  around a name under a root, the name reads as that rule's placeholder, as a name that does not
+  exist would; nothing is masked less than before. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
+  hook refuses them as identifiers.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 

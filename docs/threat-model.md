@@ -484,8 +484,13 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   folder it cannot read (a root over `~/.ssh` masks the names there). A wide pattern makes each
   request walk many folders before it starts.
 - **Masking can confirm a guess.** A name under a protected root that the agent prints itself comes
-  back masked, so an agent can test whether a name it guessed or saw elsewhere exists there, one
-  name at a time. Masking hides names; it does not keep a name the agent already holds a secret.
+  back masked, so an agent can test whether a name it guessed or saw elsewhere exists there, for
+  many names in one request. Where a file or identifier rule (a pack, `[sanitize] patterns`)
+  matches the text around a name, the name reads as that rule's placeholder, as a name that does
+  not exist would. Elsewhere it reads `<ENTRY>`: plain names, names with a plain part, names
+  written where the rule does not match (inside a longer word, or joined to a plain name), and
+  `names_from` names can be
+  tested. Masking hides names; it does not keep a name the agent already holds a secret.
 - **Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,
   which can read a record and print it in a form masking does not catch (base64, digits spelled

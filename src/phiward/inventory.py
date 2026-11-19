@@ -165,9 +165,3 @@ def matcher(strings: Iterable[str]) -> Optional[Pattern[str]]:
     _MATCHER.clear()  # keep only the latest set: memory stays one matcher's worth
     _MATCHER[key] = rx
     return rx
-
-
-def mask(line: str, rx: Optional[Pattern[str]], placeholder: str = "<ENTRY>") -> str:
-    if rx is None:
-        return line
-    return rx.sub(placeholder, line)
