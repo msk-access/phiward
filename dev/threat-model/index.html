@@ -2161,8 +2161,17 @@ from elsewhere (for example Homebrew's OpenSSL).
   with your full rights. Keep them under a <code>hooks/</code> folder of <code>~/.claude</code> or of the project's
   <code>.claude</code> (the hook asks before a file tool writes there, and Claude Code's sandbox denies its
   shell), or in a folder no session writes; never elsewhere in a project.
-- <strong>Not tested by phiward's own checks:</strong> Claude Code's real sandbox. The checks never run the real
-  <code>claude</code>; the first check after an install is yours (<a href="../releasing/">releasing.md</a>).
+- <strong>Not tested by phiward's own checks:</strong> Claude Code's real sandbox. The test suite never runs
+  the real <code>claude</code>. The release check (<code>scripts/sandbox-check</code>, <a href="../releasing/">releasing.md</a>)
+  does, on macOS and Linux, run by the operator: one session per mode, judged from its files.
+  Its probe lines are written inside the session, so a model could forge them; the checks made
+  outside it (files on the host, the settings hash, the stream that <code>launch.py</code> writes after the
+  session) are harder to forge, but a process the session leaves running could still reach
+  them before the judge reads them. On Linux,
+  Mode B stays INCONCLUSIVE while a wrapped MCP server cannot start inside <code>launch</code>.
+  It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
+  <code>use_shared_connection = false</code>, RHEL 8, NFS home folders, sssd or Kerberos; and the first
+  check after your own install is yours.
 - <strong>The spool folder</strong> is writable by the agent: it can fill it or move it, which stops the gateway
   (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
   run a command through a shell.
