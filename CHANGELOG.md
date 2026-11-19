@@ -13,6 +13,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - `phiward copy` makes each local path absolute once, and every check and the copy itself use
   that path. A local path with a `..` part, or one that starts with `~` (quoted), or an empty
   one, is refused: give the full path.
+- Identifier rules (packs and `[sanitize] patterns`) match in any letter case, and the `msk`
+  pack's rules also match an ID right after `_`. A name under a root that an identifier rule
+  matches whole now reads the same in masked output whether or not it exists.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 
