@@ -1,0 +1,68 @@
+#!/bin/sh
+# Inside the sandbox-check image, as the user tester (scripts/sandbox-check/linux.sh starts it):
+# the source is at /repo (read only, a `git archive` of HEAD), results go to /out. It runs
+# check.sh with SBX_BASE=/work and SBX_SRC=/repo, keeps the report and each mode's redacted files
+# in /out, and exits as check.sh does.
+# --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
+# nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), and the rest
+# works (the hook, the gateway, the git hook, doctor before, the redaction, the cleanup). Exit 0 only
+# when every expected line is in the report.
+set -u
+stub=""
+[ "${1:-}" = --stub ] && stub=--stub
+SBX_LOCKED=$(cat /opt/claude/locked 2>/dev/null || echo unknown)
+export SBX_BASE=/work SBX_SRC=/repo SBX_OUT=/out SBX_LOCKED
+{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | tee /out/report.txt
+code=$(cat /out/rc)
+[ -n "$stub" ] || exit "$code"
+
+status=0
+expect() {
+  if grep -qxF -- "$1" /out/report.txt; then echo "== ok    $1"
+  else echo "== MISSING $1"; status=1; fi
+}
+# Mode A: no sandbox around the stub, so every kernel probe got through
+expect "== Mode A (linux)"
+expect "FAIL read-protected: OK: it got through"
+expect "FAIL write-data: OK: it got through"
+expect "FAIL write-phiward: OK: it got through"
+expect "FAIL write-settings: OK: it got through"
+expect "FAIL Mode A"
+# the rest works in both modes: phiward's hook refused the Read, the gateway masked, the git hook
+# refused without the identifier, the wrapped MCP server could not read the file
+for m in A B; do
+  sed -n "/^== Mode $m /,/^[A-Z]* Mode $m\$/p" /out/report.txt > "/tmp/mode-$m.txt"
+  for ln in "ok   read-tool: the Read tool was refused by phiward" \
+            "ok   gateway-run: phiward run worked and masked the protected path" \
+            "ok   git-hook: the commit was refused, and the identifier not shown" \
+            "ok   the token is not in the commands' environment"; do
+    if grep -qxF -- "$ln" "/tmp/mode-$m.txt"; then echo "== ok    Mode $m: $ln"
+    else echo "== MISSING Mode $m: $ln"; status=1; fi
+  done
+done
+expect "ok   the wrapped MCP server started and could not read the protected file"
+# Mode B: the stub under the real `phiward launch`: the kernel probes are refused. Not asserted
+# here: the wrapped MCP server in Mode B (on Linux the server's own launch inside the session
+# fails today: its carry-over cannot write the read-only ~/.phiward), so not Mode B's verdict.
+expect "== Mode B (linux)"
+for p in read-protected write-data write-phiward write-settings; do
+  if grep -qE "^(ok   $p: refused by the sandbox|note $p: the write worked inside launch)" /tmp/mode-B.txt; then
+    echo "== ok    Mode B: $p refused"
+  else
+    echo "== MISSING Mode B: $p refused"; status=1
+  fi
+done
+# doctor: clean before the sessions; after them it must see the settings file that Mode A's
+# unconfined stub wrote (a new warning, so FAIL)
+if grep -q WARNING /out/doctor-before.txt 2>/dev/null || [ ! -s /out/doctor-before.txt ]; then
+  echo "== MISSING a clean doctor before the sessions"; status=1
+else echo "== ok    doctor clean before the sessions"; fi
+expect "FAIL doctor"
+expect "FAIL"
+# the token in no kept file, and the check's home removed
+if grep -rqs "FAKE-TOKEN-" /out; then echo "== FOUND the made-up token in /out"; status=1
+else echo "== ok    the made-up token is in no kept file"; fi
+if ls -d /work/phiward-sbx-* >/dev/null 2>&1; then echo "== LEFT the check's home in /work"; status=1
+else echo "== ok    the check's home is removed"; fi
+[ "$status" = 0 ] && echo "PASS stub plumbing" || echo "FAIL stub plumbing"
+exit $status
