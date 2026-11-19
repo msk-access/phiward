@@ -59,7 +59,11 @@ Then push `main`, `develop` and the tag.
    agent never runs it (it refuses without a terminal, and refuses a token from the environment
    inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
    - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
-     `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). On a cluster, run it as an
+     `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
+     folders; it may not be under /tmp, the temp folder or your home folder, nor anywhere the
+     settings phiward installs let the session write (the check refuses). On macOS it is
+     `/Users/Shared` by default; without that folder, set SBX_BASE to another folder outside
+     those (for example one you make for it on a second volume). On a cluster, run it as an
      interactive job with SBX_BASE on scratch, for example `srun --pty --job-name auto-sbx-check
      env SBX_BASE=/scratch/$USER sh scripts/sandbox-check/check.sh`.
    - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux

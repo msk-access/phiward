@@ -13,7 +13,7 @@ stub=""
 [ "${1:-}" = --stub ] && stub=--stub
 SBX_LOCKED=$(cat /opt/claude/locked 2>/dev/null || echo unknown)
 export SBX_BASE=/work SBX_SRC=/repo SBX_OUT=/out SBX_LOCKED
-{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | tee /out/console.txt
+{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
 code=$(cat /out/rc)
 [ -n "$stub" ] || exit "$code"
 
