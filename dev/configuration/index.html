@@ -1780,7 +1780,11 @@ one that is a common word of the built-in stop list (for example <code>patient</
   must be inside a protected path of the user config: the broker reads it outside the sandbox,
   and a file elsewhere would let the agent test what it holds.</li>
 <li><strong><code>table</code></strong> (true or false, default false; user config only). Whether <code>--table</code> may be used.</li>
-<li><strong><code>patterns</code></strong> (list). Each entry is <code>REGEX =&gt; &lt;PLACEHOLDER&gt;</code>.</li>
+<li><strong><code>patterns</code></strong> (list). Each entry is <code>REGEX =&gt; &lt;PLACEHOLDER&gt;</code>. Like every identifier rule of a
+  pack, it matches in any letter case; write <code>(?-i:...)</code> around a part that must keep its case.
+  So the <code>msk</code> pack also masks some ordinary words (<code>c-string</code>, <code>donor-derived</code>), the git
+  hook refuses a commit that holds them as it would an identifier, and <code>phiward sanitize
+  --check</code> counts them.</li>
 <li><strong><code>inventory_limit</code></strong> (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.</li>
