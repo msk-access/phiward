@@ -70,7 +70,10 @@ def hpc(tree, monkeypatch):
                         next((p for p in (f"/usr/bin/{name}", f"/bin/{name}") if os.path.exists(p)), None))
     ssh_cfg = tree / "home" / "phiward-ssh"
     ssh_cfg.write_text(f"Host hpc-test\n  ControlPath {sock}\n  ControlMaster no\n")
-    user_cfg(f'\n[copy]\nremotes = ["hpc-test:/work/me"]\nssh_config = "{ssh_cfg}"\n')
+    # a push lands only under [remote] roots: the folder the pushes go to is one ([copy] stays
+    # last: tests append keys to it)
+    user_cfg('\n[remote]\nroots = ["/work/me"]\n'
+             f'[copy]\nremotes = ["hpc-test:/work/me"]\nssh_config = "{ssh_cfg}"\n')
     yield {"sock": sock, "sink": sink, "srv": srv, "home": home, "key": key}
     srv.close()
     import shutil
@@ -276,7 +279,8 @@ def test_a_pull_lands_in_a_protected_root_through_a_confined_tar(tree, hpc):
 def test_copy_output_masks_remote_roots(tree, hpc):
     from phiward import config
     from phiward.sanitize import Sanitizer
-    user_cfg('\n[remote]\nroots = ["/data/protected"]\n')
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text().replace('roots = ["/work/me"]', 'roots = ["/work/me", "/data/protected"]'))
     cfg = config.load(str(tree / "repo"))
     san = Sanitizer.from_config(cfg)
     run.add_remote_roots(san, cfg)

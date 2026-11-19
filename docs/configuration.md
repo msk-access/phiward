@@ -107,10 +107,11 @@ ssh_config = "~/.config/phiward/ssh_config"
 push_limit_gib = 5
 
 [remote]
-# Hosts `phiward run --remote` may name, programs it may run there, protected paths there.
+# Hosts `phiward run --remote` may name, programs it may run there, protected paths there
+# (masked in remote output; a push goes only under one).
 hosts = ["cluster"]
 commands = ["squeue", "sacct", "sinfo"]
-roots = ["/data/protected"]
+roots = ["/data/protected", "/data/work/study-a"]
 # Join your shared SSH connection (no request reads a key or ticket). Default true.
 use_shared_connection = true
 
@@ -228,7 +229,8 @@ times become `<DATE>`, for example the dates `ls -l` prints).
 ### `[copy]`
 
 - **`remotes`** (list of `host:/absolute/prefix`). `phiward copy` may use a place under one
-  of these as a source or a destination. `..` is refused. How pushes and pulls work:
+  of these as a source or a destination; a push lands only under a `[remote] roots` folder too.
+  `..` is refused. How pushes and pulls work:
   [hpc.md](hpc.md#phiward-copy).
 - **`push_limit_gib`** (whole number, default 5; user config only). A push larger than this is
   refused: copy it yourself.
@@ -247,7 +249,9 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 - **`commands`** (list): the programs it may run there, as bare names. The default is empty,
   which refuses every remote run. Nothing confines a command on the remote side: this list is
   what limits its effects.
-- **`roots`** (list of absolute paths on the remote): masked in the output as `<PROTECTED>`.
+- **`roots`** (list of absolute paths on the remote): masked in the output as `<PROTECTED>`. A
+  push (`phiward copy` to a remote) goes only under one of these; with none, every push is
+  refused. `phiward setup` makes each new copy remote's folder one.
 - **`use_shared_connection`** (`true` or `false`; default `true`). Every HPC request joins your
   shared SSH connection and reads no credential ([hpc.md](hpc.md)). `false`: ssh logs in itself,
   so requests can read your key or ticket and have the network.

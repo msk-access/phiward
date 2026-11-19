@@ -81,6 +81,8 @@ newer, macOS or Linux, and Claude Code 2.1.295 or newer.
   (suggested by `phiward setup`) limits shell commands to listed hosts, so `git push` and `pip
   install` fail until you list their hosts; WebFetch, MCP servers and Mode B stay open.
 - Protection follows the path: protected data moved out of a protected folder is not protected.
+  `phiward copy` writes only inside a protected root of your user config, or under a remote root
+  you listed; data you move another way (your own `cp`, a download) is not protected there.
 
 [docs/threat-model.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/docs/threat-model.md) lists every limit.
 

@@ -256,7 +256,8 @@ def _write(path: str, text: str) -> None:
 
 
 # what a team template may set: shared, non-grant settings. Never a write place, the network,
-# a copy remote, an ssh config, names files, pack files by path, environment to pass on
+# a copy remote, an ssh config, names files, pack files by path, environment to pass on.
+# [remote] roots also bound where a push may land, but only within the user's own copy remotes
 TEAM_KEYS = {("broker", "commands"), ("sanitize", "packs"), ("remote", "hosts"),
              ("remote", "commands"), ("remote", "roots"), ("protected_paths", "patterns"),
              ("protected_paths", "snapshot_names"), ("copy", "push_limit_gib"),
@@ -587,11 +588,24 @@ def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
         ask.say("  With yes, `phiward run --net` gets the network. Code that reads protected\n"
                 "  data could then send it anywhere. Against an agent you do not trust, say no.")
         br["net"] = ask.yes("  Allow --net?", bool(br.get("net", False)))
+        old_remotes = list(cp.get("remotes", []))
         cp["remotes"] = ask.many(
             "6. Copy remotes ([copy] remotes)",
             "  host:/absolute/work/folder places that `phiward copy` may copy to or from. The\n"
             "  HPC questions below can fill this in. Leave empty if you do not use one.",
             list(cp.get("remotes", [])), check_remote)
+        new_remotes = [r for r in cp["remotes"] if r not in old_remotes]
+        if new_remotes:
+            # a push lands only under [remote] roots: each remote's folder is one
+            rm6 = data.setdefault("remote", {})
+            rroots = list(rm6.get("roots", []))
+            for r in new_remotes:  # a remote kept from before keeps the roots the operator chose
+                folder = r.split(":", 1)[1]
+                if not any(folder == x or folder.startswith(x.rstrip("/") + "/") for x in rroots):
+                    rroots.append(folder)
+            rm6["roots"] = rroots
+            ask.say("  Each new remote folder is also a [remote] root: a push goes only there, and")
+            ask.say("  what lands there is masked in remote output.")
     else:
         br.setdefault("net", False)
 
@@ -870,6 +884,9 @@ def first_run(argv: List[str], fout: TextIO) -> int:
     data: Dict[str, Dict[str, Any]] = {"protected_paths": {"roots": roots}}
     if remotes:
         data["copy"] = {"remotes": remotes}
+        # a push lands only under [remote] roots: each remote's folder is one (it adds masking of
+        # remote output; it grants nothing a copy remote does not)
+        data["remote"] = {"roots": sorted({r.split(":", 1)[1] for r in remotes})}
     _write(path, dump(data))
     fout.write(f"setup --first-run: wrote {path} with {len(roots)} protected root(s) and "
                f"{len(remotes)} copy remote(s); no write places, no network. From now on only "

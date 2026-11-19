@@ -415,6 +415,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - Data that a gateway command encodes on purpose, or content that is not an identifier, printed
   through `phiward run`. Write scripts that print aggregates.
 - Data a granted write place, the network or a copy remote carries away (see above).
+- On a cluster, what a push puts there is protected only by phiward's masking of remote output
+  (`[remote] roots`) and the cluster's own permissions; a link on the cluster can lead a push
+  elsewhere. A push goes only under `[remote] roots`; with none, every push is refused.
 - Code that the agent writes and the operator later runs outside the guards: shell startup files,
   git hooks, scripts. Read such code before you run it. (The broker itself runs only the phiward
   code and the system `rsync`/`ssh`; it reads the repo config, names files and pack files only as

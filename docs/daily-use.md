@@ -209,6 +209,7 @@ anything: the broker's log has the reason.
 | `refused: the phiward config changed since the broker started` | The config, the approved programs or a names file changed while the broker ran. | The operator reads the change and restarts the broker. |
 | `refused: N program(s) of [broker] commands differ from what the operator approved` | A listed program changed, is new, cannot be read or is a link. | The operator runs `phiward doctor`, checks the programs, runs `phiward pin` and restarts the broker. |
 | `run refused: the sanitizer cannot start` | A pack, a names file or the entry limit is wrong. | The operator runs `phiward doctor`. |
+| `copy refused: the destination is not under [remote] roots of the user config ...` | A push goes only under a remote root, where remote output is masked. | Ask the operator to add the folder to `[remote] roots` (`phiward setup` does it). |
 | `copy refused: the destination is not inside a protected path of the user config` | A copy may not leave the protected folders. | Copy into a protected folder, or to a configured remote. |
 | `run stopped: cancelled` | The client was interrupted (Ctrl-C); the broker stopped the command. | None. |
 | `run stopped: the broker stopped before the command finished` | The broker went away. | The operator restarts it. |
