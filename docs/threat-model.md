@@ -673,8 +673,12 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   with your full rights. Keep them under a `hooks/` folder of `~/.claude` or of the project's
   `.claude` (the hook asks before a file tool writes there, and Claude Code's sandbox denies its
   shell), or in a folder no session writes; never elsewhere in a project.
-- **Not tested by phiward's own checks:** Claude Code's real sandbox. The checks never run the real
-  `claude`; the first check after an install is yours ([releasing.md](releasing.md)).
+- **Not tested by phiward's own checks:** Claude Code's real sandbox. The test suite never runs
+  the real `claude`. The release check (`scripts/sandbox-check`, [releasing.md](releasing.md))
+  does, on macOS and Linux, run by the operator: one session per mode, judged from its files.
+  It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
+  `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
+  check after your own install is yours.
 - **The spool folder** is writable by the agent: it can fill it or move it, which stops the gateway
   (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
   run a command through a shell.

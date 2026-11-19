@@ -54,12 +54,33 @@ Then push `main`, `develop` and the tag.
    `sh scripts/quickstart-check/mac.sh WHEEL PYTHON` with uv's or Homebrew's `python3` (a home
    folder of its own, no login service).
    Then check that the real Claude Code obeys the settings phiward writes, which the scripts above
-   cannot show: `sh scripts/sandbox-check/check.sh` (macOS; it asks only for a token from
-   `claude setup-token` and builds the rest in a home folder of its own, with made-up data). In a
-   `claude -p` session there, a Bash command that reads a protected file, writes `~/.phiward` or
-   writes `~/.claude/settings.json` must fail, and a wrapped MCP server must start. Run it when
-   phiward's Claude Code wiring (`install.py`, `claude_settings.py`, `fasthook.py`, `mcp.py`) or
-   the lowest Claude Code version it supports changed since the last release; otherwise skip it.
+   cannot show. You run it yourself, in a terminal: it asks only for a token from
+   `claude setup-token`, and builds the rest in a home folder of its own, with made-up data. An
+   agent never runs it (it refuses without a terminal, and refuses a token from the environment
+   inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
+   - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
+     `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). On a cluster, run it as an
+     interactive job with SBX_BASE on scratch, for example `srun --pty --job-name auto-sbx-check
+     env SBX_BASE=/scratch/$USER sh scripts/sandbox-check/check.sh`.
+   - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
+     container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
+     pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
+
+   Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
+   `phiward launch`), Haiku with a spending cap of $1 and a time limit. The session must be
+   refused when it reads the protected file with the Read tool, and when a Bash command reads
+   it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the
+   session must mask its output, a commit of a made-up identifier must be refused by the git
+   hook without showing it, the wrapped MCP server must start, and `doctor` must stay clean.
+   It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
+   With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
+   runs, and pulls through your shared connection, which you start when it asks; it writes only
+   under REMOTE_DIR and deletes nothing there: remove that folder yourself afterwards.
+   `--stub` (a stand-in claude, no token) checks the plumbing only: run it in the container
+   (`linux.sh --stub`), never on your own machine (it plants a git hook and a home folder).
+   Run the real check when phiward's Claude Code wiring (`install.py`, `claude_settings.py`,
+   `fasthook.py`, `mcp.py`, `wholetool.py`) or the lowest Claude Code version it supports
+   changed since the last release; otherwise skip it.
 4. Commit and tag: `git flow release finish` does both; the first release is tagged by hand on
    `main`. Then push the tag:
 

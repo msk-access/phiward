@@ -36,7 +36,8 @@ brief says what correct means.
 - Work on a copy (`git clone` or `cp -R`), never in the repository; never `git worktree add` on it.
 - A scratch `HOME` for anything that runs phiward. Never run `setup`, `broker --service`, `pin`,
   `carryover` or `install` against the real home folder, and never start a login service.
-- Never run the real `claude`; use a stub on `PATH`.
+- Never run the real `claude`; use a stub on `PATH`. Of the sandbox check, run only
+  `sh scripts/sandbox-check/linux.sh --stub` (in its container); the operator runs the rest.
 - Experiments that plant git commands or hooks, or files that run later, run inside a Linux
   container (`--network none`), not on the maintainer's machine, where they look like an attack
   to the machine's own monitoring.

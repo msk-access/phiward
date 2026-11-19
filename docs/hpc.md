@@ -288,7 +288,9 @@ login node (kernel 4.18, bubblewrap 0.4.0) passed all 21 tests:
   written;
 - the direct network was blocked.
 
-A home folder on NFS was not part of that probe.
+A home folder on NFS was not part of that probe. The release check with the real Claude Code
+(`scripts/sandbox-check/check.sh`, [releasing.md](releasing.md)) runs on Linux too; it has not
+been run on the cluster yet.
 
 ## Rules for the operator
 
@@ -298,5 +300,8 @@ A home folder on NFS was not part of that probe.
   a phiward feature: phiward itself never asks at run time; your config decides.
 - Keep `[remote] commands` short. Prefer commands that print counts and states.
 - The HPC side's own rules (partitions, job names, where clinical data may be read) still apply.
+- The release check's remote probes (`REMOTE`, `REMOTE_DIR`) use an ssh config of their own that
+  can only join the shared connection you start for them (no key, no ticket). Give a new, empty
+  folder: the check writes only under it, and deletes nothing. Remove it yourself afterwards.
 
 Next: [daily use](daily-use.md).

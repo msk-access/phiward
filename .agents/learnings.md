@@ -5,6 +5,18 @@ top. Causes: **rule** (a rule or skill said the wrong thing), **trigger** (the r
 apply, or the wrong one did), **design** (the code's mechanism was the cause), **environment** (a
 fault outside this repository: nothing here changes).
 
+- **The sandbox check counted a refusal only when its text said "not permitted".** Linux's
+  sandboxes refuse otherwise: a hidden file (no such file, or an empty view) and a read-only bind
+  (EROFS). Cause: design (the probe matched Seatbelt's EPERM text). Fixed in:
+  `scripts/sandbox-check/probes.sh` (reason classes; a read compares a hash) and `judge.py`
+  (the classes that pass, per platform: EPERM only on macOS).
+- **A token prompt under util-linux `su -c` has no controlling terminal**, so `stty -g <
+  /dev/tty` fails under `set -e`. Cause: environment. Fixed in: `scripts/sandbox-check/linux.sh`
+  (`docker run --user tester`, no `su`).
+- **OpenSSH finds `~` from passwd, not from `$HOME`**: a plain `ssh` in a check's scratch home
+  would still use the operator's real keys and ticket. Cause: environment. Fixed in:
+  `scripts/sandbox-check/check.sh` (an ssh config of its own: no identity, no GSSAPI,
+  BatchMode, `ControlMaster no`; it never reads `~/.ssh/config`).
 - **A test's git experiment set off the maintainer's antivirus monitor.** Cause: rule (experiments
   that plant git commands ran on a maintainer's machine). Fixed in: `.agents/rules/review-rounds.md` (such
   experiments run in a Linux container).
