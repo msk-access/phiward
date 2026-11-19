@@ -243,9 +243,15 @@ def test_a_read_launch_refusal_passes():
     assert run(lines=lines, platform="linux", mode="B", results=LINUX)[0] == judge.PASS
 
 
-def test_a_read_not_found_passes():
+def test_a_read_not_found_passes_on_linux():
     lines = stream(read=read_call("File does not exist."))
-    assert run(lines=lines)[0] == judge.PASS
+    assert run(lines=lines, results=LINUX, platform="linux")[0] == judge.PASS
+
+
+def test_a_read_not_found_is_inconclusive_on_macos():
+    """Seatbelt never hides a file: on macOS only phiward's refusal passes."""
+    lines = stream(read=read_call("File does not exist."))
+    assert run(lines=lines)[0] == judge.INCONCLUSIVE
 
 
 def test_a_read_with_another_error_is_inconclusive():
@@ -653,8 +659,8 @@ def test_keep_command_prints_the_redacted_report(tmp_path):
 
 
 CHILD = """import os, sys, time
-open(sys.argv[1], "w").write(str(os.getpid()))
 print(os.environ["CLAUDE_CODE_OAUTH_TOKEN"], flush=True)
+open(sys.argv[1], "w").write(str(os.getpid()))
 time.sleep(60)
 """
 
@@ -695,11 +701,10 @@ def test_an_interrupted_launch_stops_claude_and_records(tmp_path, sig, code):
                          stdin=subprocess.PIPE, env=env)
     p.stdin.write((TOKEN + "\n").encode())
     p.stdin.close()
-    stream = run_dir / "stream.jsonl"
     deadline = time.monotonic() + 20
-    while time.monotonic() < deadline and not (
-            pidfile.exists() and stream.exists() and TOKEN in stream.read_text()):
+    while time.monotonic() < deadline and not pidfile.exists():
         time.sleep(0.05)
+    time.sleep(0.2)
     p.send_signal(getattr(signal, sig))
     assert p.wait(timeout=30) == code
     time.sleep(0.2)
@@ -734,3 +739,62 @@ def test_a_signal_in_the_fork_window_still_stops_claude(tmp_path):
         time.sleep(0.2)
         assert not _alive(int(pidfile.read_text())), "claude kept running"
     assert (run_dir / "token-seen").exists()
+
+
+
+def test_keep_writes_nothing_when_interrupted(tmp_path, monkeypatch):
+    """Any failure while writing, a KeyboardInterrupt too: no file is left, final or partial."""
+    h = _run_dir(tmp_path, f"{TOKEN}\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    launch = _launch_module()
+    calls = []
+
+    def rename(a, b):
+        calls.append(a)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+        os.replace(a, b)
+    monkeypatch.setattr(launch.os, "rename", rename)
+    with pytest.raises(BaseException):
+        launch.keep(TOKEN, str(h / "report.txt"), [str(h / "run-A")], str(out))
+    assert os.listdir(out) == []
+
+
+API_CHILD = """import os
+print("api" if os.environ.get("ANTHROPIC_API_KEY") else "none",
+      "oauth" if os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") else "none", flush=True)
+"""
+
+
+@pytest.mark.parametrize("line, want", [(f"ANTHROPIC_API_KEY={TOKEN}", "api none"),
+                                        (TOKEN, "none oauth")])
+def test_the_token_on_stdin_names_its_variable(tmp_path, line, want):
+    """check.sh unsets the token variables and passes the token on stdin, with its name when it
+    is an API key."""
+    import subprocess
+    import sys
+    home, run_dir, child, _pidfile, env = _setup_launch(tmp_path)
+    child.write_text(API_CHILD)
+    r = subprocess.run([sys.executable, str(LAUNCH), str(home), str(run_dir), "30", "--",
+                        sys.executable, str(child)], input=(line + "\n").encode(), env=env,
+                       timeout=60)
+    assert r.returncode == 0
+    assert (run_dir / "stream.jsonl").read_text().strip() == want
+
+
+def test_the_stream_is_written_by_launch_after_the_session(tmp_path):
+    """The session's output reaches the stream file through launch.py, which writes it after
+    the session is stopped: the session never holds the file."""
+    import subprocess
+    import sys
+    home, run_dir, child, _pidfile, env = _setup_launch(tmp_path)
+    child.write_text('import os, sys\nprint(os.readlink("/proc/self/fd/1") '
+                     'if os.path.exists("/proc/self/fd/1") else "pipe-check", flush=True)\n'
+                     'import stat\nprint("pipe" if stat.S_ISFIFO(os.fstat(1).st_mode) '
+                     'else "file", flush=True)\n')
+    r = subprocess.run([sys.executable, str(LAUNCH), str(home), str(run_dir), "30", "--",
+                        sys.executable, str(child)], input=(TOKEN + "\n").encode(), env=env,
+                       timeout=60)
+    assert r.returncode == 0
+    assert (run_dir / "stream.jsonl").read_text().splitlines()[-1] == "pipe"

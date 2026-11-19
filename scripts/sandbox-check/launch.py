@@ -1,8 +1,9 @@
 """Start the real `claude -p` for the sandbox check with a clean environment: only the variables
 it needs, the credential from the caller's environment or the first line of stdin (never argv or
-a file), Claude Code's own credential scrub for its commands, no auto-update. A watchdog stops it.
-However it ends (normally, the watchdog, SIGINT, SIGTERM or SIGHUP), it stops the session's
-process group, and records only whether the token was there: RUN_DIR/token-seen (in the
+a file; a line ANTHROPIC_API_KEY=VALUE names an API key), Claude Code's own credential scrub for its commands, no auto-update. A watchdog stops it.
+The session writes into a pipe; launch.py writes RUN_DIR/stream.jsonl itself once the session
+is stopped. However it ends (normally, the watchdog, SIGINT, SIGTERM or SIGHUP), it stops the
+session's process group, and records only whether the token was there: RUN_DIR/token-seen (in the
 session's output: what the model and the provider saw) and RUN_DIR/token-in-env (in the
 commands' environment, as probes.sh saved it in env.txt, which is then removed). Exit: claude's
 code, 124 for the watchdog, 128 + the signal for a signal.
@@ -20,6 +21,7 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
@@ -32,11 +34,20 @@ class KeepError(Exception):
     pass
 
 
+VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
+
+
 def _token():
-    for var in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"):
+    """(the variable, the token): from the environment, else the first line of stdin, which
+    may name its variable (ANTHROPIC_API_KEY=VALUE; check.sh passes an API key so)."""
+    for var in VARS:
         if os.environ.get(var):
             return var, os.environ[var]
-    return "CLAUDE_CODE_OAUTH_TOKEN", sys.stdin.readline().strip()
+    line = sys.stdin.readline().strip()
+    for var in VARS:
+        if line.startswith(var + "="):
+            return var, line[len(var) + 1:]
+    return "CLAUDE_CODE_OAUTH_TOKEN", line
 
 
 def _redacted(data, token):
@@ -61,22 +72,24 @@ def keep(token, report, run_dirs, out):
             if os.path.exists(path):
                 files[dst] = _redacted(read(path), token)
     if out:
-        written = []
+        made = []  # every path this call created, partial or final
         try:
-            for name, data in files.items():
+            for name, data in files.items():  # all the parts first
                 tmp = os.path.join(out, "." + name + ".part")
+                made.append(tmp)
                 with open(tmp, "xb") as fh:
                     fh.write(data)
-                written.append(tmp)
-            for name in files:
-                os.rename(os.path.join(out, "." + name + ".part"), os.path.join(out, name))
-        except OSError as exc:
-            for tmp in written:
+            for name in files:  # then the renames, only when every part is written
+                final = os.path.join(out, name)
+                made.append(final)
+                os.rename(os.path.join(out, "." + name + ".part"), final)
+        except BaseException:  # a KeyboardInterrupt too: nothing is left
+            for path in made:
                 try:
-                    os.remove(tmp)
+                    os.remove(path)
                 except OSError:
                     pass
-            raise KeepError(str(exc))
+            raise
     return files["report.txt"].decode("utf-8", "replace")
 
 
@@ -136,28 +149,35 @@ def main(argv):
            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1", name: token}
 
     def stopped(signum, _frame):
+        for sig in SIGNALS:  # no second signal may cut the stop short
+            signal.signal(sig, signal.SIG_IGN)
         raise Stopped(signum)
     for sig in SIGNALS:
         signal.signal(sig, stopped)
+    # the session writes into a pipe; launch.py writes the stream file itself, after the session
+    # is stopped, so the session never holds the file
     stream_out = os.path.join(run_dir, "stream.jsonl")
-    code, p = 130, None
+    chunks = []
+    code, p, reader = 130, None, None
     try:
-        with open(stream_out, "wb") as out:
-            # a signal between the start and the assignment of p waits until p is known, so the
-            # session is always stopped; the child starts with the signals unblocked
-            signal.pthread_sigmask(signal.SIG_BLOCK, SIGNALS)
-            try:
-                p = subprocess.Popen(
-                    cmd, env=env, stdin=subprocess.DEVNULL, stdout=out,
-                    stderr=subprocess.STDOUT, start_new_session=True,
-                    preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_UNBLOCK, SIGNALS))
-            finally:
-                signal.pthread_sigmask(signal.SIG_UNBLOCK, SIGNALS)
-            try:
-                code = p.wait(timeout=float(seconds))
-            except subprocess.TimeoutExpired:
-                print(f"claude was stopped after {seconds} seconds", file=sys.stderr)
-                code = 124
+        # a signal between the start and the assignment of p waits until p is known, so the
+        # session is always stopped; the child starts with the signals unblocked
+        signal.pthread_sigmask(signal.SIG_BLOCK, SIGNALS)
+        try:
+            p = subprocess.Popen(
+                cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT, start_new_session=True,
+                preexec_fn=lambda: signal.pthread_sigmask(signal.SIG_UNBLOCK, SIGNALS))
+            reader = threading.Thread(target=lambda: chunks.extend(iter(
+                lambda: p.stdout.read1(65536), b"")), daemon=True)
+            reader.start()
+        finally:
+            signal.pthread_sigmask(signal.SIG_UNBLOCK, SIGNALS)
+        try:
+            code = p.wait(timeout=float(seconds))
+        except subprocess.TimeoutExpired:
+            print(f"claude was stopped after {seconds} seconds", file=sys.stderr)
+            code = 124
     except Stopped as exc:
         print("claude was stopped (signal %d)" % exc.args[0], file=sys.stderr)
         code = 128 + exc.args[0]
@@ -166,6 +186,10 @@ def main(argv):
             signal.signal(sig, signal.SIG_IGN)
         if p is not None:
             _stop(p)
+        if reader is not None:
+            reader.join(timeout=5)  # a process left in a session of its own may hold the pipe
+        with open(stream_out, "wb") as fh:
+            fh.write(b"".join(chunks))
         in_stream = _contains(stream_out, token)
         env_dump = os.path.join(home, "proj", "env.txt")
         in_env = {True: "yes", False: "no", None: "missing"}[_contains(env_dump, token)]

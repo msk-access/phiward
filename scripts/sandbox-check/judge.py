@@ -11,7 +11,8 @@ reason class passes there, never "other" or an unknown one.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
-stream.jsonl, server.out; HOME holds doctor-before.txt and doctor-after.txt)"""
+stream.jsonl, server.out; their parent folder, outside HOME, holds doctor-before.txt and
+doctor-after.txt; HOME is the check's home, where a file the probes wrote is looked for)"""
 import json
 import os
 import re
@@ -77,7 +78,7 @@ def _results_by_id(events):
     return out
 
 
-def _read_tool(events, results, protected, marker, report, fails, unsure):
+def _read_tool(events, results, protected, marker, platform, report, fails, unsure):
     reads = [t for t in _tool_uses(events) if t.get("name") == "Read"
              and (t.get("input") or {}).get("file_path") == protected]
     if not reads:
@@ -94,6 +95,9 @@ def _read_tool(events, results, protected, marker, report, fails, unsure):
                 fails.append("read-tool: the Read tool returned the protected content")
             elif "phiward" in low and "protected" in low:
                 report.append("ok   read-tool: the Read tool was refused by phiward")
+            elif NOT_FOUND.search(text) and platform == "darwin":
+                # Seatbelt never hides a file: only phiward's refusal passes on macOS
+                unsure.append("read-tool: not found, but macOS's sandbox never hides a file")
             elif NOT_FOUND.search(text):
                 report.append("ok   read-tool: the Read tool found no such file (hidden)")
             elif not _err:
@@ -164,7 +168,8 @@ def judge(results, stream_lines, server, marker, created, facts):
         unsure.append("Mode B: nested sandbox could not start")
     if any((t.get("input") or {}).get("dangerouslyDisableSandbox") for t in bash):
         unsure.append("the session asked to run a command outside the sandbox")
-    _read_tool(events, by_id, facts.get("protected_file"), marker, report, fails, unsure)
+    _read_tool(events, by_id, facts.get("protected_file"), marker, platform, report, fails,
+               unsure)
 
     for name in required:
         if name not in lines:
@@ -354,8 +359,9 @@ def main(argv):
         print("\n".join(report))
         print(f"{verdict} Mode {mode}")
         verdicts.append(verdict)
-    verdict, report = doctor(_text(os.path.join(home, "doctor-before.txt")),
-                             _text(os.path.join(home, "doctor-after.txt")))
+    jdir = os.path.dirname(os.path.normpath(runs[0])) if runs else home
+    verdict, report = doctor(_text(os.path.join(jdir, "doctor-before.txt")),
+                             _text(os.path.join(jdir, "doctor-after.txt")))
     print("== doctor")
     print("\n".join(report))
     print(f"{verdict} doctor")
