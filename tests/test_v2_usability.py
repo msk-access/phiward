@@ -35,13 +35,24 @@ def _hook(t, tool, inp, name, source="user"):
     return claude.main(io.StringIO(json.dumps(p)), io.StringIO(), err), err.getvalue()
 
 
-def test_many_paths_in_one_call_stay_fast(t):
-    inp = {"files": [f"src/mod{i}/file{i}.py" for i in range(2000)]}
+def _timed(t, n):
+    inp = {"files": [f"src/mod{i}/file{i}.py" for i in range(n)]}
     start = time.perf_counter()
     code, err = _hook(t, "mcp__srv__index_files", inp, "srv")
-    took = time.perf_counter() - start
     assert code == 0, err
-    assert took < 2.0, f"{took:.2f}s"
+    return time.perf_counter() - start
+
+
+def test_many_paths_in_one_call_stay_fast(t):
+    # the cost grows with the number of paths, not faster: 10 times the paths may take at most
+    # 25 times as long (a cost that grows with the square would take about 100 times). Measured
+    # against a smaller call in the same run, so a busy machine slows both; and well under the
+    # hook's 10 s timeout, after which the call would be refused
+    _timed(t, 50)  # warm up (imports, the first config load)
+    small = min(_timed(t, 200) for _ in range(3))
+    took = _timed(t, 2000)
+    assert took < max(25 * small, 0.5), f"{took:.2f}s for 2000 paths, {small:.3f}s for 200"
+    assert took < 8.0, f"{took:.2f}s"
 
 
 @pytest.mark.parametrize("url", [
