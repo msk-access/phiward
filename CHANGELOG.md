@@ -32,6 +32,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   launch that sees exactly that runs its command directly, as on macOS. Anything else builds
   the full profile, and refuses where `~/.phiward` cannot be written. The sandbox check's stub
   run expects `PASS Mode B` on Linux.
+- On Linux with an older C library (RHEL 8), carry-over no longer crashes when it gives a
+  session's folder back its owner bits (a refused `phiward launch` ended with a traceback).
 - Two tests of the output cap restart the broker after changing the config, so they test the
   cap; before, every run in them was refused and their bounds held trivially.
 
