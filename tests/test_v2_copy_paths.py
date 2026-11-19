@@ -91,3 +91,25 @@ def test_a_relative_path_without_dotdot_still_copies(tree):
     code, out = _copy(tree, "notes.txt", str(tree / "phi" / "copies") + "/")
     assert code == 0, out
     assert (tree / "phi" / "copies" / "notes.txt").read_text() == "made-up note\n"
+
+
+@pytest.mark.parametrize("arg", ["", "~other/x"])
+def test_an_empty_or_tilde_user_source_is_refused(tree, arg):
+    (tree / "phi" / "copies").mkdir()
+    code, out = _copy(tree, arg, str(tree / "phi" / "copies") + "/")
+    assert code == 2 and "give the full path" in out, out
+    assert _nothing_under(tree / "phi" / "copies")
+
+
+def test_a_push_with_a_dotdot_source_is_refused(tree):
+    code, out = _copy(tree, str(tree / "phi" / "sub" / ".." / "FAKE-PT-0001.bam"),
+                      "hpc-test:/work/me/x")
+    assert code == 2 and "`..`" in out, out
+
+
+@pytest.mark.skipif(CONFINE_WHY is not None, reason="no confinement backend")
+def test_a_name_starting_with_tilde_is_copied_when_written_with_dot_slash(tree):
+    (tree / "repo" / "~notes.txt").write_text("made-up note\n")
+    code, out = _copy(tree, "./~notes.txt", str(tree / "phi" / "copies") + "/")
+    assert code == 0, out
+    assert (tree / "phi" / "copies" / "~notes.txt").read_text() == "made-up note\n"

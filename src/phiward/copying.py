@@ -27,7 +27,9 @@ Options:
 
 Copy protected data without printing it. DST must be inside a protected root of your user
 config, or under a configured remote (`[copy] remotes = ["host:/abs/prefix"]`). A source or
-destination on a remote is written HOST:/PATH.
+destination on a remote is written HOST:/PATH. A local path is made absolute once, and every
+check and the copy itself use that path; one with a `..` part, or one that starts with `~` (a
+quoted `~`, which the shell did not expand), is refused: give the full path.
 
 The command is only a client. The broker runs the copy outside the agent's sandbox, so a
 broker must be running (`phiward broker`). The copy writes only at its destination, which
@@ -301,6 +303,8 @@ def local_args(args: Sequence[str], cwd: str) -> "Tuple[List[str], str]":
         if _is_remote(a) or a.startswith("-"):
             out.append(a)
             continue
+        if not a:
+            return [], "an empty path is not a path; give the full path"
         if a.startswith("~") or ".." in a.split("/"):
             return [], "a local path holds `..` or starts with `~`; give the full path"
         full = os.path.normpath(os.path.join(cwd, a))

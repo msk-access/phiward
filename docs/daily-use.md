@@ -117,9 +117,9 @@ phiward copy ~/data/patients/run1 ~/data/patients/run1-copy
 ```
 
 `copy SRC... DST` copies without printing names. The destination must be inside a protected path
-of the user config, or under a `[copy] remotes` entry. A local path is used as written, once:
-one with a `..` part, or one that starts with `~` (quoted, so the shell left it), is refused;
-give the full path. A local copy uses the system `rsync -a`
+of the user config, or under a `[copy] remotes` entry. Each local path is made absolute
+once, and every check and the copy itself use that path. One with a `..` part, or one that
+starts with `~` (quoted, so the shell left it), is refused: give the full path. A local copy uses the system `rsync -a`
 (or `cp -R`). A copy to or from a remote is a tar stream through your shared SSH connection
 ([hpc.md](hpc.md#phiward-copy)). The copy runs in the gateway profile and cannot read
 credentials. Its output is sanitized. The only option is `--dry-run`, as the first word: it
@@ -198,7 +198,7 @@ anything: the broker's log has the reason.
 | `copy refused: ... not under a configured remote` | A remote source or destination is not a `[copy] remotes` entry. | Ask the operator to add the remote. |
 | `copy refused: start your shared connection first …` | The shared SSH connection to the host is not running. | The operator runs `kinit`, then `ssh -fN HOST`. |
 | `refused: the broker cannot use this request (...)` | The request was malformed, or its folder does not exist. | Run the command again from an existing folder. |
-| `copy refused: a local path holds `..` or starts with `~`; give the full path` | A local source or destination was written with `..` or a quoted `~`. | Give the full path. |
+| ``copy refused: a local path holds `..` or starts with `~` `` | A local source or destination was written with `..` or a quoted `~`. | Give the full path. |
 | `copy refused: options are not accepted` | `copy` picks its own options. | Remove the options (only `--dry-run` first is allowed). |
 | `refused: the broker is busy` | Too many requests wait. | Try again later. |
 | `refused: the phiward config changed since the broker started` | The config, the approved programs or a names file changed while the broker ran. | The operator reads the change and restarts the broker. |
