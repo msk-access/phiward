@@ -38,7 +38,8 @@ from dataclasses import dataclass, field
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from phiward import config, confine, paths, safeio
-from phiward.sanitize import Sanitizer, SanitizerError
+from phiward.sanitize import (WITHHELD, _PLACEHOLDER, Sanitizer, SanitizerError, fmt_n,
+                              placeholder_note)
 
 MAX_LINE = 64 * 1024  # bytes; a longer output line is withheld, not held in memory
 USAGE = ("usage: phiward run [--write-to DIR]... [--net] [--names-from FILE]... [--table] "
@@ -69,7 +70,8 @@ give paths in full. Nothing confines CMD on a remote host; the list of programs 
 there.
 
 Print counts and summaries, not records: masking hides names and identifiers, not other
-content.
+content. The last lines count the placeholders in the lines shown, and say when no identifier
+placeholder was shown.
 """
 
 
@@ -223,7 +225,8 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                  socket: str = "", allow_read: Sequence[str] = (),
                  stdin_feed: Optional[Callable[[BinaryIO], None]] = None,
                  quiet: bool = False,
-                 in_scratch: bool = False) -> int:
+                 in_scratch: bool = False,
+                 report_placeholders: bool = False) -> int:
     """Run `cmd` in the gateway profile and write its masked output to `out`. `stdin_feed`, when
     given, writes the command's input from the broker (a push's tar stream) in a thread."""
     os.makedirs(cfg.cache_dir, mode=0o700, exist_ok=True)
@@ -287,6 +290,10 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
         assert proc.stdout is not None
         lines = changed = 0
         last, repeats, shown, withheld = None, 0, 0, 0
+        # the placeholders in the lines the agent is shown, counted where a line is written
+        known = san.placeholders()
+        counts: Dict[str, int] = {}
+        content = held = 0
         cap = max(1, cfg.max_output_lines)
         try:
             for raw, too_long in _raw_lines(proc, cancelled):
@@ -329,6 +336,13 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                 last = clean
                 out.write(clean + "\n")
                 shown += 1
+                content += 1
+                if clean == WITHHELD:
+                    held += 1
+                else:
+                    for tok in _PLACEHOLDER.findall(clean):
+                        if tok in known:
+                            counts[tok] = counts.get(tok, 0) + 1
                 out.flush()
             # no counts in these notes: a count is a number the command chooses
             if repeats and shown < cap:
@@ -358,7 +372,16 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
         # the agent sees success or failure only: an exit status (0-255) and counts are numbers
         # a command chooses, so code written to leak could encode data in them. The real
         # status goes to the operator's broker log. Cancelled stays 130 (phiward's own).
-        _log(f"{label}: exit {code}, {lines} line(s), {changed} masked")
+        # the placeholder note is counted from the lines written above: the agent could count
+        # them itself, so it adds nothing; it tells a run that masked nothing from clean data
+        kinds = ", ".join(f"{fmt_n(n)} {p}" for p, n in
+                          sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+        _log(f"{label}: exit {code}, {lines} line(s), {changed} masked; "
+             + (f"placeholders shown: {kinds}" if kinds else "no placeholder shown"))
+        if report_placeholders:
+            text = placeholder_note(counts, held, content, san.identifier_placeholders())
+            if text:
+                out.write(text + "\n")
         seen = 0 if code == 0 else (130 if cancelled() else 1)
         out.write(f"{label} done: exit={seen}" + ("" if seen != 1 else
                   " (the command failed; its exit status is in the operator's broker log)")
@@ -550,7 +573,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
         listed = bool(cfg.command_lists)
         code = run_confined(cmd, cfg, san, write_to, a.net, watch, a.table, env=env, cwd=cwd,
                             cancelled=cancelled, deny_read=gateway_hidden(cfg),
-                            in_scratch=listed)
+                            in_scratch=listed, report_placeholders=True)
         if listed and any(w and not w.startswith(("/", "-")) for w in a.cmd[1:]):
             # said whatever exists there (no file name is looked up for the agent)
             out.write("run: with [broker] commands set, a command starts in a private folder "
@@ -764,7 +787,8 @@ def _execute_remote(a: RunArgs, cwd: str, env: Dict[str, str], out: TextIO, cfg:
         # through the shared connection: no credential, no network but its socket
         return run_confined(ssh, cfg, san, [], rt.net, out, a.table, label="remote run",
                             env=env, cwd=cwd, cancelled=cancelled, deny_read=rt.deny_read,
-                            socket=rt.socket, allow_read=rt.allow_read)
+                            socket=rt.socket, allow_read=rt.allow_read,
+                            report_placeholders=True)
     except confine.ConfineError as exc:
         out.write(f"run refused: {exc}\n")
         return 3

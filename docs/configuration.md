@@ -308,7 +308,8 @@ The grants. Nothing asks the operator at run time: what is not written here is r
 - **`max_output_lines`** (whole number, default 2000). The most lines of a gateway command's
   output (`run`, `run --remote` and `copy`) that the agent sees. The lines after that are
   counted, not shown, and a last line says how many were withheld. A notice such as
-  `[3 more identical line(s)]` counts as a line. A repo config may only lower this value. To
+  `[3 more identical line(s)]` counts as a line; the placeholder note after the output does
+  not, and counts only the lines shown. A repo config may only lower this value. To
   see more, write the results to a file in a `write_to` folder inside a protected root, and
   print a summary.
 

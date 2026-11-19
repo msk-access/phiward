@@ -220,6 +220,9 @@ nothing from quarantine without reading it (`phiward carryover show`).
 
 ## Risks that grow when nobody watches
 
+- **Rules that match nothing.** A scheduled run whose identifier rules match none of its data
+  looks like clean data. After it, read the broker log: `no placeholder shown` on a run over
+  named data means a pack or a pattern is missing.
 - **Prompt injection.** A page or file the agent reads can tell it what to do, and nobody sees it
   happen. phiward still keeps it from reading protected data, but what it can read it can send: the
   network is open by default. In Mode A, `[network] limit` keeps shell commands to the hosts you
