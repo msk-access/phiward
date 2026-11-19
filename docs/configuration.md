@@ -35,7 +35,7 @@ gateway command can do comes from the user config only.
 | `[protected_paths] unresolved` | yes | only stricter |
 | `[protected_paths] snapshot_names` | yes | yes, adds |
 | `[sanitize] packs` | yes (built-in names and pack files) | built-in names only; pack files are ignored |
-| `[sanitize] names_from`, `patterns` | yes | ignored |
+| `[sanitize] names_from`, `patterns`, `subjects` | yes | ignored |
 | `[sanitize] inventory_limit` | yes | only lower |
 | `[copy] remotes`, `ssh_config`, `push_limit_gib` | yes | ignored |
 | `[sanitize] table` | yes | ignored |
@@ -87,6 +87,10 @@ names_from = ["~/data/patients/.names.txt"]
 
 # Extra rules, each 'REGEX => <PLACEHOLDER>'.
 patterns = ['\bPT-\d{6}\b => <SAMPLEID>']
+
+# Or your record that the protected data holds no subject or sample IDs beyond the names
+# under the roots (phiward doctor warns until a rule masks them or this is set):
+# subjects = "none"
 
 # The most entries the sanitizer lists under the roots. Default 200000.
 inventory_limit = 200000
@@ -209,6 +213,11 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   --check` counts them. To check that your rules match your data, run a command over it: the
   note at the end of `phiward run` counts the placeholders shown and says when no identifier
   placeholder was shown.
+- **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
+  subject or sample identifiers beyond the names under the roots. Without it, and without a
+  rule that masks them (the `msk` pack, a pack file of your own with identifier rules,
+  `patterns` or `names_from`), `phiward doctor` warns. `phiward setup` asks; `"none"` is never
+  its default. A repo config or a team template cannot set it.
 - **`inventory_limit`** (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.

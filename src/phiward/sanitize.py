@@ -189,6 +189,26 @@ def load_pack(name: str) -> Pack:
     return pack
 
 
+# built-in packs whose rules mask subject or sample identifiers (an example institution's forms)
+SUBJECT_PACKS = ("msk",)
+
+
+def masks_subjects(cfg: "config.Config") -> bool:
+    """Whether the operator's own config masks subject or sample identifiers inside files: its own
+    [sanitize] patterns or names_from, a built-in subject pack, or a pack file with an identifier
+    rule for something other than files, reads or dates. Only the user config counts (a repo
+    file, which the agent can write, may add packs too). Raises SanitizerError when a pack file
+    cannot be read."""
+    if cfg.sanitize_patterns or cfg.names_from:
+        return True
+    for name in cfg.user_packs:
+        if name in SUBJECT_PACKS:
+            return True
+        if "/" in name and any(r not in NOT_SUBJECTS for _rx, r in load_pack(name).identifiers):
+            return True
+    return False
+
+
 # ---- name tokens -------------------------------------------------------------------------------
 
 def name_tokens(lines: Iterable[str], stop: Optional[Iterable[str]] = None) -> "set[str]":

@@ -17,7 +17,8 @@ phiward doctor --headless
 ```
 
 It exits with 0 when a Claude Code session in this folder would be guarded, and with 1 and the
-reasons when not. Put it first in the script. It checks that:
+reasons when not. Put it first in the script. A NOTE line (for example, that no rule masks
+subject identifiers) does not change the exit status. It checks that:
 
 - your user (or managed) settings run phiward's isolated hook on every tool. That is the `/bin/sh -c
   '...; exec <python> -I -m phiward hook claude'` that `phiward install claude --user --write`

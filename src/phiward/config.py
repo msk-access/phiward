@@ -45,7 +45,7 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "protected_paths": {"roots": "list", "patterns": "list", "unresolved": "choice",
                         "snapshot_names": "list"},
     "sanitize": {"packs": "list", "names_from": "list", "patterns": "list",
-                 "inventory_limit": "int", "table": "bool"},
+                 "inventory_limit": "int", "table": "bool", "subjects": "str"},
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
@@ -104,7 +104,7 @@ REMOVED = {("broker", "confirm"), ("broker", "prompt")}
 USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns"),
              ("copy", "push_limit_gib"), ("remote", "use_shared_connection"),
              ("remote", "hosts"), ("remote", "commands"), ("remote", "roots"),
-             ("sanitize", "names_from"), ("sanitize", "table"),
+             ("sanitize", "names_from"), ("sanitize", "table"), ("sanitize", "subjects"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
              ("shell", "commands")}
@@ -171,6 +171,12 @@ class Config:
     unresolved: str = "deny"
     snapshot_names: List[str] = field(default_factory=list)  # site snapshot folder names
     packs: List[str] = field(default_factory=list)
+    # the packs of the user's own file: only these tell doctor that subject identifiers are
+    # masked (a repo file, which the agent can write, may add packs too)
+    user_packs: List[str] = field(default_factory=list)
+    # "none": the operator's record that the protected data holds no subject or sample IDs
+    # beyond the names under the roots ([sanitize] subjects, user config only)
+    sanitize_subjects: str = ""
     names_from: List[str] = field(default_factory=list)
     sanitize_patterns: List[str] = field(default_factory=list)  # "REGEX => <PLACEHOLDER>"
     # table mode lets bare numbers through (an MRN would pass): the operator's choice only
@@ -582,6 +588,10 @@ def _check(data: Dict[str, Any], where: str) -> Tuple[Dict[str, Dict[str, Any]],
                 return {}, f"{where}: '{section}.{key}' must be a non-empty string"
             elif kind == "bool" and type(value) is not bool:
                 return {}, f"{where}: '{section}.{key}' must be true or false"
+            if (section, key) == ("sanitize", "subjects") and value != "none":
+                return {}, (f"{where}: 'sanitize.subjects' can only be \"none\" (your record "
+                            "that the protected data holds no subject or sample identifiers "
+                            "beyond the names under the roots)")
             if section == "protected_paths" and key in ("roots", "patterns"):
                 for v in value:
                     if ".." in v.split("/"):
@@ -765,6 +775,10 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
                 v = _expand_root(v, home)
             if v not in target:
                 target.append(v)
+            if key == "packs" and not repo and v not in cfg.user_packs:
+                cfg.user_packs.append(v)
+    if "subjects" in san:  # USER_ONLY: a repo file's value is ignored (listed in cfg.ignored)
+        cfg.sanitize_subjects = san["subjects"]
     if "table" in san:  # USER_ONLY: a repo file's value is ignored (listed in cfg.ignored)
         cfg.sanitize_table = bool(san["table"])
     if "inventory_limit" in san:

@@ -129,6 +129,9 @@ confined, with its output sanitized). Keep tools out of folders a project opens.
 processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.
 
 The sanitizer masks protected paths, entry names under the roots, and identifiers from the packs.
+Out of the box, only file names, read names and loci are masked inside file contents; `phiward
+doctor` warns until a pack or rule for subject identifiers is on, or `subjects = "none"` is
+recorded.
 This stops **accidental** leaks from ordinary tools (`ls`, `find`, error messages, tracebacks). It
 also covers a name that a tool writes with escapes: git's octal quoting (`\303\274`), JSON's and
 Python's `\u00fc` and `\xfc`, and a URL's `%C3%BC`. A line whose decoded form holds a name is withheld.
