@@ -202,8 +202,12 @@ def test_a_report_inside_a_session_is_handled_as_on_macos(tree):
     show = f"import json; print('REPORT-' + json.dumps(json.load(open({report!r}))))"
     _, out = _launch(tree, _inner(["--report", report, "--entry", ID, "--", PY, "-c", show]))
     if "INNER-EXIT-2" in out:
-        # only where the session cannot write the report's place (not the case here: /tmp)
-        pytest.fail("the report should be writable in the session's /tmp: " + out)
+        # macOS: the session may not write the report's place; Linux: the session's own /tmp is
+        # writable, so the report must be written there
+        assert sys.platform == "darwin", out
+        assert "the --report file cannot be written; nothing runs" in out, out
+        assert "REPORT-" not in out, out
+        return
     assert "INNER-EXIT-0" in out, out
     line = next(ln for ln in out.splitlines() if ln.startswith("REPORT-"))
     data = json.loads(line[len("REPORT-"):])
