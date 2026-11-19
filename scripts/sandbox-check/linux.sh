@@ -5,7 +5,7 @@
 # `git archive` of HEAD read only, and runs check.sh inside as tester (Mode A and B; MODES is
 # passed). The operator runs it, in a terminal: check.sh asks for the token inside the container.
 # The token is never passed in (no -e, no build-arg, no file): a token variable set here is not
-# used. Uncommitted changes are not in the check. Output (the report, each mode's redacted files)
+# used. Uncommitted changes are not in the check. Output (the report, each mode's redacted stream and facts)
 # is left in the folder it prints.
 #   --stub   a stand-in claude and a made-up token, no terminal: tests the plumbing, never
 #            Claude Code. This is the only form an agent may run.

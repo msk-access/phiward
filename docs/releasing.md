@@ -78,7 +78,14 @@ Then push `main`, `develop` and the tag.
    under REMOTE_DIR and deletes nothing there: remove that folder yourself afterwards.
    `--stub` (a stand-in claude, no token) checks the plumbing only, and runs only in the
    container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
-   hook and a home folder on your machine.
+   hook and a home folder on your machine. (That refusal looks for the container's marks,
+   `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
+   The check's home folder is always removed at the end. Only the report and, per mode, the
+   stream and the facts are kept, redacted in memory: with `KEEP=1` in a folder of their own
+   (`phiward-sbx-kept-*` next to it), and with `linux.sh` in its output folder. If the token's
+   value is still in any of them, nothing is kept ("redaction failed: nothing kept").
+   A process the session starts in a session of its own (`setsid`) can outlive the check; its
+   folder is removed all the same, so nothing it writes is kept.
    On Linux, Mode B ends INCONCLUSIVE for now: the wrapped MCP server cannot start inside a
    `launch` session there (its own launch cannot write the read-only `~/.phiward` for its
    carry-over). The judge names that cause. Until it is fixed, Mode B on Linux is proven only

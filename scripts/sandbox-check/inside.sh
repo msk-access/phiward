@@ -1,8 +1,9 @@
 #!/bin/sh
 # Inside the sandbox-check image, as the user tester (scripts/sandbox-check/linux.sh starts it):
 # the source is at /repo (read only, a `git archive` of HEAD), results go to /out. It runs
-# check.sh with SBX_BASE=/work and SBX_SRC=/repo, keeps the report and each mode's redacted files
-# in /out, and exits as check.sh does.
+# check.sh with SBX_BASE=/work, SBX_SRC=/repo and SBX_OUT=/out: check.sh keeps there only the
+# redacted report, streams and facts; the console output goes to /out/console.txt. It exits as
+# check.sh does.
 # --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
 # nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), and the rest
 # works (the hook, the gateway, the git hook, doctor before, the redaction, the cleanup). Exit 0 only
@@ -12,7 +13,7 @@ stub=""
 [ "${1:-}" = --stub ] && stub=--stub
 SBX_LOCKED=$(cat /opt/claude/locked 2>/dev/null || echo unknown)
 export SBX_BASE=/work SBX_SRC=/repo SBX_OUT=/out SBX_LOCKED
-{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | tee /out/report.txt
+{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | tee /out/console.txt
 code=$(cat /out/rc)
 [ -n "$stub" ] || exit "$code"
 
@@ -39,6 +40,10 @@ for m in A B; do
     if grep -qxF -- "$ln" "/tmp/mode-$m.txt"; then echo "== ok    Mode $m: $ln"
     else echo "== MISSING Mode $m: $ln"; status=1; fi
   done
+  # the probe found the stand-in (as it finds claude) and could, or could not, read its environ
+  if grep -qE "^(note the session can read the claude process's environment|ok   the session cannot read the claude process's environment)" "/tmp/mode-$m.txt"; then
+    echo "== ok    Mode $m: the probe found the claude process"
+  else echo "== MISSING Mode $m: the probe found the claude process"; status=1; fi
 done
 expect "ok   the wrapped MCP server started and could not read the protected file"
 # Mode B: the stub under the real `phiward launch`: the kernel probes are refused. Mode B is
@@ -56,12 +61,16 @@ for p in read-protected write-data write-phiward write-settings; do
 done
 # doctor: clean before the sessions; after them it must see the settings file that Mode A's
 # unconfined stub wrote (a new warning, so FAIL)
-if grep -q WARNING /out/doctor-before.txt 2>/dev/null || [ ! -s /out/doctor-before.txt ]; then
+if grep -q "^???? doctor: a warning before" /out/report.txt; then
   echo "== MISSING a clean doctor before the sessions"; status=1
 else echo "== ok    doctor clean before the sessions"; fi
 expect "FAIL doctor"
 expect "FAIL"
-# the token in no kept file, and the check's home removed
+# only the redacted files are kept; the token in none of them; the check's home removed
+kept=$(cd /out && ls -A | grep -vxE 'console.txt|rc' | tr '\n' ' ')
+if [ "$kept" = "facts-A.txt facts-B.txt report.txt stream-A.jsonl stream-B.jsonl " ]; then
+  echo "== ok    kept: $kept"
+else echo "== WRONG kept files: $kept"; status=1; fi
 if grep -rqs "FAKE-TOKEN-" /out; then echo "== FOUND the made-up token in /out"; status=1
 else echo "== ok    the made-up token is in no kept file"; fi
 if ls -d /work/phiward-sbx-* >/dev/null 2>&1; then echo "== LEFT the check's home in /work"; status=1

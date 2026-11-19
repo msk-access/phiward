@@ -11,7 +11,10 @@
 # paste the one `claude setup-token` prints). The token goes only to the claude process, never
 # into a file or a command line, and every kept file is redacted. A run without a terminal is
 # refused, and so is a token from the environment inside a Claude Code session (CLAUDECODE).
-# Nothing of your own setup is read or changed. KEEP=1 keeps the folder (it holds no token).
+# Nothing of your own setup is read or changed. The whole home folder is removed at the end,
+# always. What is kept: the report, and per mode the stream and the facts, redacted in memory and
+# written only if no token is left (else nothing is kept): with KEEP=1 in a folder of their own
+# next to it, with SBX_OUT there (the container's /out).
 #   --stub     a stand-in claude (stub/claude) and a made-up token: tests the plumbing, never
 #              Claude Code. It runs only in the Linux container (linux.sh --stub); elsewhere it
 #              is refused, as it would plant a git hook on a real machine.
@@ -39,6 +42,7 @@ if [ -z "$stub" ]; then
     exit 2
   fi
 else
+  # a tripwire, not a gate: anyone can set SBX_IMAGE
   [ -e /.dockerenv ] || [ -n "$SBX_IMAGE" ] || { echo "sandbox-check: --stub runs only in the container: sh scripts/sandbox-check/linux.sh --stub" >&2; exit 2; }
   [ -z "$REMOTE" ] || { echo "sandbox-check: REMOTE is for a real run, not --stub" >&2; exit 2; }
   unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
@@ -84,10 +88,10 @@ sbx_base=$(cd "$sbx_base" && pwd -P) || { echo "sandbox-check: SBX_BASE does not
 if [ $os = linux ]; then
   case $sbx_base/ in /tmp/*|/var/tmp/*|/dev/shm/*|/run/shm/*) echo "sandbox-check: SBX_BASE may not be under /tmp, /var/tmp or /dev/shm" >&2; exit 2 ;; esac
 fi
-for real_home in $homes; do
-  [ "$real_home" = / ] && continue
+printf '%s\n' "$homes" | while IFS= read -r real_home; do
+  [ -z "$real_home" ] || [ "$real_home" = / ] && continue
   case $sbx_base/ in "$real_home"/*) echo "sandbox-check: SBX_BASE may not be under your home folder" >&2; exit 2 ;; esac
-done
+done || exit 2
 if [ -n "$REMOTE" ]; then
   case $REMOTE_DIR in /*) ;; *) echo "sandbox-check: REMOTE needs REMOTE_DIR, an absolute path to a new, empty folder there" >&2; exit 2 ;; esac
   case $REMOTE$REMOTE_DIR in *[!A-Za-z0-9._/@-]*) echo "sandbox-check: REMOTE and REMOTE_DIR may hold only letters, digits and ._/@-" >&2; exit 2 ;; esac
@@ -101,15 +105,15 @@ broker=""
 cleanup() {
   [ -n "$tty_mode" ] && stty "$tty_mode" < /dev/tty 2>/dev/null
   [ -n "$broker" ] && kill "$broker" 2>/dev/null
-  # a kept folder holds no token, also after a stop between the sessions
-  if [ -n "$KEEP" ] && [ -n "$H" ] && [ -n "$py" ]; then
-    printf '%s\n' "$token" | "$py" "$here/launch.py" --redact "$H" 2>/dev/null
-  fi
-  [ -n "$H" ] && { if [ -n "$KEEP" ]; then echo "kept: $H"; else rm -rf "$H"; fi; }
+  # always: nothing of the home folder is kept. After a short wait, so that a process the session
+  # left behind (one in a session of its own outlives the stop) has less time to write again
+  if [ -n "$H" ]; then sleep 2; rm -rf "$H"; rm -rf "$H" 2>/dev/null; fi
   return 0
 }
 trap cleanup EXIT
-trap 'exit 130' INT TERM
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 if [ -z "$stub" ] && [ -z "$CLAUDE_CODE_OAUTH_TOKEN" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
   echo "In another terminal, run:  claude setup-token"
   printf "then paste the token here (it is not shown): "
@@ -277,6 +281,7 @@ for m in $modes; do
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
     echo "claude-exe $claude"
+    echo "claude-link $H/bin/claude"
     echo "nonce $nonce"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
@@ -331,16 +336,23 @@ for m in $modes; do
   runs="$runs $R"
 done
 phiward doctor > "$H/doctor-after.txt" 2>&1 || true
-# every file that leaves the run (the report reads them, /out and a KEEP folder get them):
-# redacted once more, after the last one is written
-printf '%s\n' "$token" | "$py" "$here/launch.py" --redact "$H" || { echo "sandbox-check: the redaction failed" >&2; exit 2; }
-token=""
 echo
 code=0
-"$py" "$here/judge.py" "$H" "$marker" $runs || code=$?
+"$py" "$here/judge.py" "$H" "$marker" $runs > "$H/report.txt" 2>&1 || code=$?
+# what is kept and shown: the report, the streams and the facts, redacted in memory, written
+# outside the home folder only when no token is left in any of them
+out=-
+if [ -n "$SBX_OUT" ]; then out=$SBX_OUT
+elif [ -n "$KEEP" ]; then out=$(mktemp -d "$sbx_base/phiward-sbx-kept-XXXXXX")
+fi
+printf '%s\n' "$token" | "$py" "$here/launch.py" --keep "$out" "$H/report.txt" $runs || {
+  [ "$out" = - ] || [ -n "$SBX_OUT" ] || rmdir "$out" 2>/dev/null
+  exit 3
+}
+token=""
+[ "$out" = - ] || echo "kept (redacted): $out"
 if [ -n "$REMOTE" ]; then
   echo "Remove $REMOTE:$REMOTE_DIR yourself, and stop the shared connection:"
   echo "  ssh -o ControlPath=$H/.ssh/cm-%C -O exit ${REMOTE_USER:-$(id -un)}@${REMOTE_HOSTNAME:-$REMOTE}"
 fi
-[ -z "$SBX_OUT" ] || { cp -R "$H"/run-* "$SBX_OUT"/ 2>/dev/null; cp "$H"/doctor-*.txt "$SBX_OUT"/ 2>/dev/null; } || true
 exit $code

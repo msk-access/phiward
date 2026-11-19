@@ -15,10 +15,11 @@ case ${1:-} in
       --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
     exit 0 ;;
 esac
-exec python3 - "$@" <<'PY'
+# "$0" in its command line: probes.sh finds the stand-in as it finds claude
+exec python3 - "$0" "$@" <<'PY'
 import json, os, re, subprocess, sys
 
-args = sys.argv[1:]
+args = sys.argv[2:]
 settings = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--settings"]
 cwd = os.getcwd()
 
