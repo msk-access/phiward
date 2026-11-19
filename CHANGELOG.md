@@ -15,6 +15,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   or your own patterns. `phiward doctor` warns while the user config has none of these;
   `doctor --headless` prints a NOTE and stays ready (issue #3). A script that looks for WARNING
   in doctor's output sees this one until it is answered.
+- `phiward run --table` reads CSV/TSV output by column (issue #2): a cell under an identifier
+  header (a built-in list, plus `[sanitize] id_columns` in the user config) is masked whole as
+  `<IDCOL>`, whatever its shape; a plain number passes only in a parsed cell of another column;
+  every other line is masked as text. `phiward sanitize --table` and the git hooks keep the
+  per-line meaning.
 
 ### Fixed
 
@@ -24,6 +29,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   cap; before, every run in them was refused and their bounds held trivially.
 
 ### Changed
+
+- `phiward run --table` is stricter: output without a header line (or with a line before the
+  header, a warning on stderr too) is now masked as text, with a note that says so; before, every
+  number in it was kept.
 
 - A push (`phiward copy` to a remote) goes only under `[remote] roots`, where remote output is
   masked; with no remote root, every push is refused (issue #4). `phiward setup` makes each copy

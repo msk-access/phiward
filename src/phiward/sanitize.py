@@ -16,7 +16,10 @@ A line is masked in this order (a placeholder is written in angle brackets):
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
 4. text mode only: the `positions` rules of the packs.
-Table mode skips step 4 (a table's numeric cells are program-made numbers).
+Table mode skips step 4 (a table's numeric cells are program-made numbers). This command and the
+git hook use it per line. `phiward run --table` reads columns instead (`Columns`): a cell under an
+identifier header is masked whole, and step 4 is skipped only for a plain number in another
+column.
 
 Packs: `[sanitize] packs` in the config (default `["genomics"]`). A name without "/" is a built-in
 file `packs/<name>.toml`; a name with "/" is the path of a pack file. The pack format is described
@@ -60,8 +63,9 @@ HELP = USAGE + """
 Options:
   --names-from FILE  also mask the names in FILE, an index file (tab-separated fields, as
                      `[sanitize] names_from` in docs/configuration.md); may be given again
-  --table            mask the text as a table: numeric cells are kept. Only when the operator
-                     turned it on ([sanitize] table = true in the user config)
+  --table            mask each line as a table row: identifiers only, numbers and positions
+                     are kept (no columns: `phiward run --table` reads columns). Only when the
+                     operator turned it on ([sanitize] table = true in the user config)
   --check FILE...    read the files and report what would leak (exit 1 when something would);
                      prints no protected text
   --check-table FILE...  the same, for files read as tables

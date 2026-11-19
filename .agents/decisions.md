@@ -6,6 +6,18 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **`phiward run --table` reads CSV/TSV by column.** Cells under an identifier header (a
+  built-in glob list plus `[sanitize] id_columns`, user config only, additive) are masked whole;
+  plain numbers pass only in parsed cells of other columns; every other line is text mode.
+  `[sanitize] table = true` still gates it and stays off by default. The git hook and
+  `phiward sanitize --table` keep the per-line meaning. (Why: the column, not the shape, tells an
+  identifier from a measurement. Cost: a forged header or an unmatched column still passes
+  numbers; stated in the threat model.)
+- **The built-in ID column list is broad and cannot be shortened** (some numeric columns show
+  `<IDCOL>`).
+- **A header is the first line, or the line after an empty line, and never looks like data**
+  (no 3-digit run, no identifier rule match); an empty TSV row is not an empty line.
+- **When `--table` finds no header, one fixed note says so** (no count).
 - **Which CI cells run when.** A pull request runs Python 3.9 and 3.14 on Ubuntu 24.04 and macOS,
   and 3.14 on the newest Ubuntu (5 cells); a push to develop and a release run every version from
   3.9 to 3.14 (13 cells). The short list is chosen only for a `pull_request` event, never by the
@@ -33,6 +45,12 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Turned down
 
+- **Parsing quoted CSV in `run --table`:** one more parser in a guard; a quoted row is text mode.
+  Revisit with a real need.
+- **`phiward sanitize --table` by column:** the hook and manual use stay per line.
+- **A repo file adding ID columns:** `id_columns` is user config only for now, though it would
+  only add masks.
+- **Regex header matching:** globs only.
 - **Running the tests in parallel (pytest-xdist):** a new test dependency, and timing tests depend
   on running alone.
 - **Regrouping the test files by feature:** helpers of the same name differ from file to file, so a

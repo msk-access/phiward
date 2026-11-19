@@ -181,7 +181,8 @@ class Config:
     sanitize_subjects: str = ""
     names_from: List[str] = field(default_factory=list)
     sanitize_patterns: List[str] = field(default_factory=list)  # "REGEX => <PLACEHOLDER>"
-    # table mode lets bare numbers through (an MRN would pass): the operator's choice only
+    # table mode lets numbers through (an MRN in a column whose header is not an identifier
+    # would pass): the operator's choice only
     sanitize_table: bool = False
     # `phiward run --table`: more column headers whose cells are masked whole (globs, in the
     # form of sanitize.col_key), added to the built-in list
