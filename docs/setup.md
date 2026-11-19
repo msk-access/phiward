@@ -242,7 +242,7 @@ file, or in a name outside the roots, is masked only by a rule for its form. Cho
 3. Your own rules, one per line (`[sanitize] patterns`), each checked as you type it.
 
 Every profile asks this (in choice 3 it is numbered 8). Setup keeps `genomics` in any pack
-list it writes; a list without it is yours to write by hand. Until one of these is set,
+list it writes, also on a re-run over a list you wrote without it. Until one of these is set,
 `phiward doctor` warns.
 
 ### The HPC questions

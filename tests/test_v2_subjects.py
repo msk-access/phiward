@@ -207,7 +207,7 @@ def test_a_rerun_offers_msk_but_never_none(tree, tmp_path):
     assert code == 0 and cfg.sanitize_subjects == "none", out[-800:]
     code, out = _drive_setup(tree, again + [""] + ["n", "y", "n", "n"], p)
     cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(p)))
-    assert code == 0 and "  Choose 1, 2 or 3 [1]" not in out, out[-800:]
+    assert code == 0 and "  Choose 1, 2 or 3 [2]" in out, out[-800:]
     assert cfg.sanitize_subjects == "" and "msk" in cfg.packs  # Enter took 2, not "none"
 
 

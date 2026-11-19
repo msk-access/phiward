@@ -215,8 +215,8 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   placeholder was shown.
 - **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
   subject or sample identifiers beyond the names under the roots. Without it, and without a
-  rule that masks them (the `msk` pack, a pack file of your own with identifier rules,
-  `patterns` or `names_from`), `phiward doctor` warns. `phiward setup` asks; `"none"` is never
+  rule that masks them (the `msk` pack, a pack file of your own with an identifier rule whose
+  placeholder is not `<BAMFILE>`, `<READ>` or `<DATE>`, `patterns` or `names_from`), `phiward doctor` warns. `phiward setup` asks; `"none"` is never
   its default. A repo config or a team template cannot set it.
 - **`inventory_limit`** (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
