@@ -1,0 +1,8 @@
+{
+  "name": "phiward-sandbox-check-claude",
+  "private": true,
+  "description": "The Claude Code version the sandbox check image installs (npm ci --ignore-scripts from package-lock.json).",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.327"
+  }
+}

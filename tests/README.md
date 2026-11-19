@@ -45,5 +45,5 @@ says what it holds. By feature:
 | Git hooks | test_githooks |
 | The docs' links | test_docs_links |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
-| The judge of the real Claude Code check (scripts/sandbox-check) | test_sandbox_check_judge |
+| The judge of the real Claude Code check (scripts/sandbox-check: per platform and mode, the facts, the token redaction) | test_sandbox_check_judge |
 | Fixes from the first CI runs on GitHub (bubblewrap mounts, two launches at once, deep scratch folders) | test_v2_github_ci |

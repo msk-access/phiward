@@ -19,7 +19,8 @@ SCANNED = ("AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", "SECURITY.md", "CONTINUI
            "README.md", "CHANGELOG.md", ".agents", ".claude", ".github", "docs", "scripts",
            "plugin", "skills", "src", "tests", "tools")
 TEXT = (".md", ".py", ".sh", ".json", ".toml", ".txt", ".yml", ".yaml")
-HOME_OK = {"me", "you", "u", "tester", "x", "y", ".aws"}  # the placeholders the docs use
+HOME_OK = {"me", "you", "u", "tester", "x", "y", ".aws",
+           "Shared"}  # the placeholders the docs use; /Users/Shared is macOS's shared folder
 
 
 def _local(p: Path) -> bool:
