@@ -199,7 +199,7 @@ def test_a_report_inside_a_session_is_handled_as_on_macos(tree):
     """--report inside a session: the report says the outer profile holds and the command runs
     directly, or, where the report cannot be written there, nothing runs (exit 2)."""
     report = "/tmp/phiward-nested-FAKE-PT-0001.json"
-    show = f"print('REPORT-' + open({report!r}).read())"
+    show = f"import json; print('REPORT-' + json.dumps(json.load(open({report!r}))))"
     _, out = _launch(tree, _inner(["--report", report, "--entry", ID, "--", PY, "-c", show]))
     if "INNER-EXIT-2" in out:
         assert "the --report file cannot be written; nothing runs" in out, out
