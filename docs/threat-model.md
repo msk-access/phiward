@@ -158,10 +158,11 @@ content changes, until the operator restarts it. So a change that the agent mana
 take effect unseen. The repository config (`.phiward.toml`) is not part of it: it can only add
 protection. A request that starts just as the config changes may still use the new one.
 
-**Terminal checks are a convenience.** `setup`, `pin` and `carryover add|accept|reset` refuse to run
-without a terminal, but a program can fake one. What stops an agent from changing them is that
-Claude Code's sandbox (Mode A) or the kernel profile (Mode B) denies writes to the config,
-`~/.phiward` and the service file. A plugin-only session, with no sandbox, has only the hook.
+**Terminal checks are a convenience.** `setup`, `pin`, `pseudonymize` and `carryover
+add|accept|reset` refuse to run without a terminal, but a program can fake one. What stops an
+agent from changing them is that Claude Code's sandbox (Mode A) or the kernel profile (Mode B)
+denies writes to the config, `~/.phiward` and the service file, and hides
+`~/.phiward/backups` (the pseudonymize keys) from every session and gateway command. A plugin-only session, with no sandbox, has only the hook.
 
 **To make the gateway itself as tight as it can be, set `write_to` empty, `net` false, `remotes`
 empty.** Then the only way out of the gateway is its sanitized output, and the only leak through it
