@@ -1991,6 +1991,20 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   helpers in its listed folder. A listed program that runs other code it is given (an interpreter, a
   shell, <code>git</code>, <code>find</code>, <code>make</code> and the like) undoes the list; <code>doctor</code> warns about them. The list
   does not limit what a listed program prints.</li>
+<li><strong><code>phiward run --table</code> reads columns for honest programs.</strong> It is off unless the operator sets
+  <code>[sanitize] table = true</code>. A cell under an identifier header is masked whole; a plain number in
+  any other column passes. The agent can print a header of its choice (with <code>[broker] commands</code>
+  unset, or with a listed program that prints what it is told, such as <code>cut</code> or <code>printf</code>) and get
+  numbers through, as with per-line table mode before. A column of identifiers under a header that
+  no glob matches passes its numbers (<code>kit</code>, <code>tube</code> and a lab's own codes are not on the
+  built-in list). The header must name an identifier column, but ordinary data can still make
+  the first line a header that is really data or prose: a row printed without its header (<code>tail
+  -n +2 x.tsv</code>) or a line of prose with commas (<code>sample, mrn and notes</code>), when one of its fields
+  is an identifier word; the numbers in its other columns pass. A row that fits the header (same
+  field count, a number cell) is read under it even when it starts another table (a second header
+  with a number field, a headerless second file of the same width). Rules that mask positions
+  across cells in text mode (<code>chr1</code> tab <code>1234567</code>) do not match cell by cell, so both cells are
+  shown.</li>
 <li><strong>Exit status.</strong> The agent sees only success or failure (<code>exit=0</code> or <code>exit=1</code>; 130 when
   cancelled); the real status goes to the broker's log, which no session can read. One output note
   carries a count (<code>[N more identical line(s)]</code>), which the command chooses. A failure is still one

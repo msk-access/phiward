@@ -1356,7 +1356,7 @@ the user config (<a href="../configuration/#who-may-set-what">configuration.md</
   reads the protected roots. It writes only its scratch folder and the granted folders. It has
   no network unless granted.</li>
 <li>Every line goes through <code>sanitize.Sanitizer</code>. Masking hides names and identifiers, not other
-  content.</li>
+  content. With <code>--table</code>, <code>sanitize.Columns</code> reads the lines by column (fresh for each call).</li>
 <li>The agent sees <code>exit=0</code> or <code>exit=1</code> only, and a note that counts the placeholders in the
   lines shown (<code>run_confined</code>). The real exit status and the counts go to the broker's log.</li>
 <li><code>phiward copy</code> and <code>phiward run --remote</code> take the same road (<code>copying.execute</code>,

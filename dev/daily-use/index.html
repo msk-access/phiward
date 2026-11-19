@@ -1320,8 +1320,15 @@ as an ordinary command: Claude Code's sandbox denies the protected paths to it, 
 sandbox does not confine the shell, the hook refuses it.</p>
 <p><strong>Write scripts that print aggregates</strong>: counts, summaries, tables. The sanitizer masks paths,
 entry names and identifiers. It does not mask other content. In text mode it also masks long
-numbers (<code>&lt;NUM&gt;</code>). <code>--table</code> keeps numbers, so it works only when the operator turned it on
-(<code>[sanitize] table = true</code>).</p>
+numbers (<code>&lt;NUM&gt;</code>). <code>--table</code> reads CSV or TSV output by column: cells under an identifier header
+(<code>sample_id</code>, <code>MRN</code>, <code>Patient ID</code>, ...) show <code>&lt;IDCOL&gt;</code>, and numbers in the other columns are
+kept. It works only when the operator turned it on (<code>[sanitize] table = true</code>). One table per
+output: print its header as the first line, and give it an identifier column. When the first
+line is not such a header (a warning, a line of prose, a table with no identifier column), the
+whole output is masked as text. The first line that is not a row of the table (an empty line, a
+row with a quote or another field count, a row with no number, a second header) turns the rest
+into text: print one table per command. Under <code>chrom</code> and <code>pos</code> columns, both cells are
+shown (text mode masks <code>chr1 1234567</code> as one <code>&lt;LOCUS&gt;</code>).</p>
 <p>Exit codes: 0 when the command succeeded, 1 when it failed (whatever its own code); 2 for a
 refusal or a bad form; 3 for a config,
 sanitizer, broker or confinement problem; 127 when the program cannot start; 130 when it was
@@ -1349,7 +1356,7 @@ cancelled.</p>
 </tr>
 <tr>
 <td><code>--table</code></td>
-<td>Table mode: positions and numbers in cells are not masked. Only when the operator set <code>[sanitize] table = true</code>.</td>
+<td>Read CSV/TSV output by column: cells under an identifier header are masked whole (<code>&lt;IDCOL&gt;</code>), numbers in other columns are kept; other lines are masked as text. Only when the operator set <code>[sanitize] table = true</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -1415,7 +1422,8 @@ confined, the hook refuses every command but a whole gateway call, whatever <cod
 <code>--names-from FILE</code>, <code>--check FILE</code> and <code>--check-table FILE</code> (report whether a file would
 change), and <code>--selftest</code> (run the built-in test lines). <code>--table</code> and <code>--check-table</code> need
 <code>[sanitize] table = true</code>, read from the caller's own config: in this form that is a
-convenience, not a guard. The hook does not accept this pipe form as a way to read protected
+convenience, not a guard. Here <code>--table</code> reads no columns: each line is masked for identifiers
+only, and numbers and positions are kept. The hook does not accept this pipe form as a way to read protected
 data: use <code>phiward run</code>.</p>
 <h2 id="when-a-command-is-refused">When a command is refused<a class="headerlink" href="#when-a-command-is-refused" title="Permanent link">&para;</a></h2>
 <p>A refusal is a decision, not a fault. The reason says what to run instead. The agent must not
