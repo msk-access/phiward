@@ -38,8 +38,8 @@ from dataclasses import dataclass, field
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from phiward import config, confine, paths, safeio
-from phiward.sanitize import (WITHHELD, _PLACEHOLDER, Sanitizer, SanitizerError, fmt_n,
-                              placeholder_note)
+from phiward.sanitize import (IDCOL, NO_HEADER_NOTE, WITHHELD, _PLACEHOLDER, Columns,
+                              Sanitizer, SanitizerError, fmt_n, placeholder_note)
 
 MAX_LINE = 64 * 1024  # bytes; a longer output line is withheld, not held in memory
 USAGE = ("usage: phiward run [--write-to DIR]... [--net] [--names-from FILE]... [--table] "
@@ -51,7 +51,16 @@ Options:
                      of the user config, or inside one.
   --net              let CMD use the network (needs `[broker] net = true`)
   --names-from FILE  also mask the names listed in FILE
-  --table            mask the output as a table (numeric cells are kept)
+  --table            read CSV/TSV output by column: cells under an identifier header are
+                     masked whole, numbers in other columns are kept; other lines are masked
+                     as text. One table per output: the header is the first non-empty line,
+                     and it must name an identifier column (else the whole output is text, so
+                     a table without one keeps no numbers). The first line that is not a row
+                     of it (an empty line, another field count, a quote, no number cell,
+                     another header) ends column mode for the rest. A first line that only
+                     looks like a header (prose with commas, data printed without its header
+                     as by `tail -n +2`) is read as one when it holds an identifier word.
+                     Needs `[sanitize] table = true` in the user config.
   --remote HOST      run CMD on an HPC host, through your own ssh setup. HOST must be in
                      `[remote] hosts`, and CMD in `[remote] commands`.
   --                 ends the options; CMD and its arguments follow (required)
@@ -290,8 +299,10 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
         assert proc.stdout is not None
         lines = changed = 0
         last, repeats, shown, withheld = None, 0, 0, 0
+        # `--table`: the output read by column, with state for this call only
+        cols = Columns(san, cfg.sanitize_id_columns) if table else None
         # the placeholders in the lines the agent is shown, counted where a line is written
-        known = san.placeholders()
+        known = san.placeholders() | ({IDCOL} if cols else set())
         counts: Dict[str, int] = {}
         content = held = 0
         cap = max(1, cfg.max_output_lines)
@@ -299,6 +310,8 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
             for raw, too_long in _raw_lines(proc, cancelled):
                 if too_long:
                     # a line too long to hold: the rest of it is dropped, a fixed notice shown
+                    if cols:
+                        cols.reset()  # its cells are unknown: text until an empty line
                     lines += 1
                     changed += 1
                     if shown >= cap:  # the notice counts as a line too
@@ -311,7 +324,7 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                     out.flush()
                     continue
                 text = raw.decode("utf-8", "replace").rstrip("\r\n")
-                clean = san.clean(text, table=table)
+                clean = cols.line(text) if cols else san.clean(text)
                 lines += 1
                 changed += clean != text
                 if quiet:
@@ -378,8 +391,11 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                           sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
         _log(f"{label}: exit {code}, {lines} line(s), {changed} masked; "
              + (f"placeholders shown: {kinds}" if kinds else "no placeholder shown"))
+        if cols and lines and not cols.headers:
+            out.write(NO_HEADER_NOTE + "\n")
         if report_placeholders:
-            text = placeholder_note(counts, held, content, san.identifier_placeholders())
+            text = placeholder_note(counts, held, content, san.identifier_placeholders()
+                                    | ({IDCOL} if cols else set()))
             if text:
                 out.write(text + "\n")
         seen = 0 if code == 0 else (130 if cancelled() else 1)
@@ -627,8 +643,9 @@ _HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _UNQUOTABLE = re.compile(r"[!\\\x00-\x1f\x7f]")
 
 
-TABLE_OFF = ("--table is off: table mode lets bare numbers through (a record number would "
-             "pass); the operator turns it on with [sanitize] table = true in the user config")
+TABLE_OFF = ("--table is off: it lets numbers through (`phiward run --table` in columns not "
+             "named as identifiers; a record number could pass); the operator turns it on with "
+             "[sanitize] table = true in the user config")
 
 
 NAMES_OUTSIDE = ("a --names-from file must be a plain file inside a protected path of the user "

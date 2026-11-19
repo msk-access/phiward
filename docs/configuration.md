@@ -38,7 +38,7 @@ gateway command can do comes from the user config only.
 | `[sanitize] names_from`, `patterns`, `subjects` | yes | ignored |
 | `[sanitize] inventory_limit` | yes | only lower |
 | `[copy] remotes`, `ssh_config`, `push_limit_gib` | yes | ignored |
-| `[sanitize] table` | yes | ignored |
+| `[sanitize] table`, `id_columns` | yes | ignored |
 | `[remote] hosts`, `commands`, `roots`, `use_shared_connection` | yes | ignored |
 | `[launch] pass_env` | yes | ignored |
 | `[broker] write_to`, `net` | yes | ignored |
@@ -95,8 +95,11 @@ patterns = ['\bPT-\d{6}\b => <SAMPLEID>']
 # The most entries the sanitizer lists under the roots. Default 200000.
 inventory_limit = 200000
 
-# Whether `--table` may be used (it lets bare numbers through). Default false.
+# Whether `phiward run --table` may be used (it lets numbers through in columns not named as
+# identifiers). Default false.
 table = false
+# More column headers whose cells `phiward run --table` masks whole, added to the built-in list.
+id_columns = ["lab_code", "Visit-Code"]
 
 [copy]
 # Places on other machines that `phiward copy` may copy to or from: "host:/absolute/prefix".
@@ -185,10 +188,32 @@ to that.
 In text mode (without `--table`) the `genomics` pack masks positions and long numbers
 (`<LOCUS>`, `<NUM>`, for example any run of 5 or more digits, also next to a comma). A run
 joined to other digits by a dot keeps its digits, as in a decimal (`12345.678`, but also
-`1234567.7654321`). Table mode (`--table`) keeps them,
-so a record number in a table would pass: it is off unless you turn it on with `table = true`
-(user config only). Turn it on only when identifiers in your data are caught by a pack or a
-pattern, not by the number rule.
+`1234567.7654321`). `phiward run --table` reads CSV or TSV output by column instead, one table
+per output. The header is the first non-empty line, when it has 2 or more fields split by tabs
+(else by commas), each with a letter or `_` first (after an optional `#`), no quote, no run of 3
+digits and nothing a rule masks, and when at least one of its columns is an identifier column
+(the built-in list or `id_columns`, below). Otherwise the whole output is text, so a table
+without an identifier column keeps no numbers under `--table`, and neither does output whose
+first line is a warning or prose (`Results, see below`). Ordinary data can still pass these
+tests: a first line that holds an identifier word (a row of data printed without its header, as
+by `tail -n +2 x.tsv`, or prose such as `sample, mrn`) is read as a header, and the numbers in
+its other columns are kept. Under the header, each row
+is first masked on the whole line as in table mode (protected paths, entry names, identifier
+rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
+shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
+`12.5`, `1e-05`, `1,234,567`); any other text in it gets the position rules (`chr1:1234567` is
+`<LOCUS>`). The first line that is not such a row ends column mode: it and every later line are
+masked as text. Such a line is an empty line, a row with another field count, a quote, a
+backslash or a `%XX` escape, a row with no plain-number cell (another header, as from `cat
+a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. Output
+without a header line, or with a line before it (a warning on stderr too), is all text.
+When no header was found, the output ends with a note that says so. Rules that span cells in
+text mode do not match cell by cell: under `chrom` and `pos`, `chr1` and `1234567` are both
+shown. So a record number in a column whose header is not on the list would pass: `--table` is
+off unless you turn it on with `table = true` (user config only). Turn it on only when
+identifiers in your data are caught by a pack, a pattern or a column header, not by the number
+rule. `phiward sanitize --table` and the git hooks read no columns: they mask each line as in
+table mode (identifiers only; numbers and positions are kept).
 
 An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
 one that is a common word of the built-in stop list (for example `patient`, `normal`, `tumour`,
@@ -207,6 +232,21 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   must be inside a protected path of the user config: the broker reads it outside the sandbox,
   and a file elsewhere would let the agent test what it holds.
 - **`table`** (true or false, default false; user config only). Whether `--table` may be used.
+- **`id_columns`** (list; user config only). Column headers whose cells `phiward run --table`
+  masks whole, added to the built-in list (which cannot be shortened). Each entry is a header or
+  a glob (`*`, `?`, `[...]`) of at most 64 letters, digits, spaces and `_ - . # * ? [ ] !`.
+  Headers and entries are compared in one form: spaces around them and one leading `#` removed,
+  letter case ignored, and each run of spaces, `-` and `.` read as `_`. So `"Patient ID"`
+  matches the headers `Patient ID`, `patient-id` and `#PATIENT.ID`. The built-in list:
+  `id`, `id*`, `*id`, `*_ids`, `*_id_*`, `pt`, `pt_*`, `*_pt`, `subj*`, `*sample*`,
+  `*patient*`, `*subject*`, `*donor*`, `*mrn*`, `*barcode*`, `*accession*`, `*specimen*`,
+  `*record*`, `*chart*`, `*encounter*`, `*visit*`, `*ssn*`, `*phone*`, `*zip*`, `*_no`,
+  `*number*`, `case`, `case_*`, `*_case`, `*birth*`, `*dob*`, `*num`, `*nbr`, `*rec*`, `acc*`,
+  `caseno`, `ptno`, `patno`, `labno`, `empi`, `fin`, `csn`, `participant*`, `individual*`,
+  `proband*`, `person*`, `*date*` (dates are identifiers too). It is broad on purpose: some
+  numeric columns (`n_samples`, `valid`, `records`, `read_number`, `accuracy`, `precision`,
+  `direction`, `recall`, `update_date`) show `<IDCOL>` too. Names it does not catch (`HospNo`,
+  `hn`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
   So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git

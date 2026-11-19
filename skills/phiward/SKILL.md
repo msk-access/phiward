@@ -112,8 +112,13 @@ phiward run -- python3 count.py ~/data/patients
 The output has the count, a note with the placeholders in the lines shown, and one summary
 line: `run done: exit=0`. When the note says no identifier placeholder was shown, tell the
 operator in your reply: their rules may not match this data. A count of
-5 or more digits shows as `<NUM>`. `--table` keeps numbers, but only when the operator turned
-it on; otherwise it is refused. Do not ask for it to be turned on to see identifiers.
+5 or more digits shows as `<NUM>`. `--table` reads CSV/TSV output by column: cells under an
+identifier header show `<IDCOL>`, numbers in other columns are kept. Print one table per
+command, its header first, with an identifier column. A first line that is not such a header
+(a warning, prose with commas, a table with no identifier column) makes the whole output text,
+and so does every line from the first one that does not fit the table (an empty line, a second
+header). It works only when the operator turned it on; otherwise it is refused. Do
+not ask for it to be turned on to see identifiers.
 
 These examples run `python3`, which works only where the operator set no program list. With
 `[broker] commands` set (the recommended setup for real data), run the operator's listed

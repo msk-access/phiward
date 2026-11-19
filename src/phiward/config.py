@@ -45,7 +45,8 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "protected_paths": {"roots": "list", "patterns": "list", "unresolved": "choice",
                         "snapshot_names": "list"},
     "sanitize": {"packs": "list", "names_from": "list", "patterns": "list",
-                 "inventory_limit": "int", "table": "bool", "subjects": "str"},
+                 "inventory_limit": "int", "table": "bool", "subjects": "str",
+                 "id_columns": "list"},
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
@@ -105,6 +106,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("copy", "push_limit_gib"), ("remote", "use_shared_connection"),
              ("remote", "hosts"), ("remote", "commands"), ("remote", "roots"),
              ("sanitize", "names_from"), ("sanitize", "table"), ("sanitize", "subjects"),
+             ("sanitize", "id_columns"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
              ("shell", "commands")}
@@ -179,8 +181,12 @@ class Config:
     sanitize_subjects: str = ""
     names_from: List[str] = field(default_factory=list)
     sanitize_patterns: List[str] = field(default_factory=list)  # "REGEX => <PLACEHOLDER>"
-    # table mode lets bare numbers through (an MRN would pass): the operator's choice only
+    # table mode lets numbers through (an MRN in a column whose header is not an identifier
+    # would pass): the operator's choice only
     sanitize_table: bool = False
+    # `phiward run --table`: more column headers whose cells are masked whole (globs, in the
+    # form of sanitize.col_key), added to the built-in list
+    sanitize_id_columns: List[str] = field(default_factory=list)
     remotes: List[str] = field(default_factory=list)
     remote_hosts: List[str] = field(default_factory=list)  # hosts `run --remote` may use
     remote_commands: List[str] = field(default_factory=list)  # programs it may run there
@@ -592,6 +598,13 @@ def _check(data: Dict[str, Any], where: str) -> Tuple[Dict[str, Dict[str, Any]],
                 return {}, (f"{where}: 'sanitize.subjects' can only be \"none\" (your record "
                             "that the protected data holds no subject or sample identifiers "
                             "beyond the names under the roots)")
+            if (section, key) == ("sanitize", "id_columns"):
+                from phiward.sanitize import ID_COLUMN_ENTRY, col_key
+                for v in value:
+                    if not ID_COLUMN_ENTRY.fullmatch(v) or not col_key(v):
+                        return {}, (f"{where}: a 'sanitize.id_columns' entry must be a column "
+                                    "header or a glob of at most 64 letters, digits, spaces and "
+                                    "_ - . # * ? [ ] !")
             if section == "protected_paths" and key in ("roots", "patterns"):
                 for v in value:
                     if ".." in v.split("/"):
@@ -781,6 +794,11 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
         cfg.sanitize_subjects = san["subjects"]
     if "table" in san:  # USER_ONLY: a repo file's value is ignored (listed in cfg.ignored)
         cfg.sanitize_table = bool(san["table"])
+    if san.get("id_columns"):  # USER_ONLY; checked in _check
+        from phiward.sanitize import col_key
+        for v in san["id_columns"]:
+            if col_key(v) not in cfg.sanitize_id_columns:
+                cfg.sanitize_id_columns.append(col_key(v))
     if "inventory_limit" in san:
         # tighten only: a repo file can lower the limit, never raise it
         lim = san["inventory_limit"]
