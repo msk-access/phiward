@@ -22,6 +22,7 @@ phiward also uses these places. You do not configure them in a file.
 | `~/.cache/phiward` (or `$XDG_CACHE_HOME/phiward`) | the gateway's scratch folders, while commands run | not read or write it |
 | `~/.phiward-spool` (or `$PHIWARD_SPOOL`) | requests from clients to the broker | write requests (it must) |
 | `~/.phiward/broker.json` | the broker's status: the config, cache folder, roots and patterns it uses | not write it |
+| `~/.phiward/backups/keys` | the keys of `phiward pseudonymize` (ID, a tab, the code), mode 0700; made on first use inside `~/.phiward/backups`, which install makes | not read or write it |
 
 ## Who may set what
 

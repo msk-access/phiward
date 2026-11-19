@@ -439,6 +439,27 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   write place (its scratch is removed) and no way to send output back. On Linux the PID namespace
   ends it with the request.
 
+- **Pseudonymized tables (`phiward pseudonymize`).** The codes replace only the columns you name;
+  what they do not hide:
+  - You choose the identifier columns. An ID column under a header no glob matches (`kit`,
+    `tube`) goes into the copy as it is, masked only by the rules.
+  - Quasi-identifiers can re-identify a subject: dates of birth, zip codes, ages over 89, rare
+    diagnoses, free text, names that no names file lists. Codes that link several tables (one
+    key) add to that, on purpose. The number of subjects shows.
+  - A code that is also a file name under a root reads `<ENTRY>`, and a later `[sanitize]
+    patterns` rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
+    as headers are refused, not covered.
+  - A run on a file the agent made or asked for, or with a key the agent chose, confirms the IDs
+    it guessed (they get old codes). The command refuses inputs in the places an agent writes
+    (`write_to`, the spool, a git work tree, `~/.phiward`), not a file the agent got you to put
+    elsewhere by hand.
+  - The command line you type (paths, headers, the key name) stays in the terminal's scrollback,
+    which an app that reads the terminal can see. The command's own messages name none of it.
+  - The key is hidden as a credential is (below `~/.phiward/backups`), so the same limits apply:
+    with `[shell] best_effort`, scripts through `run_in_terminal` and bare local MCP servers, a
+    key can be read as a credential can. The tty check alone is not a boundary (a pty passes it);
+    the hidden key folder is.
+
 - **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and
   to make worktrees. Most of these calls turn hooks and `core.fsmonitor` off, but not all (`git diff

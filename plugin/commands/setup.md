@@ -14,7 +14,7 @@ Rules for you while you do this:
   what is needed.
 - When a step is for the user's own terminal, give them the exact command, in its own code
   block, and wait until they say it is done.
-- Once the user config exists, `phiward setup`, `broker`, `pin` and `carryover` are the user's
+- Once the user config exists, `phiward setup`, `broker`, `pin`, `carryover` and `pseudonymize` are the user's
   only: if a later change is needed, tell them to run it in their own terminal.
 - Do not set `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` variables for these commands.
 
