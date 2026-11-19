@@ -10,6 +10,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - The `genomics` pack's number rule masks a run of 5 or more digits next to a comma too
   (`1234567,7654321` becomes `<NUM>,<NUM>`), as the docs say; only a decimal such as
   `12345.678` keeps its digits.
+- `phiward copy` makes each local path absolute once, and every check and the copy itself use
+  that path. A local path with a `..` part, or one that starts with `~` (quoted), or an empty
+  one, is refused: give the full path.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 

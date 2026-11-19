@@ -27,7 +27,9 @@ Options:
 
 Copy protected data without printing it. DST must be inside a protected root of your user
 config, or under a configured remote (`[copy] remotes = ["host:/abs/prefix"]`). A source or
-destination on a remote is written HOST:/PATH.
+destination on a remote is written HOST:/PATH. A local path is made absolute once, and every
+check and the copy itself use that path; one with a `..` part, or one that starts with `~` (a
+quoted `~`, which the shell did not expand), is refused: give the full path.
 
 The command is only a client. The broker runs the copy outside the agent's sandbox, so a
 broker must be running (`phiward broker`). The copy writes only at its destination, which
@@ -290,6 +292,27 @@ def _never() -> bool:
     return False
 
 
+def local_args(args: Sequence[str], cwd: str) -> "Tuple[List[str], str]":
+    """Each local path once, as every check and every program of the copy then use it: absolute
+    and normalized, with rsync's "the folder's contents" marker (`src/`, `src/.`, `.`) kept as
+    written. A path with a `..` part or one that starts with `~` is refused (a reason): the
+    checks and the programs could read it differently. Remote paths and options stay as given
+    (`plan` checks them)."""
+    out = []
+    for a in args:
+        if _is_remote(a) or a.startswith("-"):
+            out.append(a)
+            continue
+        if not a:
+            return [], "an empty path is not a path; give the full path"
+        if a.startswith("~") or ".." in a.split("/"):
+            return [], "a local path holds `..` or starts with `~`; give the full path"
+        full = os.path.normpath(os.path.join(cwd, a))
+        mark = "/." if (a == "." or a.endswith("/.")) else ("/" if a.endswith("/") else "")
+        out.append(full.rstrip("/") + mark if full != "/" else "/")
+    return out, ""
+
+
 def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
             cancelled: Callable[[], bool] = _never) -> int:
     """Run a copy request (in the broker), with `cwd` as the working folder."""
@@ -304,6 +327,10 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
     if cfg.problem:
         out.write("copy refused: the phiward config cannot be used (run phiward doctor)\n")
         return 3
+    args, why = local_args(args, cwd)
+    if why:
+        out.write(f"copy refused: {why}\n")
+        return 2
     why = plan(args, cwd, cfg)
     if why:
         out.write(f"copy refused: {why}\n")
