@@ -1549,6 +1549,11 @@ anything: the broker's log has the reason.</p>
 <td>The operator runs <code>phiward doctor</code>.</td>
 </tr>
 <tr>
+<td><code>copy refused: the destination is not under [remote] roots of the user config ...</code></td>
+<td>A push goes only under a remote root, where remote output is masked.</td>
+<td>Ask the operator to add the folder to <code>[remote] roots</code> (<code>phiward setup</code> does it).</td>
+</tr>
+<tr>
 <td><code>copy refused: the destination is not inside a protected path of the user config</code></td>
 <td>A copy may not leave the protected folders.</td>
 <td>Copy into a protected folder, or to a configured remote.</td>

@@ -1689,10 +1689,11 @@ keys.</p>
 <span class="n">push_limit_gib</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
 
 <span class="k">[remote]</span>
-<span class="c1"># Hosts `phiward run --remote` may name, programs it may run there, protected paths there.</span>
+<span class="c1"># Hosts `phiward run --remote` may name, programs it may run there, protected paths there</span>
+<span class="c1"># (masked in remote output; a push goes only under one).</span>
 <span class="n">hosts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"cluster"</span><span class="p">]</span>
 <span class="n">commands</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"squeue"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sacct"</span><span class="p">,</span><span class="w"> </span><span class="s2">"sinfo"</span><span class="p">]</span>
-<span class="n">roots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/data/protected"</span><span class="p">]</span>
+<span class="n">roots</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/data/protected"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/data/work/study-a"</span><span class="p">]</span>
 <span class="c1"># Join your shared SSH connection (no request reads a key or ticket). Default true.</span>
 <span class="n">use_shared_connection</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 
@@ -1805,7 +1806,8 @@ times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code>
 <h3 id="copy"><code>[copy]</code><a class="headerlink" href="#copy" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>remotes</code></strong> (list of <code>host:/absolute/prefix</code>). <code>phiward copy</code> may use a place under one
-  of these as a source or a destination. <code>..</code> is refused. How pushes and pulls work:
+  of these as a source or a destination; a push lands only under a <code>[remote] roots</code> folder too.
+  <code>..</code> is refused. How pushes and pulls work:
   <a href="../hpc/#phiward-copy">hpc.md</a>.</li>
 <li><strong><code>push_limit_gib</code></strong> (whole number, default 5; user config only). A push larger than this is
   refused: copy it yourself.</li>
@@ -1823,7 +1825,9 @@ times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code>
 - <strong><code>commands</code></strong> (list): the programs it may run there, as bare names. The default is empty,
   which refuses every remote run. Nothing confines a command on the remote side: this list is
   what limits its effects.
-- <strong><code>roots</code></strong> (list of absolute paths on the remote): masked in the output as <code>&lt;PROTECTED&gt;</code>.
+- <strong><code>roots</code></strong> (list of absolute paths on the remote): masked in the output as <code>&lt;PROTECTED&gt;</code>. A
+  push (<code>phiward copy</code> to a remote) goes only under one of these; with none, every push is
+  refused. <code>phiward setup</code> makes each new copy remote's folder one.
 - <strong><code>use_shared_connection</code></strong> (<code>true</code> or <code>false</code>; default <code>true</code>). Every HPC request joins your
   shared SSH connection and reads no credential (<a href="../hpc/">hpc.md</a>). <code>false</code>: ssh logs in itself,
   so requests can read your key or ticket and have the network.</p>
