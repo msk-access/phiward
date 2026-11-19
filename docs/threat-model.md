@@ -696,8 +696,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   Its probe lines are written inside the session, so a model could forge them; the checks made
   outside it (files on the host, the settings hash, the stream that `launch.py` writes after the
   session) are harder to forge, but a process the session leaves running could still reach
-  them before the judge reads them. On Linux,
-  Mode B stays INCONCLUSIVE while a wrapped MCP server cannot start inside `launch`.
+  them before the judge reads them.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
   `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
   check after your own install is yours.
@@ -885,6 +884,16 @@ another's Bash is best effort (its environment is the agent's). The hook also tr
 when its profile hash is the one the hook would build itself. An entry counts as bare when its
 `env` changes the hidden list (`KRB5CCNAME`, `KRB5_CONFIG`), or when the config or your credentials
 changed since the server started. It stays bare until Claude Code starts it again.
+
+**Inside `launch` (Mode B).** The record folder is a guard folder in Mode B too, so a wrapped
+server's launcher inside the session cannot write its record (`record_launch` gives up quietly),
+and the hook keeps that server bare. It is not made writable: a record the session can write, it
+can forge. This matters only for an MCP tool with a shell-like name under a `*` matcher: the hook
+that `launch` writes matches the file tools and Bash only, and the kernel profile confines the
+server. A launch inside the session runs its command directly, under the session's profile (on
+Linux it knows it is inside from the session's seccomp filter); that profile is wider than a
+server's own (`SERVER_READ_ONLY`), as on macOS. Any launch inside a session runs so, also for
+another project: that project's repo config (`.phiward.toml`) is not applied. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
 
 **Plugins and configured servers.** A launcher also notes a hash of its `CLAUDE_PLUGIN_ROOT`, which
 Claude Code exports only to a plugin's stdio server.

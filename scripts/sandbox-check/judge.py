@@ -289,11 +289,7 @@ def judge(results, stream_lines, server, marker, created, facts):
     nonce = facts.get("nonce")
     started = [ln.split() for ln in server.splitlines() if ln.startswith("STARTED ")]
     mine = [p for p in started if nonce and len(p) >= 3 and p[1] == nonce]
-    if not mine and platform == "linux" and mode == "B":
-        unsure.append("the wrapped MCP server did not start in this run (known on Linux Mode B: "
-                      "the server's own launch inside the session cannot write the read-only "
-                      "~/.phiward for its carry-over; a separate issue)")
-    elif not mine:
+    if not mine:
         unsure.append("the wrapped MCP server did not start in this run")
     elif mine[-1][2] != "READ-DENIED":
         fails.append("the wrapped MCP server read the protected file")

@@ -15,7 +15,8 @@ Carry-over (see carryover): each session runs in its own config folder, built fr
 copy and thrown away at exit. Reads of protected data and credentials are denied, and credential
 variables are removed. The launcher runs the tool through a helper that closes every descriptor
 it holds, writes the tool's settings without following links, and runs "launch inside launch"
-directly only when a canary that only this profile denies is denied with EPERM.
+directly only when the session's own profile is found: on macOS a canary that only this profile
+denies is denied with EPERM; on Linux the tool's seccomp filter gives its fingerprint errno.
 """
 
 import errno
@@ -434,10 +435,21 @@ def _sandbox_check_self() -> bool:
 
 # -- Linux -------------------------------------------------------------------------------------
 
+# The session's fingerprint: the tool's filter answers one unassigned syscall number with an
+# errno that no kernel and no common filter returns; a launch that sees it is inside phiward's
+# session (already_confined). The fingerprint is not a secret: any process may install such a
+# filter on itself and its children. Forging it needs code running in the launcher or one of its
+# ancestors, which could skip `launch` anyway. 360 is unassigned on x86_64 (335-423) and aarch64
+# (295-402), and new syscalls take numbers from 424 up on every architecture. The errno is
+# below 4096, so the C library reports it as errno.
+FINGERPRINT_SYSCALL = 360
+FINGERPRINT_ERRNO = 3917
+
+
 def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
     """No keystroke injection (ioctl TIOCSTI, TIOCLINUX: compared on the low 32 bits) and no
     kernel keyrings (keyctl, add_key, request_key: Kerberos KEYRING tickets); the x32 ABI is
-    refused on x86_64."""
+    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO."""
     machine = machine or confine._machine()
     if machine not in confine._AUDIT_ARCH:
         raise confine.ConfineError(f"no seccomp filter for the {machine} architecture")
@@ -450,6 +462,7 @@ def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
             (ld, 0, 0, 0)]
     if machine == "x86_64":
         prog += [(jge, 0, 1, 0x40000000), (ret, 0, 0, eperm)]
+    prog += [(jeq, 0, 1, FINGERPRINT_SYSCALL), (ret, 0, 0, 0x00050000 | FINGERPRINT_ERRNO)]
     for k in keys:
         prog += [(jeq, 0, 1, k), (ret, 0, 0, eperm)]
     prog += [(jeq, 0, 4, ioctl), (ld, 0, 0, 24), (jeq, 1, 0, 0x5412), (jeq, 0, 1, 0x541C),
@@ -858,7 +871,7 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                     env: Dict[str, str], folder: str, run: str,
                     server: bool = False) -> Tuple[List[str], List[int]]:
     # a root that does not exist is hidden like the others: its folder is split, so a root made
-    # later is not in the view either (inside a session, every root is missing: launch nests)
+    # later is not in the view either (a launch inside another sandbox may see no root at all)
     args: List[str] = []
     fds: List[int] = []
     hide = (confine._spellings(list(cfg.all_roots)) + _credentials(env, cfg) + list(IPC_PATHS) +
@@ -1093,11 +1106,31 @@ def _make_canary(canary: str) -> None:
         fh.write("the agent profile denies this file; launch checks it\n")
 
 
+def _fingerprint_errno() -> int:
+    """Linux: the errno the fingerprint syscall fails with (0 when it does not fail)."""
+    import ctypes
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return 0
+    libc.syscall.restype = ctypes.c_long
+    ctypes.set_errno(0)
+    if libc.syscall(ctypes.c_long(FINGERPRINT_SYSCALL)) != -1:
+        return 0
+    return ctypes.get_errno()
+
+
 def already_confined(env: Dict[str, str]) -> bool:
-    """True only when the canary that only this profile denies is denied with EPERM (ordinary
-    permissions give EACCES and do not count)."""
+    """macOS: True only when the canary that only this profile denies is denied with EPERM
+    (ordinary permissions give EACCES and do not count). Linux: True only when the fingerprint
+    syscall fails with exactly FINGERPRINT_ERRNO; no filter (ENOSYS), another filter (EPERM or
+    any other errno), or a filter set later inside the session that answers it too, all build
+    the full profile."""
+    if sys.platform.startswith("linux"):
+        return confine._machine() in confine._AUDIT_ARCH and \
+            _fingerprint_errno() == FINGERPRINT_ERRNO
     if sys.platform != "darwin":
-        return False  # Linux nests: always wrap again
+        return False
     # both must hold: this process is in a sandbox at all, and the canary that only phiward's
     # profile denies is denied. A canary replaced by a link into a folder macOS guards (privacy
     # folders give EPERM too), or another sandbox that denies ~/.phiward, must not let launch

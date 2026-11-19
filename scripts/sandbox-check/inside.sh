@@ -5,7 +5,8 @@
 # redacted report, streams and facts; the console output goes to /out/console.txt. It exits as
 # check.sh does.
 # --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
-# nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), and the rest
+# nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), Mode B passes
+# (the wrapped MCP server starts in both modes), and the rest
 # works (the hook, the gateway, the git hook, doctor before, the redaction, the cleanup). Exit 0 only
 # when every expected line is in the report.
 set -u
@@ -45,13 +46,15 @@ for m in A B; do
     echo "== ok    Mode $m: the probe found the claude process"
   else echo "== MISSING Mode $m: the probe found the claude process"; status=1; fi
 done
-expect "ok   the wrapped MCP server started and could not read the protected file"
-# Mode B: the stub under the real `phiward launch`: the kernel probes are refused. Mode B is
-# INCONCLUSIVE on Linux until the wrapped MCP server can start inside it (its own launch cannot
-# write the read-only ~/.phiward for its carry-over: a separate issue). When that is fixed,
-# expect "PASS Mode B" here instead.
+# Mode B: the stub under the real `phiward launch`: the kernel probes are refused, and the wrapped
+# MCP server starts inside the session (its own launch runs it directly), so Mode B passes
 expect "== Mode B (linux)"
-expect "INCONCLUSIVE Mode B"
+expect "PASS Mode B"
+for m in A B; do
+  if grep -qxF "ok   the wrapped MCP server started and could not read the protected file" "/tmp/mode-$m.txt"; then
+    echo "== ok    Mode $m: the wrapped MCP server started"
+  else echo "== MISSING Mode $m: the wrapped MCP server started"; status=1; fi
+done
 for p in read-protected write-data write-phiward write-settings; do
   if grep -qE "^(ok   $p: refused by the sandbox|note $p: the write worked inside launch)" /tmp/mode-B.txt; then
     echo "== ok    Mode B: $p refused"
