@@ -171,9 +171,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
   runs unconfined).
-- **A launch inside a session** (a wrapped MCP server) runs its command directly, under the
-  session's own profile, not the narrower profile of a server (which keeps more of the project
-  read-only). On macOS a file only that profile denies tells `launch` it is inside;
+- **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
+  command directly, under the session's own profile: not the narrower profile of a server (which
+  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;
   on Linux the session's seccomp filter answers one unused system call with an error number
   nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
   profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.

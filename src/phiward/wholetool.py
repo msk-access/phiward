@@ -436,9 +436,10 @@ def _sandbox_check_self() -> bool:
 # -- Linux -------------------------------------------------------------------------------------
 
 # The session's fingerprint: the tool's filter answers one unassigned syscall number with an
-# errno that no kernel and no common filter returns. A filter is set by the kernel, inherited and
-# never removed, so only an ancestor can make a process see it; a launch that sees it is inside
-# phiward's session (already_confined). 360 is unassigned on x86_64 (335-423) and aarch64
+# errno that no kernel and no common filter returns; a launch that sees it is inside phiward's
+# session (already_confined). The fingerprint is not a secret: any process may install such a
+# filter on itself and its children. Forging it needs code running in the launcher or one of its
+# ancestors, which could skip `launch` anyway. 360 is unassigned on x86_64 (335-423) and aarch64
 # (295-402), and new syscalls take numbers from 424 up on every architecture. The errno is
 # below 4096, so the C library reports it as errno.
 FINGERPRINT_SYSCALL = 360

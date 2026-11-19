@@ -877,8 +877,9 @@ and the hook keeps that server bare. It is not made writable: a record the sessi
 can forge. This matters only for an MCP tool with a shell-like name under a `*` matcher: the hook
 that `launch` writes matches the file tools and Bash only, and the kernel profile confines the
 server. A launch inside the session runs its command directly, under the session's profile (on
-Linux it knows it is inside from the session's seccomp filter, which only an ancestor can set);
-that profile is wider than a server's own (`SERVER_READ_ONLY`), as on macOS.
+Linux it knows it is inside from the session's seccomp filter); that profile is wider than a
+server's own (`SERVER_READ_ONLY`), as on macOS. Any launch inside a session runs so, also for
+another project: that project's repo config (`.phiward.toml`) is not applied. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
 
 **Plugins and configured servers.** A launcher also notes a hash of its `CLAUDE_PLUGIN_ROOT`, which
 Claude Code exports only to a plugin's stdio server.

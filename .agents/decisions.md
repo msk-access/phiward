@@ -32,8 +32,9 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 - **Plans stay local** (`.agents/plans/`); findings that are not fixed yet are reported privately.
 - **Linux: a launch knows it is inside a session by a seccomp fingerprint.** The tool's filter
   answers syscall 360 (unassigned on x86_64 and aarch64) with errno 3917; only that exact errno
-  counts, and the launch then runs its command directly, as on macOS. A filter is set by the
-  kernel, inherited and never removed, so only an ancestor can make it.
+  counts, and the launch then runs its command directly, as on macOS. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
+  Any launch inside a session, also for another project, runs under the outer profile (that
+  project's repo config is not applied), as on macOS.
 
 ## Turned down
 
