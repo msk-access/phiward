@@ -35,6 +35,7 @@ says what it holds. By feature:
 | MCP: wrap, list, launch records, launcher | test_v2_mcp_wrap, test_v2_mcp_wrap_cmd, test_v2_wrap_shared, test_v2_backups, test_v2_entry_id, test_v2_one_answer, test_v2_one_wrapped, test_v2_twin_count, test_v2_launch_records, test_v2_launcher_identity, test_v2_launcher_owner, test_v2_launcher_path, test_v2_path_risk, test_v2_attacks, test_v2_review_round3, test_v2_review_round4 |
 | The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review |
 | HPC: remote runs and pushes | test_v2_remote, test_v2_push |
+| `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | The sanitizer | test_sanitize, test_v2_dates |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_beta |
 | Carry-over | test_v2_carryover, test_v2_s17 |
