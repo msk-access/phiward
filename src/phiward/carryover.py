@@ -210,7 +210,9 @@ def _movable(parent_fd: int, name: str) -> None:
         mode = stat.S_IMODE(st.st_mode) | 0o700
         try:
             os.chmod(name, mode, dir_fd=parent_fd, follow_symlinks=False)
-        except NotImplementedError:
+        except (NotImplementedError, ValueError):  # Linux: no chmod without following links
+            # (ValueError with an older C library, RHEL 8); the entry was checked as a real
+            # folder above and no longer changes
             os.chmod(name, mode, dir_fd=parent_fd)
     except OSError:
         pass
@@ -350,7 +352,8 @@ def _remove(p: str) -> None:
                 try:
                     os.chmod(name, stat.S_IMODE(st.st_mode) | 0o700, dir_fd=dir_fd,
                              follow_symlinks=False)
-                except NotImplementedError:  # Linux: the entry no longer changes (trash)
+                except (NotImplementedError, ValueError):  # Linux (ValueError: an older C
+                    # library, RHEL 8): the entry no longer changes (trash)
                     os.chmod(name, stat.S_IMODE(st.st_mode) | 0o700, dir_fd=dir_fd)
         except OSError:
             pass
