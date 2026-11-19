@@ -59,7 +59,8 @@ holds at most 9999 IDs. The same ID gets the same code in every table coded with
 
 The rules:
 - IN is a regular file reached with no link, outside every place an agent can write: the
-  working folder (and its git work tree), any git work tree, the temp folders, the sandbox's
+  working folder (and its git work tree), any project (a folder with .git, .claude or
+  .phiward.toml above IN), the temp folders, the sandbox's
   allowWrite and additionalDirectories, a [broker] write_to folder, the spool and ~/.phiward.
   A file inside a protected root may still be the agent's (`phiward copy` puts files there):
   never run this on a file the agent made or asked for, wherever it is.
@@ -68,7 +69,9 @@ The rules:
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
   with an invisible format character is refused. A column that is not coded may not hold an
-  ID of a coded column or of the key (as a whole cell or a word): drop it or clean it first.
+  ID of a coded column or of the key (one of 5 or more characters inside any word of a cell,
+  a shorter one as the whole cell): drop it or clean it first. Run it from the folder of the
+  project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN, inside a protected root of your user config and
   outside every write_to folder (never replaced, mode 0600).
 - Messages never name a cell, a header, a path or a key line; a run reports the row count only.
@@ -252,6 +255,19 @@ def _git_top(start: str) -> Optional[str]:
         d = up
 
 
+def _project_top(start: str) -> Optional[str]:
+    """The nearest folder at or above `start` that marks a project an agent may work in (its
+    `.claude` settings can let the agent write anywhere in it)."""
+    d = start
+    while True:
+        if any(os.path.lexists(os.path.join(d, n)) for n in (".git", ".claude", ".phiward.toml")):
+            return d
+        up = os.path.dirname(d)
+        if up == d:
+            return None
+        d = up
+
+
 def _input_place(path: str, cfg: config.Config, home: str) -> str:
     full = os.path.normpath(os.path.join(os.getcwd(), path))
     ext = os.path.splitext(full)[1].lower()
@@ -282,10 +298,11 @@ def _input_place(path: str, cfg: config.Config, home: str) -> str:
         raise Refused("the input is in a place an agent can write (the working folder, a "
                       "temp folder, the sandbox's write folders, a write_to folder, the spool "
                       "or ~/.phiward): copy it to a folder of your own first.")
-    top = _git_top(os.path.dirname(full))
+    top = _project_top(os.path.dirname(full))
     if top and config._deny_inside(full, top):
-        raise Refused("the input is in a project (a git work tree), where an agent can "
-                      "write: copy it to a folder of your own first.")
+        raise Refused("the input is in a project (a folder with .git, .claude or "
+                      ".phiward.toml above it), where an agent can write: copy it to a "
+                      "folder of your own first.")
     return full
 
 
@@ -406,6 +423,33 @@ def _clean_both(san: Sanitizer, text: str) -> bool:
     return san.clean(text) == text and san.clean(text, table=True) == text
 
 
+_TOKEN_SPLIT = re.compile(r"[^A-Za-z0-9_.\-]+")
+
+
+def _norm(text: str) -> str:
+    return unicodedata.normalize("NFKC", text).casefold()
+
+
+def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> None:
+    """Refuse when a cell of a kept column holds an invisible format character, or an ID:
+    an ID of 5 or more characters anywhere inside a token of the cell (`P-9990001-T01`), a
+    shorter one only as the whole cell (`12` is not in `0.12` or `12 mg`). Cells are compared
+    after NFKC, in any letter case."""
+    long_ids = sorted({_norm(v) for v in ids if len(_norm(v)) >= 5}, key=len, reverse=True)
+    short_ids = {_norm(v) for v in ids if len(_norm(v)) < 5}
+    rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
+    for i in kept:
+        for r in rows[1:]:
+            cell = r[i]
+            if any(unicodedata.category(ch) == "Cf" for ch in cell):
+                raise Refused(f"a cell of column {i + 1} holds an invisible format character.")
+            norm = _norm(cell)
+            if norm.strip() in short_ids or (rx is not None and any(
+                    rx.search(t) for t in _TOKEN_SPLIT.split(norm) if t)):
+                raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
+                              "drop it, or clean it first.")
+
+
 def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: List[List[str]],
           key: Key) -> Tuple[List[List[str]], List[Tuple[str, str]]]:
     """(the output rows, header first; the new key lines). Refuses on any rule."""
@@ -470,16 +514,7 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
                 ids.append(v)
     new_ids = [v for v in ids if v not in key.codes]
     # an ID of the key or of a coded column left in another column would link its code to it
-    known = sorted(set(ids) | set(key.codes), key=len, reverse=True)
-    if known:
-        rx = re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(v) for v in known) +
-                        r")(?![A-Za-z0-9])", re.I)
-        for i in cols:
-            if i in coded:
-                continue
-            if any(rx.search(r[i]) for r in rows[1:]):
-                raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
-                              "drop it, or clean it first.")
+    _ids_elsewhere(rows, [i for i in cols if i not in coded], set(ids) | set(key.codes))
     # the draw: from every code not used yet, skipping one the sanitizer would touch or that is
     # a value of the input or the key
     used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}

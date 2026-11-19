@@ -462,6 +462,19 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     with `[shell] best_effort`, scripts through `run_in_terminal` and bare local MCP servers, a
     key can be read as a credential can. The tty check alone is not a boundary (a pty passes it);
     the hidden key folder is.
+  - The hook's refusal of operator commands (`setup`, `pin`, `carryover`, `broker`,
+    `pseudonymize`) is a tripwire for honest mistakes, not a boundary: it reads the words of a
+    command (with `phiward` in command position, a subcommand built at run time is refused), and
+    a program can build them where the hook cannot see (`python -c`, an `sh -c` string). The
+    boundary is the tty check together with the hidden key folder.
+  - The places refused for the input come from the sandbox settings of the working folder's
+    project and the user and managed settings, and from any `.git`, `.claude` or
+    `.phiward.toml` above the input. Another project's settings can let its agent write a
+    folder elsewhere: run the command from the folder of the project whose agent will read the
+    copy.
+  - A column that is not coded is refused when it holds an ID of a coded column or of the key:
+    an ID of 5 or more characters inside any word of a cell, a shorter one only as the whole
+    cell. An ID written another way (with spaces, split across cells) is not found.
 
 - **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and
