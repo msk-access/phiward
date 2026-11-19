@@ -130,6 +130,7 @@ def test_setup_profile_for_real_data_asks_for_the_network_limit(tree, tmp_path):
                "",                              # no scripts folder
                "",                              # limit the shell's network: the default (yes)
                "github.com", "",                # the hosts
+               "1",                             # subject identifiers: none
                "n",                             # no HPC
                "y", "y", "n", "n"]              # write, approve programs, wire, service
     code, out = _drive_setup(tree, answers, cfg_path)
@@ -142,7 +143,7 @@ def test_setup_profile_for_real_data_asks_for_the_network_limit(tree, tmp_path):
 def test_setup_refuses_a_bad_host(tree, tmp_path):
     cfg_path = tmp_path / "config.toml"
     answers = ["1", str(tree / "phi"), "", "", "",
-               "y", "http://x", "", "n", "y", "y", "n", "n"]
+               "y", "http://x", "", "1", "n", "y", "y", "n", "n"]
     code, out = _drive_setup(tree, answers, cfg_path)
     assert code == 0, out
     assert "Refused" in out

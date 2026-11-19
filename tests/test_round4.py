@@ -363,6 +363,7 @@ def test_setup_writes_a_config_that_loads(tree, tmp_path):
                "n",                            # network
                "",                             # remotes
                "n",                            # the shell's network
+               "1",                            # subject identifiers: none
                "n",                            # HPC
                "y",                            # write the file
                "n",                            # wire Claude Code now
@@ -379,7 +380,7 @@ def test_setup_writes_a_config_that_loads(tree, tmp_path):
 
 def test_setup_asks_again_for_a_bad_answer(tree, tmp_path):
     cfg_path = tmp_path / "config.toml"
-    answers = ["3", "/", str(tree / "phi"), "", "", "", "", "n", "", "n", "n", "n"]  # "/" refused; no
+    answers = ["3", "/", str(tree / "phi"), "", "", "", "", "n", "", "n", "1", "n", "n"]  # "/" refused; no
     code, out = _drive(tree, answers, cfg_path)
     assert "refused" in out.lower() or "cannot" in out.lower()
     assert not cfg_path.exists()

@@ -36,8 +36,9 @@ It first asks how you will use phiward: real patient data (a results folder insi
 protected folder, the @genomics program list plus your own scripts folder, no network), made-up
 data (open defaults), or every setting (the protected roots, patterns, write places, programs,
 network and copy remotes, one by one). For real data and every setting, it also asks whether
-the shell commands of Claude Code sessions may reach only hosts you list ([network]). Then, if
-you like, the HPC questions. Each answer is
+the shell commands of Claude Code sessions may reach only hosts you list ([network]). Every
+profile asks which rules mask subject and sample identifiers ([sanitize]): none ("none" is never
+the default), the msk example pack, or your own patterns. Then, if you like, the HPC questions. Each answer is
 checked as the config loader checks it; a refused answer is asked again. Then it shows the whole file and the difference from the old
 one. It writes the file only after a yes (mode 0600; the old file is kept as `.bak`). Other
 sections of an existing file are kept. Its comments are not kept (the backup has them).
@@ -357,6 +358,63 @@ def _merge_team(data: Dict[str, Dict[str, Any]], team: Dict[str, Dict[str, Any]]
     return n
 
 
+def _ask_subjects(ask: Ask, san: Dict[str, Any], profile: int) -> None:
+    """Which rules mask subject and sample identifiers ([sanitize]): a record that there are none,
+    the msk example pack, or the operator's own patterns. "None" is never the default: it is
+    typed each time. Setup keeps genomics in any pack list it writes."""
+    packs = list(san.get("packs", []))
+    if "msk" in packs:
+        current = "2"
+    elif san.get("patterns") or san.get("names_from") or any("/" in p for p in packs):
+        current = "3"
+    else:
+        current = ""
+    ask.say("")
+    ask.say(("8. " if profile == 3 else "") + "Subject and sample identifiers ([sanitize])")
+    ask.say("  The gateway masks the names of files and folders under your protected roots. The")
+    ask.say("  genomics pack also masks sequence file names, read names and loci. A patient, sample")
+    ask.say("  or donor ID inside a file, or in a name outside the roots, is masked only by a rule")
+    ask.say("  for its form.")
+    ask.say("  1. My data holds no such IDs beyond the names under the roots (setup records it:")
+    ask.say('     subjects = "none")')
+    ask.say("  2. Add the msk pack: one institution's forms (P-0000000-T01-IM6, C-ABC123, s_C_...,")
+    ask.say("     AB123456-T, Donor...). An example; copy it for another institution")
+    ask.say("  3. Give my own rules now ([sanitize] patterns)")
+    while True:
+        a = ask.line("  Choose 1, 2 or 3" + (f" [{current}]" if current else "") + " > ") or current
+        if a in ("1", "2", "3"):
+            break
+        ask.say("  Type 1, 2 or 3." if current else
+                "  Type 1, 2 or 3: say which fits your data (there is no default).")
+    if a == "1":
+        san["subjects"] = "none"
+    else:
+        san.pop("subjects", None)
+    if a == "2" and "msk" not in packs:
+        packs.append("msk")
+    if a == "3":
+        from phiward.sanitize import SanitizerError, parse_rule
+
+        def check(rule: str) -> str:
+            try:
+                parse_rule(rule, "the rule")
+            except SanitizerError as exc:
+                return str(exc)
+            return ""
+        san["patterns"] = ask.many(
+            "  Your identifier rules ([sanitize] patterns)",
+            "  One per line: REGEX => <PLACEHOLDER>, for example \\bPT-\\d{6}\\b => <SAMPLEID>. An\n"
+            "  index file of names ([sanitize] names_from) is added by hand:\n"
+            "  docs/configuration.md.",
+            list(san.get("patterns", [])), check)
+        if not san["patterns"] and not san.get("names_from"):
+            ask.say("  No rule given: phiward doctor warns until you add one.")
+    if packs and "genomics" not in packs:
+        packs.insert(0, "genomics")  # a list without it would turn the default pack off
+    if packs:
+        san["packs"] = packs
+
+
 def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
              team: Optional[Dict[str, Dict[str, Any]]] = None, team_name: str = "") -> int:
     try:
@@ -564,6 +622,8 @@ def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
                         "~/.claude/settings.json until you remove it there yourself.")
             data.pop("network", None)
 
+    _ask_subjects(ask, data.setdefault("sanitize", {}), profile)
+
     if profile != 2 and ask.yes("\nDo you work with an HPC cluster (copies, jobs)?", False):
         ask.say("  phiward reaches it only through your own shared SSH connection (you log in;")
         ask.say("  no request can read your key or ticket).")
@@ -630,8 +690,8 @@ def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
         for line in hpc_lines:
             ask.say("    " + line)
 
-    for sec in ("protected_paths", "broker", "copy"):
-        for key in [k for k, v in data[sec].items() if v in ([], False)]:
+    for sec in ("protected_paths", "broker", "copy", "sanitize"):
+        for key in [k for k, v in data.setdefault(sec, {}).items() if v in ([], False)]:
             del data[sec][key]
     if data.get("network", {}).get("allowed_domains") == []:
         del data["network"]["allowed_domains"]  # limit = true with no host: none at all

@@ -584,11 +584,12 @@ Options:
   --show-paths   also print the protected paths (by default only their counts)
   --headless     a short check before an unattended run (`claude -p`, an Agent SDK app, a
                  scheduled agent): exit 0 when the session would be guarded, 1 with the
-                 reasons when not (docs/unattended.md)
+                 reasons when not (docs/unattended.md); a NOTE (for example: no rule masks
+                 subject identifiers) does not change the exit status
   -h, --help     show this help
 
 Show the config in force and whether it loads, and what may turn the guards off: the
-confinement backend, the sanitizer, the broker, the pinned folders, Claude Code's settings and
+confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
 MCP servers. It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
 
@@ -700,6 +701,8 @@ def main(argv: List[str]) -> int:
     except SanitizerError as exc:
         print(f"PROBLEM: the sanitizer cannot start: {exc}")
         return 1
+    if _subjects_unmasked(cfg):
+        print(SUBJECTS_WARNING)
     rel = None
     if cfg.has_protected_paths:
         from phiward import paths
@@ -1014,16 +1017,53 @@ def headless_problems(project: str, home: str) -> List[str]:
     return out
 
 
+SUBJECTS_WARNING = (
+    "WARNING: your user config enables no pack that masks subject or sample identifiers. The "
+    "gateway masks the names of entries under the protected roots, and the genomics pack masks "
+    "sequence file names, read names and loci; a patient, sample or donor ID inside a file, or in "
+    "a name outside the roots, reaches the model provider. In your user config, add a pack for "
+    "your institution's forms ([sanitize] packs, for example \"msk\"), your own [sanitize] "
+    "patterns or names_from, or record that your data has none: [sanitize] subjects = \"none\" "
+    "(a repo's .phiward.toml cannot do this). `(cd ~ && phiward setup)` asks.")
+
+
+def _subjects_unmasked(cfg: config.Config) -> bool:
+    """Protected data, no record that it names no subjects, and nothing in the user config that
+    masks subject identifiers. A pack file that cannot be read counts as not masking."""
+    if not cfg.has_protected_paths or cfg.sanitize_subjects == "none":
+        return False
+    from phiward.sanitize import SanitizerError, masks_subjects
+    try:
+        return not masks_subjects(cfg)
+    except SanitizerError:
+        return True
+
+
+def headless_notes(project: str) -> List[str]:
+    """What an unattended run should know but that does not stop it."""
+    cfg = config.load(project)
+    if cfg.problem or not _subjects_unmasked(cfg):
+        return []
+    return ["NOTE: your user config enables no pack that masks subject or sample identifiers "
+            "inside files; `phiward doctor` says how to add one, or record [sanitize] subjects = "
+            "\"none\". It does not stop the run."]
+
+
 def headless(project: str, home: str) -> int:
     problems = headless_problems(project, home)
+    notes = headless_notes(project)
     if not problems:
         print("headless: ready (wired, sandboxed, broker running). Run `claude -p` "
               "without --bare; an Agent SDK app loads the user settings or passes "
               "`phiward install claude --json` as its settings.")
+        for n in notes:
+            print(f"  {n}")
         return 0
     print("headless: NOT READY")
     for p in problems:
         print(f"  - {p}")
+    for n in notes:
+        print(f"  {n}")
     return 1
 
 

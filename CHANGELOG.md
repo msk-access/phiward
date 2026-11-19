@@ -10,6 +10,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.
+- `phiward setup` asks, in every profile, which rules mask subject and sample identifiers:
+  none (recorded as `[sanitize] subjects = "none"`, never the default), the `msk` example pack,
+  or your own patterns. `phiward doctor` warns while the user config has none of these;
+  `doctor --headless` prints a NOTE and stays ready (issue #3). A script that looks for WARNING
+  in doctor's output sees this one until it is answered.
 
 ### Fixed
 

@@ -81,6 +81,9 @@ phiward --help
    yes is suggested; with yes, `git push` and `pip install` fail until you list their hosts),
    and asks about HPC.
 2. **Made-up data**: your folders and a results folder; any program may run.
+
+Every profile also asks which rules mask subject and sample identifiers ([Question
+8](#question-8-subject-and-sample-identifiers-sanitize)).
 3. **Every setting**: the [questions below](#question-1-protected-roots), one by one.
 
 `phiward setup --from team.toml` starts from a team template (a config file with shared
@@ -227,6 +230,21 @@ listed: `git push` needs `github.com` (or your git server), `pip install` needs 
 and `files.pythonhosted.org`. Claude Code itself, WebFetch and MCP servers are not limited by
 it. Each listed host is a way out, so list few. Choice 1 asks this too, with yes suggested.
 
+### Question 8: subject and sample identifiers (`[sanitize]`)
+
+The gateway masks the names of files and folders under your protected roots, and the `genomics`
+pack masks sequence file names, read names and loci. A patient, sample or donor ID inside a
+file, or in a name outside the roots, is masked only by a rule for its form. Choose:
+
+1. Your data holds no such IDs beyond the names under the roots: setup records
+   `subjects = "none"`. This is never the default: type 1 each time.
+2. The `msk` pack: one institution's forms. It is an example; copy it for another institution.
+3. Your own rules, one per line (`[sanitize] patterns`), each checked as you type it.
+
+Every profile asks this (in choice 3 it is numbered 8). Setup keeps `genomics` in any pack
+list it writes, also on a re-run over a list you wrote without it. Until one of these is set,
+`phiward doctor` warns.
+
 ### The HPC questions
 
 Choices 1 and 3 then ask whether you work with an HPC cluster. With yes, they ask for its short
@@ -256,8 +274,9 @@ lines to add to your own `~/.ssh/config` ([hpc.md](hpc.md#one-time-setup)).
 6. It prints the next steps: what you did not say yes to, then `phiward doctor` in a project
    folder.
 
-`setup` keeps the other sections of an existing file (`[sanitize]`, `[git]`, `unresolved`), but
-not its comments; the `.bak` file of this run has them. To set those other keys, edit the file by hand; see
+`setup` keeps the other sections of an existing file (`[git]`, `unresolved`) and the other
+`[sanitize]` keys; it writes `[sanitize] subjects`, `packs` or `patterns` from Question 8. It
+does not keep comments; the `.bak` file of this run has them. To set those other keys, edit the file by hand; see
 [configuration.md](configuration.md).
 
 ## 4. Wire the agent tool
@@ -527,6 +546,10 @@ It prints, among others:
 - for Claude Code: each settings level, whether phiward is wired with `onFailure: "block"`,
   and whether the sandbox confines the shell (and if not, why not).
 
+One WARNING says that your user config enables no pack that masks subject or sample
+identifiers: add one with `phiward setup` (Question 8), or record `[sanitize] subjects = "none"`.
+A repo's `.phiward.toml` cannot clear it.
+
 Fix each line that starts with PROBLEM or WARNING (`doctor` exits with 0 even when there are
 WARNING lines). It also warns when the current folder is inside or above a protected path.
 
@@ -569,7 +592,9 @@ settings (by hand).
 A repository can commit `.phiward.toml`. It can only add protection: more roots and
 patterns, built-in packs, protected branches, a stricter `unresolved`, a lower
 `inventory_limit`. It cannot grant anything: `write_to`, `net`, `remotes`, sanitize rules and
-pack files come from the user config only. A root that only a repo config adds is protected from
+pack files come from the user config only. A repo config or a template cannot set
+`[sanitize] subjects`, and a pack a repo config adds masks but does not clear doctor's warning
+about subject identifiers. A root that only a repo config adds is protected from
 the agent, but gateway commands cannot write to it. See
 [configuration.md](configuration.md#the-repo-config).
 

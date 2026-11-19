@@ -275,4 +275,5 @@ def test_step5_doctor_warns_about_hard_links(tree):
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / "src"))
     r = subprocess.run([sys.executable, "-m", "phiward", "doctor"], cwd=str(tree / "repo"),
                        capture_output=True, text=True, env=env)
-    assert "hard link" in r.stdout and "WARNING" in r.stdout
+    # one line holds both: other WARNING lines print in this doctor run too
+    assert any("WARNING:" in l and "hard link" in l for l in r.stdout.splitlines()), r.stdout

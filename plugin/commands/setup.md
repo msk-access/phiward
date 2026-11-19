@@ -55,7 +55,9 @@ Rules for you while you do this:
    Tell them: choose **1** (real patient data) unless they only try it on made-up data; type
    their protected folders; press Enter to accept the results folder; say yes to limiting the
    network of shell commands, and list the hosts they need (for example `github.com`: without
-   it, `git push` and `pip install` fail), or none; and say yes to writing the file. Then setup
+   it, `git push` and `pip install` fail), or none; for the identifier question, choose what
+   fits their data (1 only if it names no subjects or samples beyond the file names; there is no
+   default); and say yes to writing the file. Then setup
    lists their programs, each with its path, and asks "Approve these N program(s) as they are
    now?": the broker runs only approved programs. On a first run with nothing marked, Enter
    says yes. When a program is marked `(changed)`, or a program in their home folder shadows a

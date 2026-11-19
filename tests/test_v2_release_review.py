@@ -1045,6 +1045,7 @@ def test_setup_profile_for_real_data_sets_strict_defaults(tree, tmp_path):
                "",                              # results folder: the suggestion
                "",                              # no scripts folder
                "n",                             # no limit on the shell's network
+               "1",                             # subject identifiers: none
                "y", "hpc", "login.example.org", "alice", "/work/alice/proj",  # HPC
                "",                              # cluster folders to mask: the work folder
                "y", "y", "n", "n"]              # write, approve programs, wire, service
@@ -1070,7 +1071,7 @@ def test_setup_profile_for_real_data_sets_strict_defaults(tree, tmp_path):
 
 def test_setup_profile_for_made_up_data_keeps_open_defaults(tree, tmp_path):
     cfg_path = tmp_path / "config.toml"
-    code, out = _drive_setup(tree, ["2", str(tree / "phi"), "", "", "y", "n", "n"], cfg_path)
+    code, out = _drive_setup(tree, ["2", str(tree / "phi"), "", "", "1", "y", "n", "n"], cfg_path)
     assert code == 0, out
     cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(cfg_path)))
     assert not cfg.problem and cfg.command_lists == [] and cfg.write_to
@@ -1085,7 +1086,7 @@ def test_setup_from_a_team_template(tree, tmp_path):
                "",                            # patterns
                "",                            # write places
                "n", "",                       # programs: keep the team's list, add none
-               "n", "", "n", "n",             # network, remotes, shell network, HPC
+               "n", "", "n", "1", "n",        # network, remotes, shell network, subjects, HPC
                "y", "y", "n", "n"]            # write, approve programs, wire, service
     code, out = _drive_setup(tree, answers, cfg_path, extra=("--from", str(team)))
     assert code == 0, out
@@ -1327,7 +1328,7 @@ def test_values_with_control_characters_are_escaped_when_shown():
 def test_an_hpc_rerun_offers_the_current_settings(tree, tmp_path):
     cfg_path = tmp_path / "cfg" / "config.toml"
     cfg_path.parent.mkdir()
-    first = ["1", str(tree / "phi"), "", "", "", "n",
+    first = ["1", str(tree / "phi"), "", "", "", "n", "1",
              "y", "hpc", "login.example.org", "alice", "/work/alice/proj", "",
              "y", "y", "n", "n"]
     code, out = _drive_setup(tree, first, cfg_path)
@@ -1336,6 +1337,7 @@ def test_an_hpc_rerun_offers_the_current_settings(tree, tmp_path):
     again = ["1", "n", "",            # profile; keep the roots
              "",                      # no scripts folder (the results folder exists)
              "n",                     # no limit on the shell's network
+             "1",                     # subject identifiers: "none" is typed each time
              "y", "", "", "", "", "",  # HPC: Enter keeps each answer
              "y", "n", "n"]           # write, wire, service
     code, out = _drive_setup(tree, again, cfg_path)

@@ -10,7 +10,10 @@ the user in plain words:
    `phiward launch`) and whether the guards are on.
 2. For each `WARNING` or `PROBLEM` line, say what it means and the one command or change that
    fixes it, as the line says. Do not run fixes yourself: `phiward setup`, `phiward install`,
-   `phiward pin` and changes to settings files are for the user, in their own terminal.
+   `phiward pin` and changes to settings files are for the user, in their own terminal. For the
+   WARNING that no pack masks subject or sample identifiers, the fix is in the user config, from
+   `phiward setup` (the identifier question) or `[sanitize] subjects = "none"`; never a
+   `.phiward.toml`, which cannot clear it.
 3. If phiward is not installed or the command is not found, say so and point to the quick start
    (`docs/quickstart.md` in https://github.com/msk-access/phiward).
 

@@ -70,7 +70,8 @@ newer, macOS or Linux, and Claude Code 2.1.295 or newer.
   read names and loci (the `genomics` pack). Subject and sample identifiers inside files are
   masked only with a pack that has them (the `msk` example), your own `[sanitize] patterns` or
   `names_from`. The gateway masks entry names under the protected roots (4 characters or
-  longer). Planned for 0.2.0b2: setup asks, doctor warns, and the output says what was masked
+  longer). `phiward setup` asks which rules apply, `phiward doctor` warns while none does, and
+  `phiward run` ends with a note that counts the placeholders shown
   ([#3](https://github.com/msk-access/phiward/issues/3),
   [#5](https://github.com/msk-access/phiward/issues/5)).
 - In Mode A, the file tools are refused inside Claude Code, not by the kernel; hooks and MCP

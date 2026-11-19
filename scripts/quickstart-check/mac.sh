@@ -36,7 +36,7 @@ echo "FAKE-PT-0001 line" > "$H/data/FAKE-PT-0001/a.txt"
 (cd "$H/proj" && git init -q)
 "$uv" tool install -q --python "$H/py/bin/$pyname" "$wheel" > "$H/install.out" 2>&1 \
   || fail "uv tool install" "$H/install.out"
-printf '[protected_paths]\nroots = ["%s/data"]\n[broker]\ncommands = ["wc"]\n' "$H" \
+printf '[protected_paths]\nroots = ["%s/data"]\n[broker]\ncommands = ["wc"]\n[sanitize]\nsubjects = "none"\n' "$H" \
   > "$H/.config/phiward/config.toml"
 cd "$H/proj"
 phiward install claude --user --write --yes < /dev/null > "$H/wire.out" 2>&1 || fail "install" "$H/wire.out"

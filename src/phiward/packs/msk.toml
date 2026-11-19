@@ -1,5 +1,6 @@
 # EXAMPLE sanitizer pack: the identifier forms of one institution (MSK) and an example path
-# layout. It is not a default; name it in the config to use it:
+# layout. It is not a default; choose it in `phiward setup` (option 2 of the identifier
+# question), or name it in the config:
 #   [sanitize]
 #   packs = ["genomics", "msk"]
 # Copy it and change the rules for another institution. The format is described at the top of
