@@ -76,8 +76,17 @@ Then push `main`, `develop` and the tag.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only
    under REMOTE_DIR and deletes nothing there: remove that folder yourself afterwards.
-   `--stub` (a stand-in claude, no token) checks the plumbing only: run it in the container
-   (`linux.sh --stub`), never on your own machine (it plants a git hook and a home folder).
+   `--stub` (a stand-in claude, no token) checks the plumbing only, and runs only in the
+   container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
+   hook and a home folder on your machine.
+   On Linux, Mode B ends INCONCLUSIVE for now: the wrapped MCP server cannot start inside a
+   `launch` session there (its own launch cannot write the read-only `~/.phiward` for its
+   carry-over). The judge names that cause. Until it is fixed, Mode B on Linux is proven only
+   in its other items.
+   What the session writes in its project folder (`results.txt`, `server.out`) a model could
+   forge, line by line. The checks made outside the session cannot be forged: a probe's file on
+   the host, the settings file's hash, the marker or the token in the stream, and the
+   transcript's tool calls. Read a PASS with that in mind.
    Run the real check when phiward's Claude Code wiring (`install.py`, `claude_settings.py`,
    `fasthook.py`, `mcp.py`, `wholetool.py`) or the lowest Claude Code version it supports
    changed since the last release; otherwise skip it.

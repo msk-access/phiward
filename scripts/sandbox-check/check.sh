@@ -13,8 +13,8 @@
 # refused, and so is a token from the environment inside a Claude Code session (CLAUDECODE).
 # Nothing of your own setup is read or changed. KEEP=1 keeps the folder (it holds no token).
 #   --stub     a stand-in claude (stub/claude) and a made-up token: tests the plumbing, never
-#              Claude Code. An agent runs it only in the Linux container (linux.sh --stub): on
-#              a real machine it plants a git hook. On macOS the git probes need SBX_GIT=1.
+#              Claude Code. It runs only in the Linux container (linux.sh --stub); elsewhere it
+#              is refused, as it would plant a git hook on a real machine.
 #   MODES      the modes to run (default "A B").
 #   SBX_BASE   where the home folder is made: macOS /private/tmp by default; on Linux required,
 #              and never under /tmp, /var/tmp or your home folder (on a cluster: scratch).
@@ -39,6 +39,7 @@ if [ -z "$stub" ]; then
     exit 2
   fi
 else
+  [ -e /.dockerenv ] || [ -n "$SBX_IMAGE" ] || { echo "sandbox-check: --stub runs only in the container: sh scripts/sandbox-check/linux.sh --stub" >&2; exit 2; }
   [ -z "$REMOTE" ] || { echo "sandbox-check: REMOTE is for a real run, not --stub" >&2; exit 2; }
   unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
 fi
@@ -71,7 +72,8 @@ else
 fi
 # where the home folder is made: never under the real home (its ~/.ssh and ~/.claude are
 # reachable by passwd), and on Linux never in a shared temp folder
-real_home=$(cd ~ 2>/dev/null && pwd -P) || real_home=""
+# the home folder by passwd (what ssh and others use) and by $HOME, both resolved
+homes=$("$python" -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
 if [ $os = darwin ]; then
   sbx_base=${SBX_BASE:-/private/tmp}
 else
@@ -80,11 +82,12 @@ else
 fi
 sbx_base=$(cd "$sbx_base" && pwd -P) || { echo "sandbox-check: SBX_BASE does not exist" >&2; exit 2; }
 if [ $os = linux ]; then
-  case $sbx_base/ in /tmp/*|/var/tmp/*) echo "sandbox-check: SBX_BASE may not be under /tmp or /var/tmp" >&2; exit 2 ;; esac
+  case $sbx_base/ in /tmp/*|/var/tmp/*|/dev/shm/*|/run/shm/*) echo "sandbox-check: SBX_BASE may not be under /tmp, /var/tmp or /dev/shm" >&2; exit 2 ;; esac
 fi
-if [ -n "$real_home" ] && [ "$real_home" != / ]; then
+for real_home in $homes; do
+  [ "$real_home" = / ] && continue
   case $sbx_base/ in "$real_home"/*) echo "sandbox-check: SBX_BASE may not be under your home folder" >&2; exit 2 ;; esac
-fi
+done
 if [ -n "$REMOTE" ]; then
   case $REMOTE_DIR in /*) ;; *) echo "sandbox-check: REMOTE needs REMOTE_DIR, an absolute path to a new, empty folder there" >&2; exit 2 ;; esac
   case $REMOTE$REMOTE_DIR in *[!A-Za-z0-9._/@-]*) echo "sandbox-check: REMOTE and REMOTE_DIR may hold only letters, digits and ._/@-" >&2; exit 2 ;; esac
@@ -93,10 +96,15 @@ fi
 token=""
 tty_mode=""
 H=""
+py=""
 broker=""
 cleanup() {
   [ -n "$tty_mode" ] && stty "$tty_mode" < /dev/tty 2>/dev/null
   [ -n "$broker" ] && kill "$broker" 2>/dev/null
+  # a kept folder holds no token, also after a stop between the sessions
+  if [ -n "$KEEP" ] && [ -n "$H" ] && [ -n "$py" ]; then
+    printf '%s\n' "$token" | "$py" "$here/launch.py" --redact "$H" 2>/dev/null
+  fi
   [ -n "$H" ] && { if [ -n "$KEEP" ]; then echo "kept: $H"; else rm -rf "$H"; fi; }
   return 0
 }
@@ -192,8 +200,6 @@ esac
 launch=$("$H/.local/share/uv/tools/phiward/bin/python" -c 'from phiward import config; print(config.launch_settings_path())')
 [ -f "$launch" ] || fail "the --settings file ($launch)" "$H/wire.out"
 
-git_probes=yes
-[ -n "$stub" ] && [ $os = darwin ] && [ -z "$SBX_GIT" ] && git_probes=no
 if [ -n "$REMOTE" ]; then
   mkdir -m 700 "$H/.ssh"
   cat > "$H/.config/phiward/ssh_config" <<SSH
@@ -270,7 +276,7 @@ for m in $modes; do
     echo "phiward $H/.phiward"
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
-    echo "git $git_probes"
+    echo "claude-exe $claude"
     echo "nonce $nonce"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
@@ -308,27 +314,27 @@ for m in $modes; do
     echo "bwrap $(bwrap --version 2>/dev/null | head -1 || echo none)"
     echo "claude $ver"
     echo "stub $([ -n "$stub" ] && echo yes || echo no)"
-    echo "git $git_probes"
     echo "image ${SBX_IMAGE:-none}"
     echo "locked ${SBX_LOCKED:-n/a}"
     echo "settings_same $same"
     echo "token_seen $(cat "$R/token-seen" 2>/dev/null || echo missing)"
     echo "token_in_env $(cat "$R/token-in-env" 2>/dev/null || echo missing)"
-    echo "parent_environ $(cat "$R/parent-environ" 2>/dev/null || echo missing)"
     echo "nonce $nonce"
     echo "protected_file $H/data/FAKE-PT-0001/a.txt"
     echo "hook_ms $hook_ms"
     if [ -n "$REMOTE" ]; then echo "remote yes"; echo "pulled_ok $pulled"; else echo "remote no"; fi
     req="control-write control-read read-protected write-data write-phiward write-settings"
-    req="$req gateway-run parent-environ env-secrets"
-    [ $git_probes = yes ] && req="$req control-commit git-hook"
+    req="$req gateway-run parent-environ env-secrets control-commit git-hook"
     [ -n "$REMOTE" ] && req="$req remote-push remote-run remote-pull remote-pull-out remote-own-socket"
     echo "required $req"
   } > "$R/facts.txt"
   runs="$runs $R"
 done
-token=""
 phiward doctor > "$H/doctor-after.txt" 2>&1 || true
+# every file that leaves the run (the report reads them, /out and a KEEP folder get them):
+# redacted once more, after the last one is written
+printf '%s\n' "$token" | "$py" "$here/launch.py" --redact "$H" || { echo "sandbox-check: the redaction failed" >&2; exit 2; }
+token=""
 echo
 code=0
 "$py" "$here/judge.py" "$H" "$marker" $runs || code=$?

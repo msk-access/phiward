@@ -44,7 +44,8 @@ modes=${MODES:-A B}
 tty=""
 [ -n "$stub" ] || tty=-it
 code=0
-docker run --rm $tty --user tester --privileged --label "$label" \
+docker run --rm $tty --user tester --privileged --security-opt no-new-privileges \
+  --label "$label" \
   -e "SBX_IMAGE=$id" -e "MODES=$modes" \
   -v "$work/src:/repo:ro" -v "$work/out:/out" \
   "$image" sh /repo/scripts/sandbox-check/inside.sh $stub || code=$?

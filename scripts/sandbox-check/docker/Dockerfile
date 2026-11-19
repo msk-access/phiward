@@ -8,7 +8,9 @@
 # needs no Node (the binary is native).
 # CLAUDE_VERSION (a build-arg) installs another version instead, unlocked: the report says so.
 ARG CLAUDE_VERSION=
-FROM node:22-trixie-slim AS claude
+# the base images by digest (python:3.12-slim and node:22-trixie-slim of 2026-11-19); update
+# both digests together, by `docker buildx imagetools inspect IMAGE`
+FROM node:22-trixie-slim@sha256:68c76cfad89921b927eae28ba21407475e29d0ce450afcdbe70c1532db042b64 AS claude
 ARG CLAUDE_VERSION
 COPY package.json package-lock.json /opt/claude/
 RUN cd /opt/claude && if [ -z "$CLAUDE_VERSION" ]; then \
@@ -18,7 +20,7 @@ RUN cd /opt/claude && if [ -z "$CLAUDE_VERSION" ]; then \
         "@anthropic-ai/claude-code@$CLAUDE_VERSION" && echo no > locked; \
     fi
 
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 ARG CLAUDE_VERSION
 RUN apt-get update -qq >/dev/null && \
     apt-get install -y -qq --no-install-recommends bubblewrap socat git bsdutils util-linux \
@@ -29,7 +31,8 @@ RUN case $(uname -m) in x86_64) a=x64 ;; aarch64) a=arm64 ;; *) echo "unknown ar
     want=${CLAUDE_VERSION:-$(sed -n 's/.*"@anthropic-ai\/claude-code": "\(.*\)".*/\1/p' /opt/claude/package.json)} && \
     got=$(claude --version | head -1) && echo "claude: $got" && \
     case $got in "$want "*|"$want") ;; *) echo "claude is $got, not $want" >&2; exit 1 ;; esac
-RUN pip install -q uv==0.13.9
+COPY uv-requirements.txt /tmp/uv-requirements.txt
+RUN pip install -q --require-hashes -r /tmp/uv-requirements.txt
 RUN useradd -m tester && mkdir /work /out && chown tester /work /out
 USER tester
 RUN uv python install -q 3.12

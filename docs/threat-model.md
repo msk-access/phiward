@@ -676,6 +676,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - **Not tested by phiward's own checks:** Claude Code's real sandbox. The test suite never runs
   the real `claude`. The release check (`scripts/sandbox-check`, [releasing.md](releasing.md))
   does, on macOS and Linux, run by the operator: one session per mode, judged from its files.
+  Its probe lines are written inside the session, so a model could forge them; the checks made
+  outside it (files on the host, the settings hash, the stream) cannot be forged. On Linux,
+  Mode B stays INCONCLUSIVE while a wrapped MCP server cannot start inside `launch`.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
   `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
   check after your own install is yours.

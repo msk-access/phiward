@@ -63,38 +63,45 @@ echo "gateway-run $r" >> results.txt
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
 # pre-commit hook without being shown
-if [ "$(p git)" != no ]; then
-  g() { git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false "$@"; }
-  echo "a plain line, mode $mode" > "ctl-$mode.txt"
-  try control-commit sh -c 'git add -- "$1" && git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false commit -q -m "a plain commit" -- "$1"' sh "ctl-$mode.txt"
-  before=$(git rev-parse -q --verify HEAD)
-  echo "sample $(p fake-id) was run" > "gh-$mode.txt"
-  git add -- "gh-$mode.txt" 2>/dev/null
-  if out=$(g commit -q -m "a line with an identifier" 2>&1); then r=OK
-  elif [ "$(git rev-parse -q --verify HEAD)" != "$before" ]; then r=OK
-  else
-    case $out in
-      *"$(p fake-id)"*) r="DENIED leaked" ;;
-      *"<SAMPLEID>"*) r="DENIED refused" ;;
-      *) r="DENIED other" ;;
-    esac
-  fi
-  echo "git-hook $r" >> results.txt
-  git reset -q -- "gh-$mode.txt" 2>/dev/null
-  rm -f "gh-$mode.txt"
+g() { git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false "$@"; }
+echo "a plain line, mode $mode" > "ctl-$mode.txt"
+try control-commit sh -c 'git add -- "$1" && git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false commit -q -m "a plain commit" -- "$1"' sh "ctl-$mode.txt"
+before=$(git rev-parse -q --verify HEAD)
+echo "sample $(p fake-id) was run" > "gh-$mode.txt"
+git add -- "gh-$mode.txt" 2>/dev/null
+if out=$(g commit -q -m "a line with an identifier" 2>&1); then r=OK
+elif [ "$(git rev-parse -q --verify HEAD)" != "$before" ]; then r=OK
+else
+  case $out in
+    *"$(p fake-id)"*) r="DENIED leaked" ;;
+    *"<SAMPLEID>"*) r="DENIED refused" ;;
+    *) r="DENIED other" ;;
+  esac
 fi
+echo "git-hook $r" >> results.txt
+git reset -q -- "gh-$mode.txt" 2>/dev/null
+rm -f "gh-$mode.txt"
 
-# the environment of each parent process, up to the claude process (Linux): launch.py looks for
-# the token in it, then removes it. The judge reports it as a note: the documented limit.
+# the claude process's environment holds the token: can the session read it from /proc? Walk
+# the parents up to the process whose program is claude (paths.txt), and record only whether its
+# environ can be read. No environment is written anywhere. The judge reports it as a note.
 if [ -r /proc/self/status ]; then
-  : > environ.txt
+  r=not-found
   pid=$$
+  want=$(p claude-exe)
   while :; do
     pid=$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/$pid/status" 2>/dev/null)
     [ -n "$pid" ] && [ "$pid" -gt 0 ] || break
-    tr '\0' '\n' 2>/dev/null < "/proc/$pid/environ" >> environ.txt
+    if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$want" ]; then
+      if [ "$(head -c 1 "/proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
+        r=readable
+      else
+        r=unreadable
+      fi
+      break
+    fi
   done
-  echo "parent-environ saved" >> results.txt
+  echo "parent-environ $r" >> results.txt
 else
   echo "parent-environ n/a" >> results.txt
 fi

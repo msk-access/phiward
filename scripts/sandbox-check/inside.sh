@@ -41,10 +41,12 @@ for m in A B; do
   done
 done
 expect "ok   the wrapped MCP server started and could not read the protected file"
-# Mode B: the stub under the real `phiward launch`: the kernel probes are refused. Not asserted
-# here: the wrapped MCP server in Mode B (on Linux the server's own launch inside the session
-# fails today: its carry-over cannot write the read-only ~/.phiward), so not Mode B's verdict.
+# Mode B: the stub under the real `phiward launch`: the kernel probes are refused. Mode B is
+# INCONCLUSIVE on Linux until the wrapped MCP server can start inside it (its own launch cannot
+# write the read-only ~/.phiward for its carry-over: a separate issue). When that is fixed,
+# expect "PASS Mode B" here instead.
 expect "== Mode B (linux)"
+expect "INCONCLUSIVE Mode B"
 for p in read-protected write-data write-phiward write-settings; do
   if grep -qE "^(ok   $p: refused by the sandbox|note $p: the write worked inside launch)" /tmp/mode-B.txt; then
     echo "== ok    Mode B: $p refused"
