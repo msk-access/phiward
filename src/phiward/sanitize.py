@@ -257,8 +257,7 @@ class Sanitizer:
             path_rules = [r for p in packs for r in p.paths]
             id_rules = [r for p in packs for r in p.identifiers]
             id_rules += [parse_rule(v, "[sanitize] patterns") for v in cfg.sanitize_patterns]
-            # identifiers in any letter case: entry names are matched in any case, so a rule that
-            # cared about case would mask a real name (as an entry) and not a guess of it
+            # identifiers in any letter case: entry names are matched in any case too
             id_rules = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in id_rules]
             pos_rules = [r for p in packs for r in p.positions]
             keep = [k for p in packs for k in p.keep_files]
@@ -282,6 +281,11 @@ class Sanitizer:
                                            {w.casefold() for w in stop})
                 except inventory.InventoryError as exc:
                     raise SanitizerError(str(exc))
+                # a name that a file or identifier rule matches whole is left to the rule: it
+                # then reads the same in output whether or not it exists under a root
+                whole = [re.compile(rx.pattern, rx.flags | re.IGNORECASE)
+                         for rx, _r in path_rules + id_rules]
+                ents = {e for e in ents if not any(rx.fullmatch(e) for rx in whole)}
             return cls(pset, path_rules, id_rules, pos_rules, keep, tokens, ents, known, roots)
         except SanitizerError:
             raise
@@ -301,17 +305,6 @@ class Sanitizer:
         return any(k.fullmatch(base) for k in self.keep_files)
 
     def _mask(self, line: str, table: bool) -> str:
-        """The line masked by the rules and the entry names. When the rules alone hide every word
-        that the entry names hide (an identifier-shaped name), the rules' result is used: such a
-        name then reads the same whether or not it exists under a root. A name the rules leave
-        (a plain name) is masked as an entry, so it still shows only that a name was there."""
-        out = self._masked(line, table, True)
-        if self.entries is None or "<ENTRY>" not in out:
-            return out
-        alone = self._masked(line, table, False)
-        return alone if _words(alone) <= _words(out) else out
-
-    def _masked(self, line: str, table: bool, entries: bool) -> str:
         line = self._apply(self.first_rules, line)
         if self.protected is not None:
             # another spelling of a path (`<root>\/Zorro` from JSON, `<root>//x`, `<root>/./x`):
@@ -329,8 +322,7 @@ class Sanitizer:
             # spaces; then the mark with the rest of the path (names, now placeholders, and
             # path characters) becomes one placeholder: no part of `Doe Jane/x` is left
             line = self._marked(line)
-        if entries:
-            line = inventory.mask(line, self.entries)
+        line = inventory.mask(line, self.entries)
         if self.protected is not None:
             # a mark and the rest of its path; one whose path goes on past the root or the
             # pattern (`<root>/New Person 7`) is followed by `_GOES_ON` for `_tail`
@@ -400,11 +392,6 @@ class Sanitizer:
             return out
         except Exception:  # noqa: BLE001 - fail closed on anything
             return WITHHELD
-
-
-def _words(text: str) -> "set":
-    """The words a masked line shows (placeholders left out), in any case."""
-    return {w.casefold() for w in re.findall(r"[^\W_]+", _PLACEHOLDER.sub(" ", text))}
 
 
 _MARK = "\x00"  # never in a line: normalize removes control characters

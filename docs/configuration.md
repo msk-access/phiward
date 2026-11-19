@@ -203,7 +203,9 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   and a file elsewhere would let the agent test what it holds.
 - **`table`** (true or false, default false; user config only). Whether `--table` may be used.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
-  pack, it matches in any letter case.
+  pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
+  So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), and the git
+  hook refuses a commit that holds them as it would an identifier.
 - **`inventory_limit`** (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.

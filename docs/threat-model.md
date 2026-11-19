@@ -485,11 +485,11 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   request walk many folders before it starts.
 - **Masking can confirm a guess.** A name under a protected root that the agent prints itself comes
   back masked, so an agent can test whether a name it guessed or saw elsewhere exists there, for
-  many names in one request. A name that an identifier rule (a pack, `[sanitize] patterns`)
-  matches whole reads the same whether or not it exists, so only plain names can be tested this
-  way: names no rule matches, names with a plain part (`sample_P-...`, `P-... Doe Jane`) and
-  `names_from` names. Masking hides names; it does not keep a name the agent already holds a
-  secret.
+  many names in one request. A name that a file or identifier rule (a pack, `[sanitize]
+  patterns`) matches whole is left to that rule, so it reads the same whether or not it exists.
+  Other names under a root, and `names_from` names, are masked because they exist. The cost: an
+  identifier written into a longer word (`xP-...`) is not masked as a name either. Masking hides
+  names; it does not keep a name the agent already holds a secret.
 - **Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,
   which can read a record and print it in a form masking does not catch (base64, digits spelled

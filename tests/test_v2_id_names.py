@@ -12,7 +12,8 @@ from phiward import config
 from phiward.sanitize import Sanitizer
 
 REAL = ["P-9990001-T01-IM6.bam", "sample_P-9990006-T01-IM6.bam", "AB123456-T.bam",
-        "C-ABC123-L001-d.bam", "Doe Jane", "P-9990003 Doe Jane", "P-9990004.Roe Ann.bam"]
+        "C-ABC123-L001-d.bam", "Doe Jane", "P-9990003 Doe Jane", "P-9990004.Roe Ann.bam",
+        "batchfolder", "Smith_P-9990005-T01-IM6", "DOE_JANE"]
 
 
 @pytest.fixture()
@@ -34,7 +35,8 @@ def san(tree):
     ("C-ABC123-L001-d", "C-ABC124-L001-d"),
 ])
 def test_an_id_shaped_name_reads_the_same_whether_or_not_it_exists(san, real, guess):
-    for line in (real, f"x {real} y", f"{real}\t{guess}"):
+    # also next to a real plain name on the same line
+    for line in (real, f"x {real} y", f"{real}\t{guess}", f"Doe Jane {real}", f"batchfolder {real}"):
         other = line.replace(real, guess)
         assert san.clean(line) == san.clean(other), (line, san.clean(line), san.clean(other))
     assert real.lower() not in san.clean(f"x {real} y").lower()
@@ -46,6 +48,9 @@ def test_an_id_shaped_name_reads_the_same_whether_or_not_it_exists(san, real, gu
     ("P-9990004.Roe Ann.bam", ["Roe", "Ann", "9990004"]),
     # a plain part makes it a plain name: masked whole, as an entry
     ("sample_P-9990006-T01-IM6", ["sample", "9990006"]),
+    ("smith/; Smith_P-9990005-T01-IM6", ["Smith", "9990005"]),
+    ("<DOE_JANE>", ["DOE_JANE"]),
+    ("Doe Jane/doe-123456_jane-;x", ["Doe Jane"]),
 ])
 def test_a_name_with_a_personal_part_stays_masked_whole(san, line, gone):
     out = san.clean(line)

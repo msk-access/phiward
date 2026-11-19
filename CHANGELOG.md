@@ -14,8 +14,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   that path. A local path with a `..` part, or one that starts with `~` (quoted), or an empty
   one, is refused: give the full path.
 - Identifier rules (packs and `[sanitize] patterns`) match in any letter case, and the `msk`
-  pack's rules also match an ID right after `_`. A name under a root that an identifier rule
-  matches whole now reads the same in masked output whether or not it exists.
+  pack's rules also match an ID right after `_`. A name under a root that a file or identifier
+  rule matches whole is left to that rule, so it reads the same in masked output whether or not
+  it exists. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
+  hook refuses them as identifiers.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 
