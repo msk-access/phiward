@@ -320,8 +320,9 @@ class Sanitizer:
 
     def identifier_placeholders(self) -> "Set[str]":
         """The placeholders that stand for a subject, a sample or a protected name: identifier
-        rules, names, entries and protected paths (not files, reads, positions or numbers)."""
-        return {r for _rx, r in self.id_rules if r not in NOT_SUBJECTS} | \
+        and path rules (a patient's folder), names, entries and protected paths (not files,
+        reads, dates, positions or numbers)."""
+        return {r for _rx, r in self.path_rules + self.id_rules if r not in NOT_SUBJECTS} | \
             {"<PROTECTED>", "<ENTRY>", "<NAME>"}
 
     def _apply(self, rules: Sequence[Rule], line: str) -> str:

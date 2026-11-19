@@ -75,6 +75,10 @@ def test_placeholder_sets(tree):
     ident = san.identifier_placeholders()
     assert {"<SUBJECT>", "<PROTECTED>", "<ENTRY>", "<NAME>"} <= ident
     assert not ({"<NUM>", "<BAMFILE>", "<LOCUS>", "<READ>"} & ident)
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text().replace("[sanitize]\n", '[sanitize]\npacks = ["genomics", "msk"]\n'))
+    msk = sanitize.Sanitizer.from_config(config.load(str(tree / "repo")))
+    assert {"<PATIENTPATH>", "<SAMPLEID>"} <= msk.identifier_placeholders()
 
 
 # --- through a real run ---------------------------------------------------------------------------
@@ -120,6 +124,15 @@ def test_collapsed_repeats_are_not_counted(tree):
     rc, out = go(tree, ["id FAKE-PT-0102"] * 30 + ["end"])
     assert "[29 more identical line(s)]" in out, out
     assert note(out) == "[placeholders in the lines shown: 1 <SUBJECT>]", out
+
+
+@needs_confine
+def test_a_line_dropped_after_a_repeat_note_at_the_cap_is_not_counted(tree, broker):
+    subjects()
+    user_cfg("[broker]\nmax_output_lines = 5\n")
+    rc, out = go(tree, ["a", "b", "c", "d", "d", "d", "id FAKE-PT-0103", "more"])
+    assert "[2 more identical line(s)]" in out, out
+    assert "<SUBJECT>" not in out and note(out) == "", out
 
 
 @needs_confine

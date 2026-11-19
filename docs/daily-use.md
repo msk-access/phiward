@@ -39,10 +39,10 @@ the gateway profile and sends back the sanitized output. The command:
   found on the broker's `PATH` (the `PATH` of the terminal that started the broker).
 
 Every line it prints (stdout and stderr) goes through the sanitizer. A line longer than 64 KiB
-is withheld. At the end, `run` prints a note and one line. The note counts the placeholders in the lines
+is withheld. At the end, `run` prints a note (when it has something to say) and one line. The note counts the placeholders in the lines
 shown, for example `[placeholders in the lines shown: 412 <SAMPLEID>, 60 <BAMFILE>]`, and the
 lines the sanitizer withheld. From 20 shown lines on, when none holds an identifier placeholder
-(a subject, a sample, an entry or a protected path), it says so: tell the operator, who checks
+(a subject, a sample, a patient's folder, an entry or a protected path), it says so: tell the operator, who checks
 `[sanitize] packs` and `patterns` with `phiward doctor`. Then `run done: exit=0`, or `exit=1` when the command failed.
 The command's real exit status and the line counts go to the broker's log, which no session
 reads (a number the command chooses could carry data).

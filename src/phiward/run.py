@@ -71,7 +71,7 @@ there.
 
 Print counts and summaries, not records: masking hides names and identifiers, not other
 content. The last lines count the placeholders in the lines shown, and say when no identifier
-placeholder was shown.
+placeholder was shown in 20 lines or more.
 """
 
 
