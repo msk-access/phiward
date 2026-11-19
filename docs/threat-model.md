@@ -488,7 +488,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   many names in one request. Where a file or identifier rule (a pack, `[sanitize] patterns`)
   matches the text around a name, the name reads as that rule's placeholder, as a name that does
   not exist would. Elsewhere it reads `<ENTRY>`: plain names, names with a plain part, names
-  written where the rule does not match (inside a longer word), and `names_from` names can be
+  written where the rule does not match (inside a longer word, or joined to a plain name), and
+  `names_from` names can be
   tested. Masking hides names; it does not keep a name the agent already holds a secret.
 - **Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,

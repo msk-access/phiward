@@ -69,3 +69,15 @@ def test_text_after_a_protected_path_stays_masked(san, tree):
 
 def test_an_id_after_an_underscore_is_masked(san):
     assert san.clean("x_P-9990009-T01-IM6 done") == "x_<SAMPLEID> done"
+
+
+@pytest.mark.parametrize("real,guess", [
+    ("P-9990001-T01-IM6", "P-9990002-T01-IM6"),
+    ("AB123456-T", "AB123457-T"),
+])
+@pytest.mark.parametrize("shape", ["{root}/{id}/sub /tmp/y", "{root}/{id} ", "{id}_R1 done"])
+def test_an_id_shaped_name_in_a_path_or_with_a_suffix_reads_the_same(san, tree, real, guess, shape):
+    root = f"{tree}/phi"
+    (tree / "phi" / real).mkdir(exist_ok=True)
+    line = shape.format(root=root, id=real)
+    assert san.clean(line) == san.clean(line.replace(real, guess)), san.clean(line)

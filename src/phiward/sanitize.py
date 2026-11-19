@@ -8,7 +8,8 @@ touch protected data. The filter fails closed and never echoes a line that was n
 A line is masked in this order (a placeholder is written in angle brackets):
 1. protected paths of the config (roots, patterns, and the symlink-resolved spellings): <PROTECTED>;
    then, when the inventory is on, the name of every entry under the roots, wherever it
-   appears in the line (inventory.py): <ENTRY>;
+   appears in the line (inventory.py): <ENTRY>, or the placeholder of a file or identifier
+   rule whose match holds it (so it reads as a name that does not exist would);
    (before step 1, escape sequences and control characters are removed and the line is put in
    Unicode NFKC form, so a name cannot hide behind color codes or look-alike letters);
 2. the `paths` rules of the packs, then the `identifiers` rules of the packs, then the rules of
@@ -469,7 +470,7 @@ def _line_end(line: str, start: int) -> int:
 def _key(path: str) -> str:
     """A path as the known-folder set holds it: case folded where the volume ignores case."""
     return path.casefold() if paths.FOLD_CASE else path
-_AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<ENTRY>|{paths._PATH_CHAR})*)*")
+_AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<[A-Z][A-Z0-9_]*>|{paths._PATH_CHAR})*)*")
 normalize = inventory.normalize  # the form masking sees (escapes removed, NFKC)
 
 # the escapes ordinary tools write a name with: a run of bytes (git's `\303\274`, Python's

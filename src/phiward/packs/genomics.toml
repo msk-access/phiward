@@ -4,7 +4,7 @@
 #   [pack]
 #   name        = "..."           optional, for humans
 #   paths       = [ RULE, ... ]   applied first, over all packs, before the identifier rules
-#   identifiers = [ RULE, ... ]   applied in text mode AND table mode
+#   identifiers = [ RULE, ... ]   applied in text mode AND table mode, in any letter case
 #   positions   = [ RULE, ... ]   text mode only (numbers and positions)
 #   keep_files  = [ REGEX, ... ]  whole file names that a <BAMFILE> rule leaves alone
 #

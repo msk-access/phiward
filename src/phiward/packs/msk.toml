@@ -27,7 +27,7 @@ identifiers = [
   '(?<![A-Za-z0-9])C-\w{6}(?:[-_]\w+)* => <CMOID>',
   '(?<![A-Za-z0-9])s_C_\w+ => <CMOID>',
   # anonymized BAM stems: AB123456-T
-  '(?<![A-Za-z0-9])[A-Z]{2}\d{6}-[A-Z]\b => <BAMID>',
+  '(?<![A-Za-z0-9])[A-Z]{2}\d{6}-[A-Z](?![A-Za-z0-9]) => <BAMID>',
   # donor names
   '(?<![A-Za-z0-9])Donor[\w\-]+ => <DONOR>',
 ]
