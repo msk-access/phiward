@@ -542,6 +542,7 @@ GENOMICS_CASES = [  # pack "genomics" alone, no names: (made-up input, masked ou
     ("id 1_1234_A_C and chr7-55249071-C-T", "id <LOCUS> and <LOCUS>"),
     ("bare 1234567 and 98765. and (4567890)", "bare <NUM> and <NUM>. and (<NUM>)"),
     ("grouped 12,345,678 reads", "grouped <NUM> reads"),
+    ("csv 1234567,7654321,12", "csv <NUM>,<NUM>,12"),
     ("tail position:48999 here", "tail position:<NUM> here"),
     # genomics alone does not know institution IDs; only the digit run goes
     ("sample P-9990001-T01-IM6 failed", "sample P-<NUM>-T01-IM6 failed"),
