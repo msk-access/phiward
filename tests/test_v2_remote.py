@@ -102,7 +102,8 @@ def test_words_a_csh_login_shell_would_expand_are_refused(tree, word):
 def test_a_remote_path_with_shell_characters_is_refused(tree, dst):
     # openrsync passes the remote path to the remote shell as it is
     from phiward import config
-    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n')
+    # a remote root, so the push case is refused for its characters, not for a missing root
+    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n[remote]\nroots = ["/work/me"]\n')
     (tree / "repo" / "f.txt").write_text("x\n")
     cfg = config.load(str(tree / "repo"))
     assert copying.plan(["f.txt", dst], str(tree / "repo"), cfg) is not None
@@ -120,7 +121,7 @@ def test_a_remote_spelling_rsync_reads_as_remote_is_checked(tree):
 
 def test_a_plain_remote_path_is_still_allowed(tree):
     from phiward import config
-    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n')
+    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n[remote]\nroots = ["/work/me"]\n')
     (tree / "repo" / "f.txt").write_text("x\n")
     cfg = config.load(str(tree / "repo"))
     assert copying.plan(["f.txt", "hpc-test:/work/me/sub/run-1.2_a+b"], str(tree / "repo"), cfg) is None
@@ -220,3 +221,62 @@ def test_a_copy_of_a_credential_is_refused(tree):
     cfg = config.load(str(tree / "repo"))
     for src in (str(tree / "home" / ".ssh" / "id_fake"), str(tree / "home")):
         assert "credential" in (copying.plan([src, "hpc-test:/work/me/x"], str(tree / "repo"), cfg) or "")
+
+
+# --- a push lands only under [remote] roots (issue #4) -------------------------------------------------
+
+@pytest.mark.parametrize("roots,dst,ok", [
+    ('', "hpc-test:/work/me/x", False),                       # no remote root: every push refused
+    ('roots = ["/work/me/masked"]\n', "hpc-test:/work/me/x", False),
+    ('roots = ["/work/me/masked"]\n', "hpc-test:/work/me/masked/x", True),
+    ('roots = ["/work/me"]\n', "hpc-test:/work/me", True),
+    ('roots = ["/work/me/a"]\n', "hpc-test:/work/me/ab", False),  # a prefix by text is not a root
+])
+def test_a_push_goes_only_under_remote_roots(tree, roots, dst, ok):
+    from phiward import config
+    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n' + ("[remote]\n" + roots if roots else ""))
+    (tree / "repo" / "f.txt").write_text("x\n")
+    cfg = config.load(str(tree / "repo"))
+    why = copying.plan(["f.txt", dst], str(tree / "repo"), cfg)
+    assert (why is None) is ok, why
+    if not ok:
+        assert "[remote] roots" in why
+        out = io.StringIO()  # a dry run says the same
+        assert copying.execute(["--dry-run", "f.txt", dst], str(tree / "repo"), dict(os.environ), out) == 2
+        assert "[remote] roots" in out.getvalue()
+
+
+def test_a_pull_needs_no_remote_root(tree):
+    from phiward import config
+    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n')
+    cfg = config.load(str(tree / "repo"))
+    assert copying.plan(["hpc-test:/work/me/res", str(tree / "phi")], str(tree / "repo"), cfg) is None
+
+
+def test_doctor_warns_about_a_copy_remote_without_a_remote_root(tree, capsys, monkeypatch):
+    from phiward import doctor
+    user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n')
+    monkeypatch.chdir(tree / "repo")
+    doctor.main([])
+    out = capsys.readouterr().out
+    assert "WARNING: 1 copy remote(s) are not under [remote] roots" in out, out
+    user_cfg('[remote]\nroots = ["/work"]\n')
+    doctor.main([])
+    assert "not under [remote] roots" not in capsys.readouterr().out
+
+
+def test_setup_makes_each_copy_remote_a_remote_root(tree, tmp_path):
+    from phiward import config
+    from test_v2_release_review import _drive_setup
+    cfg_path = tmp_path / "config.toml"
+    answers = ["3", str(tree / "phi"), "",    # profile, roots
+               "", "",                        # patterns, write places
+               "",                            # programs
+               "n",                           # network for gateway commands
+               "hpc-test:/work/me", "",       # copy remotes
+               "n", "1", "n",                 # shell network, subject identifiers, HPC
+               "y", "n", "n"]                 # write, wire, service
+    code, out = _drive_setup(tree, answers, cfg_path)
+    assert code == 0, out[-800:]
+    cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(cfg_path)))
+    assert cfg.remotes == ["hpc-test:/work/me"] and cfg.remote_roots == ["/work/me"]

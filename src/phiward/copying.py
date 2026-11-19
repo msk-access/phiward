@@ -1,7 +1,8 @@
 """`phiward copy SRC... DST`: copy protected data without printing it.
 
 The destination must be inside a protected root of the user's own config, or under a configured
-remote (`[copy] remotes = ["host:/abs/prefix"]`). Like `run`, the command the agent types is a
+remote (`[copy] remotes = ["host:/abs/prefix"]`) and, for a push, under `[remote] roots`. Like
+`run`, the command the agent types is a
 client of the broker; the broker calls `execute`. The copy runs with rsync (or
 `cp -R` when rsync is missing and every path is local) in the gateway profile of
 `phiward run`: it can write only at its destination (a folder inside a protected path of the
@@ -27,7 +28,8 @@ Options:
 
 Copy protected data without printing it. DST must be inside a protected root of your user
 config, or under a configured remote (`[copy] remotes = ["host:/abs/prefix"]`). A source or
-destination on a remote is written HOST:/PATH. A local path is made absolute once, and every
+destination on a remote is written HOST:/PATH; a push goes only under `[remote] roots` (where
+remote output is masked). A local path is made absolute once, and every
 check and the copy itself use that path; one with a `..` part, or one that starts with `~` (a
 quoted `~`, which the shell did not expand), is refused: give the full path.
 
@@ -259,6 +261,13 @@ def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
                 # rsync and ssh read credentials for a remote copy, so the profile cannot hide
                 # them: a source that is or holds one is refused here
                 return "a source is or holds a credential or a trace that no copy may read"
+    if _is_remote(dst):
+        # what a push puts on the cluster is masked in remote output only under [remote] roots
+        m = _REMOTE.fullmatch(dst)
+        where = os.path.normpath(m.group(2)) if m else ""
+        if not any(where == r or where.startswith(r.rstrip("/") + "/") for r in cfg.remote_roots):
+            return ("the destination is not under [remote] roots of the user config (what lands "
+                    "there would not be masked)")
     return None
 
 

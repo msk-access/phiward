@@ -163,11 +163,17 @@ into a dot-folder either. A push to your home folder could otherwise plant your 
 there; if your cluster names home folders another way, name a work folder yourself.
 
 Copies may go:
-- from an unprotected folder (the project) to an approved remote;
-- from a protected folder to a protected folder or to an approved remote;
+- from an unprotected folder (the project) to an approved remote, under a `[remote] roots`
+  folder;
+- from a protected folder to a protected folder or to an approved remote, under a `[remote]
+  roots` folder;
 - from an approved remote to a protected folder.
 
-Nothing lands where the agent can read it raw.
+Give local paths in full: a local path with a `..` part, or one that starts with a quoted `~`,
+is refused. A push goes only under a `[remote] roots` folder, where remote output is masked;
+with no remote root, every push is refused (setup makes each copy remote's folder one). Locally,
+what lands is inside a protected root. On the cluster it is masked only under `[remote] roots`,
+and a link there can carry a push outside one.
 
 **A push** (local sources to a remote) does not use rsync. A source may be any file or folder
 that is not a credential, not above one, and not in `/dev`, `/proc` or `/sys`. Your broker checks each source,

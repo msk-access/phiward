@@ -23,6 +23,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- A push (`phiward copy` to a remote) goes only under `[remote] roots`, where remote output is
+  masked; with no remote root, every push is refused (issue #4). `phiward setup` makes each copy
+  remote's folder a remote root, and `phiward doctor` warns about a copy remote without one.
 - The `genomics` pack's number rule masks a run of 5 or more digits next to a comma too
   (`1234567,7654321` becomes `<NUM>,<NUM>`), as the docs say; only a decimal such as
   `12345.678` keeps its digits.

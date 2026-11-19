@@ -793,6 +793,14 @@ def main(argv: List[str]) -> int:
           + (f" (skipped: {cfg.write_to_claude} that hold a .claude folder)"
              if cfg.write_to_claude else "")
           + f", network: {'yes' if cfg.net else 'no'}, copy remotes: {len(cfg.remotes)}")
+    bare = [r for r in cfg.remotes if not any(
+        r.split(":", 1)[-1] == x or r.split(":", 1)[-1].startswith(x.rstrip("/") + "/")
+        for x in cfg.remote_roots)]
+    if bare:
+        print(f"WARNING: {len(bare)} copy remote(s) are not under [remote] roots: a push goes only "
+              "under a remote root (what lands there is masked in remote output), so a push "
+              "there is refused. Add the folder to [remote] roots of your user config "
+              "(`(cd ~ && phiward setup)` does it).")
     if show:
         for p in cfg.write_to:
             print(f"  write_to: {p}")

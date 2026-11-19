@@ -113,3 +113,37 @@ def test_a_name_starting_with_tilde_is_copied_when_written_with_dot_slash(tree):
     code, out = _copy(tree, "./~notes.txt", str(tree / "phi" / "copies") + "/")
     assert code == 0, out
     assert (tree / "phi" / "copies" / "~notes.txt").read_text() == "made-up note\n"
+
+
+# --- what is enforced today (issue #4): a copy never lands outside a protected root ---------------------
+
+def _user_cfg(extra):
+    from pathlib import Path
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text() + extra)
+
+
+def test_a_pull_into_an_unprotected_folder_is_refused(tree):
+    _user_cfg('[copy]\nremotes = ["hpc-test:/work/me"]\n')
+    code, out = _copy(tree, "hpc-test:/work/me/res", str(tree / "pub" / "pulled"))
+    assert code == 2 and not (tree / "pub" / "pulled").exists(), out
+
+
+def test_a_copy_into_a_root_only_a_repo_config_adds_is_refused(tree):
+    (tree / "pub" / "repo-root").mkdir()
+    (tree / "repo" / ".phiward.toml").write_text(
+        f'[protected_paths]\nroots = ["{tree}/pub/repo-root"]\n')
+    code, out = _copy(tree, str(tree / "phi" / "FAKE-PT-0001.bam"), str(tree / "pub" / "repo-root") + "/")
+    assert code == 2 and _nothing_under(tree / "pub" / "repo-root"), out
+
+
+def test_a_copy_into_a_pattern_match_is_refused(tree):
+    dst = tree / "runs" / "run1" / "panel" / "c"
+    code, out = _copy(tree, str(tree / "phi" / "FAKE-PT-0001.bam"), str(dst) + "/")
+    assert code == 2 and not dst.exists(), out
+
+
+def test_a_copy_through_a_dangling_link_into_a_root_is_refused(tree):
+    os.symlink(tree / "phi" / "not-yet", tree / "pub" / "dangling")
+    code, out = _copy(tree, str(tree / "phi" / "FAKE-PT-0001.bam"), str(tree / "pub" / "dangling") + "/")
+    assert code == 2 and not (tree / "phi" / "not-yet").exists(), out

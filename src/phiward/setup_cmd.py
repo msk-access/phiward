@@ -592,6 +592,17 @@ def dialogue(ask: Ask, path: str, home: str, env: Dict[str, str],
             "  host:/absolute/work/folder places that `phiward copy` may copy to or from. The\n"
             "  HPC questions below can fill this in. Leave empty if you do not use one.",
             list(cp.get("remotes", [])), check_remote)
+        if cp["remotes"]:
+            # a push lands only under [remote] roots: each remote's folder is one
+            rm6 = data.setdefault("remote", {})
+            rroots = list(rm6.get("roots", []))
+            for r in cp["remotes"]:
+                folder = r.split(":", 1)[1]
+                if not any(folder == x or folder.startswith(x.rstrip("/") + "/") for x in rroots):
+                    rroots.append(folder)
+            rm6["roots"] = rroots
+            ask.say("  Each remote folder is also a [remote] root: a push goes only there, and")
+            ask.say("  what lands there is masked in remote output.")
     else:
         br.setdefault("net", False)
 
