@@ -178,7 +178,9 @@ The sanitizer filters everything a gateway command prints, the output of
 to that.
 
 In text mode (without `--table`) the `genomics` pack masks positions and long numbers
-(`<LOCUS>`, `<NUM>`, for example any run of 5 or more digits). Table mode (`--table`) keeps them,
+(`<LOCUS>`, `<NUM>`, for example any run of 5 or more digits, also next to a comma). A run
+joined to other digits by a dot keeps its digits, as in a decimal (`12345.678`, but also
+`1234567.7654321`). Table mode (`--table`) keeps them,
 so a record number in a table would pass: it is off unless you turn it on with `table = true`
 (user config only). Turn it on only when identifiers in your data are caught by a pack or a
 pattern, not by the number rule.

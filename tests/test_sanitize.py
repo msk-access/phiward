@@ -89,6 +89,23 @@ def test_default_pack_is_genomics():
     assert san.clean("sample P-9990001-T01-IM6") == "sample P-<NUM>-T01-IM6"  # no msk pack
 
 
+@pytest.mark.parametrize("src,want", [
+    ("1234567,7654321", "<NUM>,<NUM>"),  # a CSV row of two long numbers
+    ("FAKE,9990001,12", "FAKE,<NUM>,12"),
+    ("9990001,12", "<NUM>,12"),
+    ("12,9990001", "12,<NUM>"),
+    ("12345,67", "<NUM>,67"),  # a decimal comma: the whole part is masked
+])
+def test_a_long_number_next_to_a_comma_is_masked(genomics, src, want):
+    # configuration.md: any run of five or more digits becomes <NUM>; a comma is no exception
+    assert genomics.clean(src) == want
+
+
+@pytest.mark.parametrize("src", ["12,345 reads", "1,234 and 999,999", "mean=12345.678", "0.0123456"])
+def test_grouped_thousands_and_decimals_are_kept(genomics, src):
+    assert genomics.clean(src) == src
+
+
 def test_msk_pack_has_no_personal_paths():
     text = (Path(SRC) / "phiward" / "packs" / "msk.toml").read_text()
     assert "/users/" not in text.lower() and "/home/" not in text.lower()

@@ -3,6 +3,14 @@
 All notable changes to phiward. Dates are UTC. Versions follow semantic versioning; until
 1.0, a minor version may change behaviour.
 
+## [0.2.0b2] - unreleased
+
+### Changed
+
+- The `genomics` pack's number rule masks a run of 5 or more digits next to a comma too
+  (`1234567,7654321` becomes `<NUM>,<NUM>`), as the docs say; only a decimal such as
+  `12345.678` keeps its digits.
+
 ## [0.2.0b1] - 2026-11-18 (beta)
 
 The first public release. phiward keeps protected data (for example patient data) out of what
