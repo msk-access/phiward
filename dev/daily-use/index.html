@@ -1307,7 +1307,11 @@ the gateway profile and sends back the sanitized output. The command:</p>
   found on the broker's <code>PATH</code> (the <code>PATH</code> of the terminal that started the broker).</li>
 </ul>
 <p>Every line it prints (stdout and stderr) goes through the sanitizer. A line longer than 64 KiB
-is withheld. At the end, <code>run</code> prints one line: <code>run done: exit=0</code>, or <code>exit=1</code> when the command failed.
+is withheld. At the end, <code>run</code> prints a note (when it has something to say) and one line. The note counts the placeholders in the lines
+shown, for example <code>[placeholders in the lines shown: 412 &lt;SAMPLEID&gt;, 60 &lt;BAMFILE&gt;]</code>, and the
+lines the sanitizer withheld. From 20 shown lines on, when none holds an identifier placeholder
+(a subject, a sample, a patient's folder, an entry or a protected path), it says so: tell the operator, who checks
+<code>[sanitize] packs</code> and <code>patterns</code> with <code>phiward doctor</code>. Then <code>run done: exit=0</code>, or <code>exit=1</code> when the command failed.
 The command's real exit status and the line counts go to the broker's log, which no session
 reads (a number the command chooses could carry data).</p>
 <p><strong>Write it as the whole command.</strong> Nothing before or after it: no <code>cd</code>, no pipe, no redirect, no
@@ -1444,6 +1448,11 @@ anything: the broker's log has the reason.</p>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td><code>[... no identifier placeholder in the N lines shown ...]</code></td>
+<td>20 or more lines were shown and no rule masked a subject, a sample or a protected name in them.</td>
+<td>If the data names subjects or samples, the operator checks <code>[sanitize] packs</code> and <code>patterns</code> (<code>phiward doctor</code>).</td>
+</tr>
 <tr>
 <td><code>run refused: no phiward broker is running</code></td>
 <td>No broker, or its heartbeat is older than 10 s.</td>

@@ -1784,7 +1784,9 @@ one that is a common word of the built-in stop list (for example <code>patient</
   pack, it matches in any letter case; write <code>(?-i:...)</code> around a part that must keep its case.
   So the <code>msk</code> pack also masks some ordinary words (<code>c-string</code>, <code>donor-derived</code>), the git
   hook refuses a commit that holds them as it would an identifier, and <code>phiward sanitize
-  --check</code> counts them.</li>
+  --check</code> counts them. To check that your rules match your data, run a command over it: the
+  note at the end of <code>phiward run</code> counts the placeholders shown and says when no identifier
+  placeholder was shown.</li>
 <li><strong><code>inventory_limit</code></strong> (whole number, default 200000). The sanitizer lists every entry under the
   roots each time a gateway command starts. With more entries than this, it stops (fails
   closed). Raise it for a very large root, or narrow the root.</li>
@@ -1881,7 +1883,8 @@ times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code>
 - <strong><code>max_output_lines</code></strong> (whole number, default 2000). The most lines of a gateway command's
   output (<code>run</code>, <code>run --remote</code> and <code>copy</code>) that the agent sees. The lines after that are
   counted, not shown, and a last line says how many were withheld. A notice such as
-  <code>[3 more identical line(s)]</code> counts as a line. A repo config may only lower this value. To
+  <code>[3 more identical line(s)]</code> counts as a line; the placeholder note after the output does
+  not, and counts only the lines shown. A repo config may only lower this value. To
   see more, write the results to a file in a <code>write_to</code> folder inside a protected root, and
   print a summary.</p>
 <p>A grant gives code that the agent chooses that capability. To keep the gateway as closed as
