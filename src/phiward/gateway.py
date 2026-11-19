@@ -11,7 +11,7 @@ ordinary command, and the guard checks it as one.
 
 import re
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from phiward import shell
 from phiward.names import MODULES, PROGRAMS
@@ -148,9 +148,85 @@ def _names_program(word: str) -> bool:
     return False
 
 
+# Wrappers that run the next word as a command (their own options are skipped)
+_WRAPPERS = ("env", "command", "exec", "timeout", "nice", "nohup", "time", "xargs", "uvx",
+             "builtin", "doas", "sudo")
+_TWO_WORD = (("uv", "run"), ("pipx", "run"))
+_ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
+_PYTHON = re.compile(r"python[0-9.]*")
+
+
+def _built_at_run_time(w: "shell.Word") -> bool:
+    return w.has_sub or w.has_dollar or w.has_glob or w.has_brace or \
+        any(k not in ("lit", "tilde") for k, _, _ in w.segs)
+
+
+def _simple_commands(parsed: "shell.Parsed") -> "List[List[shell.Word]]":
+    out: "List[List[shell.Word]]" = [[]]
+    for it in parsed.items:
+        if isinstance(it, shell.Word):
+            if not it.redirect_target:
+                out[-1].append(it)
+        elif not it.is_redirect:
+            out.append([])
+    return [c for c in out if c]
+
+
+def _program_at(words: "List[shell.Word]", i: int) -> "Tuple[int, bool]":
+    """(the index of the subcommand word when the command at `i` runs phiward, else -1; whether
+    a wrapper adds words of its own after it: xargs, find -exec)."""
+    adds = False
+    while i < len(words):
+        t = words[i].text()
+        base = t.rsplit("/", 1)[-1]
+        if _ASSIGN.match(words[i].raw):
+            i += 1
+            continue
+        if base in _WRAPPERS:
+            adds = adds or base == "xargs"
+            i += 1
+            # the wrapper's options, its env assignments, durations and counts
+            while i < len(words) and (words[i].text().startswith("-") or
+                                      _ASSIGN.match(words[i].raw) or
+                                      re.fullmatch(r"[0-9.]+[smhd]?", words[i].text())):
+                i += 1
+            continue
+        if i + 1 < len(words) and (base, words[i + 1].text()) in _TWO_WORD:
+            i += 2
+            while i < len(words) and words[i].text().startswith("-"):
+                i += 1
+            continue
+        if base == "find":
+            for j in range(i + 1, len(words) - 1):
+                if words[j].text() in ("-exec", "-execdir", "-ok", "-okdir"):
+                    sub, _ = _program_at(words, j + 1)
+                    if sub >= 0:
+                        return sub, True
+            return -1, False
+        if _PYTHON.fullmatch(base):
+            j = i + 1
+            while j < len(words) and words[j].text().startswith("-"):
+                m = words[j].text()
+                if m == "-m" and j + 1 < len(words):
+                    mod = words[j + 1].text().split(".", 1)[0]
+                    return (j + 2, adds) if mod in MODULES else (-1, False)
+                if m.startswith("-m") and len(m) > 2:
+                    return (j + 1, adds) if m[2:].split(".", 1)[0] in MODULES else (-1, False)
+                j += 1
+            return -1, False
+        if base in PROGRAMS + MODULES:
+            return i + 1, adds
+        return -1, False
+    return -1, False
+
+
 def is_operator_command(command: str) -> bool:
     """Whether some simple command in `command` runs an operator-only subcommand
-    (`phiward setup`), in any spelling of the program the guard can see."""
+    (`phiward setup`), in any spelling of the program the guard can see.
+
+    A tripwire for honest mistakes, not the boundary: a program can always build the words
+    (`python -c`, `sh -c` strings). The operator commands refuse without a terminal, and
+    pseudonymize's keys sit in a folder no session or gateway command can read or write."""
     try:
         parsed = shell.parse(command)
     except (shell.ShellSyntaxError, ValueError, RecursionError):
@@ -159,16 +235,22 @@ def is_operator_command(command: str) -> bool:
     items = [it for it in parsed.items if isinstance(it, shell.Word)]
     words = [it.text() for it in items]
     for i, w in enumerate(words):
-        if not _names_program(w) or i + 1 >= len(words):
+        if _names_program(w) and i + 1 < len(words) and words[i + 1] in OPERATOR_ONLY:
+            return True
+    # phiward in command position (first word, after assignments or a wrapper): its
+    # subcommand must be a word as written, and must be there when a wrapper adds words
+    for cmd in _simple_commands(parsed):
+        sub, adds = _program_at(cmd, 0)
+        if sub < 0:
             continue
-        nxt = items[i + 1]
-        if words[i + 1] in OPERATOR_ONLY:
+        if sub >= len(cmd):
+            if adds:
+                return True
+            continue
+        if _built_at_run_time(cmd[sub]) or (adds and cmd[sub].text() in ("{}", ";", "+")):
             return True
-        # a word made when the command runs (a substitution, a variable, a glob, a brace) may
-        # be any subcommand: refused (fail closed)
-        if nxt.has_sub or nxt.has_dollar or nxt.has_glob or nxt.has_brace or \
-                any(k not in ("lit", "tilde") for k, _, _ in nxt.segs):
-            return True
+    if any(is_operator_command(inner) for inner in parsed.subs):
+        return True
     # any other spelling that names the program and an operator-only word together
     # (`sh -c 'phiward broker'`, `$p broker`, `xargs phiward`): refused unless it is a plain
     # gateway call
