@@ -17,8 +17,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   in doctor's output sees this one until it is answered.
 - `phiward run --table` reads CSV/TSV output by column (issue #2): a cell under an identifier
   header (a built-in list, plus `[sanitize] id_columns` in the user config) is masked whole as
-  `<IDCOL>`, whatever its shape; a plain number passes only in a parsed cell of another column;
-  every other line is masked as text. `phiward sanitize --table` and the git hooks keep the
+  `<IDCOL>`, whatever its shape; a plain number passes only in a parsed cell of another column.
+  One table per output, its header the first line; from the first line that is not a row of it,
+  the rest is masked as text. `phiward sanitize --table` and the git hooks keep the
   per-line meaning.
 
 ### Fixed

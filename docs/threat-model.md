@@ -514,8 +514,11 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   unset, or with a listed program that prints what it is told, such as `cut` or `printf`) and get
   numbers through, as with per-line table mode before. A column of identifiers under a header that
   no glob matches passes its numbers (`kit`, `tube` and a lab's own codes are not on the
-  built-in list). A row of words as the first line (`NA,NA`) is read as a header with no
-  identifier column, so the numbers under it pass. Rules that mask positions across cells in text
+  built-in list). Ordinary data can make the first line a header that is really data: a file
+  printed without its header (`tail -n +2 x.tsv`) or a first row of words (`NA,NA`) is read as a
+  header with no identifier column, so the numbers under it pass. A row that fits the header
+  (same field count, a number cell) is read under it even when it starts another table (a second
+  header with a number field, a headerless second file of the same width). Rules that mask positions across cells in text
   mode (`chr1` tab `1234567`) do not match cell by cell, so both cells are shown.
 - **Exit status.** The agent sees only success or failure (`exit=0` or `exit=1`; 130 when
   cancelled); the real status goes to the broker's log, which no session can read. One output note

@@ -188,21 +188,21 @@ to that.
 In text mode (without `--table`) the `genomics` pack masks positions and long numbers
 (`<LOCUS>`, `<NUM>`, for example any run of 5 or more digits, also next to a comma). A run
 joined to other digits by a dot keeps its digits, as in a decimal (`12345.678`, but also
-`1234567.7654321`). `phiward run --table` reads CSV or TSV output by column instead. A header
-is the first line, or the line after an empty line: 2 or more fields split by tabs (else by
-commas), each with a letter or `_` first (after an optional `#`), no quote, no run of 3 digits
-and nothing a rule masks. After an empty line, a header must also name an identifier column, so
-a row of words there (`NA,NA`) is not taken for one. On the first line it is: the program
-chooses its first line. Inside a table, a line whose fields all look like column names (another
-header, as from `cat a.csv b.csv`, or a row of words such as `TP53,BRCA1`) ends the table: text
-until the next empty line. Under a header, each row
+`1234567.7654321`). `phiward run --table` reads CSV or TSV output by column instead, one table
+per output. The header is the first non-empty line, when it has 2 or more fields split by tabs
+(else by commas), each with a letter or `_` first (after an optional `#`), no quote, no run of 3
+digits and nothing a rule masks; otherwise the whole output is text. Ordinary data can pass
+these tests: a file printed without its header (`tail -n +2 x.tsv`) or a first row of words
+(`NA,NA`) is read as a header, and the numbers under it are kept. Under the header, each row
 is first masked on the whole line as in table mode (protected paths, entry names, identifier
 rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
 shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
 `12.5`, `1e-05`, `1,234,567`); any other text in it gets the position rules (`chr1:1234567` is
-`<LOCUS>`). Every line that is not such a row is masked as text: output without a header line, a
-line before the header (a warning on stderr too), a row with another field count, a quote, a
-backslash or a `%XX` escape, and every line after a line too long to read until an empty line.
+`<LOCUS>`). The first line that is not such a row ends column mode: it and every later line are
+masked as text. Such a line is an empty line, a row with another field count, a quote, a
+backslash or a `%XX` escape, a row with no plain-number cell (another header, as from `cat
+a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. Output
+without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under `chrom` and `pos`, `chr1` and `1234567` are both
 shown. So a record number in a column whose header is not on the list would pass: `--table` is
@@ -237,10 +237,10 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   `id`, `id*`, `*id`, `*_ids`, `*_id_*`, `pt`, `pt_*`, `*_pt`, `subj*`, `*sample*`,
   `*patient*`, `*subject*`, `*donor*`, `*mrn*`, `*barcode*`, `*accession*`, `*specimen*`,
   `*record*`, `*chart*`, `*encounter*`, `*visit*`, `*ssn*`, `*phone*`, `*zip*`, `*_no`,
-  `*number*`, `case`, `case_*`, `*_case`, `*birth*`, `*dob*`, `*no`, `*num`, `*nbr`, `*rec*`,
-  `acc*`. It is broad on purpose: some numeric columns (`n_samples`, `valid`, `records`,
-  `read_number`, `accuracy`, `precision`, `geno`) show `<IDCOL>` too. Names it does not catch
-  (`kit`, `tube`, a lab's own codes) belong in `id_columns`.
+  `*number*`, `case`, `case_*`, `*_case`, `*birth*`, `*dob*`, `*num`, `*nbr`, `*rec*`, `acc*`.
+  It is broad on purpose: some numeric columns (`n_samples`, `valid`, `records`, `read_number`,
+  `accuracy`, `precision`, `direction`, `recall`) show `<IDCOL>` too. Names it does not catch
+  (`HospNo`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
   So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git

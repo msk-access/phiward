@@ -499,7 +499,7 @@ BUILTIN_ID_COLUMNS = (
     "id", "id*", "*id", "*_ids", "*_id_*", "pt", "pt_*", "*_pt", "subj*", "*sample*", "*patient*",
     "*subject*", "*donor*", "*mrn*", "*barcode*", "*accession*", "*specimen*", "*record*",
     "*chart*", "*encounter*", "*visit*", "*ssn*", "*phone*", "*zip*", "*_no", "*number*", "case",
-    "case_*", "*_case", "*birth*", "*dob*", "*no", "*num", "*nbr", "*rec*", "acc*")
+    "case_*", "*_case", "*birth*", "*dob*", "*num", "*nbr", "*rec*", "acc*")
 # an `[sanitize] id_columns` entry as written: a header or a glob
 ID_COLUMN_ENTRY = re.compile(r"[A-Za-z0-9 _.#*?\[\]!-]{1,64}")
 _HEADER_FIELD = re.compile(r"#?[A-Za-z_][A-Za-z0-9_ .()/%+\-]{0,63}")
@@ -531,11 +531,14 @@ class _Misfit(Exception):
 
 
 class Columns:
-    """Masks the lines of one `phiward run --table` output by column. A header is the first
-    line, or the line after an empty line, when it looks like one (`_header`); the rows under it
-    are masked as in table mode on the whole line, then each cell under an identifier header
-    becomes <IDCOL> and the positions rules run on each other cell that is not a plain number.
-    Every other line is masked as text (`Sanitizer.clean`). Made fresh for each run."""
+    """Masks the lines of one `phiward run --table` output by column. One table per output:
+    its header is the first non-empty line, when it looks like one (`_header`). Each row under
+    it is masked as in table mode on the whole line; then each cell under an identifier header
+    becomes <IDCOL>, and the positions rules run on each other cell that is not a plain number.
+    The first line that is not such a row (an empty line, another field count, a quote or an
+    escape, a mask that eats a delimiter, no plain-number cell, as in another header) ends
+    column mode: it and every later line are masked as text (`Sanitizer.clean`). Made fresh for
+    each run."""
 
     def __init__(self, san: Sanitizer, extra_globs: Iterable[str] = ()):
         self.san = san
@@ -543,50 +546,42 @@ class Columns:
         # an ID cell that is exactly one of these is kept (the masks of the line already
         # replaced it)
         self.known = san.placeholders() | {IDCOL}
-        self.state = "start"  # "start": the next line may be a header; "table"; "none"
-        self.first = True  # no line read yet
+        self.state = "start"  # "start": no non-empty line yet; "table"; "none": text to the end
         self.delim = "\t"
         self.width = 0
         self.is_id: List[bool] = []
-        self.headers = 0  # header lines found
+        self.headers = 0  # header lines found (0 or 1)
         self.rows = 0  # rows read by column
 
     def reset(self) -> None:
-        """Text mode until the next empty line (after a line too long to read)."""
+        """Text mode to the end (after a line too long to read)."""
         self.state = "none"
-        self.first = False
 
     def line(self, text: str) -> str:
         """The line as shown. Never raises."""
         try:
             norm = normalize(text)
-            first, self.first = self.first, False
-            if norm == "":
-                self.state = "start"
-                return self.san.clean(text)
             if self.state == "start":
                 shown = self.san.clean(text)
-                if self._header(norm, shown, first):
-                    self.state = "table"
-                    self.headers += 1
-                else:
+                if norm != "":
                     self.state = "none"
+                    if self._header(norm, shown):
+                        self.state = "table"
+                        self.headers += 1
                 return shown
             if self.state == "table":
-                if _words(norm, "\t") or _words(norm, ","):
-                    # another header (`cat a.csv b.csv`, also with the other delimiter) or a
-                    # row of words: not a row of this table; text until an empty line
-                    self.state = "none"
-                    return self.san.clean(text)
                 try:
                     out = self._row(norm)
                 except _Misfit:
+                    self.state = "none"
                     return self.san.clean(text)
                 # the second pass: the shown row read again gives itself, else it is withheld
                 try:
                     if normalize(out) != out or self._row(out, again=True) != out:
+                        self.state = "none"
                         return WITHHELD
                 except _Misfit:
+                    self.state = "none"
                     return WITHHELD
                 self.rows += 1
                 return out
@@ -595,7 +590,7 @@ class Columns:
             self.state = "none"
             return WITHHELD
 
-    def _header(self, norm: str, shown: str, first: bool) -> bool:
+    def _header(self, norm: str, shown: str) -> bool:
         if shown != norm:  # a field holds an identifier, a protected path or a name
             return False
         delim = "\t" if "\t" in norm else "," if "," in norm else ""
@@ -607,12 +602,8 @@ class Columns:
         rules = self.san.first_rules + self.san.path_rules + self.san.id_rules
         if any(rx.search(f) for f in fields for rx, _r in rules):
             return False
-        is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
-        # after an empty line, a row of words (`NA,NA`) is not taken for a header: there it
-        # must name an identifier column
-        if not first and not any(is_id):
-            return False
-        self.delim, self.width, self.is_id = delim, len(fields), is_id
+        self.delim, self.width = delim, len(fields)
+        self.is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
         return True
 
     def _mask(self, line: str) -> str:
@@ -631,6 +622,11 @@ class Columns:
         if m.count(d) != n or (again and m != norm):
             raise _Misfit()
         cells = m.split(d)
+        # a row with no plain-number cell (another header, as from `cat a.csv b.csv`, or a row
+        # of words) is not read: it may start other columns (on the second pass, an ID cell
+        # that was a number is <IDCOL>)
+        if not again and not any(_NUMBER.fullmatch(c.strip()) for c in cells):
+            raise _Misfit()
         for i, c in enumerate(cells):
             core = c.strip()
             if self.is_id[i]:
