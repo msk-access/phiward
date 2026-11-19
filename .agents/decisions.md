@@ -30,6 +30,10 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 - **The standard library only;** no dependency is added, also not for tests (beyond pytest and
   pytest-timeout).
 - **Plans stay local** (`.agents/plans/`); findings that are not fixed yet are reported privately.
+- **Linux: a launch knows it is inside a session by a seccomp fingerprint.** The tool's filter
+  answers syscall 360 (unassigned on x86_64 and aarch64) with errno 3917; only that exact errno
+  counts, and the launch then runs its command directly, as on macOS. A filter is set by the
+  kernel, inherited and never removed, so only an ancestor can make it.
 
 ## Turned down
 
@@ -41,5 +45,11 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   fewer cells, never fewer tests: see "Which CI cells run when".)
 - **A supervisor that kills a gateway command's leftover processes on macOS:** the command can kill
   the supervisor first; the limit is stated in the threat model.
+- **Generic /proc signals for "inside a session" on Linux** (`NoNewPrivs`, `Seccomp: 2`, a user
+  or PID namespace): Docker, systemd and Claude Code's own sandbox show them too, so a launch
+  there would skip its own profile. The seccomp fingerprint is used instead.
+- **Falling back to a private run folder when `~/.phiward` cannot be written:** that also happens
+  outside a session (read-only or root-squashed home folders), where the server's caches would
+  go to a folder the agent can write. Refuse instead.
 - **Repository roots only inside the repository:** a repo config protects folders next to it
   (`../secret`); the name listing this allows is stated in the threat model.

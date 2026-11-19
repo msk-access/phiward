@@ -540,14 +540,16 @@ def test_parent_environ_fact_is_not_used():
     assert verdict == judge.PASS and not any("documented limit" in ln for ln in report)
 
 
-# Linux Mode B: the wrapped MCP server stays required, and the judge names the known cause
+# Linux Mode B: the wrapped MCP server is required and starts (its launch inside the session runs
+# it directly); a server that did not start is not excused by a known cause any more
 
-def test_linux_mode_b_server_not_started_names_the_cause():
+def test_linux_mode_b_server_is_required_like_everywhere_else():
     verdict, report = run(results=LINUX, platform="linux", mode="B", server="")
     assert verdict == judge.INCONCLUSIVE
-    assert any("~/.phiward" in ln and ln.startswith("????") for ln in report), report
-    verdict, report = run(server="")
-    assert verdict == judge.INCONCLUSIVE and not any("~/.phiward" in ln for ln in report)
+    assert "???? the wrapped MCP server did not start in this run" in report, report
+    assert not any("~/.phiward" in ln for ln in report), report
+    verdict, report = run(results=LINUX, platform="linux", mode="B")
+    assert "ok   the wrapped MCP server started and could not read the protected file" in report
 
 
 def test_doctor_lists_a_warning_before_also_when_it_fails():

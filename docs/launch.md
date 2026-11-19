@@ -171,9 +171,12 @@ when in doubt, reinstall: the step names the command for the tool that installed
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
   runs unconfined).
-- **Linux: a launch inside a session** wraps itself in bubblewrap again. A host that forbids a
-  user namespace inside bubblewrap (seen on GitHub's Ubuntu 24.04 runners) refuses it, and nothing
-  runs.
+- **A launch inside a session** (a wrapped MCP server) runs its command directly, under the
+  session's own profile, not the narrower profile of a server (which keeps more of the project
+  read-only). On macOS a file only that profile denies tells `launch` it is inside;
+  on Linux the session's seccomp filter answers one unused system call with an error number
+  nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
+  profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
 
 Read [threat-model.md](threat-model.md) (Mode B, limits L1–L8). In short:
 - **The network is open.** A session cannot read protected data, so it cannot send it. But it

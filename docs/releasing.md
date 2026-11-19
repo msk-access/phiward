@@ -98,10 +98,9 @@ Then push `main`, `develop` and the tag.
    is stopped, into the judge's folder: next to the home folder, outside the folders the check
    gives the session. The check does not prove that the sandbox cannot write there; a process
    left running in a session of its own could, before the judge reads it.
-   On Linux, Mode B ends INCONCLUSIVE for now: the wrapped MCP server cannot start inside a
-   `launch` session there (its own launch cannot write the read-only `~/.phiward` for its
-   carry-over). The judge names that cause. Until it is fixed, Mode B on Linux is proven only
-   in its other items.
+   On Linux too the wrapped MCP server must start in Mode B: its launch inside the session runs
+   it directly (the session's seccomp fingerprint). A server that does not start leaves the mode
+   INCONCLUSIVE, as on macOS.
    What the session writes in its project folder (`results.txt`, `server.out`) a model could
    forge, line by line. The checks made outside the session are harder to forge: a probe's file
    on the host, the settings file's hash, the marker or the token in the stream, and the

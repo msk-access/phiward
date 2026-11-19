@@ -26,6 +26,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux: a wrapped MCP server inside `phiward launch` (Mode B) now starts. Its own launch used
+  to wrap itself again and fail on the read-only `~/.phiward`. The session's seccomp filter now
+  answers one unused system call (360) with an error number nothing else returns (3917); a
+  launch that sees exactly that runs its command directly, as on macOS. Anything else builds
+  the full profile, and refuses where `~/.phiward` cannot be written. The sandbox check's stub
+  run expects `PASS Mode B` on Linux.
 - Two tests of the output cap restart the broker after changing the config, so they test the
   cap; before, every run in them was refused and their bounds held trivially.
 
