@@ -499,7 +499,9 @@ BUILTIN_ID_COLUMNS = (
     "id", "id*", "*id", "*_ids", "*_id_*", "pt", "pt_*", "*_pt", "subj*", "*sample*", "*patient*",
     "*subject*", "*donor*", "*mrn*", "*barcode*", "*accession*", "*specimen*", "*record*",
     "*chart*", "*encounter*", "*visit*", "*ssn*", "*phone*", "*zip*", "*_no", "*number*", "case",
-    "case_*", "*_case", "*birth*", "*dob*", "*num", "*nbr", "*rec*", "acc*")
+    "case_*", "*_case", "*birth*", "*dob*", "*num", "*nbr", "*rec*", "acc*", "caseno", "ptno",
+    "patno", "labno", "empi", "fin", "csn", "participant*", "individual*", "proband*", "person*",
+    "*date*")
 # an `[sanitize] id_columns` entry as written: a header or a glob
 ID_COLUMN_ENTRY = re.compile(r"[A-Za-z0-9 _.#*?\[\]!-]{1,64}")
 _HEADER_FIELD = re.compile(r"#?[A-Za-z_][A-Za-z0-9_ .()/%+\-]{0,63}")
@@ -532,7 +534,8 @@ class _Misfit(Exception):
 
 class Columns:
     """Masks the lines of one `phiward run --table` output by column. One table per output:
-    its header is the first non-empty line, when it looks like one (`_header`). Each row under
+    its header is the first non-empty line, when it looks like one and names an identifier
+    column (`_header`). Each row under
     it is masked as in table mode on the whole line; then each cell under an identifier header
     becomes <IDCOL>, and the positions rules run on each other cell that is not a plain number.
     The first line that is not such a row (an empty line, another field count, a quote or an
@@ -602,8 +605,12 @@ class Columns:
         rules = self.san.first_rules + self.san.path_rules + self.san.id_rules
         if any(rx.search(f) for f in fields for rx, _r in rules):
             return False
-        self.delim, self.width = delim, len(fields)
-        self.is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
+        is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
+        # a header names an identifier column: a first line of prose with commas (`Results,
+        # see below`) or a table without one is text
+        if not any(is_id):
+            return False
+        self.delim, self.width, self.is_id = delim, len(fields), is_id
         return True
 
     def _mask(self, line: str) -> str:

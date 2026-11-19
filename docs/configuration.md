@@ -191,9 +191,13 @@ joined to other digits by a dot keeps its digits, as in a decimal (`12345.678`, 
 `1234567.7654321`). `phiward run --table` reads CSV or TSV output by column instead, one table
 per output. The header is the first non-empty line, when it has 2 or more fields split by tabs
 (else by commas), each with a letter or `_` first (after an optional `#`), no quote, no run of 3
-digits and nothing a rule masks; otherwise the whole output is text. Ordinary data can pass
-these tests: a file printed without its header (`tail -n +2 x.tsv`) or a first row of words
-(`NA,NA`) is read as a header, and the numbers under it are kept. Under the header, each row
+digits and nothing a rule masks, and when at least one of its columns is an identifier column
+(the built-in list or `id_columns`, below). Otherwise the whole output is text, so a table
+without an identifier column keeps no numbers under `--table`, and neither does output whose
+first line is a warning or prose (`Results, see below`). Ordinary data can still pass these
+tests: a first line that holds an identifier word (a row of data printed without its header, as
+by `tail -n +2 x.tsv`, or prose such as `sample, mrn`) is read as a header, and the numbers in
+its other columns are kept. Under the header, each row
 is first masked on the whole line as in table mode (protected paths, entry names, identifier
 rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
 shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
@@ -237,10 +241,12 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   `id`, `id*`, `*id`, `*_ids`, `*_id_*`, `pt`, `pt_*`, `*_pt`, `subj*`, `*sample*`,
   `*patient*`, `*subject*`, `*donor*`, `*mrn*`, `*barcode*`, `*accession*`, `*specimen*`,
   `*record*`, `*chart*`, `*encounter*`, `*visit*`, `*ssn*`, `*phone*`, `*zip*`, `*_no`,
-  `*number*`, `case`, `case_*`, `*_case`, `*birth*`, `*dob*`, `*num`, `*nbr`, `*rec*`, `acc*`.
-  It is broad on purpose: some numeric columns (`n_samples`, `valid`, `records`, `read_number`,
-  `accuracy`, `precision`, `direction`, `recall`) show `<IDCOL>` too. Names it does not catch
-  (`HospNo`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
+  `*number*`, `case`, `case_*`, `*_case`, `*birth*`, `*dob*`, `*num`, `*nbr`, `*rec*`, `acc*`,
+  `caseno`, `ptno`, `patno`, `labno`, `empi`, `fin`, `csn`, `participant*`, `individual*`,
+  `proband*`, `person*`, `*date*` (dates are identifiers too). It is broad on purpose: some
+  numeric columns (`n_samples`, `valid`, `records`, `read_number`, `accuracy`, `precision`,
+  `direction`, `recall`, `update_date`) show `<IDCOL>` too. Names it does not catch (`HospNo`,
+  `hn`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
   So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git

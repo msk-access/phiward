@@ -53,11 +53,13 @@ Options:
   --names-from FILE  also mask the names listed in FILE
   --table            read CSV/TSV output by column: cells under an identifier header are
                      masked whole, numbers in other columns are kept; other lines are masked
-                     as text. One table per output: the header is the first non-empty line.
-                     The first line that is not a row of it (an empty line, another field
-                     count, a quote, no number cell, another header) ends column mode for the
-                     rest. A first line of data (`tail -n +2`, a row of words such as NA,NA) is
-                     read as a header, and the numbers under it are kept.
+                     as text. One table per output: the header is the first non-empty line,
+                     and it must name an identifier column (else the whole output is text, so
+                     a table without one keeps no numbers). The first line that is not a row
+                     of it (an empty line, another field count, a quote, no number cell,
+                     another header) ends column mode for the rest. A first line that only
+                     looks like a header (prose with commas, data printed without its header
+                     as by `tail -n +2`) is read as one when it holds an identifier word.
                      Needs `[sanitize] table = true` in the user config.
   --remote HOST      run CMD on an HPC host, through your own ssh setup. HOST must be in
                      `[remote] hosts`, and CMD in `[remote] commands`.

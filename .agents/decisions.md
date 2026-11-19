@@ -15,8 +15,9 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   numbers; stated in the threat model.)
 - **The built-in ID column list is broad and cannot be shortened** (some numeric columns show
   `<IDCOL>`).
-- **One table per output.** The header may only be the first non-empty line, and never looks
-  like data (no 3-digit run, no identifier rule match). The first line that is not a row that
+- **One table per output.** The header may only be the first non-empty line, never looks like
+  data (no 3-digit run, no identifier rule match), and names an identifier column (else the
+  output is text: a table without one keeps no numbers; prose with commas is not a header). The first line that is not a row that
   fits (an empty line, another field count, a quote or escape, no plain-number cell, as in a
   second header) ends column mode for the rest of the output. (Why: two rounds of rules for a
   second header leaked; the mechanism was removed. Cost: a first line of data is read as a
