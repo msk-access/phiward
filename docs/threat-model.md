@@ -513,8 +513,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   any other column passes. The agent can print a header of its choice (with `[broker] commands`
   unset, or with a listed program that prints what it is told, such as `cut` or `printf`) and get
   numbers through, as with per-line table mode before. A column of identifiers under a header that
-  no glob matches passes its numbers. Rules that mask positions across cells in text mode
-  (`chr1` tab `1234567`) do not match cell by cell, so both cells are shown.
+  no glob matches passes its numbers (`kit`, `tube` and a lab's own codes are not on the
+  built-in list). A row of words as the first line (`NA,NA`) is read as a header with no
+  identifier column, so the numbers under it pass. Rules that mask positions across cells in text
+  mode (`chr1` tab `1234567`) do not match cell by cell, so both cells are shown.
 - **Exit status.** The agent sees only success or failure (`exit=0` or `exit=1`; 130 when
   cancelled); the real status goes to the broker's log, which no session can read. One output note
   carries a count (`[N more identical line(s)]`), which the command chooses. A failure is still one

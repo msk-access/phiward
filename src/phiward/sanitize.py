@@ -499,7 +499,7 @@ BUILTIN_ID_COLUMNS = (
     "id", "id*", "*id", "*_ids", "*_id_*", "pt", "pt_*", "*_pt", "subj*", "*sample*", "*patient*",
     "*subject*", "*donor*", "*mrn*", "*barcode*", "*accession*", "*specimen*", "*record*",
     "*chart*", "*encounter*", "*visit*", "*ssn*", "*phone*", "*zip*", "*_no", "*number*", "case",
-    "case_*", "*_case", "*birth*", "*dob*")
+    "case_*", "*_case", "*birth*", "*dob*", "*no", "*num", "*nbr", "*rec*", "acc*")
 # an `[sanitize] id_columns` entry as written: a header or a glob
 ID_COLUMN_ENTRY = re.compile(r"[A-Za-z0-9 _.#*?\[\]!-]{1,64}")
 _HEADER_FIELD = re.compile(r"#?[A-Za-z_][A-Za-z0-9_ .()/%+\-]{0,63}")
@@ -516,6 +516,14 @@ def col_key(name: str) -> str:
     if name.startswith("#"):
         name = name[1:].strip()
     return re.sub(r"[ .\-]+", "_", name.casefold())
+
+
+def _words(norm: str, delim: str) -> bool:
+    """Whether the line has 2 or more fields and each looks like a column name: a letter or `_`
+    first (after an optional `#`), no quote, no run of 3 digits."""
+    fields = norm.split(delim)
+    return len(fields) >= 2 and all(
+        _HEADER_FIELD.fullmatch(f.strip()) and not re.search(r"\d{3}", f) for f in fields)
 
 
 class _Misfit(Exception):
@@ -536,6 +544,7 @@ class Columns:
         # replaced it)
         self.known = san.placeholders() | {IDCOL}
         self.state = "start"  # "start": the next line may be a header; "table"; "none"
+        self.first = True  # no line read yet
         self.delim = "\t"
         self.width = 0
         self.is_id: List[bool] = []
@@ -545,23 +554,30 @@ class Columns:
     def reset(self) -> None:
         """Text mode until the next empty line (after a line too long to read)."""
         self.state = "none"
+        self.first = False
 
     def line(self, text: str) -> str:
         """The line as shown. Never raises."""
         try:
             norm = normalize(text)
+            first, self.first = self.first, False
             if norm == "":
                 self.state = "start"
                 return self.san.clean(text)
             if self.state == "start":
                 shown = self.san.clean(text)
-                if self._header(norm, shown):
+                if self._header(norm, shown, first):
                     self.state = "table"
                     self.headers += 1
                 else:
                     self.state = "none"
                 return shown
             if self.state == "table":
+                if _words(norm, "\t") or _words(norm, ","):
+                    # another header (`cat a.csv b.csv`, also with the other delimiter) or a
+                    # row of words: not a row of this table; text until an empty line
+                    self.state = "none"
+                    return self.san.clean(text)
                 try:
                     out = self._row(norm)
                 except _Misfit:
@@ -579,24 +595,24 @@ class Columns:
             self.state = "none"
             return WITHHELD
 
-    def _header(self, norm: str, shown: str) -> bool:
+    def _header(self, norm: str, shown: str, first: bool) -> bool:
         if shown != norm:  # a field holds an identifier, a protected path or a name
             return False
         delim = "\t" if "\t" in norm else "," if "," in norm else ""
-        if not delim:
+        # every field looks like a column name, and nothing a path or identifier rule matches
+        # is in it: a first line of data is not a header
+        if not delim or not _words(norm, delim):
             return False
         fields = norm.split(delim)
-        if len(fields) < 2:
-            return False
         rules = self.san.first_rules + self.san.path_rules + self.san.id_rules
-        for f in fields:
-            # a header field has a letter first, no quote, no run of 3 digits, and nothing a
-            # path or identifier rule matches: a first line of data is not a header
-            if not _HEADER_FIELD.fullmatch(f.strip()) or re.search(r"\d{3}", f) or \
-                    any(rx.search(f) for rx, _r in rules):
-                return False
-        self.delim, self.width = delim, len(fields)
-        self.is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
+        if any(rx.search(f) for f in fields for rx, _r in rules):
+            return False
+        is_id = [any(fnmatch.fnmatchcase(col_key(f), g) for g in self.globs) for f in fields]
+        # after an empty line, a row of words (`NA,NA`) is not taken for a header: there it
+        # must name an identifier column
+        if not first and not any(is_id):
+            return False
+        self.delim, self.width, self.is_id = delim, len(fields), is_id
         return True
 
     def _mask(self, line: str) -> str:

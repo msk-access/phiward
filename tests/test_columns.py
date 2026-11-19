@@ -173,6 +173,39 @@ def test_data_first_line_is_not_a_header(msk, first):
     assert got == text_mode(msk, [first, "7654321\tok"])
 
 
+@pytest.mark.parametrize("lines", [
+    ["gene,depth", "TP53,12", "depth,mrn", "12,9990001"],
+    ["score\tn", "1\t2", "sample\tpatient_id", "x\t9990001"],
+    ["a\tb\tc", "1\t2\t3", "sample_id,gene,n", "9990001\tx\t9990002"],
+])
+def test_second_header_without_empty_line_ends_the_table(genomics, lines):
+    # `cat a.csv b.csv`: the second header is not a row of the first table
+    got = read(genomics, lines)
+    assert "9990001" not in got[3], got
+    assert got[2:] == text_mode(genomics, lines[2:])
+
+
+def test_row_of_words_ends_the_table_until_an_empty_line(genomics):
+    got = read(genomics, ["gene,n", "TP53,BRCA1", "x,9990001", "", "mrn,n", "9990002,4"])
+    assert got[1:3] == text_mode(genomics, ["TP53,BRCA1", "x,9990001"])
+    assert got[5] == "<IDCOL>,4"
+
+
+def test_after_an_empty_line_a_header_needs_an_id_column(genomics):
+    lines = ["mrn,value", "9990001,3", "", "NA,NA", "9990002,4"]
+    got = read(genomics, lines)
+    assert got[1] == "<IDCOL>,3"
+    assert got[3:] == text_mode(genomics, lines[3:])
+    assert "9990002" not in got[4]
+    # a second table with an identifier column is read by column
+    assert read(genomics, ["gene,n", "TP53,5", "", "sample_id,n", "9990002,4"])[4] == "<IDCOL>,4"
+
+
+def test_words_as_the_first_line_are_a_header(genomics):
+    # documented: the first line is the program's own; a row of words there is read as a header
+    assert read(genomics, ["NA,NA", "9990002,4"])[1] == "9990002,4"
+
+
 def test_bom_header(genomics):
     assert read(genomics, ["\ufeffsample_id\tn", "1234567\t5"]) == ["sample_id\tn", "<IDCOL>\t5"]
 
@@ -186,7 +219,8 @@ def test_chrom_pos_cells_are_kept(genomics):
 @pytest.mark.parametrize("header", ["pt", "pt_no", "subj", "ids", "identifier",
                                     "medical_record_number", "record", "chart_no", "encounter",
                                     "visit", "ssn", "phone", "zip", "id", "case", "dob",
-                                    "birth_date", "specimen", "accession", "donor"])
+                                    "birth_date", "specimen", "accession", "donor", "MedRecNo",
+                                    "PatNum", "HospNo", "Acct", "acct_nbr", "rec_key", "visitno"])
 def test_builtin_globs_cover_common_headers(genomics, header):
     assert read(genomics, [f"{header}\tn", "1234567\t5"])[1] == "<IDCOL>\t5"
 
@@ -255,6 +289,7 @@ PIECES = [  # from test_sanitize.py
 ID_HEADERS = ["sample_id", "MRN", "Patient ID", "#SubjectID", "Tumor_Sample_Barcode", "pt_no",
               "visit", "accession"]
 OTHER_HEADERS = ["fragment_count", "mean", "locus", "note", "gene", "pos", "chrom", "depth"]
+WORDS = ["NA", "TP53", "BRCA1", "ok", "yes"]
 SMALL = ["12", "12.5", "1e-05", "0", "-3", "7.25%", "1,234"]
 
 
@@ -279,10 +314,16 @@ def _table(rng, counter):
         counter[0] += 1
         return f"FAKE-PT-{counter[0] % 10000:04d}"
 
+    # the model of what the docs promise, from what the generator knows it wrote (not from the
+    # reader's header test): a header starts a table at the very first line, or after an empty
+    # line when one of its columns is an identifier column; a header or a row of words inside a
+    # table ends it (text until an empty line); a row of words as the first line is read as a
+    # header (documented)
     state, delim, is_id = "start", "\t", []
-    for _ in range(rng.randint(1, 14)):
+    for n in range(rng.randint(1, 14)):
+        first = n == 0
         kind = rng.choice(["header", "row", "row", "row", "row", "blank", "noise", "quoted",
-                           "empty", "wide"])
+                           "empty", "wide", "words"])
         ok_line, bad = [], []
         if kind == "blank":
             line = ""
@@ -290,8 +331,18 @@ def _table(rng, counter):
             delim = rng.choice(["\t", ","])
             names = rng.sample(ID_HEADERS + OTHER_HEADERS, rng.randint(2, 5))
             line = delim.join(names)
-            if state == "start":
+            if state == "start" and (first or any(n in ID_HEADERS for n in names)):
                 state, is_id, cur = "table", [n in ID_HEADERS for n in names], delim
+            else:
+                state = "none"
+        elif kind == "words":
+            d = cur if state == "table" else rng.choice(["\t", ","])
+            width = len(is_id) if state == "table" else rng.randint(2, 4)
+            line = d.join(rng.choice(WORDS) for _ in range(width))
+            if state == "start" and first:
+                state, is_id, cur = "table", [False] * width, d
+            else:
+                state = "none"
         elif kind == "noise":
             s = mrn()
             bad.append(s)
@@ -345,7 +396,7 @@ def _table(rng, counter):
                     bad.append(p)
         if kind == "blank":
             state = "start"
-        elif state == "start" and kind != "header":
+        elif state == "start" and kind not in ("header", "words"):
             state = "none"
         lines.append(line)
         allowed.append(ok_line)

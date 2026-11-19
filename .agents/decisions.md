@@ -16,7 +16,10 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 - **The built-in ID column list is broad and cannot be shortened** (some numeric columns show
   `<IDCOL>`).
 - **A header is the first line, or the line after an empty line, and never looks like data**
-  (no 3-digit run, no identifier rule match); an empty TSV row is not an empty line.
+  (no 3-digit run, no identifier rule match); an empty TSV row is not an empty line. After an
+  empty line it must name an identifier column; inside a table, a line of column-name-like
+  fields only (another header, a row of words) ends the table. A row of words as the first line
+  is read as a header (stated in the threat model).
 - **When `--table` finds no header, one fixed note says so** (no count).
 - **Which CI cells run when.** A pull request runs Python 3.9 and 3.14 on Ubuntu 24.04 and macOS,
   and 3.14 on the newest Ubuntu (5 cells); a push to develop and a release run every version from

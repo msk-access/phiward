@@ -57,8 +57,10 @@ entry names and identifiers. It does not mask other content. In text mode it als
 numbers (`<NUM>`). `--table` reads CSV or TSV output by column: cells under an identifier header
 (`sample_id`, `MRN`, `Patient ID`, ...) show `<IDCOL>`, and numbers in the other columns are
 kept. It works only when the operator turned it on (`[sanitize] table = true`). Print the header
-as the first line, or after an empty line; a warning before it turns the table into text, and so
-does a row with a quote or another field count. Under `chrom` and `pos` columns, both cells are
+as the first line, or after an empty line (there it must name an identifier column). A warning
+before it turns the table into text, and so does a row with a quote or another field count.
+Another header, or a row of words only, inside a table ends it: put an empty line between
+tables. Under `chrom` and `pos` columns, both cells are
 shown (text mode masks `chr1 1234567` as one `<LOCUS>`).
 
 Exit codes: 0 when the command succeeded, 1 when it failed (whatever its own code); 2 for a
