@@ -137,6 +137,17 @@ def not_whole(command: str) -> Optional[str]:
 OPERATOR_ONLY = ("setup", "pin", "carryover", "broker", "pseudonymize")
 
 
+def _names_program(word: str) -> bool:
+    """Whether a word runs phiward: its name or path, a module name, or `-m` glued to a module
+    (`-mphiward`, `-mphiward.cli`)."""
+    base = word.rsplit("/", 1)[-1]
+    if base in PROGRAMS + MODULES:
+        return True
+    if word.startswith("-m"):
+        return word[2:].split(".", 1)[0] in MODULES
+    return False
+
+
 def is_operator_command(command: str) -> bool:
     """Whether some simple command in `command` runs an operator-only subcommand
     (`phiward setup`), in any spelling of the program the guard can see."""
@@ -145,11 +156,18 @@ def is_operator_command(command: str) -> bool:
     except (shell.ShellSyntaxError, ValueError, RecursionError):
         return any(op in command for op in OPERATOR_ONLY) and \
             any(n in command for n in PROGRAMS + MODULES)
-    words = [it.text() for it in parsed.items if isinstance(it, shell.Word)]
+    items = [it for it in parsed.items if isinstance(it, shell.Word)]
+    words = [it.text() for it in items]
     for i, w in enumerate(words):
-        base = w.rsplit("/", 1)[-1]
-        if base in PROGRAMS + MODULES and i + 1 < len(words) and \
-                words[i + 1] in OPERATOR_ONLY:
+        if not _names_program(w) or i + 1 >= len(words):
+            continue
+        nxt = items[i + 1]
+        if words[i + 1] in OPERATOR_ONLY:
+            return True
+        # a word made when the command runs (a substitution, a variable, a glob, a brace) may
+        # be any subcommand: refused (fail closed)
+        if nxt.has_sub or nxt.has_dollar or nxt.has_glob or nxt.has_brace or \
+                any(k not in ("lit", "tilde") for k, _, _ in nxt.segs):
             return True
     # any other spelling that names the program and an operator-only word together
     # (`sh -c 'phiward broker'`, `$p broker`, `xargs phiward`): refused unless it is a plain
