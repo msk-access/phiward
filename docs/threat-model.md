@@ -473,10 +473,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     folder elsewhere: run the command from the folder of the project whose agent will read the
     copy.
   - A column that is not coded is refused when it holds an ID of a coded column or of the key:
-    an ID of 5 or more characters that is not only digits anywhere in a cell (after NFKC, in any
-    letter case), any other ID only as the whole cell. So an MRN inside a longer value
-    (`P-9990001-T01`, `see 9990001`) is not found, nor an ID written another way (split across
-    cells, other separators).
+    an ID of 5 or more characters anywhere in a cell (after NFKC, in any letter case), an ID of 5
+    or more digits as a whole run of digits, a shorter ID only as the whole cell. Not found: an
+    MRN glued to other digits (`19990001`, a position may look so), a short ID inside a cell, an
+    ID written another way (split across cells, digits spaced out).
 
 - **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and

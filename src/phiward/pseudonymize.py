@@ -69,8 +69,9 @@ The rules:
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
   with an invisible format character is refused. A column that is not coded may not hold an
-  ID of a coded column or of the key (one of 5 or more characters, not only digits, anywhere
-  in a cell; any other ID as the whole cell): drop it or clean it first. Run it from the folder of the
+  ID of a coded column or of the key (one of 5 or more characters anywhere in a cell; one of
+  5 or more digits as a whole run of digits; a shorter one as the whole cell): drop it or
+  clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN, inside a protected root of your user config and
   outside every write_to folder (never replaced, mode 0600).
@@ -429,17 +430,19 @@ def _norm(text: str) -> str:
 
 
 def _long(norm_id: str) -> bool:
-    """An ID matched anywhere in a cell: 5 or more characters, not digits only (a longer
-    number, such as a position, may hold a short or numeric ID by chance)."""
+    """An ID of 5 or more characters, not digits only: matched anywhere in a cell."""
     return len(norm_id) >= 5 and not norm_id.isdigit()
 
 
 def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> None:
     """Refuse when a cell of a kept column holds an invisible format character, or an ID: a
-    long ID (`_long`) anywhere in the cell, any other ID as the whole cell."""
+    long ID (`_long`) anywhere in the cell; an ID of 5 or more digits as a whole run of digits
+    (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); any other ID as the
+    whole cell (`12` is not in `0.12`)."""
     norm_ids = {_norm(v) for v in ids}
     long_ids = sorted((v for v in norm_ids if _long(v)), key=len, reverse=True)
-    whole = {v for v in norm_ids if not _long(v)}
+    numbers = {v for v in norm_ids if v.isdigit() and len(v) >= 5}
+    whole = {v for v in norm_ids if not _long(v) and v not in numbers}
     rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
     for i in kept:
         for r in rows[1:]:
@@ -447,7 +450,8 @@ def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> N
             if any(unicodedata.category(ch) == "Cf" for ch in cell):
                 raise Refused(f"a cell of column {i + 1} holds an invisible format character.")
             norm = _norm(cell)
-            if norm.strip() in whole or (rx is not None and rx.search(norm)):
+            if norm.strip() in whole or (rx is not None and rx.search(norm)) or \
+                    (numbers and any(d in numbers for d in re.findall(r"[0-9]+", norm))):
                 raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
                               "drop it, or clean it first.")
 

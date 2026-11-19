@@ -756,15 +756,16 @@ def test_the_help_names_the_rules(ps):
 
 def test_an_id_in_another_column_is_refused(tree, ps):
     """A coded ID left in a kept or plain column would link its code to the real ID."""
-    for note in ("9990002", "see FAKE-PT-0001 again", "FAKE-PT-0001"):
+    for note in ("9990002", "see 9990002 again", "x/9990002.bam", "PT:9990001",
+                 "P-9990001-T01", "see FAKE-PT-0001 again", "FAKE-PT-0001"):
         write_table(tree / "data" / "labs.tsv", ["mrn", "sample_id", "note", "value"],
                     [["9990001", "x", "a", "1"], ["9990002", "y", note, "2"],
                      ["FAKE-PT-0001", "z", "b", "3"]])
         code, text = run(tree, base(tree, more=["--keep", "sample_id"]), extra=["note"])
         assert code == 2 and "column 3" in text, (note, text)
         nothing_written(tree)
-    # an ID of digits only counts as the whole cell: a longer number is no match
-    for note in ("19990001", "199900012", "0.9990001"):
+    # an ID of digits only counts as a whole run of digits: a longer number is no match
+    for note in ("19990001", "199900012", "x19990001y"):
         write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
                     [["9990001", note], ["9990002", "ok"]])
         assert run(tree, base(tree))[0] == 0, note
@@ -774,7 +775,7 @@ def test_an_id_in_another_column_is_refused(tree, ps):
 
 def test_an_id_of_the_key_in_another_column_is_refused(tree, ps):
     assert run(tree, base(tree, out=tree / "phi" / "o1.tsv"))[0] == 0
-    write_table(tree / "data" / "more.tsv", ["mrn", "note"], [["9990500", "9990003"]])
+    write_table(tree / "data" / "more.tsv", ["mrn", "note"], [["9990500", "was 9990003"]])
     assert run(tree, base(tree, new=False, inp=tree / "data" / "more.tsv"))[0] == 2
     assert not (tree / "phi" / "out.tsv").exists()
 
