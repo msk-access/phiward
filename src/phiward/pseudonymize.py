@@ -23,6 +23,7 @@ import random
 import re
 import secrets
 import stat
+import unicodedata
 import sys
 from typing import Dict, List, Optional, Sequence, TextIO, Tuple
 
@@ -57,13 +58,19 @@ key cannot be rebuilt, and new runs give new codes. A code is `PREFIX` and 4 dig
 holds at most 9999 IDs. The same ID gets the same code in every table coded with one key.
 
 The rules:
-- IN is a regular file reached with no link, outside a [broker] write_to folder, the spool, a
-  git work tree and ~/.phiward. Every row has the header's number of fields (UTF-8).
+- IN is a regular file reached with no link, outside every place an agent can write: the
+  working folder (and its git work tree), any git work tree, the temp folders, the sandbox's
+  allowWrite and additionalDirectories, a [broker] write_to folder, the spool and ~/.phiward.
+  A file inside a protected root may still be the agent's (`phiward copy` puts files there):
+  never run this on a file the agent made or asked for, wherever it is.
+  Every row has the header's number of fields (UTF-8).
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
-  refused. A cell's ID is the cell without outer spaces; an empty cell stays empty.
-- OUT is a new file of the same kind as IN, inside a protected root of your user config
-  (never replaced, mode 0600).
+  refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
+  with an invisible format character is refused. A column that is not coded may not hold an
+  ID of a coded column or of the key (as a whole cell or a word): drop it or clean it first.
+- OUT is a new file of the same kind as IN, inside a protected root of your user config and
+  outside every write_to folder (never replaced, mode 0600).
 - Messages never name a cell, a header, a path or a key line; a run reports the row count only.
 """
 
@@ -166,18 +173,64 @@ def _parse(argv: Sequence[str]) -> Dict[str, object]:
 
 # --- places -------------------------------------------------------------------------------------
 
-def _private_dir(path: str, what: str, mode: Optional[int] = 0o700) -> None:
+_DIR = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+
+
+def _open_part(parent: int, name: str, what: str, mode: Optional[int]) -> int:
+    """`name` in the folder `parent`, opened without following a link, as a real folder of
+    ours (with `mode` when given). FileNotFoundError when it is missing."""
     try:
-        st = os.lstat(path)
+        fd = os.open(name, _DIR, dir_fd=parent)
     except FileNotFoundError:
-        raise Refused(f"{what} is missing: run `phiward install claude` first (it makes it).")
+        raise
     except OSError:
-        raise Refused(f"{what} cannot be checked.")
+        raise Refused(f"{what} is not a real folder of yours (a link, a file, or another "
+                      "account's).")
+    try:
+        _check_dir(fd, what, mode)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _check_dir(fd: int, what: str, mode: Optional[int] = 0o700) -> None:
+    st = os.fstat(fd)
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
         raise Refused(f"{what} is not a real folder of yours (a link, a file, or another "
                       "account's).")
     if mode is not None and stat.S_IMODE(st.st_mode) != mode:
         raise Refused(f"{what} is not private (mode 0700).")
+
+
+def _open_state(home: str) -> Tuple[int, int]:
+    """(the backups folder, the keys folder or -1 when it is missing), each opened from the
+    home folder one part at a time, never through a link."""
+    try:
+        hfd = os.open(home, os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        raise Refused("the home folder cannot be opened.")
+    pfd = bfd = -1
+    try:
+        try:
+            pfd = _open_part(hfd, ".phiward", "~/.phiward", None)
+            bfd = _open_part(pfd, "backups", "~/.phiward/backups", 0o700)
+        except FileNotFoundError:
+            raise Refused("~/.phiward/backups is missing: run `phiward install claude` first "
+                          "(it makes it).")
+        try:
+            kfd = _open_part(bfd, "keys", "~/.phiward/backups/keys", 0o700)
+        except FileNotFoundError:
+            kfd = -1
+        return bfd, kfd
+    except BaseException:
+        if bfd >= 0:
+            os.close(bfd)
+        raise
+    finally:
+        os.close(hfd)
+        if pfd >= 0:
+            os.close(pfd)
 
 
 def _home() -> str:
@@ -186,13 +239,6 @@ def _home() -> str:
     if named and os.path.realpath(named) != os.path.realpath(home):
         raise Refused("$HOME names another folder than your account's home folder.")
     return home
-
-
-def _check_fd_dir(fd: int, what: str) -> None:
-    st = os.fstat(fd)
-    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid() or \
-            stat.S_IMODE(st.st_mode) != 0o700:
-        raise Refused(f"{what} is not a real folder of yours with mode 0700.")
 
 
 def _git_top(start: str) -> Optional[str]:
@@ -225,15 +271,21 @@ def _input_place(path: str, cfg: config.Config, home: str) -> str:
                 raise
             raise Refused("the input cannot be checked.")
     # places an agent can write: a file there may be planted (a guess list confirmed by codes)
+    from phiward import claude_settings
+    cwd = os.path.realpath(os.getcwd())
+    project = _git_top(cwd) or cwd  # the working folder's tree, a git repository or not
     places = list(cfg.write_to) + [config.spool_dir(), os.path.join(home, ".phiward")]
+    places += claude_settings._temp_roots() + claude_settings.agent_writable_anywhere(home)
+    places += claude_settings.agent_writable(project, home)
     if any(config._deny_inside(full, os.path.realpath(p)) or config._deny_inside(full, p)
-           for p in places):
-        raise Refused("the input is in a place an agent can write (a write_to folder, the "
-                      "spool or ~/.phiward).")
-    for top in (_git_top(os.path.dirname(full)), _git_top(os.path.realpath(os.getcwd()))):
-        if top and config._deny_inside(full, top):
-            raise Refused("the input is in a project (a git work tree), where an agent can "
-                          "write: copy it to a folder of your own first.")
+           for p in places if p):
+        raise Refused("the input is in a place an agent can write (the working folder, a "
+                      "temp folder, the sandbox's write folders, a write_to folder, the spool "
+                      "or ~/.phiward): copy it to a folder of your own first.")
+    top = _git_top(os.path.dirname(full))
+    if top and config._deny_inside(full, top):
+        raise Refused("the input is in a project (a git work tree), where an agent can "
+                      "write: copy it to a folder of your own first.")
     return full
 
 
@@ -281,8 +333,8 @@ def _read_key(kfd: int, file: str) -> Key:
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or \
-                stat.S_IMODE(st.st_mode) != 0o600:
-            raise Refused("the key is not a plain file of yours with mode 0600.")
+                stat.S_IMODE(st.st_mode) != 0o600 or st.st_nlink != 1:
+            raise Refused("the key is not a plain file of yours with mode 0600 and one name.")
         chunks = []
         while True:
             b = os.read(fd, 1 << 20)
@@ -409,12 +461,25 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
             v = r[i].strip()
             if not v:
                 continue
-            if "\t" in v or "\n" in v or "\r" in v:
-                raise Refused(f"a cell of column {i + 1} holds a tab or a line break.")
+            if "\t" in v or "\n" in v or "\r" in v or \
+                    any(unicodedata.category(ch) == "Cf" for ch in v):
+                raise Refused(f"a cell of column {i + 1} holds a tab, a line break or an "
+                              "invisible format character.")
             if v not in seen:
                 seen.add(v)
                 ids.append(v)
     new_ids = [v for v in ids if v not in key.codes]
+    # an ID of the key or of a coded column left in another column would link its code to it
+    known = sorted(set(ids) | set(key.codes), key=len, reverse=True)
+    if known:
+        rx = re.compile(r"(?<![A-Za-z0-9])(?:" + "|".join(re.escape(v) for v in known) +
+                        r")(?![A-Za-z0-9])", re.I)
+        for i in cols:
+            if i in coded:
+                continue
+            if any(rx.search(r[i]) for r in rows[1:]):
+                raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
+                              "drop it, or clean it first.")
     # the draw: from every code not used yet, skipping one the sanitizer would touch or that is
     # a value of the input or the key
     used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
@@ -455,6 +520,9 @@ def _out_place(path: str, ext: str, cfg: config.Config) -> Tuple[str, str]:
     real, why = copying.dest_place(full, os.getcwd(), cfg)
     if why:
         raise Refused(f"the output cannot go there: {why}.")
+    if any(config._deny_inside(real, w) for w in cfg.write_to):
+        raise Refused("the output cannot go in a write_to folder (gateway commands write "
+                      "there).")
     parent = os.path.dirname(full)
     try:
         if not os.path.samefile(real, parent) or os.path.islink(parent):
@@ -464,17 +532,35 @@ def _out_place(path: str, ext: str, cfg: config.Config) -> Tuple[str, str]:
     return real, os.path.basename(full)
 
 
+def _open_walk(folder: str) -> int:
+    """The folder, opened from `/` one part at a time without following a link: the folder
+    checked is the folder written, whatever is renamed on the way meanwhile."""
+    fd = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        for part in [p for p in folder.split("/") if p]:
+            nxt = os.open(part, _DIR, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
+    except OSError:
+        os.close(fd)
+        raise Refused("the folder of the output is reached through a link or cannot be opened.")
+    return fd
+
+
 def run(argv: Sequence[str]) -> int:
     opts = _parse(argv)
     home = _home()
-    base = os.path.join(home, ".phiward")
-    backups = os.path.join(base, "backups")
-    keys_dir = os.path.join(backups, "keys")
-    _private_dir(base, "~/.phiward", mode=None)
-    _private_dir(backups, "~/.phiward/backups")
-    if os.path.lexists(keys_dir):
-        _private_dir(keys_dir, "~/.phiward/backups/keys")
-    elif not opts["new"]:
+    bfd, kfd = _open_state(home)
+    try:
+        return _run(opts, home, bfd, kfd)
+    finally:
+        os.close(bfd)
+        if kfd >= 0:
+            os.close(kfd)
+
+
+def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> int:
+    if kfd < 0 and not opts["new"]:
         raise Refused("the key does not exist (start one with --new-key).")
     cfg = config.load(os.getcwd())
     if cfg.problem:
@@ -485,46 +571,35 @@ def run(argv: Sequence[str]) -> int:
     ext = os.path.splitext(full_in)[1].lower()
     out_dir, out_name = _out_place(str(opts["out"]), ext, cfg)
     file = f"{opts['name']}.tsv"
-    kfd = -1
-    try:
-        if os.path.lexists(keys_dir):
-            kfd = os.open(keys_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            _check_fd_dir(kfd, "~/.phiward/backups/keys")
-        if opts["new"]:
-            if kfd >= 0:
-                try:
-                    os.stat(file, dir_fd=kfd, follow_symlinks=False)
-                    raise Refused("a key of that name exists; extend it with --key.")
-                except FileNotFoundError:
-                    pass
-            key = Key(str(opts["prefix"]), {}, None)
-        else:
-            key = _read_key(kfd, file)
-        rows = _parse_table(_read_input(full_in), "\t" if ext == ".tsv" else ",")
-        try:
-            san = Sanitizer.from_config(cfg, entries=True)
-        except SanitizerError:
-            raise Refused("the sanitizer cannot be built from the config.")
-        table, added = build(opts, cfg, san, rows, key)
-        buf = io.StringIO()
-        csv.writer(buf, delimiter="\t" if ext == ".tsv" else ",",
-                   lineterminator="\n").writerows(table)
-        data = buf.getvalue().encode("utf-8")
-        return _commit(opts, key, kfd, keys_dir, file, added, out_dir, out_name, data,
-                       len(table) - 1)
-    finally:
+    if opts["new"]:
         if kfd >= 0:
-            os.close(kfd)
+            try:
+                os.stat(file, dir_fd=kfd, follow_symlinks=False)
+                raise Refused("a key of that name exists; extend it with --key.")
+            except FileNotFoundError:
+                pass
+        key = Key(str(opts["prefix"]), {}, None)
+    else:
+        key = _read_key(kfd, file)
+    rows = _parse_table(_read_input(full_in), "\t" if ext == ".tsv" else ",")
+    try:
+        san = Sanitizer.from_config(cfg, entries=True)
+    except SanitizerError:
+        raise Refused("the sanitizer cannot be built from the config.")
+    table, added = build(opts, cfg, san, rows, key)
+    buf = io.StringIO()
+    csv.writer(buf, delimiter="\t" if ext == ".tsv" else ",",
+               lineterminator="\n").writerows(table)
+    data = buf.getvalue().encode("utf-8")
+    return _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data,
+                   len(table) - 1)
 
 
-def _commit(opts: Dict[str, object], key: Key, kfd: int, keys_dir: str, file: str,
+def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
             added: List[Tuple[str, str]], out_dir: str, out_name: str, data: bytes,
             count: int) -> int:
     """Create OUT, append the key, write OUT; OUT is removed on any failure after it exists."""
-    try:
-        dfd = os.open(out_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    except OSError:
-        raise Refused("the folder of the output cannot be opened.")
+    dfd = _open_walk(out_dir)
     try:
         try:
             ofd = os.open(out_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
@@ -534,7 +609,7 @@ def _commit(opts: Dict[str, object], key: Key, kfd: int, keys_dir: str, file: st
                           "writable).")
         try:
             try:
-                _append_key(opts, key, kfd, keys_dir, file, added)
+                _append_key(opts, key, bfd, kfd, file, added)
             except OSError:
                 raise Refused("the key cannot be written.")
             os.fchmod(ofd, 0o600)
@@ -559,23 +634,19 @@ def _commit(opts: Dict[str, object], key: Key, kfd: int, keys_dir: str, file: st
     return count
 
 
-def _append_key(opts: Dict[str, object], key: Key, kfd: int, keys_dir: str, file: str,
+def _append_key(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
                 added: List[Tuple[str, str]]) -> None:
     text = "".join(f"{v}\t{c}\n" for v, c in added)
     own = -1
     if kfd < 0:
-        try:
-            os.mkdir(keys_dir, 0o700)
-        except FileExistsError:
-            pass
-        own = os.open(keys_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        # made now, in the backups folder opened before (never by its path again)
+        os.mkdir("keys", 0o700, dir_fd=bfd)
+        own = os.open("keys", _DIR, dir_fd=bfd)
         kfd = own
     try:
-        st = os.fstat(kfd)
-        if stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and \
-                stat.S_IMODE(st.st_mode) != 0o700 and own >= 0:
-            os.fchmod(kfd, 0o700)  # made now: the umask may have taken bits away
-        _check_fd_dir(kfd, "~/.phiward/backups/keys")
+        if own >= 0:
+            os.fchmod(kfd, 0o700)  # the umask may have taken bits away
+        _check_dir(kfd, "~/.phiward/backups/keys")
         if opts["new"]:
             fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
                          dir_fd=kfd)
@@ -588,7 +659,7 @@ def _append_key(opts: Dict[str, object], key: Key, kfd: int, keys_dir: str, file
             st = os.fstat(fd)
             if opts["new"]:
                 os.fchmod(fd, 0o600)
-            elif (st.st_dev, st.st_ino, st.st_size) != key.ident:
+            elif (st.st_dev, st.st_ino, st.st_size) != key.ident or st.st_nlink != 1:
                 raise Refused("the key changed while it was read.")
             _write_all(fd, text.encode("utf-8"))
         finally:

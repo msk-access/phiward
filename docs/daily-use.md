@@ -156,9 +156,12 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.
 - The input is one `.tsv` or `.csv` file (UTF-8, every row as wide as the header), reached with
-  no link, outside a `write_to` folder, the spool, a git work tree and `~/.phiward`. The output
-  is a new file of the same kind inside a protected root of your user config. It is never
-  replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
+  no link, outside every place an agent can write: the working folder and its git work tree,
+  any git work tree, the temp folders, the sandbox's `allowWrite` and `additionalDirectories`,
+  a `write_to` folder, the spool and `~/.phiward`. A column that is not coded may not hold an
+  ID of a coded column or of the key, and a coded cell may not hold an invisible format
+  character. The output is a new file of the same kind inside a protected root of your user
+  config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
 - The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
   or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;
   until then the command refuses. Keep a backup of the key where no agent can reach it: a lost
@@ -166,8 +169,10 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
 - The command refuses without a terminal, and the hook refuses it as an agent command. Its
   messages name no value, header or path, and a run reports only the row count.
 
-Never run it on a file the agent made or asked for, or with a key name the agent chose: the
-codes it gives would confirm the IDs the agent guessed. Run it in a terminal the agent's app
+Never run it on a file the agent made or asked for, wherever it is, or with a key name the
+agent chose: the codes it gives would confirm the IDs the agent guessed. A file inside a
+protected root may have been put there by `phiward copy` at the agent's request; the command
+cannot tell. Run it in a terminal the agent's app
 cannot read (not the app's own terminal panel): the command line you type, with its paths and
 headers, stays in the terminal's scrollback. What the codes do not hide is in
 [threat-model.md](threat-model.md#known-limits).

@@ -452,8 +452,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     as headers are refused, not covered.
   - A run on a file the agent made or asked for, or with a key the agent chose, confirms the IDs
     it guessed (they get old codes). The command refuses inputs in the places an agent writes
-    (`write_to`, the spool, a git work tree, `~/.phiward`), not a file the agent got you to put
-    elsewhere by hand.
+    (the working folder, a git work tree, the temp folders, the sandbox's write folders,
+    `write_to`, the spool, `~/.phiward`). It cannot tell a file inside a protected root that
+    `phiward copy` put there at the agent's request, nor one the agent got you to put elsewhere
+    by hand: never run it on a file the agent made or asked for, wherever it is.
   - The command line you type (paths, headers, the key name) stays in the terminal's scrollback,
     which an app that reads the terminal can see. The command's own messages name none of it.
   - The key is hidden as a credential is (below `~/.phiward/backups`), so the same limits apply:
