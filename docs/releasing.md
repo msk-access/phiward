@@ -54,12 +54,61 @@ Then push `main`, `develop` and the tag.
    `sh scripts/quickstart-check/mac.sh WHEEL PYTHON` with uv's or Homebrew's `python3` (a home
    folder of its own, no login service).
    Then check that the real Claude Code obeys the settings phiward writes, which the scripts above
-   cannot show: `sh scripts/sandbox-check/check.sh` (macOS; it asks only for a token from
-   `claude setup-token` and builds the rest in a home folder of its own, with made-up data). In a
-   `claude -p` session there, a Bash command that reads a protected file, writes `~/.phiward` or
-   writes `~/.claude/settings.json` must fail, and a wrapped MCP server must start. Run it when
-   phiward's Claude Code wiring (`install.py`, `claude_settings.py`, `fasthook.py`, `mcp.py`) or
-   the lowest Claude Code version it supports changed since the last release; otherwise skip it.
+   cannot show. You run it yourself, in a terminal: it asks only for a token from
+   `claude setup-token`, and builds the rest in a home folder of its own, with made-up data. An
+   agent never runs it (it refuses without a terminal, and refuses a token from the environment
+   inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
+   - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
+     `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
+     folders; it may not be under /tmp, the temp folder or your home folder, nor anywhere the
+     settings phiward installs let the session write (the check refuses). On macOS it is
+     `/Users/Shared` by default; without that folder, set SBX_BASE to another folder outside
+     those (for example one you make for it on a second volume). On a cluster, run it as an
+     interactive job with SBX_BASE on scratch, for example `srun --pty --job-name auto-sbx-check
+     env SBX_BASE=/scratch/$USER sh scripts/sandbox-check/check.sh`.
+   - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
+     container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
+     pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
+
+   Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
+   `phiward launch`), Haiku with a spending cap of $1 and a time limit. The session must be
+   refused when it reads the protected file with the Read tool, and when a Bash command reads
+   it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the
+   session must mask its output, a commit of a made-up identifier must be refused by the git
+   hook without showing it, the wrapped MCP server must start, and `doctor` must stay clean.
+   It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
+   With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
+   runs, and pulls through your shared connection, which you start when it asks; it writes only
+   under REMOTE_DIR and deletes nothing there: remove that folder yourself afterwards.
+   `--stub` (a stand-in claude, no token) checks the plumbing only, and runs only in the
+   container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
+   hook and a home folder on your machine. (That refusal looks for the container's marks,
+   `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
+   A token you set in the environment is read once and unset at the start: only the claude
+   process gets it. The check's home folder and its judge's folder are removed at the end, also
+   after Ctrl-C, SIGTERM or a closed terminal; if one cannot be removed, the check names it and
+   exits non-zero. A `kill -9` of `check.sh` or `launch.py` skips that: the session may keep
+   running, and the folders stay (remove them yourself). Only the report and, per mode, the
+   stream and the facts are kept, redacted in memory: with `KEEP=1` in a folder of their own
+   (`phiward-sbx-kept-*` next to it), and with `linux.sh` in its output folder. If the token's
+   value is still in any of them, nothing is kept ("redaction failed: nothing kept").
+   A process the session starts in a session of its own (`setsid`) can outlive the check; its
+   folders are removed all the same, so nothing it writes is kept.
+   The stream reaches `launch.py` through a pipe, and `launch.py` writes it, after the session
+   is stopped, into the judge's folder: next to the home folder, outside the folders the check
+   gives the session. The check does not prove that the sandbox cannot write there; a process
+   left running in a session of its own could, before the judge reads it.
+   On Linux, Mode B ends INCONCLUSIVE for now: the wrapped MCP server cannot start inside a
+   `launch` session there (its own launch cannot write the read-only `~/.phiward` for its
+   carry-over). The judge names that cause. Until it is fixed, Mode B on Linux is proven only
+   in its other items.
+   What the session writes in its project folder (`results.txt`, `server.out`) a model could
+   forge, line by line. The checks made outside the session are harder to forge: a probe's file
+   on the host, the settings file's hash, the marker or the token in the stream, and the
+   transcript's tool calls (with the limit above). Read a PASS with that in mind.
+   Run the real check when phiward's Claude Code wiring (`install.py`, `claude_settings.py`,
+   `fasthook.py`, `mcp.py`, `wholetool.py`) or the lowest Claude Code version it supports
+   changed since the last release; otherwise skip it.
 4. Commit and tag: `git flow release finish` does both; the first release is tagged by hand on
    `main`. Then push the tag:
 

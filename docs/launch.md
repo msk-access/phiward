@@ -167,6 +167,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
   record their settings: `git switch` still prints "set up to track" but does not); run them in
   your own terminal. A repository the session makes is not
   read-only, but its control files are listed in the exit report as files that run later.
+- **Linux: Claude Code's own sandbox runs inside launch.** phiward turns it off only on macOS.
+  On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
+  inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
+  runs unconfined).
 - **Linux: a launch inside a session** wraps itself in bubblewrap again. A host that forbids a
   user namespace inside bubblewrap (seen on GitHub's Ubuntu 24.04 runners) refuses it, and nothing
   runs.

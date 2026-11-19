@@ -1,0 +1,131 @@
+#!/bin/sh
+# A stand-in for `claude -p`, for `check.sh --stub` (the plumbing, never Claude Code itself): no
+# model, no network, no sandbox of its own. It writes a stream-json transcript as Claude Code
+# does: the init event (after it starts the wrapped MCP server from the config Claude Code would
+# read), a Read of the protected file (refused if a PreToolUse hook refuses it, as Claude Code
+# runs the hooks, else read for real), and one Bash call of `sh ./probes.sh`, run with the
+# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
+# nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
+# probes meet the real boundary. It cannot test the terminal prompt.
+case ${1:-} in
+  --version) echo "2.1.327 (Claude Code stand-in)"; exit 0 ;;
+  --help)
+    echo "Usage: claude [options] (stand-in)"
+    for f in -p --model --output-format --verbose --settings --add-dir --allowedTools \
+      --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
+    exit 0 ;;
+esac
+# "$0" in its command line: probes.sh finds the stand-in as it finds claude
+exec python3 - "$0" "$@" <<'PY'
+import json, os, re, subprocess, sys
+
+args = sys.argv[2:]
+settings = [args[i + 1] for i, a in enumerate(args[:-1]) if a == "--settings"]
+cwd = os.getcwd()
+
+
+def emit(ev):
+    print(json.dumps(ev), flush=True)
+
+
+def load(path):
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def matches(matcher, tool):
+    """A hook matcher as Claude Code reads it: empty or * is every tool, else a regex (or a
+    list split by |)."""
+    if matcher in ("", "*"):
+        return True
+    try:
+        return re.fullmatch(matcher, tool) is not None
+    except re.error:
+        return tool in matcher.split("|")
+
+
+home = os.environ.get("HOME", "")
+conf = os.environ.get("CLAUDE_CONFIG_DIR")
+main = os.path.join(conf, ".claude.json") if conf else os.path.join(home, ".claude.json")
+user = os.path.join(conf, "settings.json") if conf else os.path.join(home, ".claude", "settings.json")
+
+# the wrapped MCP server, started as Claude Code starts it (stdin closed: it exits at once)
+servers = []
+for name, entry in (load(main).get("mcpServers") or {}).items():
+    if not isinstance(entry, dict) or not entry.get("command"):
+        continue
+    try:
+        r = subprocess.run([entry["command"]] + list(entry.get("args") or []),
+                           env=dict(os.environ, **(entry.get("env") or {})),
+                           stdin=subprocess.DEVNULL, capture_output=True, timeout=60)
+        status = "connected" if r.returncode == 0 else "failed"
+    except (OSError, subprocess.SubprocessError):
+        status = "failed"
+    servers.append({"name": name, "status": status})
+emit({"type": "system", "subtype": "init", "cwd": cwd, "model": "stub", "mcp_servers": servers,
+      "tools": ["Bash", "Read"]})
+
+prot = ""
+try:
+    with open(os.path.join(cwd, "paths.txt")) as fh:
+        for ln in fh:
+            if ln.startswith("protected-file "):
+                prot = ln.split(" ", 1)[1].strip()
+except OSError:
+    pass
+
+# the Read: every PreToolUse hook whose matcher covers Read, from each settings source
+payload = json.dumps({"session_id": "stub", "hook_event_name": "PreToolUse", "tool_name": "Read",
+                      "tool_input": {"file_path": prot}, "cwd": cwd, "transcript_path": ""})
+refusal = None
+for src in settings + [user]:
+    for g in (load(src).get("hooks") or {}).get("PreToolUse") or []:
+        m = (g.get("matcher") or "") if isinstance(g, dict) else ""
+        if not matches(m, "Read"):
+            continue
+        for h in g.get("hooks") or []:
+            if refusal is not None or not isinstance(h, dict) or not h.get("command"):
+                continue
+            r = subprocess.run(["sh", "-c", h["command"]], input=payload.encode(),
+                               capture_output=True, timeout=30)
+            if r.returncode == 2:
+                refusal = r.stderr.decode(errors="replace").strip()
+                continue
+            try:
+                out = json.loads(r.stdout or b"{}")
+            except ValueError:
+                out = {}
+            spec = out.get("hookSpecificOutput") if isinstance(out, dict) else None
+            if isinstance(spec, dict) and spec.get("permissionDecision") == "deny":
+                refusal = str(spec.get("permissionDecisionReason", "denied"))
+emit({"type": "assistant", "message": {"content": [
+    {"type": "tool_use", "id": "stub-read", "name": "Read", "input": {"file_path": prot}}]}})
+if refusal is not None:
+    result, err = "PreToolUse:Read hook error: " + refusal, True
+else:
+    try:
+        with open(prot) as fh:
+            result, err = fh.read(), False
+    except OSError as exc:
+        result, err = ("File does not exist." if isinstance(exc, FileNotFoundError)
+                       else f"Error: {exc.strerror}"), True
+emit({"type": "user", "message": {"content": [
+    {"type": "tool_result", "tool_use_id": "stub-read", "is_error": err, "content": result}]}})
+
+# the Bash call, with the credentials scrubbed from its environment
+emit({"type": "assistant", "message": {"content": [
+    {"type": "tool_use", "id": "stub-bash", "name": "Bash",
+     "input": {"command": "sh ./probes.sh"}}]}})
+env = {k: v for k, v in os.environ.items()
+       if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=240)
+emit({"type": "user", "message": {"content": [
+    {"type": "tool_result", "tool_use_id": "stub-bash", "is_error": r.returncode != 0,
+     "content": (r.stdout + r.stderr).decode(errors="replace")[-2000:]}]}})
+emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "DONE"}]}})
+emit({"type": "result", "subtype": "success", "is_error": False, "result": "DONE"})
+PY

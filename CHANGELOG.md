@@ -23,10 +23,20 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   not a row of it, the rest is masked as text. `phiward sanitize --table` and the git hooks keep the
   per-line meaning.
 
+- The release check with the real Claude Code (`scripts/sandbox-check`) runs on Linux too:
+  `check.sh` on a real machine (`SBX_BASE`), or `linux.sh` in a container with Claude Code
+  pinned by a lock file. One session per mode (`MODES`, A and B), new probes (the Read tool,
+  `phiward run` from the session, the git hook, the parents' environment, doctor before and
+  after, and with `REMOTE` push, run and pull through the shared connection), reason classes
+  per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
+  every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+
 ### Fixed
 
 - `date` is a placeholder word: a names file with a path part `date` no longer turns the dates
   pack's `<DATE>` into `<<NAME>>`.
+- On Linux with an older C library (RHEL 8), carry-over no longer crashes when it gives a
+  session's folder back its owner bits (a refused `phiward launch` ended with a traceback).
 - Two tests of the output cap restart the broker after changing the config, so they test the
   cap; before, every run in them was refused and their bounds held trivially.
 

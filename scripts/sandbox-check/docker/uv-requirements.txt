@@ -1,0 +1,6 @@
+# uv for the sandbox check's image, pinned by the hashes of its Linux wheels
+# (pip install --require-hashes -r uv-requirements.txt)
+uv==0.13.9 \
+    --hash=sha256:5435c5ce14a56431208ca0996416d310f1598e8c2c8ba707688985a16bb82dbe \
+    --hash=sha256:d7f459fe4fd247d830351c75686d3996ace3c6f3f728eb0e85a30b7ada0cef19 \
+    --hash=sha256:ecb6028d79dc96fbeafffe5c8af62a7099487ebc05a701e76714eebcffd06375

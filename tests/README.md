@@ -38,12 +38,12 @@ says what it holds. By feature:
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_beta |
-| Carry-over | test_v2_carryover, test_v2_s17 |
+| Carry-over | test_v2_carryover, test_v2_s17, test_v2_old_glibc |
 | phiward's own Python (the self-check) | test_v2_selfcheck, test_v2_full_check, test_v2_fault_place, test_v2_one_rule, test_v2_python_reads, test_v2_round7, test_v2_release8, test_v2_release9, test_v2_release10, test_v2_release11, test_v2_release12, test_v2_release13, test_v2_release14, test_v2_release16 |
 | `doctor`, `setup`, `init`, onboarding | test_v2_doctor_first, test_v2_onboard, test_copy_and_adapter, test_v2_note_service, test_v2_review_final |
 | Unattended agents (headless, the SDK) | test_v2_unattended |
 | Git hooks | test_githooks |
 | The docs' links | test_docs_links |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
-| The judge of the real Claude Code check (scripts/sandbox-check) | test_sandbox_check_judge |
+| The judge of the real Claude Code check (scripts/sandbox-check: per platform and mode, the facts, the token redaction) | test_sandbox_check_judge |
 | Fixes from the first CI runs on GitHub (bubblewrap mounts, two launches at once, deep scratch folders) | test_v2_github_ci |
