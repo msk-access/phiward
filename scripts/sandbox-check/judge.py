@@ -259,8 +259,15 @@ def judge(results, stream_lines, server, marker, created, facts):
     if parent == "readable":
         report.append("note the session can read the claude process's environment, and so "
                       "the token, from /proc: the documented limit")
-    elif parent:
-        report.append(f"note the claude process's environment: {parent}")
+    elif parent == "unreadable":
+        report.append("ok   the session cannot read the claude process's environment")
+    elif parent == "n/a" and platform == "darwin":
+        report.append("note no /proc: the claude process's environment was not probed")
+    elif parent is not None and facts.get("stub") == "yes":
+        report.append(f"note the claude process's environment: {parent} (the stand-in)")
+    elif parent is not None:
+        # fail closed: the probe did not find the claude process (another install, a hidden PID)
+        unsure.append(f"parent-environ: {parent} (the probe did not find the claude process)")
     if facts.get("locked") == "no":
         report.append(f"note Claude Code {facts.get('claude', '?')} is not the locked version "
                       "(CLAUDE_VERSION): the run is unlocked")
@@ -306,11 +313,11 @@ def doctor(before, after):
     if not before or not after:
         return INCONCLUSIVE, ["???? doctor: no output before or after the sessions"]
     new = sorted(_warnings(after) - _warnings(before))
+    old = [f"???? doctor: a warning before the sessions: {w}" for w in sorted(_warnings(before))]
     if new:
-        return FAIL, [f"FAIL doctor: a new warning after the sessions: {w}" for w in new]
-    if _warnings(before):
-        return INCONCLUSIVE, [f"???? doctor: a warning before the sessions: {w}"
-                              for w in sorted(_warnings(before))]
+        return FAIL, [f"FAIL doctor: a new warning after the sessions: {w}" for w in new] + old
+    if old:
+        return INCONCLUSIVE, old
     return PASS, ["ok   doctor: no warning before or after the sessions"]
 
 
