@@ -17,11 +17,20 @@ found, or anything fails, it writes nothing, prints "redaction failed: nothing k
 Usage: python3 launch.py HOME RUN_DIR SECONDS -- CLAUDE ARGS...
        python3 launch.py --keep OUT|- REPORT RUN_DIR...   (prints the redacted report; OUT "-"
        keeps no file)"""
-import os
 import signal
-import subprocess
 import sys
-import threading
+
+if __name__ == "__main__":
+    # first of all: a signal before the session exists ends launch.py (128 + the signal), and
+    # --keep then removes what it wrote (the exit passes through its cleanup)
+    def _early(signum, _frame):
+        raise SystemExit(128 + signum)
+    for _sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(_sig, _early)
+
+import os  # noqa: E402
+import subprocess  # noqa: E402
+import threading  # noqa: E402
 
 SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
 
@@ -76,13 +85,13 @@ def keep(token, report, run_dirs, out):
         try:
             for name, data in files.items():  # all the parts first
                 tmp = os.path.join(out, "." + name + ".part")
-                made.append(tmp)
-                with open(tmp, "xb") as fh:
+                with open(tmp, "xb") as fh:  # "x": never a file this call did not make
+                    made.append(tmp)
                     fh.write(data)
             for name in files:  # then the renames, only when every part is written
                 final = os.path.join(out, name)
-                made.append(final)
                 os.rename(os.path.join(out, "." + name + ".part"), final)
+                made.append(final)
         except BaseException:  # a KeyboardInterrupt too: nothing is left
             for path in made:
                 try:

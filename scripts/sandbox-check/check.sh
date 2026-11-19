@@ -24,8 +24,10 @@
 #              Claude Code. It runs only in the Linux container (linux.sh --stub); elsewhere it
 #              is refused, as it would plant a git hook on a real machine.
 #   MODES      the modes to run (default "A B").
-#   SBX_BASE   where the home folder is made: macOS /private/tmp by default; on Linux required,
-#              and never under /tmp, /var/tmp or your home folder (on a cluster: scratch).
+#   SBX_BASE   where the home folder and the judge's folder are made: macOS /Users/Shared by
+#              default; on Linux required. Never under /tmp, /var/tmp, /dev/shm, the temp
+#              folder (TMPDIR) or your home folder (on a cluster: scratch), and never where the
+#              settings phiward installs let the session write (checked after the install).
 #   SBX_SRC    a source tree to build instead of `git archive HEAD` (the container has no .git).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
@@ -92,14 +94,23 @@ fi
 # the home folder by passwd (what ssh and others use) and by $HOME, both resolved
 homes=$("$python" -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
 if [ $os = darwin ]; then
-  sbx_base=${SBX_BASE:-/private/tmp}
+  # not /private/tmp or the per-user temp folder: Claude Code's sandbox lets the session write
+  # there, and the judge's folder must not be writable by it
+  if [ -n "$SBX_BASE" ]; then sbx_base=$SBX_BASE
+  elif [ -d /Users/Shared ]; then sbx_base=/Users/Shared
+  else echo "sandbox-check: set SBX_BASE to a folder outside /tmp, the temp folder and your home folder" >&2; exit 2
+  fi
 else
   [ -n "$SBX_BASE" ] || { echo "sandbox-check: on Linux, set SBX_BASE to a folder for the check (not under /tmp, /var/tmp or your home folder; on a cluster, scratch)" >&2; exit 2; }
   sbx_base=$SBX_BASE
 fi
 sbx_base=$(cd "$sbx_base" && pwd -P) || { echo "sandbox-check: SBX_BASE does not exist" >&2; exit 2; }
-if [ $os = linux ]; then
-  case $sbx_base/ in /tmp/*|/var/tmp/*|/dev/shm/*|/run/shm/*) echo "sandbox-check: SBX_BASE may not be under /tmp, /var/tmp or /dev/shm" >&2; exit 2 ;; esac
+case $sbx_base/ in /tmp/*|/var/tmp/*|/dev/shm/*|/run/shm/*|/private/tmp/*|/private/var/tmp/*|/private/var/folders/*)
+  echo "sandbox-check: SBX_BASE may not be under /tmp, /var/tmp, /dev/shm or the temp folders" >&2; exit 2 ;;
+esac
+tmp_real=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tmp_real=""
+if [ -n "$tmp_real" ] && [ "$tmp_real" != / ]; then
+  case $sbx_base/ in "$tmp_real"/*) echo "sandbox-check: SBX_BASE may not be under the temp folder ($tmp_real)" >&2; exit 2 ;; esac
 fi
 printf '%s\n' "$homes" | while IFS= read -r real_home; do
   [ -z "$real_home" ] || [ "$real_home" = / ] && continue
@@ -116,33 +127,7 @@ J=""
 py=""
 broker=""
 lpid=""
-cleanup() {
-  st=$?
-  set +e  # a failure here must not cut the cleanup short
-  [ -n "$tty_mode" ] && stty "$tty_mode" < /dev/tty 2>/dev/null
-  [ -n "$broker" ] && kill "$broker" 2>/dev/null
-  # nothing of the home folder or the judge's folder is kept. After a short wait, so that a
-  # process the session left behind (one in a session of its own outlives the stop) has less
-  # time to write again; folders the session made unwritable are made writable first
-  left=""
-  for d in "$H" "$J"; do
-    [ -n "$d" ] || continue
-    sleep 2
-    chmod -R u+rwX "$d" 2>/dev/null
-    rm -rf "$d" 2>/dev/null
-    [ -e "$d" ] && left="$left $d"
-  done
-  if [ -n "$left" ]; then
-    echo "sandbox-check: the run folder could not be removed: remove it yourself:$left" >&2
-    [ "$st" = 0 ] && st=2
-  fi
-  exit "$st"
-}
-# a signal is forwarded to launch.py, which stops the session; then the cleanup runs
-stopped() {
-  if [ -n "$lpid" ]; then kill -"$1" "$lpid" 2>/dev/null; wait "$lpid" 2>/dev/null; fi
-  exit "$2"
-}
+. "$here/cleanup.sh"
 trap cleanup EXIT
 trap 'stopped INT 130' INT
 trap 'stopped TERM 143' TERM
@@ -239,6 +224,16 @@ case " $modes " in
 esac
 launch=$("$H/.local/share/uv/tools/phiward/bin/python" -c 'from phiward import config; print(config.launch_settings_path())')
 [ -f "$launch" ] || fail "the --settings file ($launch)" "$H/wire.out"
+# the judge's folder and SBX_BASE must be outside every folder the installed settings let the
+# session write (the project, the temp folders, the spool, allowWrite, additionalDirectories)
+"$H/.local/share/uv/tools/phiward/bin/python" -c '
+import sys
+from phiward import claude_settings as c
+roots = c.agent_writable(sys.argv[1], sys.argv[2]) + [sys.argv[2]]
+bad = [p for p in sys.argv[3:] if c.inside(p, roots)]
+sys.exit("sandbox-check: the session could write here: " + " ".join(bad) +
+         "; set SBX_BASE elsewhere (docs/releasing.md)" if bad else 0)
+' "$H/proj" "$H" "$J" "$sbx_base" || exit 2
 
 if [ -n "$REMOTE" ]; then
   mkdir -m 700 "$H/.ssh"
@@ -338,6 +333,7 @@ for m in $modes; do
   [ "$m" = B ] && set -- phiward launch --tool claude -- "$@"
   code=0
   # in the background, so a signal to this script is handled at once (forwarded to launch.py)
+  lpid=starting
   printf '%s\n' "$token" | "$py" "$here/launch.py" "$H" "$R" 300 -- "$@" &
   lpid=$!
   wait "$lpid" || code=$?

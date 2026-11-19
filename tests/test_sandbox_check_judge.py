@@ -798,3 +798,53 @@ def test_the_stream_is_written_by_launch_after_the_session(tmp_path):
                        timeout=60)
     assert r.returncode == 0
     assert (run_dir / "stream.jsonl").read_text().splitlines()[-1] == "pipe"
+
+
+
+def test_keep_never_removes_a_file_it_did_not_make(tmp_path):
+    h = _run_dir(tmp_path, f"{TOKEN}\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    theirs = out / ".stream-A.jsonl.part"
+    theirs.write_text("not ours\n")
+    with pytest.raises(BaseException):
+        _launch_module().keep(TOKEN, str(h / "report.txt"), [str(h / "run-A")], str(out))
+    assert theirs.read_text() == "not ours\n"
+    assert sorted(os.listdir(out)) == [".stream-A.jsonl.part"]
+
+
+CLEANUP = JUDGE.parent / "cleanup.sh"
+DRIVER = """. "$1"
+H=$2; J=$3; lpid=""; broker=""; tty_mode=""
+trap cleanup EXIT
+trap 'stopped INT 130' INT
+trap 'stopped TERM 143' TERM
+trap 'stopped HUP 129' HUP
+echo ready
+exit 0
+"""
+
+
+def test_a_second_signal_during_the_cleanup_does_not_cut_it_short(tmp_path):
+    """Two Ctrl-C while the cleanup waits: it still removes both folders (one with a folder
+    the session made unwritable)."""
+    import signal
+    import subprocess
+    import time
+    h, j = tmp_path / "h", tmp_path / "j"
+    (h / "locked").mkdir(parents=True)
+    (h / "locked" / "f").write_text("x")
+    (h / "locked").chmod(0o500)
+    j.mkdir()
+    driver = tmp_path / "driver.sh"
+    driver.write_text(DRIVER)
+    env = dict(os.environ, SBX_CLEANUP_WAIT="1")
+    p = subprocess.Popen(["sh", str(driver), str(CLEANUP), str(h), str(j)],
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    assert p.stdout.readline().strip() == b"ready"
+    time.sleep(0.3)  # in the cleanup's wait now
+    p.send_signal(signal.SIGINT)
+    time.sleep(0.3)
+    p.send_signal(signal.SIGINT)
+    p.wait(timeout=30)
+    assert not h.exists() and not j.exists()
