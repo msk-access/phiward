@@ -155,6 +155,8 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   named in `--drop` (left out) or `--keep` (kept as it is, on your word).
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.
+- The home folder itself is not a project (your `~/.claude` is Claude Code's own folder), so
+  an input in a folder of your home is taken; one below a project inside it is not.
 - The input is one `.tsv` or `.csv` file (UTF-8, every row as wide as the header), reached with
   no link, outside every place an agent can write: the working folder and its git work tree,
   any project (a folder with `.git`, `.claude` or `.phiward.toml` above the input), the temp
@@ -162,7 +164,11 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   a `write_to` folder, the spool and `~/.phiward`. A column that is not coded may not hold an
   ID of a coded column or of the key (an ID of 5 or more characters anywhere in a cell; one of
   5 or more digits as a whole run of digits, so `see 9990002` refuses and `19990001` does not;
-  a shorter one as the whole cell), and no cell may hold an invisible format character. The output is a new file of the same kind inside a protected root of your user
+  a shorter one with a letter as a whole word; a shorter one of digits only as the whole
+  cell), and no cell may hold an invisible format character. Not found: a short digit ID
+  inside a cell (`12` in `12 mg`), an ID glued to other digits (`19990001`), an ID written
+  another way (with spaces or other hyphens, `9 990 001`), an ID with its leading zeros
+  dropped or added (`0001` and `1`). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
   config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
 - The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
   or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;

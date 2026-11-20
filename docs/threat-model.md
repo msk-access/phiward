@@ -464,19 +464,23 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     the hidden key folder is.
   - The hook's refusal of operator commands (`setup`, `pin`, `carryover`, `broker`,
     `pseudonymize`) is a tripwire for honest mistakes, not a boundary: it reads the words of a
-    command (with `phiward` in command position, a subcommand built at run time is refused), and
+    command (with `phiward` in command position, after reserved words and the usual wrappers, a
+    subcommand built at run time is refused), and
     a program can build them where the hook cannot see (`python -c`, an `sh -c` string). The
     boundary is the tty check together with the hidden key folder.
   - The places refused for the input come from the sandbox settings of the working folder's
     project and the user and managed settings, and from any `.git`, `.claude` or
-    `.phiward.toml` above the input. Another project's settings can let its agent write a
+    `.phiward.toml` above the input below the home folder (the home folder's own `~/.claude`
+    does not count). Another project's settings can let its agent write a
     folder elsewhere: run the command from the folder of the project whose agent will read the
     copy.
   - A column that is not coded is refused when it holds an ID of a coded column or of the key:
     an ID of 5 or more characters anywhere in a cell (after NFKC, in any letter case), an ID of 5
-    or more digits as a whole run of digits, a shorter ID only as the whole cell. Not found: an
-    MRN glued to other digits (`19990001`, a position may look so), a short ID inside a cell, an
-    ID written another way (split across cells, digits spaced out).
+    or more digits as a whole run of digits, a shorter ID with a letter as a whole word, a
+    shorter ID of digits only as the whole cell. Not found: a short digit ID inside a cell
+    (`12` in `12 mg`), an MRN glued to other digits (`19990001`, a position may look so), an ID
+    written another way (with spaces or other hyphens, split across cells), an ID with its
+    leading zeros dropped or added.
 
 - **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and

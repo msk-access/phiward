@@ -70,8 +70,8 @@ The rules:
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
   with an invisible format character is refused. A column that is not coded may not hold an
   ID of a coded column or of the key (one of 5 or more characters anywhere in a cell; one of
-  5 or more digits as a whole run of digits; a shorter one as the whole cell): drop it or
-  clean it first. Run it from the folder of the
+  5 or more digits as a whole run of digits; a shorter one with a letter as a whole word; a
+  shorter one of digits only as the whole cell): drop it or clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN, inside a protected root of your user config and
   outside every write_to folder (never replaced, mode 0600).
@@ -256,11 +256,15 @@ def _git_top(start: str) -> Optional[str]:
         d = up
 
 
-def _project_top(start: str) -> Optional[str]:
+def _project_top(start: str, home: str) -> Optional[str]:
     """The nearest folder at or above `start` that marks a project an agent may work in (its
-    `.claude` settings can let the agent write anywhere in it)."""
+    `.claude` settings can let the agent write anywhere in it). The home folder is never one:
+    `~/.claude` is the user's own Claude Code folder, and the walk stops below it."""
     d = start
+    homes = {os.path.normpath(home), os.path.realpath(home)}
     while True:
+        if d in homes:
+            return None
         if any(os.path.lexists(os.path.join(d, n)) for n in (".git", ".claude", ".phiward.toml")):
             return d
         up = os.path.dirname(d)
@@ -299,7 +303,7 @@ def _input_place(path: str, cfg: config.Config, home: str) -> str:
         raise Refused("the input is in a place an agent can write (the working folder, a "
                       "temp folder, the sandbox's write folders, a write_to folder, the spool "
                       "or ~/.phiward): copy it to a folder of your own first.")
-    top = _project_top(os.path.dirname(full))
+    top = _project_top(os.path.dirname(full), home)
     if top and config._deny_inside(full, top):
         raise Refused("the input is in a project (a folder with .git, .claude or "
                       ".phiward.toml above it), where an agent can write: copy it to a "
@@ -437,13 +441,17 @@ def _long(norm_id: str) -> bool:
 def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> None:
     """Refuse when a cell of a kept column holds an invisible format character, or an ID: a
     long ID (`_long`) anywhere in the cell; an ID of 5 or more digits as a whole run of digits
-    (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); any other ID as the
-    whole cell (`12` is not in `0.12`)."""
+    (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID with a
+    letter as a whole word (`see ab12`); a shorter ID of digits only as the whole cell (`12`
+    is not in `0.12`)."""
     norm_ids = {_norm(v) for v in ids}
     long_ids = sorted((v for v in norm_ids if _long(v)), key=len, reverse=True)
     numbers = {v for v in norm_ids if v.isdigit() and len(v) >= 5}
-    whole = {v for v in norm_ids if not _long(v) and v not in numbers}
+    whole = {v for v in norm_ids if v.isdigit() and len(v) < 5}
+    words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len, reverse=True)
     rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
+    wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
+                    r")(?![0-9a-z])") if words else None
     for i in kept:
         for r in rows[1:]:
             cell = r[i]
@@ -451,6 +459,7 @@ def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> N
                 raise Refused(f"a cell of column {i + 1} holds an invisible format character.")
             norm = _norm(cell)
             if norm.strip() in whole or (rx is not None and rx.search(norm)) or \
+                    (wx is not None and wx.search(norm)) or \
                     (numbers and any(d in numbers for d in re.findall(r"[0-9]+", norm))):
                 raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
                               "drop it, or clean it first.")
