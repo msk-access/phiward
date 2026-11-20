@@ -63,8 +63,9 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "shell": {"best_effort": "bool", "strict": "bool", "commands": "list"},
 }
 # built-in program lists for `[broker] commands` (`"@genomics"`): programs that read data and
-# print results, chosen so that none runs code it is given. Each still prints what it reads:
-# print summaries.
+# print results, chosen so that none runs code it is given. Each still prints what it reads,
+# and some (samtools, seqkit) count or select records by a value the agent gives
+# (threat-model.md).
 COMMAND_PRESETS = {
     # not in them: `sort` (--compress-program runs a program), `bcftools` (+plugin loads a
     # library from a path), interpreters, shells, `awk`, `find`, `xargs`, `make`, `git`, pagers

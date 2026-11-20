@@ -576,6 +576,13 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   helpers in its listed folder. A listed program that runs other code it is given (an interpreter, a
   shell, `git`, `find`, `make` and the like) undoes the list; `doctor` warns about them. The list
   does not limit what a listed program prints.
+- **A listed program can select or count records by a value the agent gives.** Many data tools
+  pick records by a value or a pattern on their command line or in a file the agent wrote
+  (`samtools view -d`, `-D`, `-r` or `-e`, `seqkit grep`). A count, or whether anything is
+  printed, is not masked. So the agent can test whether a value it guessed, or a prefix of one,
+  occurs in a protected file, for many values in one request. Masking hides identifiers in what
+  a program prints; it does not hide whether a program found them. If that matters for your
+  data, leave such programs out of `[broker] commands`.
 - **`phiward run --table` reads columns for honest programs.** It is off unless the operator sets
   `[sanitize] table = true`. A cell under an identifier header is masked whole; a plain number in
   any other column passes. The agent can print a header of its choice (with `[broker] commands`

@@ -332,8 +332,10 @@ The grants. Nothing asks the operator at run time: what is not written here is r
   - `@genomics` or `@counts`: a built-in list (`samtools`, `bedtools`, `tabix`, `bgzip`,
     `mosdepth`, `seqkit`, `wc`, `uniq`, `cut`, `du`, checksums, `ls`, `file`, `stat`, `head`,
     `tail`, `zcat`, `gzip`, `gunzip`; `@counts` is the counting part). None of them runs other
-    code it is given. `fastqc`, `multiqc`, `bcftools` and `sort` are left out on purpose: each
-    can be told to start another program or load a library;
+    code it is given, but some (`samtools`, `seqkit`) can count or select records by a value
+    the agent gives (see the [threat model](threat-model.md)). `fastqc`, `multiqc`, `bcftools`
+    and `sort` are left out on purpose: each can be told to start another program or load a
+    library;
   - a path: one file, for example your own script, written as its real path: a path with a
     link on it lists nothing (`phiward pin` and `doctor` say so), because what is checked and
     what starts must be the same file. List a link by its name instead (a multi-call program
