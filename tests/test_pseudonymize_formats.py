@@ -1843,7 +1843,9 @@ BAD_ID_TEXT = "holds a tab, a line break or an invisible format character"
 def test_pin_the_bad_id_text_rule_in_a_table(tree, ps, cell):
     p = tree / "data" / "labs.csv"
     with open(p, "w", newline="") as f:
-        csv.writer(f, lineterminator="\n").writerows([["mrn", "site"], [cell, "lab"]])
+        # every field quoted: Python 3.9's writer leaves a field with a lone \r unquoted
+        csv.writer(f, lineterminator="\n", quoting=csv.QUOTE_ALL).writerows(
+            [["mrn", "site"], [cell, "lab"]])
     code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.csv"), extra=[cell])
     assert code == 2 and f"a cell of column 1 {BAD_ID_TEXT}" in text, text
     none_written(tree, "out.csv")
