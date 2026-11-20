@@ -36,7 +36,7 @@ says what it holds. By feature:
 | The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review, test_v2_placeholder_counts |
 | HPC: remote runs and pushes | test_v2_remote, test_v2_push |
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
-| `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
+| `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_beta |
 | A launch inside a session (a wrapped MCP server in Mode B; the Linux seccomp fingerprint) | test_v2_nested_launch, test_v2_w1 |

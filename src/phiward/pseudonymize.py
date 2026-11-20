@@ -1,6 +1,6 @@
 """`phiward pseudonymize`: the operator's own command that makes a pseudonymized copy of one
-table (TSV, CSV, a tab-separated .txt, a MAF or a VCF, each plain, gzip- or bgzip-compressed)
-for the agent.
+table (TSV, CSV, a tab-separated .txt, a MAF, a VCF or a JSON file, each plain, gzip- or
+bgzip-compressed) for the agent.
 
 The identifier columns the operator names get codes (`S0042`): a prefix fixed in the key, then 4
 digits drawn with `secrets` from the codes not used yet, so neither an ID nor its place in the
@@ -19,6 +19,8 @@ import csv
 import fnmatch
 import gzip
 import io
+import json
+import math
 import os
 import pwd
 import random
@@ -38,7 +40,10 @@ USAGE = ("usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
          "                            --columns H[=NEW],... [--drop H,...] [--keep H,...]\n"
          "                            [--keep-order] IN OUT\n"
          "       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
-         "                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf\n")
+         "                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf\n"
+         "       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
+         "                            --columns PATH,... [--drop PATH,...] [--keep PATH,...]\n"
+         "                            [--keep-order] IN.json OUT.json\n")
 HELP = USAGE + """
 Make a copy of one table (IN) in which the identifier columns you name hold codes (S0042) in
 place of the IDs. The agent then reads the copy through `phiward run`.
@@ -51,15 +56,17 @@ Options:
   --prefix P       with --new-key: 1 to 3 capital letters before the digits (default S)
   --columns H[=NEW],...
                    the identifier columns to code; each one's header becomes NEW (default
-                   pseudonym, then pseudonym_2, ...; in a MAF the header stays)
-  --drop H,...     columns to leave out
-  --keep H,...     columns that look like identifiers, kept as they are on your word
+                   pseudonym, then pseudonym_2, ...; in a MAF the header stays); in JSON,
+                   key paths (below)
+  --drop H,...     columns (in JSON, key paths) to leave out
+  --keep H,...     columns (in JSON, key paths) that look like identifiers, kept as they are
+                   on your word
   --keep-samples N,...
                    with a VCF: keep the names of these samples (1 is the first sample) as they
                    are, out of the key (TUMOR, NORMAL), on your word
-  --keep-order     keep the order of the rows, or of a VCF's sample columns (by default they
-                   are shuffled, so the order of a sorted file does not give away the order
-                   of the IDs)
+  --keep-order     keep the order of the rows, of a VCF's sample columns or of a JSON array
+                   of objects (by default they are shuffled, so the order of a sorted file
+                   does not give away the order of the IDs)
   -h, --help       show this help
 
 The key: ~/.phiward/backups/keys/NAME.tsv (ID, a tab, the code). No agent session, launch or
@@ -85,11 +92,26 @@ The kinds (the extensions decide; the content must fit them):
   needs it) and their values; the sample columns are shuffled instead. A record that holds a
   sample's ID is refused: clean it first (bcftools annotate). A short sample name of digits
   only (123) refuses every record that holds that number: rename it first;
+- .json: the IDs are the values at the key paths in --columns: keys joined by `.`, `[]` for
+  every element of an array (--columns 'samples[].id,samples[].mrn'; `[].mrn` for a
+  top-level array). A key is matched exactly; one with `.`, `[` or `]` cannot be named. A
+  path that matches nothing, or meets a value of another kind (a key where there is no
+  object), is refused. A coded value is a string or an integer (it becomes a string code);
+  null stays null; any other value is refused. Every key that looks like an identifier, at
+  any depth, is named by its path in --columns, --drop or --keep (`samples` too, when it
+  holds the samples: --keep samples); --drop and --keep paths end in a key. A key the
+  sanitizer would mask is refused (keys that are IDs are not coded). The array at the last
+  [] of a coded path (an array of objects, samples[] for samples[].id) is shuffled, unless
+  --keep-order; a path that ends in [] (ids[], the elements themselves) needs --keep-order;
+  other arrays and the order of keys are kept. Refused as unreadable: a key twice in one
+  object, NaN, Infinity, a number out of range, an integer of more than 4300 digits, nesting
+  deeper than 100. The copy is written with an indent of 2 and read back. A key is named in
+  messages by its number in the order of the file. The run reports no count;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
   coded table. A bgzip (BGZF) input, every block of it and its EOF block, gives a BGZF
   copy; for a VCF, run `tabix -p vcf` on it to index it (an index is never read or copied).
-  .json and .md are not covered yet; Parquet is not: convert it to TSV with your own tools first.
+  .md is not covered yet; Parquet is not: convert it to TSV with your own tools first.
 Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
@@ -100,6 +122,7 @@ The rules:
   A file inside a protected root may still be the agent's (`phiward copy` puts files there):
   never run this on a file the agent made or asked for, wherever it is.
   Every row has the header's number of fields (UTF-8).
+  In JSON, a key is a header and a scalar a cell in the rules below.
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
@@ -115,8 +138,8 @@ The rules:
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
   your user config and outside every write_to folder (never replaced, mode 0600).
-- Messages never name a cell, a header, a path or a key line; a run reports the row (or VCF
-  record) count only.
+- Messages never name a cell, a header, a key path, a path or a key line; a run reports the
+  row (or VCF record) count only, and a JSON run no count.
 """
 
 PREFIX = re.compile(r"[A-Z]{1,3}")
@@ -126,8 +149,8 @@ DIGITS = 4
 LIMIT = 1 << 30  # the largest table read, compressed or expanded (it is held in memory)
 # the kinds, by the last extension before an optional `.gz`: (delimiter, name in messages)
 KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separated text"),
-         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF")}
-LATER = (".json", ".md")  # kinds of a later version: refused for now
+         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF"), ".json": ("", "JSON")}
+LATER = (".md",)  # kinds of a later version: refused for now
 GZIP_MAGIC = b"\x1f\x8b"
 # BGZF (the SAM spec, 4.1): a gzip member with the extra subfield `BC` (BSIZE, the block size
 # - 1); a block holds at most 64 KiB, so bgzip puts 0xff00 input bytes in each; the EOF block
@@ -146,6 +169,9 @@ SAMPLE_WORDS = {"tumor", "normal", "sample", "sample1", "control", "germline", "
                 "unknown", "na", "none"}
 _ZEROS = re.compile(rb"\0*")
 MAF_VERSION = re.compile(r"#version \d{1,3}(?:\.\d{1,3})?")  # the one `#` line a MAF keeps
+JSON_DEPTH = 100  # objects and arrays nested deeper are refused
+JSON_DIGITS = 4300  # an integer of more digits is refused (Python 3.11's own limit, on 3.9 too)
+JSON_STEP = re.compile(r"([^.\[\]]*)((?:\[\])*)")  # one part of a key path: a key, then []s
 
 
 class Refused(Exception):
@@ -370,10 +396,10 @@ def _kind(path: str) -> Tuple[str, bool]:
     if last == ".parquet":
         raise Refused("Parquet is not covered: convert it to TSV with your own tools first.")
     if last in LATER:
-        raise Refused("JSON and Markdown files are not covered yet.")
+        raise Refused("Markdown files are not covered yet.")
     if last not in KINDS or not stem:
-        raise Refused("the input must be a .tsv, .csv, .txt, .maf or .vcf file, or one of them "
-                      "compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
+        raise Refused("the input must be a .tsv, .csv, .txt, .maf, .vcf or .json file, or one "
+                      "of them compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
     return last, gz
 
 
@@ -1049,6 +1075,230 @@ def _code_vcf(opts: Dict[str, object], san: Sanitizer, text: str, key: Key
     return written, added, len(recs), m
 
 
+# --- JSON ---------------------------------------------------------------------------------------
+
+def _no_twins(pairs: List[Tuple[str, object]]) -> Dict[str, object]:
+    out: Dict[str, object] = {}
+    for k, v in pairs:
+        if k in out:
+            raise ValueError("a key twice in one object")
+        out[k] = v
+    return out
+
+
+def _no_constant(name: str) -> object:
+    raise ValueError("NaN or Infinity")
+
+
+def _finite(text: str) -> float:
+    f = float(text)
+    if not math.isfinite(f):  # 1e400 reads as inf, which JSON cannot write
+        raise ValueError("a number out of range")
+    return f
+
+
+def _integer(text: str) -> int:
+    if len(text.lstrip("-")) > JSON_DIGITS:
+        raise ValueError("an integer too long")
+    return int(text)
+
+
+def _read_json(text: str) -> object:
+    """The document: a key twice in one object, NaN, Infinity, a number out of range, an
+    integer of more than JSON_DIGITS digits and objects or arrays nested deeper than JSON_DEPTH
+    are refused (as any error: the one fixed refusal)."""
+    doc = json.loads(text, object_pairs_hook=_no_twins, parse_constant=_no_constant,
+                     parse_float=_finite, parse_int=_integer)
+    stack = [(doc, 1)]
+    while stack:
+        v, depth = stack.pop()
+        if isinstance(v, (dict, list)):
+            if depth > JSON_DEPTH:
+                raise ValueError("nested too deep")
+            stack += [(c, depth + 1) for c in (v.values() if isinstance(v, dict) else v)]
+    return doc
+
+
+def _write_json(doc: object) -> str:
+    return json.dumps(doc, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+
+
+Steps = Tuple[Optional[str], ...]  # a key path: a key, or None for every element of an array
+
+
+def _json_path(spec: str, n: int, opt: str) -> Steps:
+    """`samples[].id` as ("samples", None, "id"); `[].mrn` names the elements of a top-level
+    array. A key is matched exactly; one with `.`, `[` or `]` cannot be named."""
+    steps: List[Optional[str]] = []
+    for k, part in enumerate(spec.split(".")):
+        hit = JSON_STEP.fullmatch(part)
+        if not hit or not hit.group(1) and (k > 0 or not hit.group(2)):
+            raise Refused(f"path {n} of {opt} is not a key path (see --help).")
+        if hit.group(1):
+            steps.append(hit.group(1))
+        steps += [None] * (len(hit.group(2)) // 2)
+    return tuple(steps)
+
+
+def _json_at(box: List[object], steps: Steps, n: int, opt: str, last: int = -1
+             ) -> Tuple[List[Tuple[object, object]], List[List[object]]]:
+    """(the places the path reaches, each a (container, key or index); the arrays met at step
+    `last`). A missing key or a null on the way reaches nothing there; any other value where
+    the path needs an object or an array is refused."""
+    places: List[Tuple[object, object]] = [(box, 0)]
+    arrays: List[List[object]] = []
+    for i, step in enumerate(steps):
+        nxt: List[Tuple[object, object]] = []
+        for parent, slot in places:
+            v = parent[slot]  # type: ignore[index]
+            if v is None:
+                continue
+            if step is None and isinstance(v, list):
+                nxt += [(v, j) for j in range(len(v))]
+                if i == last:
+                    arrays.append(v)
+            elif step is not None and isinstance(v, dict):
+                if step in v:
+                    nxt.append((v, step))
+            else:
+                raise Refused(f"path {n} of {opt} meets a value of another kind (a key where "
+                              "there is no object, or brackets where there is no array).")
+        places = nxt
+    return places, arrays
+
+
+def _json_items(doc: object):
+    """Every value of `doc` in the order of the file: (its path, the object it is in or None,
+    the key it is under or None, the value)."""
+    stack: List[Tuple[Steps, object, Optional[str], object]] = [((), None, None, doc)]
+    while stack:
+        path, parent, k, v = stack.pop()
+        yield path, parent, k, v
+        if isinstance(v, dict):
+            stack += [(path + (c,), v, c, x) for c, x in reversed(list(v.items()))]
+        elif isinstance(v, list):
+            stack += [(path + (None,), v, None, x) for x in reversed(v)]
+
+
+def _json_text(v: object) -> Optional[str]:
+    """The text of a scalar for the scan: a string, or a number as written."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return json.dumps(v)
+    return None
+
+
+def _scan_json(doc: object, m: _Matcher) -> None:
+    """The scan of the whole document as it was read back, codes included: no key and no
+    scalar may hold an invisible format character or an ID (`_Matcher`)."""
+    for _, _, k, v in _json_items(doc):
+        if k is not None and (_has_cf(k) or m.hit(k)):
+            raise Refused("a key of the output holds an ID of a coded path or of the key, or an "
+                          "invisible format character.")
+        text = _json_text(v)
+        if text is not None and (_has_cf(text) or m.hit(text)):
+            raise Refused("a value of the output holds an ID of a coded path or of the key, or "
+                          "an invisible format character: drop it, or clean it first.")
+
+
+def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: str, key: Key
+               ) -> Tuple[str, List[Tuple[str, str]], _Matcher]:
+    """(the written JSON, the new key lines, the matcher). The values at the paths of --columns
+    (a string or an integer; null stays) get codes; the keys at the paths of --drop are
+    removed; every key an ID glob matches is named by its path. The array at the last [] of a
+    coded path that goes on to a key (an array of objects) is shuffled unless --keep-order; a
+    coded path that ends in [] (the elements themselves) needs --keep-order."""
+    doc = _read_json(text)
+    box: List[object] = [doc]
+    # a key is named in messages by its number in the input, never by its text or its path
+    keys = (x for x in _json_items(doc) if x[2] is not None)
+    number = {(id(p), k): n for n, (_, p, k, _) in enumerate(keys, 1)}
+    specs: Dict[str, List[Tuple[int, Steps]]] = {}
+    named = set()
+    for opt in ("columns", "drop", "keep"):
+        flag = f"--{opt}"
+        specs[opt] = []
+        for n, spec in enumerate(opts.get(opt, []), 1):  # type: ignore[union-attr]
+            if opt == "columns" and "=" in str(spec):
+                raise Refused("a key path takes no new name (=NEW): a coded value keeps its key.")
+            steps = _json_path(str(spec), n, flag)
+            if opt != "columns" and (not steps or steps[-1] is None):
+                raise Refused(f"path {n} of {flag} does not end in a key.")
+            bare = steps
+            while bare and bare[-1] is None:
+                bare = bare[:-1]
+            if bare in named:
+                raise Refused("a key path is named twice in --columns, --drop and --keep.")
+            named.add(bare)
+            specs[opt].append((n, steps))
+    for n, steps in specs["drop"]:
+        places, _ = _json_at(box, steps, n, "--drop")
+        if not places:
+            raise Refused(f"path {n} of --drop matches nothing.")
+        for parent, slot in places:
+            del parent[slot]  # type: ignore[attr-defined]
+    for n, steps in specs["keep"]:
+        if not _json_at(box, steps, n, "--keep")[0]:
+            raise Refused(f"path {n} of --keep matches nothing.")
+    fills: List[Tuple[object, object, str]] = []
+    shuffled: Dict[int, List[object]] = {}
+    for n, steps in specs["columns"]:
+        if steps[-1] is None and not opts["keep_order"]:
+            raise Refused(f"path {n} of --columns codes the elements of an array, whose order "
+                          "may follow the IDs and cannot be shuffled alone: give --keep-order.")
+        last = max([i for i, s in enumerate(steps) if s is None], default=-1)
+        places, arrays = _json_at(box, steps, n, "--columns", last)
+        if not places:
+            raise Refused(f"path {n} of --columns matches nothing.")
+        for parent, slot in places:
+            v = parent[slot]  # type: ignore[index]
+            if v is None:
+                continue
+            if isinstance(v, bool) or not isinstance(v, (str, int)):
+                raise Refused(f"a value at path {n} of --columns is not a string, an integer "
+                              "or null.")
+            s = (v if isinstance(v, str) else str(v)).strip()
+            if "\t" in s or "\n" in s or "\r" in s or _has_cf(s):
+                raise Refused(f"a value at path {n} of --columns holds a tab, a line break or "
+                              "an invisible format character.")
+            fills.append((parent, slot, s))
+        for a in arrays:
+            shuffled[id(a)] = a
+    globs = list(BUILTIN_ID_COLUMNS) + [col_key(g) for g in cfg.sanitize_id_columns]
+    for path, p, k, _ in _json_items(box[0]):
+        if k is None:
+            continue
+        count = number[(id(p), k)]
+        if any(fnmatch.fnmatchcase(col_key(k), g) for g in globs) and path not in named:
+            raise Refused(f"key {count} (in the order of the file) looks like an identifier: "
+                          "name its path in --columns, --drop or --keep.")
+        if not _clean_both(san, k):
+            raise Refused(f"key {count} (in the order of the file) holds what the sanitizer "
+                          "masks (a key that is an ID is refused).")
+    ids = list(dict.fromkeys(s for _, _, s in fills if s))  # in order of first appearance
+    m = _Matcher(set(ids) | set(key.codes))
+    for _, p, k, _ in _json_items(box[0]):
+        if k is not None and (_has_cf(k) or m.hit(k)):
+            raise Refused(f"key {number[(id(p), k)]} (in the order of the file) holds an ID of "
+                          "a coded path or of the key, or an invisible format character.")
+    values = {c for _, _, k, v in _json_items(box[0])
+              for c in (k, _json_text(v)) if c is not None}
+    codes, added = _draw(ids, key, san, m, {v.strip() for v in values})
+    for parent, slot, s in fills:
+        parent[slot] = codes[s] if s else ""  # type: ignore[index]
+    if not opts["keep_order"]:
+        for a in shuffled.values():
+            _shuffle(a)
+    written = _write_json(box[0])
+    back = _read_json(written)
+    # `==` takes 1 for true and 1.0: the compact text also compares the kinds and the order
+    if back != box[0] or json.dumps(back) != json.dumps(box[0]):
+        raise Refused("the copy does not read back as the coded JSON.")
+    _scan_json(back, m)
+    return written, added, m
+
+
 # --- the run ------------------------------------------------------------------------------------
 
 def _out_place(path: str, kind: Tuple[str, bool], cfg: config.Config) -> Tuple[str, str]:
@@ -1141,7 +1391,7 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
         # member, a decode error, memory): one fixed text, never the exception's own
         raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
     _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data)
-    return count, "VCF, {} record(s)" if kind == ".vcf" else "table, {} row(s)"
+    return count, {".vcf": "VCF, {} record(s)", ".json": "JSON file"}.get(kind, "table, {} row(s)")
 
 
 def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: bytes, kind: str,
@@ -1151,6 +1401,9 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     plain, bgzf = _decompress(raw) if gz else (raw, False)
     if kind == ".vcf":
         text, added, count, m = _code_vcf(opts, san, _decode(plain, kind), key)
+    elif kind == ".json":
+        text, added, m = _code_json(opts, cfg, san, _decode(plain, kind), key)
+        count = 0  # a JSON file reports no count (decision G)
     else:
         kept, rows = _read_table(_decode(plain, kind), kind)
         for line in kept:
