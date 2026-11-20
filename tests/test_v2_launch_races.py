@@ -137,7 +137,8 @@ def test_r5_an_entry_replaced_by_a_link_right_before_bwrap_starts_never_shows_it
                                   ["symlink", str(tree / "phi"), str(pub)]],
                                  probe(pub))
     assert "SECRET" not in out + err and "FAKE-PT" not in out, out
-    assert "RAN" not in out or "MARK.txt" in out, out
+    # the helper's own refusal, not any other failed start
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
 
 
 @linux_confined
@@ -153,7 +154,7 @@ def test_r9_a_split_folder_replaced_by_a_link_before_the_check_never_shows_its_t
                                   ["symlink", str(tree / "phi"), str(run1)]],
                                  probe(run1 / "public"))
     assert "SECRET" not in out + err and "FAKE-PT" not in out, out
-    assert "RAN" not in out or "ok.txt" in out, out
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
 
 
 @linux_confined
@@ -162,7 +163,8 @@ def test_r7_pin_a_read_only_file_removed_before_bwrap_starts_still_stops_the_sta
     mcp = tree / "repo" / ".mcp.json"
     mcp.write_text("{}\n")
     code, out, err = launch_with(tree, "exec", [["unlink", str(mcp)]], probe(mcp))
-    assert "RAN" not in out and code != 0, (out, err)
+    # bwrap's own refusal of the missing source (not the helper's, not another failure)
+    assert "RAN" not in out and code != 0 and "bwrap: Can't find source path" in err, (out, err)
 
 
 # --- unit level: the command line and the strict binds -------------------------------------------
@@ -204,3 +206,59 @@ def test_r8_the_view_names_its_entries_and_lets_bwrap_skip_a_missing_one(tree):
     finally:
         for fd in fds:
             os.close(fd)
+
+
+# --- the helper's check: anything it cannot read or compare stops the start ----------------------
+
+def helper_with(records_text, prelude=""):
+    """HELPER on its own, outside bwrap, with these records; the tool prints RAN."""
+    import tempfile
+    with tempfile.TemporaryFile() as fh:
+        fh.write(records_text.encode("utf-8"))
+        fh.flush()
+        fd = os.dup(fh.fileno())
+    try:
+        r = subprocess.run([sys.executable, "-I", "-S", "-c", prelude + wholetool.HELPER, str(fd),
+                            "0", sys.executable, "-c", "print('RAN')"], pass_fds=[fd],
+                           capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
+    finally:
+        os.close(fd)
+    return r.returncode, r.stdout, r.stderr
+
+
+REFUSAL = "the session's view is not what was checked before the start"
+
+
+@pytest.mark.parametrize("records", ["null", "{}", "[]", "[null]", '[["2f"]]', '[{"a": 1}]',
+                                     '[["/x\\u0000y", 1, 2, true]]', '[["2f00", 1, 2, true]]',
+                                     '[["2f", "1", 2, false]]', '[["2f", 1, 2, 1]]', "not json"])
+def test_r10_garbled_records_stop_the_start(records):
+    code, out, err = helper_with(records)
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
+
+
+def test_r11_an_error_while_comparing_stops_the_start(tree):
+    # a seam for an lstat that cannot encode a name (a launcher in UTF-8, a helper in Latin-1)
+    name = os.fsencode(str(tree))
+    rec = json.dumps([[name.hex(), os.lstat(str(tree)).st_dev, os.lstat(str(tree)).st_ino, False]])
+    # only for the recorded path (as bytes, or as its hex text in an older format)
+    prelude = ("import os\n_real = os.lstat\n"
+               "def _boom(p, *a, **k):\n"
+               f"    if p in ({name!r}, {name.hex()!r}):\n"
+               "        raise UnicodeEncodeError('latin-1', 'x', 0, 1, 'seam')\n"
+               "    return _real(p, *a, **k)\n"
+               "os.lstat = _boom\n")
+    code, out, err = helper_with(rec, prelude)
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
+
+
+def test_r12_a_name_in_any_encoding_is_compared_as_bytes(tree):
+    d = tree / "日a"
+    d.mkdir()
+    st = os.lstat(str(d))
+    good = [[os.fsencode(str(d)).hex(), st.st_dev, st.st_ino, False]]
+    code, out, err = helper_with(json.dumps(good))
+    assert "RAN" in out and code == 0, (code, out, err)
+    wrong = [[os.fsencode(str(d)).hex(), st.st_dev, st.st_ino + 1, True]]
+    code, out, err = helper_with(json.dumps(wrong))
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
