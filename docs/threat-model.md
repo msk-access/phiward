@@ -655,6 +655,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - **Long-lived shells** that started outside the confinement stay outside it.
 - **Linux** needs Landlock ABI 2 or newer for the gateway, and bubblewrap must be able to start
   (AppArmor on Ubuntu 24.04 can block it).
+  Before a gateway command starts, a helper inside checks that each folder and file bound into
+  it is the one checked before the start, mounted at its name; anything it cannot confirm stops
+  the request.
 - **The sanitizer** does not mask entry names shorter than 4 characters (6 when only digits) or
   names that are common words of its stop list (`patient`, `normal`, `bam`, ...), and it stops
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
