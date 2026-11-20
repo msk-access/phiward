@@ -1790,3 +1790,114 @@ def test_markdown_two_tables_without_a_blank_line_are_refused(tree, ps):
     code, out = mrun(tree, mput(tree, text), more=("--keep-order",), extra=("FAKE-PT-0009",))
     assert code == 2 and "line 5" in out and "blank line" in out, out
     none_written(tree, "out.md", "md")
+
+
+# === hygiene: pins on the rules that are spelled in one helper each =========================
+# Each rule had two copies; each pin runs a caller of the helper and checks its exact refusal,
+# so a change to the helper shows in both callers.
+
+def test_pin_an_input_reached_through_a_link_or_that_cannot_be_checked(tree, ps):
+    os.symlink(tree / "data" / "labs.tsv", tree / "data" / "l.tsv")
+    code, text = run(tree, base(tree, inp=tree / "data" / "l.tsv"))
+    assert code == 2 and "reached through a link" in text, text
+    code, text = run(tree, base(tree, inp=tree / "data" / "labs.tsv" / "x.tsv"))
+    assert code == 2 and "the input cannot be checked" in text, text
+    none_written(tree)
+
+
+ID_HEADER = "looks like an identifier"
+
+
+def test_pin_the_id_header_rule_on_a_table_header(tree, ps):
+    """`col_key` drops one `#`: `#pt` is the header `pt`, an ID; `##pt` is `#pt`, not one."""
+    write_table(tree / "data" / "labs.tsv", ["mrn", "#pt", "value"], [["9990001", "a", "1"]])
+    code, text = run(tree, base(tree))
+    assert code == 2 and f"column 2 {ID_HEADER}" in text, text
+    none_written(tree)
+    write_table(tree / "data" / "labs.tsv", ["mrn", "##pt", "value"], [["9990001", "a", "1"]])
+    code, text = run(tree, base(tree))
+    assert code == 0, text
+
+
+def test_pin_the_id_header_rule_on_a_new_header(tree, ps):
+    code, text = run(tree, base(tree, cols="mrn=#pt"))
+    assert code == 2 and f"new header of column 1 is empty, {ID_HEADER}" in text, text
+    none_written(tree)
+    code, text = run(tree, base(tree, cols="mrn=##pt"))
+    assert code == 0, text
+
+
+def test_pin_the_id_header_rule_on_a_json_key(tree, ps):
+    code, text = jrun(tree, jput(tree, jdoc(**{"#pt": "x"})))
+    assert code == 2 and ID_HEADER in text, text
+    none_written(tree, "out.json", "js")
+    code, text = jrun(tree, jput(tree, jdoc(**{"##pt": "x"})))
+    assert code == 0, text
+
+
+BAD_ID_TEXT = "holds a tab, a line break or an invisible format character"
+
+
+@pytest.mark.parametrize("cell", ["FAKE\tPT-0001", "FAKE\nPT-0001", "FAKE\rPT-0001",
+                                  "FAKE​PT-0001"])
+def test_pin_the_bad_id_text_rule_in_a_table(tree, ps, cell):
+    p = tree / "data" / "labs.csv"
+    with open(p, "w", newline="") as f:
+        csv.writer(f, lineterminator="\n").writerows([["mrn", "site"], [cell, "lab"]])
+    code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.csv"), extra=[cell])
+    assert code == 2 and f"a cell of column 1 {BAD_ID_TEXT}" in text, text
+    none_written(tree, "out.csv")
+
+
+@pytest.mark.parametrize("value", ["FAKE\tPT-0001", "FAKE\nPT-0001", "FAKE\rPT-0001",
+                                   "FAKE​PT-0001"])
+def test_pin_the_bad_id_text_rule_in_json(tree, ps, value):
+    code, text = jrun(tree, jput(tree, jdoc(samples=[{"id": value, "mrn": None}])))
+    assert code == 2 and f"a value at path 1 of --columns {BAD_ID_TEXT}" in text, text
+    none_written(tree, "out.json", "js")
+
+
+def test_pin_the_bad_id_text_rule_in_markdown_keeps_the_table_number(tree, ps):
+    text = LABS_MD + "| FAKE​PT-0004 | lab | 4 |\n"
+    code, out = mrun(tree, mput(tree, text))
+    assert code == 2 and f"table 1: a cell of column 1 {BAD_ID_TEXT}" in out, out
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("header", ["**site**", "si&#116;e", "si&amp;te"])
+def test_pin_the_markdown_header_markup_rule_on_a_header(tree, ps, header):
+    code, out = mrun(tree, mput(tree, LABS_MD.replace("| site |", f"| {header} |", 1)),
+                     extra=(header,))
+    assert code == 2 and "table 1: the header of column 2 holds Markdown" in out, out
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("new", ["**code**", "co&#100;e", "co&amp;de", "a|b", "a\\b", "a`b"])
+def test_pin_the_markdown_header_markup_rule_on_a_new_header(tree, ps, new):
+    code, out = mrun(tree, mput(tree, LABS_MD), cols=f"mrn={new}", extra=(new,))
+    assert code == 2 and "table 1: a new header holds a pipe" in out, out
+    none_written(tree, "out.md", "md")
+
+
+def test_pin_the_ids_are_drawn_in_order_of_first_appearance(tree, ps, monkeypatch):
+    """Row by row, in each row the coded columns in --columns order: the key lines follow."""
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    write_table(tree / "data" / "labs.tsv", ["mrn", "patient", "site"],
+                [["9990003", "FAKE-PT-0002", "a"], ["", "9990001", "b"],
+                 ["9990001", "FAKE-PT-0002", "c"], ["9990004", "", "d"]])
+    code, text = run(tree, base(tree, cols="patient,mrn", more=["--keep-order"]))
+    assert code == 0, text
+    assert [ln.split("\t")[0] for ln in key_lines(tree / "home", "labs")[1:]] == \
+        ["FAKE-PT-0002", "9990003", "9990001", "9990004"]
+
+
+def test_pin_markdown_the_draw_knows_the_ids_of_every_coded_column(tree, ps, monkeypatch):
+    """The draw would pick QX9999 first; `X9999` in the second coded column of the second
+    table makes it skip that code."""
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    second = ("| case | patient_id |\n| --- | --- |\n| FAKE-PT-0005 | X9999 |\n")
+    code, out = mrun(tree, mput(tree, md_text(LABS_MD, second)), cols="mrn,case,patient_id",
+                     more=("--prefix", "QX", "--keep-order"), extra=("X9999",))
+    assert code == 0, out
+    codes = key_map(tree / "home", "md").values()
+    assert "QX9999" not in codes and len(set(codes)) == 5
