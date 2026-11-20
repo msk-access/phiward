@@ -1779,6 +1779,43 @@ def test_markdown_two_tables_without_a_blank_line_are_refused(tree, ps):
     none_written(tree, "out.md", "md")
 
 
+# --- the twin rule is the scan's own match ---------------------------------------------------
+# Two IDs are twins exactly when the scan reads them as one: each would get a code, though the
+# scan matches one with the other. Before the fix each of these got a second code.
+
+TWINS = ["FAKE-PT-٠٠٠١", "FAKE%2DPT-0001", "FAKE PT 0001", "FAKE.PT.0001"]
+
+
+@pytest.mark.parametrize("twin", TWINS)
+def test_two_ids_the_scan_reads_as_one_are_twins_in_a_table(tree, ps, twin):
+    assert ps._Matcher({"FAKE-PT-0001"}).hit(twin)  # the scan matches one with the other
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"],
+                [["FAKE-PT-0001", "a"], [twin, "b"]])
+    code, text = run(tree, base(tree), extra=[twin])
+    assert code == 2 and "letter case" in text and "the scan" in text, text
+    none_written(tree)
+
+
+@pytest.mark.parametrize("twin", TWINS)
+def test_an_id_the_scan_reads_as_one_of_the_key_is_a_twin(tree, ps, twin):
+    write_table(tree / "data" / "a.tsv", ["mrn", "site"], [["FAKE-PT-0001", "a"]])
+    assert run(tree, base(tree, inp=tree / "data" / "a.tsv", out=tree / "phi" / "a.tsv"))[0] == 0
+    write_table(tree / "data" / "b.tsv", ["mrn", "site"], [[twin, "b"]])
+    code, text = run(tree, base(tree, new=False, inp=tree / "data" / "b.tsv"), extra=[twin])
+    assert code == 2 and "letter case" in text and "the scan" in text, text
+    assert not (tree / "phi" / "out.tsv").exists()
+    assert list(key_map(tree / "home", "labs")) == ["FAKE-PT-0001"]
+
+
+@pytest.mark.parametrize("other", ["999 0001", "999-0001", "FAKE-PT-00011", "P 1", "FAKE-PT-0002"])
+def test_ids_the_scan_does_not_read_as_one_are_not_twins(tree, ps, other):
+    first = "9990001" if other[0].isdigit() else ("P-1" if other == "P 1" else "FAKE-PT-0001")
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [[first, "a"], [other, "b"]])
+    code, text = run(tree, base(tree, more=["--keep-order"]), extra=[other])
+    assert code == 0, text
+    assert sorted(key_map(tree / "home", "labs")) == sorted([first, other])
+
+
 # === hygiene: pins on the rules that are spelled in one helper each =========================
 # Each rule had two copies; each pin runs a caller of the helper and checks its exact refusal,
 # so a change to the helper shows in both callers.

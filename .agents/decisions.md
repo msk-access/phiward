@@ -37,10 +37,16 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   IDs and values of all tables. Only a table with a coded column is shuffled. The scan reads
   each cell raw and in each round of NFKC, `sanitize.unescape` and `html.unescape` (a
   superset of the entities CommonMark decodes), each also with emphasis marks removed; a
-  cell still changing after 4 rounds is the one fixed refusal. In every kind, the scan and
-  the twin rule read every Unicode dash (Pd, and U+2212, U+2043, U+02D7, U+30FC) as `-`, and
-  an ID of 5 or more characters with a letter is also matched with every character but
-  letters and digits removed from it and the field; digit-only IDs are never joined.
+  cell still changing after 4 rounds is the one fixed refusal. In every kind, the scan reads
+  every Unicode dash (Pd, and U+2212, U+2043, U+02D7, U+30FC) as `-`, and an ID of 5 or
+  more characters with a letter is also matched with every character but letters and digits
+  removed from it and the field; digit-only IDs are never joined. Two IDs are twins (refused)
+  exactly when they share a form the scan reads (`_twin_forms`: each of `_forms`, and the
+  letters and digits only of a long one with a letter): one rule, the scan's forms, so two IDs
+  that are the same once normalized never get two codes (Arabic-Indic digits, `%2D`,
+  `FAKE PT 0001`, `FAKE.PT.0001` were missed before). One ID inside a longer one
+  (`FAKE-PT-0001`, `FAKE-PT-00011`) is not a twin. Cost: a key that already holds a twin
+  pair cannot code either ID again; start a new key.
   (Why: the same rules as a table, and a cell's rendered or decoded form is what a reader
   sees. Cost: tables with escaped pipes or code spans, and reports with prose, are refused.)
 - **`phiward pseudonymize` codes JSON values at key paths.** `--columns`, `--drop` and

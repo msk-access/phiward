@@ -146,17 +146,19 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. Two IDs that differ only in letter case,
-  Unicode form or dash (P-1, p-1, a full-width P, an en dash), in IN or in IN and the key,
-  are refused: make them one first. No field of the output (a cell, a header, the kept #
-  line, the codes too) may hold an ID of a coded column or of the key, also in another
-  letter case, Unicode form, dash (U+2010, U+2013, U+2212, every Unicode dash) or digits,
-  or escaped (%2D, \\u002D, also twice): one of 5 or more characters anywhere in a field,
-  or across the fields of a line as written, and one with a letter also with every
-  character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
-  one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
-  word; a shorter one of digits only as the whole field. Drop such a
-  column or clean it first. Run it from the folder of the
+  with an invisible format character is refused. Two IDs that are the same once normalized
+  as the scan below reads them (P-1, p-1, a full-width P, an en dash; FAKE%2DPT-0001,
+  FAKE PT 0001 for FAKE-PT-0001; not FAKE-PT-00011), in IN or in IN and the key, are
+  refused: make them one first. A key that already holds two such IDs cannot code either
+  again: start a new key. No field of the output (a
+  cell, a header, the kept # line, the codes too) may hold an ID of a coded column or of
+  the key, also in another letter case, Unicode form, dash (U+2010, U+2013, U+2212, every
+  Unicode dash) or digits, or escaped (%2D, \\u002D, also twice): one of 5 or more
+  characters anywhere in a field, or across the fields of a line as written, and one with a
+  letter also with every character but letters and digits removed (FAKE PT 0001,
+  FAKE.PT.0001 for FAKE-PT-0001); one of 5 or more digits as a whole run of digits; a
+  shorter one with a letter as a whole word; a shorter one of digits only as the whole
+  field. Drop such a column or clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
   your user config and outside every write_to folder (never replaced, mode 0600).
@@ -785,8 +787,8 @@ class _Matcher:
         words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len,
                        reverse=True)
         self.rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
-        bare = sorted({b for v in long_ids if re.search(r"[^\W\d_]", v)
-                       for b in [_alnum(v)] if len(b) >= 5}, key=len, reverse=True)
+        bare = sorted({b for v in long_ids for b in [_letters_digits(v)] if b}, key=len,
+                      reverse=True)
         self.sx = re.compile("|".join(re.escape(v) for v in bare)) if bare else None
         self.wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
                              r")(?![0-9a-z])") if words else None
@@ -808,6 +810,16 @@ class _Matcher:
 def _alnum(text: str) -> str:
     """The letters and digits of a text, every other character removed."""
     return "".join(ch for ch in text if ch.isalnum())
+
+
+def _letters_digits(norm: str) -> str:
+    """For a form (`_forms`) of 5 or more characters with a letter, its letters and digits if
+    there are 5 or more (`FAKE PT 0001` and `FAKE.PT.0001` read `fakept0001`); else "". Digits
+    alone are never joined."""
+    if not (_long(norm) and re.search(r"[^\W\d_]", norm)):
+        return ""
+    b = _alnum(norm)
+    return b if len(b) >= 5 else ""
 
 
 def _has_cf(text: str) -> bool:
@@ -861,28 +873,39 @@ def _scan(meta: List[str], table: List[List[str]], cols: List[int], coded: "set[
 
 
 def _fold(text: str) -> str:
-    """NFKC with format characters removed, every dash as `-`, then a case fold: the form two
-    IDs share when they differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width
-    `Ｐ-1`, `P–1`)."""
+    """NFKC with format characters removed, every dash as `-`, then a case fold: for the rule
+    of sample names that are words (`ｓａｍｐｌｅ1`)."""
     return inventory.normalize(text).translate(DASHES).casefold()
+
+
+def _twin_forms(text: str) -> "set[str]":
+    """The forms in which the scan reads an ID: each of `_forms` (letter case, Unicode form,
+    digits, dashes, escapes) and its letters and digits only (`_letters_digits`). Two IDs that
+    share one are twins: the scan matches one with the other (`P-1`, `p-1`, `Ｐ-1`, `P–1`;
+    `FAKE-PT-0001`, `FAKE-PT-٠٠٠١`, `FAKE%2DPT-0001`, `FAKE PT 0001`, `FAKE.PT.0001`)."""
+    forms = _forms(text) - {""}
+    return forms | {b for f in forms for b in [_letters_digits(f)] if b}
 
 
 def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[str]"
           ) -> Tuple[Dict[str, str], List[Tuple[str, str]]]:
     """(every ID's code, the new key lines). Two IDs of the input, or of the input and the key,
-    with one folded form (`_fold`) but other text are refused: they would get two codes for
-    what may be one subject. A code for each ID the key does not hold, drawn
+    that share a form the scan reads (`_twin_forms`) but differ in text are refused: they would
+    get two codes for what may be one subject. A code for each ID the key does not hold, drawn
     from every code not used yet, skipping one the sanitizer would touch, one the scan would
     flag (`m`), or one that is a value of the input (`values`) or the key."""
     forms: Dict[str, "set[str]"] = {}
     for v in key.codes:
-        forms.setdefault(_fold(v), set()).add(v)
+        for f in _twin_forms(v):
+            forms.setdefault(f, set()).add(v)
     for v in ids:
-        twins = forms.setdefault(_fold(v), set())
-        twins.add(v)
-        if len(twins) > 1:
-            raise Refused("two IDs of the input, or of the input and the key, differ only in "
-                          "letter case or Unicode form: make them one first.")
+        for f in _twin_forms(v):
+            twins = forms.setdefault(f, set())
+            twins.add(v)
+            if len(twins) > 1:
+                raise Refused("two IDs of the input, or of the input and the key, differ only "
+                              "in letter case, Unicode form, digits, escapes or separators (the "
+                              "scan reads them as one): make them one first.")
     used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
     used |= {v.casefold() for v in values}
     free = [n for n in range(1, 10 ** DIGITS)
