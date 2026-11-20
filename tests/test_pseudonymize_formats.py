@@ -238,8 +238,8 @@ def test_a_gzip_copy_that_is_not_the_table_in_plain_gzip_does_not_read_back(tree
     none_written(tree, "out.tsv.gz")
 
 
-@pytest.mark.parametrize("bgzf", [False, True], ids=["gzip", "bgzf"])
-def test_the_output_is_decompressed_once(tree, ps, monkeypatch, bgzf):
+@pytest.mark.parametrize("blocked", [False, True], ids=["gzip", "bgzf"])
+def test_the_output_is_decompressed_once(tree, ps, monkeypatch, blocked):
     """`_encode` reads the compressed copy back once; the line scan reads the text it was
     made from, already shown equal."""
     real = ps._decompress
@@ -250,7 +250,7 @@ def test_the_output_is_decompressed_once(tree, ps, monkeypatch, bgzf):
         return real(data)
     monkeypatch.setattr(ps, "_decompress", counted)
     monkeypatch.setattr(ps.gzip, "decompress", lambda *a, **kw: pytest.fail("gzip.decompress"))
-    p = put(tree, "labs.tsv.gz", _bgzf(TABLE) if bgzf else GZ)
+    p = put(tree, "labs.tsv.gz", bgzf(TABLE) if blocked else GZ)
     out = tree / "phi" / "out.tsv.gz"
     code, text = run(tree, base(tree, inp=p, out=out, more=["--keep-order"]))
     assert code == 0, text
