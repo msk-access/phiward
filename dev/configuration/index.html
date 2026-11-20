@@ -1910,8 +1910,10 @@ times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code>
 <li><code>@genomics</code> or <code>@counts</code>: a built-in list (<code>samtools</code>, <code>bedtools</code>, <code>tabix</code>, <code>bgzip</code>,
     <code>mosdepth</code>, <code>seqkit</code>, <code>wc</code>, <code>uniq</code>, <code>cut</code>, <code>du</code>, checksums, <code>ls</code>, <code>file</code>, <code>stat</code>, <code>head</code>,
     <code>tail</code>, <code>zcat</code>, <code>gzip</code>, <code>gunzip</code>; <code>@counts</code> is the counting part). None of them runs other
-    code it is given. <code>fastqc</code>, <code>multiqc</code>, <code>bcftools</code> and <code>sort</code> are left out on purpose: each
-    can be told to start another program or load a library;</li>
+    code it is given, but some (<code>samtools</code>, <code>seqkit</code>) can count or select records by a value
+    the agent gives (see the <a href="../threat-model/">threat model</a>). <code>fastqc</code>, <code>multiqc</code>, <code>bcftools</code>
+    and <code>sort</code> are left out on purpose: each can be told to start another program or load a
+    library;</li>
 <li>a path: one file, for example your own script, written as its real path: a path with a
     link on it lists nothing (<code>phiward pin</code> and <code>doctor</code> say so), because what is checked and
     what starts must be the same file. List a link by its name instead (a multi-call program
