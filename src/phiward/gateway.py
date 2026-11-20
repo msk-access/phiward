@@ -149,7 +149,7 @@ def _names_program(word: str) -> bool:
 
 
 # Words after which the next word is a command: shell reserved words and grouping
-_PREFIXES = ("do", "then", "else", "elif", "if", "while", "until", "{", "!", "coproc")
+_RESERVED = ("do", "then", "else", "elif", "if", "while", "until", "{", "!", "coproc")
 # Wrappers that run a later word as a command: their options that take a value, and how many
 # plain words (a mask, a file) come before the command
 _WRAPPERS = {
@@ -221,7 +221,7 @@ def _program_at(words: "List[shell.Word]", i: int) -> "Tuple[int, bool]":
     while i < len(words):
         t = words[i].text()
         base = t.rsplit("/", 1)[-1]
-        if _ASSIGN.match(words[i].raw) or (t in _PREFIXES and all(
+        if _ASSIGN.match(words[i].raw) or (t in _RESERVED and all(
                 k == "lit" and not q for k, _, q in words[i].segs)):
             i += 1
             continue
