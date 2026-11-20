@@ -305,7 +305,8 @@ def git_redirects(project: str, home: str) -> List[str]:
         if os.path.isdir(dot):
             common = os.path.join(dot, "commondir")
             # `.` (Claude Code's env scrub writes it on Linux): git's common folder is then this
-            # folder itself, as with no commondir. git strips only trailing newlines
+            # folder itself, as with no commondir. Only the exact forms with trailing newlines
+            # pass; anything else is reported, also forms git reads the same way (`.\r\n`)
             if os.path.lexists(common) and _read_raw(common).rstrip("\n") not in (".", "./", "./."):
                 text = _read_line(common)
                 out.append(f"{common} -> {os.path.realpath(os.path.join(dot, text)) if text else '?'}")
