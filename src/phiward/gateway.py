@@ -148,12 +148,35 @@ def _names_program(word: str) -> bool:
     return False
 
 
-# Wrappers that run the next word as a command (their own options are skipped)
-_WRAPPERS = ("env", "command", "exec", "timeout", "nice", "nohup", "time", "xargs", "uvx",
-             "builtin", "doas", "sudo")
-_TWO_WORD = (("uv", "run"), ("pipx", "run"))
+# Words after which the next word is a command: shell reserved words and grouping
+_PREFIXES = ("do", "then", "else", "elif", "if", "while", "until", "{", "!", "coproc")
+# Wrappers that run a later word as a command: their options that take a value, and how many
+# plain words (a mask, a file) come before the command
+_WRAPPERS = {
+    "env": ({"-u", "--unset", "-C", "--chdir", "-S", "--split-string", "-P"}, 0),
+    "command": (set(), 0), "builtin": (set(), 0), "nohup": (set(), 0), "time": (set(), 0),
+    "unbuffer": (set(), 0), "arch": (set(), 0),
+    "exec": ({"-a"}, 0),
+    "timeout": ({"-s", "--signal", "-k", "--kill-after"}, 0),
+    "nice": ({"-n", "--adjustment"}, 0),
+    "xargs": ({"-I", "-a", "--arg-file", "-n", "--max-args", "-L", "--max-lines", "-P",
+               "--max-procs", "-s", "--max-chars", "-d", "--delimiter", "-E", "-e"}, 0),
+    "sudo": ({"-u", "--user", "-g", "--group", "-C", "-h", "--host", "-p", "--prompt", "-r",
+              "--role", "-t", "--type", "-U", "--other-user", "-D", "--chdir", "-R",
+              "--chroot", "-T", "--command-timeout"}, 0),
+    "doas": ({"-u", "-C"}, 0),
+    "stdbuf": ({"-i", "-o", "-e", "--input", "--output", "--error"}, 0),
+    "taskset": (set(), 1), "chrt": (set(), 1),
+    "caffeinate": ({"-w", "-t"}, 0),
+    "script": ({"-c", "--command", "-t", "--timing", "-F", "-T"}, 1),
+    "uvx": ({"--with", "--from", "--python", "-p", "--index", "--index-url", "--directory",
+             "--project", "--env-file"}, 0),
+}
+_RUNNERS = {("uv", "run"): "uvx", ("uv", "tool", "run"): "uvx", ("pipx", "run"): "uvx"}
+_PY_VALUE = {"-X", "-W", "-Q"}
 _ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\+?=")
 _PYTHON = re.compile(r"python[0-9.]*")
+_NUMBER = re.compile(r"[0-9][0-9.]*[smhd]?|0x[0-9A-Fa-f]+")
 
 
 def _built_at_run_time(w: "shell.Word") -> bool:
@@ -172,6 +195,25 @@ def _simple_commands(parsed: "shell.Parsed") -> "List[List[shell.Word]]":
     return [c for c in out if c]
 
 
+def _skip_options(words: "List[shell.Word]", i: int, value: "set", plain: int) -> int:
+    """The index after a wrapper's options (and the values of those that take one), its
+    assignments, counts and durations, and `plain` other words."""
+    while i < len(words):
+        t = words[i].text()
+        if t in value:
+            i += 2
+        elif t.startswith("-") or _ASSIGN.match(words[i].raw):
+            i += 1
+        elif plain > 0:  # a mask, a priority, a file: the first plain word
+            plain -= 1
+            i += 1
+        elif _NUMBER.fullmatch(t):
+            i += 1
+        else:
+            break
+    return i
+
+
 def _program_at(words: "List[shell.Word]", i: int) -> "Tuple[int, bool]":
     """(the index of the subcommand word when the command at `i` runs phiward, else -1; whether
     a wrapper adds words of its own after it: xargs, find -exec)."""
@@ -179,22 +221,20 @@ def _program_at(words: "List[shell.Word]", i: int) -> "Tuple[int, bool]":
     while i < len(words):
         t = words[i].text()
         base = t.rsplit("/", 1)[-1]
-        if _ASSIGN.match(words[i].raw):
+        if _ASSIGN.match(words[i].raw) or (t in _PREFIXES and all(
+                k == "lit" and not q for k, _, q in words[i].segs)):
             i += 1
+            continue
+        runner = next((r for r in sorted(_RUNNERS, key=len, reverse=True)
+                       if tuple(w.text() for w in words[i:i + len(r)]) == r), None)
+        if runner is not None:
+            value, plain = _WRAPPERS[_RUNNERS[runner]]
+            i = _skip_options(words, i + len(runner), value, plain)
             continue
         if base in _WRAPPERS:
             adds = adds or base == "xargs"
-            i += 1
-            # the wrapper's options, its env assignments, durations and counts
-            while i < len(words) and (words[i].text().startswith("-") or
-                                      _ASSIGN.match(words[i].raw) or
-                                      re.fullmatch(r"[0-9.]+[smhd]?", words[i].text())):
-                i += 1
-            continue
-        if i + 1 < len(words) and (base, words[i + 1].text()) in _TWO_WORD:
-            i += 2
-            while i < len(words) and words[i].text().startswith("-"):
-                i += 1
+            value, plain = _WRAPPERS[base]
+            i = _skip_options(words, i + 1, value, plain)
             continue
         if base == "find":
             for j in range(i + 1, len(words) - 1):
@@ -212,7 +252,9 @@ def _program_at(words: "List[shell.Word]", i: int) -> "Tuple[int, bool]":
                     return (j + 2, adds) if mod in MODULES else (-1, False)
                 if m.startswith("-m") and len(m) > 2:
                     return (j + 1, adds) if m[2:].split(".", 1)[0] in MODULES else (-1, False)
-                j += 1
+                if m == "-c":
+                    return -1, False
+                j += 2 if m in _PY_VALUE else 1
             return -1, False
         if base in PROGRAMS + MODULES:
             return i + 1, adds
