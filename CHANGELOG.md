@@ -7,6 +7,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Added
 
+- `phiward pseudonymize` (the operator's, in a terminal) makes a copy of one CSV/TSV table with
+  the identifier columns you name coded (`S0042`: drawn at random, the same code for the same ID
+  in every table of one key). The key stays in `~/.phiward/backups/keys`, hidden from every
+  session, launch and gateway command; the copy is a new file inside a protected root, its rows
+  shuffled by default. Every column that looks like an identifier must be coded, dropped or
+  kept by name. The hook refuses it as an agent command, and its messages give the row count
+  only (issue #1).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.

@@ -16,6 +16,7 @@ What each layer covers, and what no layer covers, is in
 | `phiward launch` (Mode B) | The whole agent tool in a kernel profile, with carry-over of its settings | `wholetool.py`, `carryover.py` |
 | MCP servers | `phiward mcp wrap` runs a server under `launch`; the hook trusts a wrapped server only while its launcher runs | `mcp_config.py`, `mcp.py` |
 | HPC | Remote runs and copies through the operator's own SSH connection | `remote.py` |
+| Pseudonymized tables | `phiward pseudonymize`, the operator's: a copy of one table with its ID columns coded, the key in `~/.phiward/backups/keys` | `pseudonymize.py` |
 | phiward's own install | The self-check of phiward's Python and files; `doctor`, `setup`, `init`, `pin`, the login service | `selfcheck.py`, `doctor.py`, `setup_cmd.py`, `init.py`, `pin.py`, `service.py` |
 
 ## Shared pieces

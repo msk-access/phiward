@@ -6,6 +6,15 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **`phiward pseudonymize` is the operator's own command.** It joins `gateway.OPERATOR_ONLY` and
+  refuses without a tty on stdin and stdout; the boundary is the key folder,
+  `~/.phiward/backups/keys`, below a folder hidden in all three modes and made at install (it
+  refuses until then). Codes are `S` and 4 digits drawn with `secrets` from the unused ones; a
+  key is only appended to. The output is a new file only inside a user protected root, rows
+  shuffled by default (`--keep-order`); every ID-glob column is coded, dropped or kept by name;
+  messages give the row count only. One key per ID kind. (Why: the agent can read the
+  operator's terminal, gateway commands read roots, and counts of new IDs confirm planted
+  guesses. Cost: refused before install; masked reads only.)
 - **`phiward run --table` reads CSV/TSV by column.** Cells under an identifier header (a
   built-in glob list plus `[sanitize] id_columns`, user config only, additive) are masked whole;
   plain numbers pass only in parsed cells of other columns; every other line is text mode.
@@ -55,6 +64,12 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Turned down
 
+- **A pseudonymized table outside the protected roots after a check that nothing would be
+  masked:** false assurance; the check does not see names in free text, zip codes, ages or rare
+  diagnoses.
+- **The pseudonymize key in a protected root, or in a new hidden folder:** gateway commands read
+  roots (a key line no rule matches comes back whole), and a hidden path made after a profile was
+  built is not hidden from it.
 - **Parsing quoted CSV in `run --table`:** one more parser in a guard; a quoted row is text mode.
   Revisit with a real need.
 - **`phiward sanitize --table` by column:** the hook and manual use stay per line.

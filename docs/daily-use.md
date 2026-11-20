@@ -136,6 +136,56 @@ starts with `~` (quoted, so the shell left it), is refused: give the full path. 
 credentials. Its output is sanitized. The only option is `--dry-run`, as the first word: it
 counts what a push would send, and for a local copy it shows what rsync would copy.
 
+## Give the agent pseudonymized data: `phiward pseudonymize`
+
+When the agent needs a table but not its identifiers, make a copy in which the identifier
+columns hold codes. Type the command yourself, in your own terminal:
+
+```bash
+phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/data/patients/labs-coded.tsv
+```
+
+- `--new-key NAME` starts a key; `--key NAME` extends it, so the same ID gets the same code in
+  every table coded with that key. `--prefix P` (1 to 3 capital letters, default `S`) is fixed
+  in a new key. A code is the prefix and 4 digits (`S0042`), drawn at random from the codes not
+  used yet: a key holds at most 9999 IDs.
+- `--columns H[=NEW],...` names the columns to code. A coded column's header becomes `NEW`
+  (default `pseudonym`, then `pseudonym_2`, ...). Every other column whose header looks like an
+  identifier (the built-in list of `phiward run --table` and `[sanitize] id_columns`) must be
+  named in `--drop` (left out) or `--keep` (kept as it is, on your word).
+- The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
+  `--keep-order` keeps the order.
+- The home folder itself is not a project (your `~/.claude` is Claude Code's own folder), so
+  an input in a folder of your home is taken; one below a project inside it is not.
+- The input is one `.tsv` or `.csv` file (UTF-8, every row as wide as the header), reached with
+  no link, outside every place an agent can write: the working folder and its git work tree,
+  any project (a folder with `.git`, `.claude` or `.phiward.toml` above the input), the temp
+  folders, the sandbox's `allowWrite` and `additionalDirectories`,
+  a `write_to` folder, the spool and `~/.phiward`. A column that is not coded may not hold an
+  ID of a coded column or of the key (an ID of 5 or more characters anywhere in a cell; one of
+  5 or more digits as a whole run of digits, so `see 9990002` refuses and `19990001` does not;
+  a shorter one with a letter as a whole word; a shorter one of digits only as the whole
+  cell), and no cell may hold an invisible format character. Not found: a short digit ID
+  inside a cell (`12` in `12 mg`), an ID glued to other digits (`19990001`), an ID written
+  another way (with spaces or other hyphens, `9 990 001`), an ID with its leading zeros
+  dropped or added (`0001` and `1`). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
+  config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
+- The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
+  or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;
+  until then the command refuses. Keep a backup of the key where no agent can reach it: a lost
+  key cannot be rebuilt, and new runs give new codes.
+- The command refuses without a terminal, and the hook refuses it as an agent command. Its
+  messages name no value, header or path, and a run reports only the row count.
+
+Never run it on a file the agent made or asked for, wherever it is, or with a key name the
+agent chose: the codes it gives would confirm the IDs the agent guessed. A file inside a
+protected root may have been put there by `phiward copy` at the agent's request; the command
+cannot tell. Run it from the folder of the project whose agent will read the copy: the
+places it refuses come from that project's sandbox settings (and the user's). Run it in a terminal the agent's app
+cannot read (not the app's own terminal panel): the command line you type, with its paths and
+headers, stays in the terminal's scrollback. What the codes do not hide is in
+[threat-model.md](threat-model.md#known-limits).
+
 ## Check a command: `phiward check`
 
 ```bash
