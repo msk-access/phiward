@@ -1,6 +1,8 @@
 # Tests that skip on Linux (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
-# macOS-only tests, and a few that need what a system may lack (node, an overlay). Made in
-# Docker (arm64, Python 3.12 and 3.9); remake with PHIWARD_WRITE_SKIPS=FILE.
+# macOS-only tests, and a few that need what a system may lack. Made in Docker (arm64, Python
+# 3.12 and 3.9; scripts/linux-check installs node, as CI's runners have it); remake with
+# PHIWARD_WRITE_SKIPS=FILE. One entry runs on CI and skips only in Docker (no overlay in a user
+# namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
 tests/test_confinement.py::test_gateway_network_grant
 tests/test_protected_paths.py::test_case_folding_on_macos
 tests/test_round2.py::test_c_no_clipboard
@@ -35,6 +37,7 @@ tests/test_v2_p0a3.py::test_f1_a_volfs_path_to_a_protected_file_is_denied
 tests/test_v2_p0a3.py::test_f1_an_unresolvable_volfs_path_counts_as_inside
 tests/test_v2_p0a4.py::test_g1_a_prefix_the_walk_cannot_find_but_the_kernel_resolves_is_inside[/.nofollow]
 tests/test_v2_p0a4.py::test_g1_a_prefix_the_walk_cannot_find_but_the_kernel_resolves_is_inside[/.resolve/1]
+tests/test_v2_p0a4.py::test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias
 tests/test_v2_part2.py::test_an_allow_read_beside_the_matches_keeps_confinement
 tests/test_v2_part2.py::test_an_allow_read_into_a_match_breaks_confinement[{t}/runs/*/x]
 tests/test_v2_part2.py::test_an_allow_read_into_a_match_breaks_confinement[{t}/runs/r1/panel/x]
