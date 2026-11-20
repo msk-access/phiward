@@ -42,6 +42,8 @@ def act():
             os.rename(a[1], a[2])
         elif a[0] == "symlink":
             os.symlink(a[1], a[2])
+        elif a[0] == "mkdir":
+            os.mkdir(a[1])
 if seam == "listing":
     real_view = wholetool.hidden_view
     def view(*a, **k):
@@ -49,6 +51,10 @@ if seam == "listing":
         act()
         return out
     wholetool.hidden_view = view
+elif seam == "checks":
+    def failing(*a, **k):
+        raise UnicodeEncodeError("utf-8", "x", 0, 1, "seam")
+    wholetool._write_checks = failing
 elif seam == "built":
     real_state = wholetool.carryover.project_state
     def state(*a, **k):
@@ -62,12 +68,12 @@ else:
             act()
         return real_popen(cmd, *a, **k)
     subprocess.Popen = popen
-sys.exit(wholetool.main(["--", sys.executable, "-c", code]))
+sys.exit(wholetool.main(sys.argv[4:] + ["--", sys.executable, "-c", code]))
 """
 
 
-def launch_with(tree, seam, acts, code):
-    r = subprocess.run([sys.executable, "-c", RUNNER, seam, json.dumps(acts), code],
+def launch_with(tree, seam, acts, code, opts=()):
+    r = subprocess.run([sys.executable, "-c", RUNNER, seam, json.dumps(acts), code, *opts],
                        cwd=str(tree / "repo"), env=dict(os.environ, PYTHONPATH=SRC),
                        capture_output=True, text=True, timeout=120, stdin=subprocess.DEVNULL)
     return r.returncode, r.stdout, r.stderr
@@ -252,7 +258,7 @@ def test_r11_an_error_while_comparing_stops_the_start(tree):
     assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
 
 
-def test_r12_a_name_in_any_encoding_is_compared_as_bytes(tree):
+def test_r12_a_utf8_name_is_compared_as_bytes(tree):
     d = tree / "日a"
     d.mkdir()
     st = os.lstat(str(d))
@@ -262,3 +268,36 @@ def test_r12_a_name_in_any_encoding_is_compared_as_bytes(tree):
     wrong = [[os.fsencode(str(d)).hex(), st.st_dev, st.st_ino + 1, True]]
     code, out, err = helper_with(json.dumps(wrong))
     assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
+
+
+@linux
+def test_r13_a_name_that_is_not_utf8_is_compared_as_bytes(tree):
+    d = os.fsencode(str(tree)) + b"/caf\xe9"
+    os.mkdir(d)
+    st = os.lstat(d)
+    code, out, err = helper_with(json.dumps([[d.hex(), st.st_dev, st.st_ino, False]]))
+    assert "RAN" in out and code == 0, (code, out, err)
+    code, out, err = helper_with(json.dumps([[d.hex(), st.st_dev, st.st_ino + 1, True]]))
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
+
+
+@linux_confined
+def test_r14_an_entry_named_in_no_encoding_is_checked_end_to_end(tree):
+    # an entry of the view whose name is not UTF-8, replaced right before bwrap starts
+    name = os.fsdecode(os.fsencode(str(tree)) + b"/caf\xe9")
+    os.mkdir(name)
+    code, out, err = launch_with(tree, "exec", [["rename", name, str(tree / "moved")],
+                                                ["mkdir", name]], "print('RAN')")
+    assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
+    os.rmdir(name)
+    code, out, err = launch_with(tree, "exec", [], "print('RAN')")  # unchanged: it runs
+    assert "RAN" in out, err
+
+
+@linux_confined
+def test_r15_checks_that_cannot_be_written_end_the_launch_cleanly(tree):
+    code, out, err = launch_with(tree, "checks", [], "print('RAN')", ("--tool", "claude"))
+    assert "RAN" not in out and code == 126, (code, out, err)
+    assert "Traceback" not in err and "nothing runs" in err, err
+    runs = tree / "home" / ".phiward" / "tools" / "claude" / "runs"
+    assert not runs.exists() or os.listdir(runs) == [], os.listdir(runs)  # the session ended
