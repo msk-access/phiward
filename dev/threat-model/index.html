@@ -2103,7 +2103,8 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   checks their text, best effort). For the hook alone (without <code>launch</code>) on Linux, a folder that
   matches a pattern after a command started is covered from the next command on. Under <code>launch</code> on
   Linux, a match made after the start is not in the session's view, except inside a folder that can
-  be entered but not listed (docs/launch.md).</li>
+  be entered but not listed (docs/launch.md). The session's view is checked against what was
+  checked before the tool starts: an entry the host replaces while the session starts stops it.</li>
 <li><strong>Claude Code's sandbox on Linux</strong> (bubblewrap): a denied path is hidden at its real place, so a
   link to it (<code>~/work -&gt; /data/...</code>) is covered too. A path that does not exist when a command
   starts is not hidden in that command, only from the next one on. phiward's probe of the sandbox
