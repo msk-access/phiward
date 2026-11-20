@@ -5,6 +5,11 @@ top. Causes: **rule** (a rule or skill said the wrong thing), **trigger** (the r
 apply, or the wrong one did), **design** (the code's mechanism was the cause), **environment** (a
 fault outside this repository: nothing here changes).
 
+- **The scan's forms of a cell were fixed round after round**: Unicode dashes, escapes after
+  NFKC, separators, digits, each in its own place and each found by a later review. Cause: design
+  (each form was added to the code that first missed it, not to the one function that lists the
+  forms). Fixed in: this entry; the forms are in `_forms` (and `_md_forms`) of
+  `src/phiward/pseudonymize.py`: a new form goes there, in that one function, with its test.
 - **The sandbox check counted a refusal only when its text said "not permitted".** Linux's
   sandboxes refuse otherwise: a hidden file (no such file, or an empty view) and a read-only bind
   (EROFS). Cause: design (the probe matched Seatbelt's EPERM text). Fixed in:
