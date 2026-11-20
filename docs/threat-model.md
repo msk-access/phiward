@@ -531,7 +531,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     On Linux only the `.claude`, `.vscode` and `.git` folders that exist when it starts; `.idea`,
     `.gitmodules`, `.ripgreprc` and a new `.git` are not covered there.
   - `doctor` names a `commondir` in the project's `.git`, and a `.git` file that leads to a folder
-    the agent can write.
+    the agent can write. It does not name a `commondir` that holds only `.` (git then uses that
+    `.git` folder itself). Claude Code writes one at start on Linux when
+    `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` is set, as the sandbox check sets it.
 
   Not covered: Linux (its sandbox has no wildcard write rules), projects outside the home folder, a
   nested repository staged into the index, submodules below the first level, and older Claude Code.

@@ -304,7 +304,9 @@ def git_redirects(project: str, home: str) -> List[str]:
     for dot in config.enclosing_git_dirs(project):
         if os.path.isdir(dot):
             common = os.path.join(dot, "commondir")
-            if os.path.lexists(common):
+            # `.` (Claude Code's env scrub writes it on Linux): git's common folder is then this
+            # folder itself, as with no commondir. git strips only trailing newlines
+            if os.path.lexists(common) and _read_raw(common).rstrip("\n") not in (".", "./", "./."):
                 text = _read_line(common)
                 out.append(f"{common} -> {os.path.realpath(os.path.join(dot, text)) if text else '?'}")
             continue
@@ -322,10 +324,18 @@ def _is_repository(d: str) -> bool:
 
 
 def _read_line(path: str) -> str:
+    try:
+        return _read_raw(path).strip().splitlines()[0]
+    except IndexError:
+        return ""
+
+
+def _read_raw(path: str) -> str:
+    """The file's text as it is, or "" when it cannot be read."""
     from phiward import safeio
     try:
-        return safeio.read_text(path, limit=4096).strip().splitlines()[0]
-    except (OSError, UnicodeDecodeError, ValueError, IndexError):
+        return safeio.read_text(path, limit=4096)
+    except (OSError, UnicodeDecodeError, ValueError):
         return ""
 
 
