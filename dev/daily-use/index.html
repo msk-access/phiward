@@ -1480,14 +1480,74 @@ get unrelated codes. A free-text column (<code>BAM_File</code>) that names a sam
   them). A record or a kept line that holds a sample's ID (an <code>INFO</code> value, the <code>ID</code>
   column) is refused: clean it first (<code>bcftools annotate</code>).</li>
 <li>The run reports the record count.</li>
-<li>Each of them gzip-compressed (<code>.tsv.gz</code>, <code>.maf.gz</code>, <code>.vcf.gz</code>). Every member is read, up to
+<li><code>.json</code>: the IDs are the values at the key paths you name. Keys are joined by <code>.</code>, and
+<code>[]</code> stands for every element of an array (<code>[].mrn</code> for an array at the top):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>samples<span class="w"> </span>--columns<span class="w"> </span><span class="s1">'samples[].id, samples[].mrn'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>~/raw/study.json<span class="w"> </span>~/data/patients/study-coded.json
+</code></pre></div>
+<ul>
+<li>A key is matched exactly; a key with <code>.</code>, <code>[</code> or <code>]</code> cannot be named. A path that
+  matches nothing, or meets a value of another kind (a key where there is no object), is
+  refused.</li>
+<li>A coded value is a string or an integer; it becomes a string code (<code>9990001</code> and
+  <code>"9990001"</code> get the same code, as in a table). <code>null</code> stays <code>null</code>. A <code>true</code>, a decimal
+  number, an object or an array at a coded path is refused.</li>
+<li>Every key that looks like an identifier and holds values (strings, numbers, <code>true</code>,
+  <code>false</code>, <code>null</code>) is named by their path in <code>--columns</code>, <code>--drop</code> or <code>--keep</code>:
+  <code>samples[]</code> for strings in an array under <code>samples</code>, <code>samples[].id</code> for the <code>id</code> of its
+  objects. A key that holds only objects or arrays (<code>samples</code> above) needs no name.
+  <code>--keep</code> names such a path; <code>--drop</code> names a key, and drops a container whole. A key
+  the sanitizer would mask is refused: keys that are IDs are not coded.</li>
+<li>The array at the last <code>[]</code> of a coded path (<code>samples[]</code> for <code>samples[].id</code>, an array of
+  objects) is shuffled. It is refused when an array of the same length sits beside it in
+  the same object: arrays side by side may be paired by position (<code>samples</code> and
+  <code>purity</code>), and a shuffle would break the pairing without a word. Give <code>--keep-order</code>
+  (it is for the whole run, never one array), or drop the other array. A path that ends in
+  <code>[]</code> (<code>ids[]</code>, the elements themselves) needs <code>--keep-order</code>: an array of IDs may be
+  paired by position with arrays in other files. Other arrays and the order of keys are
+  kept.</li>
+<li>Refused as unreadable: a key twice in one object, <code>NaN</code>, <code>Infinity</code>, a number out of
+  range (<code>1e400</code>), an integer of more than 4300 digits, nesting deeper than 100 levels, a
+  lone surrogate (<code>\ud800</code>, which has no UTF-8 form).</li>
+<li>Every key and every value of the copy is a field for the scan below; a number that is
+  whole is also read as its integer (<code>1234.0</code>, <code>"9.990001e6"</code> for <code>9990001</code>). The copy is
+  written with an indent of 2, and it must read back as the coded document. A message
+  names a key by its number in the order of the file. The run reports no count.</li>
+<li>Each of them gzip-compressed (<code>.tsv.gz</code>, <code>.maf.gz</code>, <code>.vcf.gz</code>, <code>.json.gz</code>, <code>.md.gz</code>). Every member is read, up to
 1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
 the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
 BGZF copy; for a VCF, <code>tabix -p vcf OUT</code> indexes it. An index (<code>.tbi</code>, <code>.csi</code>) is never
 read or copied. A BGZF file must end with its EOF block (one cut short is refused), and a
 file that mixes BGZF blocks and plain gzip members is refused.</li>
-<li>Not covered yet: <code>.json</code>, <code>.md</code>. Not covered: Parquet; convert it to TSV with your own
-tools first.</li>
+<li><code>.md</code>: the file holds only pipe tables and blank lines. The names of <code>--columns</code>,
+<code>--drop</code> and <code>--keep</code> apply to each table whose header holds them:</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>labs<span class="w"> </span>--columns<span class="w"> </span>mrn<span class="w"> </span>~/raw/labs.md<span class="w"> </span>~/data/patients/labs-coded.md
+</code></pre></div>
+<ul>
+<li>Each line of a table starts and ends with <code>|</code>, and the second line is the alignment row
+  (<code>| --- | :---: |</code>). Any other line is free text and is refused: prose, a heading, a
+  list, code, front matter, an HTML comment, a row without its outer pipes.</li>
+<li>A line with a backslash or a backtick is refused: an escaped pipe (<code>\|</code>) or a code span
+  has no safe split into cells. A line with <code>&lt;</code>, <code>[</code> or <code>]</code> is refused: inline HTML,
+  links, images and autolinks are not covered (write <code>&amp;lt;</code> for a <code>&lt;</code>). A header with
+  emphasis or an entity (<code>**id**</code>, <code>_mrn_</code>, <code>patient&amp;#95;id</code>) is refused: write it plain.</li>
+<li>Two tables need a blank line between them: a row inside a table whose cells are all
+  like <code>---</code> is refused (it would read as a second header, coded as IDs). So is a body
+  row of dashes only (<code>| - | - |</code>).</li>
+<li>Each table follows the table rules: every column that looks like an identifier is
+  named, in that table. Each name is found in some table, and one ID gets one code in
+  all of them.</li>
+<li>The body rows of a table with a coded column are shuffled (<code>--keep-order</code> keeps them);
+  the other tables keep their order. The header and the alignment row are kept. The copy
+  is written as <code>| a | b |</code> lines, one blank line between tables, and read back.</li>
+<li>For the scan, every cell is also read with its HTML entities decoded (<code>&amp;#45;</code>,
+  <code>&amp;amp;#45;</code>, <code>&amp;hyphen;</code>, also nested up to 4 times; deeper is refused) and its
+  emphasis marks removed (<code>**</code>, <code>_</code>, <code>~~</code>): <code>&amp;#70;AKE-PT-0001</code> and <code>999**0001**</code> are
+  found. A message names a table by its number. The run reports the row count of all
+  tables.</li>
+<li>Not covered: Parquet; convert it to TSV with your own tools first.</li>
 <li>A file that cannot be read or written as its kind gives one fixed refusal.</li>
 <li>The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   <code>--keep-order</code> keeps the order.</li>
@@ -1499,9 +1559,13 @@ tools first.</li>
   folders, the sandbox's <code>allowWrite</code> and <code>additionalDirectories</code>,
   a <code>write_to</code> folder, the spool and <code>~/.phiward</code>. No field of the output (a cell, a header, the
   kept <code>#version</code> line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or script of digits, or escaped (<code>%2D</code>, <code>\u002D</code>, also
-  escaped twice): an ID of 5 or more characters anywhere in a field, or across the fields of a
-  line as written (<code>Doe, John</code> as the CSV fields <code>Doe</code> and <code>John</code>); one of 5 or more digits as a whole run of digits, so
+  another letter case, Unicode form, dash (<code>‐</code>, <code>–</code>, <code>−</code> and the other Unicode dashes) or
+  script of digits, or escaped (<code>%2D</code>, <code>\u002D</code>, <code>%E2%80%90</code>, also escaped twice): an ID of
+  5 or more characters anywhere in a field, or across the fields of a line as written (<code>Doe,
+  John</code> as the CSV fields <code>Doe</code> and <code>John</code>), and one with a letter also with every
+  character but letters and digits removed (<code>FAKE PT 0001</code>, <code>FAKE.PT.0001</code>,
+  <code>FAKE-**PT**-0001</code> for <code>FAKE-PT-0001</code>; digits are never joined, so <code>999 0001</code> is not
+  <code>9990001</code>); one of 5 or more digits as a whole run of digits, so
   <code>see 9990002</code> refuses and <code>19990001</code> does not; a shorter one with a letter as a whole word;
   a shorter one of digits only as the whole field. No field may hold an invisible format
   character. Not found: a short digit ID

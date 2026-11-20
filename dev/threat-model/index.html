@@ -1941,7 +1941,19 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     where the genomics pack is on.</li>
 <li>A gzip or bgzip input is read up to 1 GiB expanded; the copy is checked by reading it back.
     A bug in the BGZF writer gives a file <code>tabix</code> rejects, never a leak (the scan and the
-    check-back come first). JSON and Markdown are refused for now, and Parquet is not read.</li>
+    check-back come first). Parquet is not read.</li>
+<li>A Markdown copy keeps every cell of the columns you did not name. The scan reads each cell
+    raw, with its entities decoded and its emphasis marks removed, and finds only the IDs of
+    the run and the key. Prose, inline HTML, links, images, code spans and escapes are
+    refused, not scanned. The other tables of the file keep their row
+    order, which may pair them with a shuffled table.</li>
+<li>A JSON copy keeps every value at a path you did not name. The ID-glob rule sees only the
+    key that holds a value: an ID under a key no glob matches (<code>note</code>, <code>label</code>) goes into the
+    copy, masked only by the rules, unless it is an ID of the run or the key. Only the array
+    at the last <code>[]</code> of a coded path is shuffled: the order of the other arrays and of the
+    keys stays, and it can follow the IDs. A shuffle is refused only when an array of the
+    same length sits beside the shuffled one; arrays paired by position across objects or
+    files are not seen. Keys that are IDs are refused, not coded.</li>
 <li>A code that is also a file name under a root reads <code>&lt;ENTRY&gt;</code>, and a later <code>[sanitize]
     patterns</code> rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
     as headers are refused, not covered.</li>
@@ -1974,9 +1986,10 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     an ID of 5 or more characters anywhere in a cell (after NFKC, in any letter case), an ID of 5
     or more digits as a whole run of digits, a shorter ID with a letter as a whole word, a
     shorter ID of digits only as the whole cell. Not found: a short digit ID inside a cell
-    (<code>12</code> in <code>12 mg</code>), an MRN glued to other digits (<code>19990001</code>, a position may look so), an ID
-    written another way (with spaces or other hyphens, split across cells), an ID with its
-    leading zeros dropped or added.</p>
+    (<code>12</code> in <code>12 mg</code>), an MRN glued to other digits (<code>19990001</code>, a position may look so), an
+    MRN of digits only written with separators (<code>999 0001</code>), an ID split across cells, an ID
+    with its leading zeros dropped or added. Unicode dashes read as <code>-</code>, and an ID with a letter
+    is also matched with its separators removed (<code>FAKE PT 0001</code>).</p>
 </li>
 <li>
 <p><strong>Git's control files.</strong> Claude Code runs git outside its sandbox: about a hundred times in a
