@@ -11,7 +11,7 @@ exits with `tail`'s code). Redirect to a log, then test `$?`.
 ## Every commit
 
 ```bash
-uvx ruff check --select F src tests;                 echo "ruff rc=$?"
+uvx ruff check;                                      echo "ruff rc=$?"
 uv run --quiet --with pytest --with pytest-timeout python -m pytest --timeout=300 -q \
   -p no:cacheprovider > /tmp/phiward-suite.log 2>&1; echo "suite rc=$?"; tail -3 /tmp/phiward-suite.log
 ```

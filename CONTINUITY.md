@@ -4,22 +4,27 @@ Updated at each milestone, not each session. Details are in the pull requests an
 
 ## Goal
 
-v0.2.0b1, the first public beta, published from this repository.
+v0.2.0b2, the second beta (v0.2.0b1 is on PyPI since 2026-11-18).
 
 ## Just finished
 
-- The final pre-release review, with a fresh review of each round of fixes; every release check
-  passes (macOS and Linux suites, the quickstart check, the install check on macOS).
-- The agent harness for work on phiward itself (`AGENTS.md`, `CLAUDE.md`, `.agents/`, `.claude/`).
+- Issues #2 to #5 for 0.2.0b2, and `phiward pseudonymize` (#1 was declined as asked; the
+  command is the operator's own) for CSV/TSV, text, MAF, VCF, JSON and Markdown, each also
+  gzip-compressed (PRs 23 to 27).
+- Code hygiene after that work (PRs 28 to 35): the docs, the tests and the Linux skip list, the
+  renames, a stderr thread fix in `phiward copy`, folded duplicate rules, one gzip read-back,
+  the duplicate-ID rule that matches the scan, and a ruff config in `pyproject.toml`.
 
 ## Next
 
-1. The first release, in the order [docs/releasing.md](docs/releasing.md) gives: the repository
-   while it is still private, the pending publisher and the `pypi` environment, the tag, and only
-   after the package is on PyPI, the repository made public.
-2. Then on GitHub: rulesets on `main` and on `v*` tags, private vulnerability reporting, secret
-   scanning.
+1. The launch races that make CI flaky: an entry under `/var/tmp`, or a descriptor, vanishes
+   between the listing and bubblewrap's mount. Launch refuses (fail-closed); the fix removes the
+   race.
+2. Issue #6: the sandbox check on a Linux machine with Landlock ABI 2 or newer (kernel 5.19 or
+   newer), and the RHEL 8 run on the HPC nodes.
+3. The 0.2.0b2 release, as [docs/releasing.md](docs/releasing.md) says.
+4. Then on GitHub: rulesets on `main`, `develop` and `v*` tags, private vulnerability reporting.
 
 ## Waiting on the maintainer
 
-- The go-ahead for each publishing step.
+- The go-ahead for each publishing step, and a Linux machine with a new enough kernel for #6.
