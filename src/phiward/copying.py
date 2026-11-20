@@ -511,7 +511,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
                 for fd in fds:
                     os.close(fd)
 
-            def read_errors() -> None:
+            def read_errors(ssh: subprocess.Popen = ssh, errs: List[str] = errs) -> None:
                 assert ssh.stderr is not None
                 for raw in iter(lambda: ssh.stderr.readline(65536), b""):
                     if len(errs) < 50:
@@ -521,7 +521,8 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             t = threading.Thread(target=read_errors, daemon=True)
             t.start()
 
-            def relay(stdin) -> None:  # the stream, from ssh's output into the local tar
+            # the stream, from ssh's output into the local tar
+            def relay(stdin, ssh: subprocess.Popen = ssh) -> None:
                 assert ssh.stdout is not None
                 shutil.copyfileobj(ssh.stdout, stdin, 1 << 20)
 

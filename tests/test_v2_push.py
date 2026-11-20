@@ -391,3 +391,32 @@ def test_a_pull_never_shows_the_names_tar_prints(tree, hpc):
     text = out.getvalue()
     assert "Smith_John" not in text and "summary.tsv" not in text, text
     assert "withheld" in text, text
+
+
+@needs_confine
+def test_a_late_stderr_reader_does_not_touch_the_next_pull(tree, hpc, monkeypatch):
+    # the first remote keeps its stderr open past the reader's join: its late line must not
+    # count as a message from the second remote (which prints none)
+    fake_visible(tree)
+    (tree / "pub" / "outbox" / "res2").mkdir()
+    (tree / "pub" / "outbox" / "res2" / "b.tsv").write_text("count\t4\n")
+    fake = tree / "pub" / "fake-ssh"
+    outbox = tree / "pub" / "outbox"
+    text = fake.read_text().replace(
+        '  *"tar -c"*)',
+        f'  *"-- res "*) (sleep 1; echo late >&2) >/dev/null &\n'
+        f'    cd {outbox} && exec tar -c -f - res;;\n'
+        f'  *"-- res2 "*) sleep 3; cd {outbox} && exec tar -c -f - res2;;\n'
+        '  *"tar -c"*)')
+    fake.write_text(text)
+    import threading
+    real_join = threading.Thread.join
+    monkeypatch.setattr(threading.Thread, "join",
+                        lambda self, timeout=None: real_join(self, 0.2 if timeout else None))
+    out = io.StringIO()
+    code = copying.execute(["hpc-test:/work/me/res", "hpc-test:/work/me/res2",
+                            str(tree / "phi" / "pulled")], str(tree / "repo"),
+                           dict(os.environ), out)
+    assert code == 0, out.getvalue()
+    assert (tree / "phi" / "pulled" / "res2" / "b.tsv").read_text() == "count\t4\n"
+    assert "from the remote withheld" not in out.getvalue(), out.getvalue()
