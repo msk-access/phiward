@@ -1655,10 +1655,11 @@ pins, and the names and pack files the config names at start, and refuses every 
 content changes, until the operator restarts it. So a change that the agent manages to make does not
 take effect unseen. The repository config (<code>.phiward.toml</code>) is not part of it: it can only add
 protection. A request that starts just as the config changes may still use the new one.</p>
-<p><strong>Terminal checks are a convenience.</strong> <code>setup</code>, <code>pin</code> and <code>carryover add|accept|reset</code> refuse to run
-without a terminal, but a program can fake one. What stops an agent from changing them is that
-Claude Code's sandbox (Mode A) or the kernel profile (Mode B) denies writes to the config,
-<code>~/.phiward</code> and the service file. A plugin-only session, with no sandbox, has only the hook.</p>
+<p><strong>Terminal checks are a convenience.</strong> <code>setup</code>, <code>pin</code>, <code>pseudonymize</code> and <code>carryover
+add|accept|reset</code> refuse to run without a terminal, but a program can fake one. What stops an
+agent from changing them is that Claude Code's sandbox (Mode A) or the kernel profile (Mode B)
+denies writes to the config, <code>~/.phiward</code> and the service file, and hides
+<code>~/.phiward/backups</code> (the pseudonymize keys) from every session and gateway command. A plugin-only session, with no sandbox, has only the hook.</p>
 <p><strong>To make the gateway itself as tight as it can be, set <code>write_to</code> empty, <code>net</code> false, <code>remotes</code>
 empty.</strong> Then the only way out of the gateway is its sanitized output, and the only leak through it
 is a command written to encode data on purpose. This does not make the hook alone safe against a
@@ -1919,6 +1920,51 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   macOS until it exits, in the gateway profile: it can read protected data, but has no network, no
   write place (its scratch is removed) and no way to send output back. On Linux the PID namespace
   ends it with the request.</p>
+</li>
+<li>
+<p><strong>Pseudonymized tables (<code>phiward pseudonymize</code>).</strong> The codes replace only the columns you name;
+  what they do not hide:</p>
+</li>
+<li>You choose the identifier columns. An ID column under a header no glob matches (<code>kit</code>,
+    <code>tube</code>) goes into the copy as it is, masked only by the rules.</li>
+<li>Quasi-identifiers can re-identify a subject: dates of birth, zip codes, ages over 89, rare
+    diagnoses, free text, names that no names file lists. Codes that link several tables (one
+    key) add to that, on purpose. The number of subjects shows.</li>
+<li>A code that is also a file name under a root reads <code>&lt;ENTRY&gt;</code>, and a later <code>[sanitize]
+    patterns</code> rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
+    as headers are refused, not covered.</li>
+<li>A run on a file the agent made or asked for, or with a key the agent chose, confirms the IDs
+    it guessed (they get old codes). The command refuses inputs in the places an agent writes
+    (the working folder, a git work tree, the temp folders, the sandbox's write folders,
+    <code>write_to</code>, the spool, <code>~/.phiward</code>). It cannot tell a file inside a protected root that
+    <code>phiward copy</code> put there at the agent's request, nor one the agent got you to put elsewhere
+    by hand: never run it on a file the agent made or asked for, wherever it is.</li>
+<li>The command line you type (paths, headers, the key name) stays in the terminal's scrollback,
+    which an app that reads the terminal can see. The command's own messages name none of it.</li>
+<li>The key is hidden as a credential is (below <code>~/.phiward/backups</code>), so the same limits apply:
+    with <code>[shell] best_effort</code>, scripts through <code>run_in_terminal</code> and bare local MCP servers, a
+    key can be read as a credential can. The tty check alone is not a boundary (a pty passes it);
+    the hidden key folder is.</li>
+<li>The hook's refusal of operator commands (<code>setup</code>, <code>pin</code>, <code>carryover</code>, <code>broker</code>,
+    <code>pseudonymize</code>) is a tripwire for honest mistakes, not a boundary: it reads the words of a
+    command (with <code>phiward</code> in command position, after reserved words and the usual wrappers, a
+    subcommand built at run time is refused), and
+    a program can build them where the hook cannot see (<code>python -c</code>, an <code>sh -c</code> string). The
+    boundary is the tty check together with the hidden key folder.</li>
+<li>The places refused for the input come from the sandbox settings of the working folder's
+    project and the user and managed settings, and from any <code>.git</code>, <code>.claude</code> or
+    <code>.phiward.toml</code> above the input below the home folder (the home folder's own <code>~/.claude</code>
+    does not count). Another project's settings can let its agent write a
+    folder elsewhere: run the command from the folder of the project whose agent will read the
+    copy.</li>
+<li>
+<p>A column that is not coded is refused when it holds an ID of a coded column or of the key:
+    an ID of 5 or more characters anywhere in a cell (after NFKC, in any letter case), an ID of 5
+    or more digits as a whole run of digits, a shorter ID with a letter as a whole word, a
+    shorter ID of digits only as the whole cell. Not found: a short digit ID inside a cell
+    (<code>12</code> in <code>12 mg</code>), an MRN glued to other digits (<code>19990001</code>, a position may look so), an ID
+    written another way (with spaces or other hyphens, split across cells), an ID with its
+    leading zeros dropped or added.</p>
 </li>
 <li>
 <p><strong>Git's control files.</strong> Claude Code runs git outside its sandbox: about a hundred times in a

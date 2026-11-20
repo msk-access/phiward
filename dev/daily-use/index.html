@@ -481,6 +481,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give the agent pseudonymized data: phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#check-a-command-phiward-check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1180,6 +1191,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give the agent pseudonymized data: phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#check-a-command-phiward-check" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1406,6 +1428,52 @@ starts with <code>~</code> (quoted, so the shell left it), is refused: give the 
 (<a href="../hpc/#phiward-copy">hpc.md</a>). The copy runs in the gateway profile and cannot read
 credentials. Its output is sanitized. The only option is <code>--dry-run</code>, as the first word: it
 counts what a push would send, and for a local copy it shows what rsync would copy.</p>
+<h2 id="give-the-agent-pseudonymized-data-phiward-pseudonymize">Give the agent pseudonymized data: <code>phiward pseudonymize</code><a class="headerlink" href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" title="Permanent link">&para;</a></h2>
+<p>When the agent needs a table but not its identifiers, make a copy in which the identifier
+columns hold codes. Type the command yourself, in your own terminal:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>labs<span class="w"> </span>--columns<span class="w"> </span>mrn<span class="w"> </span>--drop<span class="w"> </span>dob<span class="w"> </span>~/raw/labs.tsv<span class="w"> </span>~/data/patients/labs-coded.tsv
+</code></pre></div>
+<ul>
+<li><code>--new-key NAME</code> starts a key; <code>--key NAME</code> extends it, so the same ID gets the same code in
+  every table coded with that key. <code>--prefix P</code> (1 to 3 capital letters, default <code>S</code>) is fixed
+  in a new key. A code is the prefix and 4 digits (<code>S0042</code>), drawn at random from the codes not
+  used yet: a key holds at most 9999 IDs.</li>
+<li><code>--columns H[=NEW],...</code> names the columns to code. A coded column's header becomes <code>NEW</code>
+  (default <code>pseudonym</code>, then <code>pseudonym_2</code>, ...). Every other column whose header looks like an
+  identifier (the built-in list of <code>phiward run --table</code> and <code>[sanitize] id_columns</code>) must be
+  named in <code>--drop</code> (left out) or <code>--keep</code> (kept as it is, on your word).</li>
+<li>The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
+  <code>--keep-order</code> keeps the order.</li>
+<li>The home folder itself is not a project (your <code>~/.claude</code> is Claude Code's own folder), so
+  an input in a folder of your home is taken; one below a project inside it is not.</li>
+<li>The input is one <code>.tsv</code> or <code>.csv</code> file (UTF-8, every row as wide as the header), reached with
+  no link, outside every place an agent can write: the working folder and its git work tree,
+  any project (a folder with <code>.git</code>, <code>.claude</code> or <code>.phiward.toml</code> above the input), the temp
+  folders, the sandbox's <code>allowWrite</code> and <code>additionalDirectories</code>,
+  a <code>write_to</code> folder, the spool and <code>~/.phiward</code>. A column that is not coded may not hold an
+  ID of a coded column or of the key (an ID of 5 or more characters anywhere in a cell; one of
+  5 or more digits as a whole run of digits, so <code>see 9990002</code> refuses and <code>19990001</code> does not;
+  a shorter one with a letter as a whole word; a shorter one of digits only as the whole
+  cell), and no cell may hold an invisible format character. Not found: a short digit ID
+  inside a cell (<code>12</code> in <code>12 mg</code>), an ID glued to other digits (<code>19990001</code>), an ID written
+  another way (with spaces or other hyphens, <code>9 990 001</code>), an ID with its leading zeros
+  dropped or added (<code>0001</code> and <code>1</code>). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
+  config, outside every <code>write_to</code> folder. It is never replaced. The agent reads it through <code>phiward run</code>, masked; the codes pass the masks.</li>
+<li>The key is <code>~/.phiward/backups/keys/NAME.tsv</code>. No session, launch or gateway command can read
+  or write it. It is only ever added to. <code>phiward install claude</code> makes <code>~/.phiward/backups</code>;
+  until then the command refuses. Keep a backup of the key where no agent can reach it: a lost
+  key cannot be rebuilt, and new runs give new codes.</li>
+<li>The command refuses without a terminal, and the hook refuses it as an agent command. Its
+  messages name no value, header or path, and a run reports only the row count.</li>
+</ul>
+<p>Never run it on a file the agent made or asked for, wherever it is, or with a key name the
+agent chose: the codes it gives would confirm the IDs the agent guessed. A file inside a
+protected root may have been put there by <code>phiward copy</code> at the agent's request; the command
+cannot tell. Run it from the folder of the project whose agent will read the copy: the
+places it refuses come from that project's sandbox settings (and the user's). Run it in a terminal the agent's app
+cannot read (not the app's own terminal panel): the command line you type, with its paths and
+headers, stays in the terminal's scrollback. What the codes do not hide is in
+<a href="../threat-model/#known-limits">threat-model.md</a>.</p>
 <h2 id="check-a-command-phiward-check">Check a command: <code>phiward check</code><a class="headerlink" href="#check-a-command-phiward-check" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>check<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>~/data/patients/file.txt
 </code></pre></div>
