@@ -15,6 +15,17 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   messages give the row count only. One key per ID kind. (Why: the agent can read the
   operator's terminal, gateway commands read roots, and counts of new IDs confirm planted
   guesses. Cost: refused before install; masked reads only.)
+- **`phiward pseudonymize` reads more kinds by the extension chain.** `.tsv`, `.csv`, `.txt`
+  (a TSV of 2 or more columns: free text is refused) and `.maf`, each also `.gz`; the content
+  must fit the chain, and OUT has the same one. gzip is read in chunks up to 1 GiB expanded
+  and written with `gzip.compress(mtime=0)` (no input header field), checked by reading it
+  back. A MAF keeps only an exact `#version` line and its coded headers; the operator names
+  the barcode columns and keeps the other ID-glob columns by name. One scan of the whole
+  output (codes, headers and the kept line included) replaces the scan of kept cells; the draw
+  skips a code it would flag. Any exception in reading or writing is one fixed refusal.
+  Parquet is never read (convert it first); bgzip, VCF, JSON and Markdown come in later steps.
+  (Why: one shape for every kind, and what is written is what was scanned. Cost: a long
+  `--keep` for a MAF; Parquet needs a step.)
 - **`phiward run --table` reads CSV/TSV by column.** Cells under an identifier header (a
   built-in glob list plus `[sanitize] id_columns`, user config only, additive) are masked whole;
   plain numbers pass only in parsed cells of other columns; every other line is text mode.
@@ -70,6 +81,12 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 - **The pseudonymize key in a protected root, or in a new hidden folder:** gateway commands read
   roots (a key line no rule matches comes back whole), and a hidden path made after a profile was
   built is not hidden from it.
+- **Parquet in `phiward pseudonymize`** (an optional `pyarrow`, or a reader by hand): a large
+  native library in the process that holds the key folder, or thousands of lines over
+  untrusted bytes. The operator converts it to TSV.
+- **Free text in `phiward pseudonymize`** (`.txt` prose, replacing the key's IDs as tokens):
+  the scan finds only IDs phiward knows, so a name or another subject's ID would stay beside
+  the codes.
 - **Parsing quoted CSV in `run --table`:** one more parser in a guard; a quoted row is text mode.
   Revisit with a real need.
 - **`phiward sanitize --table` by column:** the hook and manual use stay per line.

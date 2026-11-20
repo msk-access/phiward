@@ -153,19 +153,44 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   (default `pseudonym`, then `pseudonym_2`, ...). Every other column whose header looks like an
   identifier (the built-in list of `phiward run --table` and `[sanitize] id_columns`) must be
   named in `--drop` (left out) or `--keep` (kept as it is, on your word).
+- The kinds: the extensions decide, and the content must fit them. OUT has the same
+  extensions as IN (`labs.tsv.gz` gives a `.tsv.gz`).
+  - `.tsv`, `.csv`; `.txt` is read as a TSV and needs 2 or more columns (free text is refused).
+  - `.maf`: a TSV after its `#` lines. Of these only an exact `#version 2.4` is kept; the other
+    `#` lines (commands, paths) are dropped, and a `#` line after the header is refused. Name
+    the barcode columns, and keep the columns that look like IDs but are not:
+
+    ```bash
+    phiward pseudonymize --new-key samples --columns Tumor_Sample_Barcode,Matched_Norm_Sample_Barcode \
+      --keep Entrez_Gene_Id,Exon_Number ~/raw/cohort.maf ~/data/patients/cohort-coded.maf
+    ```
+
+    The command names each column that looks like an ID and is not named (by number): add it
+    to `--keep`, or to `--drop` (`Tumor_Sample_UUID`).
+
+    A coded MAF column keeps its header, so MAF tools still read the copy. Tumor and normal
+    get unrelated codes. A free-text column (`BAM_File`) that names a sample is refused: drop it.
+  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`). Every member is read, up to 1 GiB
+    expanded. The copy is plain gzip with no name and no time, and it must read back as the
+    coded table before it is written.
+  - Not covered yet: bgzip (BGZF) files, `.vcf`, `.json`, `.md`. Not covered: Parquet; convert
+    it to TSV with your own tools first.
+  - A file that cannot be read or written as its kind gives one fixed refusal.
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.
 - The home folder itself is not a project (your `~/.claude` is Claude Code's own folder), so
   an input in a folder of your home is taken; one below a project inside it is not.
-- The input is one `.tsv` or `.csv` file (UTF-8, every row as wide as the header), reached with
+- The input is one table of those kinds (UTF-8, every row as wide as the header), reached with
   no link, outside every place an agent can write: the working folder and its git work tree,
   any project (a folder with `.git`, `.claude` or `.phiward.toml` above the input), the temp
   folders, the sandbox's `allowWrite` and `additionalDirectories`,
-  a `write_to` folder, the spool and `~/.phiward`. A column that is not coded may not hold an
-  ID of a coded column or of the key (an ID of 5 or more characters anywhere in a cell; one of
-  5 or more digits as a whole run of digits, so `see 9990002` refuses and `19990001` does not;
-  a shorter one with a letter as a whole word; a shorter one of digits only as the whole
-  cell), and no cell may hold an invisible format character. Not found: a short digit ID
+  a `write_to` folder, the spool and `~/.phiward`. No field of the output (a cell, a header, the
+  kept `#version` line, the codes too) may hold an ID of a coded column or of the key, also in
+  another letter case or Unicode form, or escaped (`%2D`, `\u002D`): an ID of 5 or more
+  characters anywhere in a field; one of 5 or more digits as a whole run of digits, so
+  `see 9990002` refuses and `19990001` does not; a shorter one with a letter as a whole word;
+  a shorter one of digits only as the whole field. No field may hold an invisible format
+  character. Not found: a short digit ID
   inside a cell (`12` in `12 mg`), an ID glued to other digits (`19990001`), an ID written
   another way (with spaces or other hyphens, `9 990 001`), an ID with its leading zeros
   dropped or added (`0001` and `1`). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
