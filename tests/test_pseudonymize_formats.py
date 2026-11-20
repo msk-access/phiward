@@ -1568,10 +1568,9 @@ def test_markdown_a_header_or_alignment_row_with_a_backslash_is_refused(tree, ps
 @pytest.mark.parametrize("cell", [
     "&#70;AKE-PT-0001", "FAKE&#45;PT&#x2D;0001", "FAKE&amp;#45;PT-0001",
     "FAKE&amp;amp;#45;PT-0001", "**FAKE**-PT-0001", "*FAKE*-PT-*0001*", "~~FAKE~~-PT-0001",
-    "__FAKE__-PT-0001", "[FAKE-PT](x)-0001", "![FAKE-PT](x)-0001", "[x](FAKE-PT-0001)",
-    "[x](&#70;AKE-PT-0001)", "FAKE<b></b>-PT-0001", "FAKE-PT-<!-- x -->0001",
-    "<a href=\"&#70;AKE-PT-0001\">x</a>", "FAKE%26%2345%3BPT-0001", "ＦＡＫＥ&#45;PT-0001",
-    "see &#57;990002 again", "999**0002**", "x/9990&#48;02.bam", "[999](x)0002",
+    "__FAKE__-PT-0001",
+    "FAKE%26%2345%3BPT-0001", "ＦＡＫＥ&#45;PT-0001",
+    "see &#57;990002 again", "999**0002**", "x/9990&#48;02.bam",
 ])
 def test_markdown_an_id_behind_an_entity_or_markup_in_a_kept_cell_is_refused(tree, ps, cell):
     code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"),
@@ -1595,8 +1594,8 @@ def test_markdown_entities_nested_past_the_rounds_are_refused(tree, ps):
 
 
 def test_markdown_markup_and_entities_with_no_id_pass(tree, ps):
-    cells = ["**bold**", "[link](https://example.org/a_b)", "a &amp; b", "&lt;x&gt;",
-             "<br>", "1999**0001**", "snake_case_name", "100%"]
+    cells = ["**bold**", "https://example.org/a_b", "a &amp; b", "&lt;x&gt;",
+             "1999**0001**", "snake_case_name", "100%", "a > b"]
     rows = "".join(f"| FAKE-PT-{i + 4:04d} | {c} | {i} |\n" for i, c in enumerate(cells))
     assert mrun(tree, mput(tree, LABS_MD + rows), more=("--keep-order",))[0] == 0
     body = md_cells((tree / "phi" / "out.md").read_text())[0][5:]
@@ -1647,8 +1646,8 @@ def test_markdown_a_name_found_in_no_table_is_refused(tree, ps):
         none_written(tree, "out.md", "md")
 
 
-@pytest.mark.parametrize("header", ["**patient_id**", "_mrn_", "[pid](x)", "<b>id</b>",
-                                    "patient&#95;id", "pat*ient_id*"])
+@pytest.mark.parametrize("header", ["**patient_id**", "_mrn_", "patient&#95;id",
+                                    "pat*ient_id*", "~~mrn~~"])
 def test_markdown_a_header_with_markup_or_an_entity_is_refused(tree, ps, header):
     text = LABS_MD.replace("| site |", f"| {header} |", 1)
     code, out = mrun(tree, mput(tree, text), extra=(header,))
@@ -1685,4 +1684,109 @@ def test_markdown_a_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatc
                                                                               "| lbb |"))
     code, text = mrun(tree, mput(tree, LABS_MD))
     assert code == 2 and "read back" in text, text
+    none_written(tree, "out.md", "md")
+
+
+# --- step 4, review round 1 -------------------------------------------------------------------
+
+DASHES = ["‐", "‑", "‒", "–", "—", "―", "−", "⁃",
+          "˗", "ー", "﹣", "⸺"]
+
+
+@pytest.mark.parametrize("dash", DASHES + ["%E2%80%90", "%E2%88%92"])
+def test_an_id_with_a_unicode_dash_in_a_kept_tsv_cell_is_refused(tree, ps, dash):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["FAKE-PT-0001", f"FAKE{dash}PT-0001"], ["FAKE-PT-0002", "ok"]])
+    code, text = run(tree, base(tree), extra=["note", f"FAKE{dash}PT-0001"])
+    assert code == 2 and "column 2" in text, text
+    none_written(tree)
+
+
+def test_a_kept_tsv_header_with_a_unicode_dash_id_is_refused(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "FAKE‐PT-0001"],
+                [["FAKE-PT-0001", "x"], ["FAKE-PT-0002", "ok"]])
+    code, text = run(tree, base(tree), extra=["FAKE‐PT-0001"])
+    assert code == 2, text
+    none_written(tree)
+
+
+@pytest.mark.parametrize("dash", ["–", "−", "‐"])
+def test_two_ids_that_differ_only_in_a_dash_are_twins(tree, ps, dash):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"],
+                [["FAKE-PT-0001", "a"], [f"FAKE{dash}PT-0001", "b"]])
+    code, text = run(tree, base(tree), extra=[f"FAKE{dash}PT-0001"])
+    assert code == 2 and "letter case" in text, text
+    none_written(tree)
+
+
+def test_a_vcf_record_with_a_unicode_dash_sample_id_is_refused(tree, ps):
+    p = put(tree, "calls.vcf", vcf_text(recs=_with(1, 7, "DP=31;T=P‑9990001-T01-IM6"))
+            .encode())
+    code, text = vcf_run(tree, p)
+    assert code == 2, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+@pytest.mark.parametrize("note", ["FAKE‐PT-0001", "FAKE%E2%80%90PT-0001",
+                                  "FAKE\\u2212PT-0001"])
+def test_a_json_value_with_a_unicode_dash_id_is_refused(tree, ps, note):
+    code, text = jrun(tree, jput(tree, jdoc(note=note)), extra=(note,))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+
+
+@pytest.mark.parametrize("cell", ["FAKE&hyphen;PT-0001", "FAKE&dash;PT-0001",
+                                  "FAKE&minus;PT-0001", "FAKE&#8208;PT-0001",
+                                  "FAKE%E2%80%90PT-0001", "FAKE–PT-0001"])
+def test_markdown_an_id_with_a_unicode_dash_is_refused(tree, ps, cell):
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"),
+                      extra=(cell,))
+    assert code == 2 and "table 1" in text, text
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("cell", ["FAKE PT 0001", "seen FAKE  PT/0001 today", "FAKE.PT.0001",
+                                  "FAKEPT0001", "f-a-k-e-p-t-0-0-0-1"])
+def test_an_id_with_other_separators_in_a_kept_tsv_cell_is_refused(tree, ps, cell):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["FAKE-PT-0001", cell], ["FAKE-PT-0002", "ok"]])
+    code, text = run(tree, base(tree), extra=["note", cell])
+    assert code == 2 and "column 2" in text, (cell, text)
+    none_written(tree)
+
+
+@pytest.mark.parametrize("cell", ["999 0001", "999-0001", "9.990001", "999,0001"])
+def test_digit_ids_are_not_joined_across_separators(tree, ps, cell):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"],
+                [["9990001", cell], ["9990002", "ok"]])
+    assert run(tree, base(tree), extra=["note"])[0] == 0, cell
+
+
+@pytest.mark.parametrize("cell", ["FAKE-**PT**-0001", "FAKE PT 0001", "*FAKE* PT_0001"])
+def test_markdown_an_id_split_by_emphasis_or_spaces_is_refused(tree, ps, cell):
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"),
+                      extra=(cell,))
+    assert code == 2 and "table 1" in text, text
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("cell", [
+    'FAKE<a title="x>y">-PT-0001', "FAKE<!-- > -->-PT-0001", "FAKE<?x>?>-PT-0001",
+    "FAKE<![CDATA[>]]>-PT-0001", "[FAKE-PT](a(b))-0001", "<b>x</b>", "a < b", "[x]",
+    "x]", "<https://example.org>", "[FAKE-PT](x)-0001", "![FAKE-PT](x)-0001",
+    "[x](FAKE-PT-0001)", "[x](&#70;AKE-PT-0001)", "FAKE<b></b>-PT-0001",
+    "FAKE-PT-<!-- x -->0001", "<a href=\"&#70;AKE-PT-0001\">x</a>", "[999](x)0002",
+])
+def test_markdown_a_cell_with_a_raw_angle_or_square_bracket_is_refused(tree, ps, cell):
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"),
+                      extra=(cell,))
+    assert code == 2 and "line 6" in text and "<, [ or ]" in text, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_two_tables_without_a_blank_line_are_refused(tree, ps):
+    text = ("| mrn | site |\n| --- | --- |\n| FAKE-PT-0001 | lab |\n"
+            "| patient_id | site |\n| :-- | --: |\n| FAKE-PT-0009 | x |\n")
+    code, out = mrun(tree, mput(tree, text), more=("--keep-order",), extra=("FAKE-PT-0009",))
+    assert code == 2 and "line 5" in out and "blank line" in out, out
     none_written(tree, "out.md", "md")

@@ -248,8 +248,12 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
       (`| --- | :---: |`). Any other line is free text and is refused: prose, a heading, a
       list, code, front matter, an HTML comment, a row without its outer pipes.
     - A line with a backslash or a backtick is refused: an escaped pipe (`\|`) or a code span
-      has no safe split into cells. A header with markup or an entity (`**id**`, `_mrn_`,
-      `patient&#95;id`) is refused: write it plain.
+      has no safe split into cells. A line with `<`, `[` or `]` is refused: inline HTML,
+      links, images and autolinks are not covered (write `&lt;` for a `<`). A header with
+      emphasis or an entity (`**id**`, `_mrn_`, `patient&#95;id`) is refused: write it plain.
+    - Two tables need a blank line between them: a row inside a table whose cells are all
+      like `---` is refused (it would read as a second header, coded as IDs). So is a body
+      row of dashes only (`| - | - |`).
     - Each table follows the table rules: every column that looks like an identifier is
       named, in that table. Each name is found in some table, and one ID gets one code in
       all of them.
@@ -257,8 +261,8 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
       the other tables keep their order. The header and the alignment row are kept. The copy
       is written as `| a | b |` lines, one blank line between tables, and read back.
     - For the scan, every cell is also read with its HTML entities decoded (`&#45;`,
-      `&amp;#45;`, also nested up to 4 times; deeper is refused) and its markup removed
-      (`**`, `_`, `~~`, links, HTML tags): `&#70;AKE-PT-0001` and `**FAKE**-PT-0001` are
+      `&amp;#45;`, `&hyphen;`, also nested up to 4 times; deeper is refused) and its
+      emphasis marks removed (`**`, `_`, `~~`): `&#70;AKE-PT-0001` and `999**0001**` are
       found. A message names a table by its number. The run reports the row count of all
       tables.
   - Not covered: Parquet; convert it to TSV with your own tools first.
@@ -273,9 +277,13 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   folders, the sandbox's `allowWrite` and `additionalDirectories`,
   a `write_to` folder, the spool and `~/.phiward`. No field of the output (a cell, a header, the
   kept `#version` line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or script of digits, or escaped (`%2D`, `\u002D`, also
-  escaped twice): an ID of 5 or more characters anywhere in a field, or across the fields of a
-  line as written (`Doe, John` as the CSV fields `Doe` and ` John`); one of 5 or more digits as a whole run of digits, so
+  another letter case, Unicode form, dash (`‐`, `–`, `−` and the other Unicode dashes) or
+  script of digits, or escaped (`%2D`, `\u002D`, `%E2%80%90`, also escaped twice): an ID of
+  5 or more characters anywhere in a field, or across the fields of a line as written (`Doe,
+  John` as the CSV fields `Doe` and ` John`), and one with a letter also with every
+  character but letters and digits removed (`FAKE PT 0001`, `FAKE.PT.0001`,
+  `FAKE-**PT**-0001` for `FAKE-PT-0001`; digits are never joined, so `999 0001` is not
+  `9990001`); one of 5 or more digits as a whole run of digits, so
   `see 9990002` refuses and `19990001` does not; a shorter one with a letter as a whole word;
   a shorter one of digits only as the whole field. No field may hold an invisible format
   character. Not found: a short digit ID

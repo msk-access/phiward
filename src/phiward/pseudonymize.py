@@ -119,13 +119,14 @@ The kinds (the extensions decide; the content must fit them):
 - .md: only pipe tables (| a | b |, each line starting and ending with |, the alignment row
   | --- | second) and blank lines. Any other line (prose, a heading, a list, code, front
   matter, an HTML comment) is free text, refused. A line with a backslash or a backtick (an
-  escaped pipe, a code span) is refused, and so is a header with markup or an entity (**id**,
-  _mrn_, &#95;). Each table follows the table rules with the names of --columns, --drop and
-  --keep that its header holds; each name is in some table, and one ID gets one code in all
-  of them. The body rows of a table with a coded column are shuffled; the header and the
-  alignment row are kept. For the scan, each cell is also read with its HTML entities
-  (&#45;, &amp;#45;) decoded and its markup (**, links, tags) removed. Messages name a
-  table by its number;
+  escaped pipe, a code span), with <, [ or ] (inline HTML, a link, an image), or a second
+  alignment row (two tables need a blank line between them) is refused, and so is a header
+  with emphasis or an entity (**id**, _mrn_, &#95;). Each table follows the table rules
+  with the names of --columns, --drop and --keep that its header holds; each name is in
+  some table, and one ID gets one code in all of them. The body rows of a table with a
+  coded column are shuffled; the header and the alignment row are kept. For the scan, each
+  cell is also read with its HTML entities (&#45;, &amp;#45;, &hyphen;) decoded and its
+  emphasis marks (**, _, ~~) removed. Messages name a table by its number;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
   coded table. A bgzip (BGZF) input, every block of it and its EOF block, gives a BGZF
@@ -145,12 +146,14 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. Two IDs that differ only in letter case or
-  Unicode form (P-1, p-1, a full-width P), in IN or in IN and the key, are refused: make
-  them one first. No field of the output (a cell, a header,
-  the kept # line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or digits, or escaped (%2D, \\u002D, also twice): one
-  of 5 or more characters anywhere in a field, or across the fields of a line as written;
+  with an invisible format character is refused. Two IDs that differ only in letter case,
+  Unicode form or dash (P-1, p-1, a full-width P, an en dash), in IN or in IN and the key,
+  are refused: make them one first. No field of the output (a cell, a header, the kept #
+  line, the codes too) may hold an ID of a coded column or of the key, also in another
+  letter case, Unicode form, dash (U+2010, U+2013, U+2212, every Unicode dash) or digits,
+  or escaped (%2D, \\u002D, also twice): one of 5 or more characters anywhere in a field,
+  or across the fields of a line as written, and one with a letter also with every
+  character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
   one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
   word; a shorter one of digits only as the whole field. Drop such a
   column or clean it first. Run it from the folder of the
@@ -194,10 +197,12 @@ JSON_STEP = re.compile(r"([^.\[\]]*)((?:\[\])*)")  # one part of a key path: a k
 JSON_NUMBER = re.compile(r"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 SURROGATE = re.compile("[\ud800-\udfff]")  # a lone surrogate: no UTF-8 form
 MD_ALIGN = re.compile(r":?-+:?")  # a cell of a pipe table's alignment row
-MD_TAG = re.compile(r"<[^>]*>")  # an HTML tag or comment, for the rendered form of a cell
-MD_DEST = re.compile(r"\]\([^)]*\)")  # a link's destination: `[text](url)` renders `text`
-MD_MARKS = re.compile(r"[*_~\[\]!]")  # emphasis, strike-through, link and image marks
-MD_MARKUP = re.compile(r"[<>*~\[\]]|(?<![0-9A-Za-z])_|_(?![0-9A-Za-z])")  # not in a header
+MD_MARKS = re.compile(r"[*_~]")  # the marks of emphasis and strike-through
+# every dash (Unicode category Pd) and the look-alikes outside it, as `-`: for the scan and the
+# twin rule only
+DASHES = {c: "-" for c in range(sys.maxunicode + 1)
+          if unicodedata.category(chr(c)) == "Pd" or c in (0x2212, 0x2043, 0x02D7, 0x30FC)}
+MD_MARKUP = re.compile(r"[*~]|(?<![0-9A-Za-z])_|_(?![0-9A-Za-z])")  # emphasis: not in a header
 
 
 class Refused(Exception):
@@ -746,16 +751,21 @@ def _ascii_digits(text: str) -> str:
                    unicodedata.category(ch) == "Nd" else ch for ch in text)
 
 
+def _plain(text: str) -> str:
+    """NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII and
+    every dash as `-` (`DASHES`: `FAKE‐PT`, `FAKE–PT`, `FAKE−PT` read `FAKE-PT`)."""
+    return _ascii_digits(inventory.normalize(text)).translate(DASHES)
+
+
 def _forms(text: str) -> "set[str]":
     """Every form a text takes on the way to its fixed point, in any letter case: one round is
-    NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII, then
-    `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no longer changes, or
-    after ROUNDS. So an escape that NFKC makes (`％２Ｄ`) or one escaped twice (`%252D`) is
-    decoded too."""
-    forms = {text.casefold()}
+    `_plain`, then `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no
+    longer changes, or after ROUNDS. So an escape that NFKC makes (`％２Ｄ`), one escaped twice
+    (`%252D`) or a dash escaped (`%E2%80%90`) is decoded too."""
+    forms = {text.casefold(), text.translate(DASHES).casefold()}
     for _ in range(ROUNDS):
-        nxt = unescape(_ascii_digits(inventory.normalize(text)))
-        forms.add(_ascii_digits(inventory.normalize(nxt)).casefold())
+        nxt = unescape(_plain(text))
+        forms.add(_plain(nxt).casefold())
         if nxt == text:
             break
         text = nxt
@@ -764,7 +774,10 @@ def _forms(text: str) -> "set[str]":
 
 class _Matcher:
     """Whether a field holds an ID of the run or of the key, in any of its forms (`_forms`):
-    a long ID (`_long`) anywhere in the field; an ID of 5 or more digits as a whole run of
+    a long ID (`_long`) anywhere in the field, also with every character that is not a letter or
+    a digit removed from both when the ID has a letter (`FAKE PT 0001`, `FAKE.PT.0001` for
+    `FAKE-PT-0001`; never digits joined: `999 0001` is not `9990001`); an ID of 5 or more digits
+    as a whole run of
     digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID
     with a letter as a whole word (`see ab12`); a shorter ID of digits only as the whole field
     (`12` is not in `0.12`)."""
@@ -777,6 +790,9 @@ class _Matcher:
         words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len,
                        reverse=True)
         self.rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
+        bare = sorted({b for v in long_ids if re.search(r"[^\W\d_]", v)
+                       for b in [_alnum(v)] if len(b) >= 5}, key=len, reverse=True)
+        self.sx = re.compile("|".join(re.escape(v) for v in bare)) if bare else None
         self.wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
                              r")(?![0-9a-z])") if words else None
 
@@ -786,11 +802,17 @@ class _Matcher:
         for norm in _forms(field):
             if (whole and norm.strip() in self.whole) or \
                     (self.rx is not None and self.rx.search(norm)) or \
+                    (self.sx is not None and self.sx.search(_alnum(norm))) or \
                     (self.wx is not None and self.wx.search(norm)) or \
                     (self.numbers and any(d in self.numbers
                                           for d in re.findall(r"[0-9]+", norm))):
                 return True
         return False
+
+
+def _alnum(text: str) -> str:
+    """The letters and digits of a text, every other character removed."""
+    return "".join(ch for ch in text if ch.isalnum())
 
 
 def _has_cf(text: str) -> bool:
@@ -823,9 +845,10 @@ def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[
 
 
 def _fold(text: str) -> str:
-    """NFKC with format characters removed, then a case fold: the form two IDs share when they
-    differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width `Ｐ-1`)."""
-    return inventory.normalize(text).casefold()
+    """NFKC with format characters removed, every dash as `-`, then a case fold: the form two
+    IDs share when they differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width
+    `Ｐ-1`, `P–1`)."""
+    return inventory.normalize(text).translate(DASHES).casefold()
 
 
 def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[str]"
@@ -1398,6 +1421,10 @@ def _read_md(text: str) -> List[List[List[str]]]:
         if "\\" in row or "`" in row:
             raise Refused(f"line {n} of the Markdown file holds a backslash or a backtick (an "
                           "escape or a code span): its cells cannot be split safely.")
+        if "<" in row or "[" in row or "]" in row:
+            raise Refused(f"line {n} of the Markdown file holds <, [ or ] (inline HTML, a link, "
+                          "an image or an autolink), which is not covered: write &lt; or "
+                          "remove it.")
         cells = [c.strip(" \t") for c in row[1:-1].split("|")]
         if cur and len(cells) != len(cur[0]):
             raise Refused(f"line {n} of the Markdown file has another number of cells than the "
@@ -1405,6 +1432,9 @@ def _read_md(text: str) -> List[List[List[str]]]:
         if len(cur) == 1 and not all(MD_ALIGN.fullmatch(c) for c in cells):
             raise Refused(f"line {n} of the Markdown file is not the alignment row of its table "
                           "(| --- |): free text is not covered.")
+        if len(cur) > 1 and all(MD_ALIGN.fullmatch(c) for c in cells):
+            raise Refused(f"line {n} of the Markdown file is an alignment row inside a table: "
+                          "put a blank line between two tables.")
         cur.append(cells)
     if not tables:
         raise Refused("the Markdown file holds no table.")
@@ -1416,15 +1446,15 @@ def _write_md(tables: List[List[List[str]]]) -> str:
 
 
 def _md_render(text: str) -> str:
-    """A cell as Markdown shows it, roughly: HTML tags and comments, link destinations and the
-    marks of emphasis, links and images removed (`**FAKE**-PT`, `[FAKE](x)-PT`). For the scan
-    only: it removes more than a renderer does, never less."""
-    return MD_MARKS.sub("", MD_DEST.sub("", MD_TAG.sub("", text)))
+    """A cell with the marks of emphasis and strike-through removed (`999**0001**`), for the
+    scan only. A cell has no HTML, link or image: `_read_md` refuses `<`, `[` and `]`."""
+    return MD_MARKS.sub("", text)
 
 
 def _md_forms(text: str) -> List[str]:
     """The forms of a Markdown cell for the scan: the text, then each round of NFKC, the
-    escapes of `sanitize.unescape` and HTML entities decoded (`&#45;`, `&amp;#45;`, `%26%2345%3B`),
+    escapes of `sanitize.unescape` and HTML entities decoded (`&#45;`, `&amp;#45;`, `%26%2345%3B`,
+    `&hyphen;`),
     each also rendered (`_md_render`). A text still changing after ROUNDS rounds cannot be
     decided: ValueError (the one fixed refusal)."""
     forms: List[str] = []

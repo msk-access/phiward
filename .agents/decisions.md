@@ -29,13 +29,18 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 - **`phiward pseudonymize` codes Markdown pipe tables.** Only tables and blank lines; every
   other line is free text, refused (decision C). Each line of a table starts and ends with
   `|`, and the second is the alignment row. A line with a backslash or a backtick is refused
-  (an escaped pipe or a code span has no safe split), and so is a header with markup or an
-  entity (it would dodge the ID-glob rule). Each table goes through the table rules
+  (an escaped pipe or a code span has no safe split), and so is a line with `<`, `[` or `]`
+  (no inline HTML, links or images: parsing them as CommonMark does was tried in review and
+  removed), a body row of alignment cells only (two tables with no blank line between them),
+  and a header with emphasis or an entity (it would dodge the ID-glob rule). Each table goes through the table rules
   (`build`) with the names its header holds; each name is in some table; one draw knows the
   IDs and values of all tables. Only a table with a coded column is shuffled. The scan reads
   each cell raw and in each round of NFKC, `sanitize.unescape` and `html.unescape` (a
-  superset of the entities CommonMark decodes), each also with tags, link destinations and
-  emphasis marks removed; a cell still changing after 4 rounds is the one fixed refusal.
+  superset of the entities CommonMark decodes), each also with emphasis marks removed; a
+  cell still changing after 4 rounds is the one fixed refusal. In every kind, the scan and
+  the twin rule read every Unicode dash (Pd, and U+2212, U+2043, U+02D7, U+30FC) as `-`, and
+  an ID of 5 or more characters with a letter is also matched with every character but
+  letters and digits removed from it and the field; digit-only IDs are never joined.
   (Why: the same rules as a table, and a cell's rendered or decoded form is what a reader
   sees. Cost: tables with escaped pipes or code spans, and reports with prose, are refused.)
 - **`phiward pseudonymize` codes JSON values at key paths.** `--columns`, `--drop` and
