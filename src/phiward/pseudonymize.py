@@ -146,9 +146,11 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. Two IDs that the scan below reads as one
-  (P-1, p-1, a full-width P, an en dash; FAKE%2DPT-0001, FAKE PT 0001 for FAKE-PT-0001), in
-  IN or in IN and the key, are refused: make them one first. No field of the output (a
+  with an invisible format character is refused. Two IDs that are the same once normalized
+  as the scan below reads them (P-1, p-1, a full-width P, an en dash; FAKE%2DPT-0001,
+  FAKE PT 0001 for FAKE-PT-0001; not FAKE-PT-00011), in IN or in IN and the key, are
+  refused: make them one first. A key that already holds two such IDs cannot code either
+  again: start a new key. No field of the output (a
   cell, a header, the kept # line, the codes too) may hold an ID of a coded column or of
   the key, also in another letter case, Unicode form, dash (U+2010, U+2013, U+2212, every
   Unicode dash) or digits, or escaped (%2D, \\u002D, also twice): one of 5 or more
