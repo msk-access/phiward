@@ -118,6 +118,11 @@ What this costs:
 - An entry the host adds to one of those folders after the start (a new folder in your home) is
   seen only by the next session. A file the host replaces there (an editor saving `~/.gitconfig`)
   stays as it was for the session.
+- The session's view is checked against what was checked before the tool starts. An entry the
+  host removes from one of those folders while the session starts is left out of the view. An
+  entry the host replaces while the session starts stops the start: nothing runs; start again.
+  A short window stays: an entry removed between bubblewrap's own check and its mount stops the
+  start with `bwrap: Can't bind mount ...`; start again.
 - A folder that is missing from the view cannot be made: `mkdir ~/.ssh` fails (read-only).
 - A folder that can be entered but not listed (mode 711, common on HPC) cannot be rebuilt. It is
   shown whole, with the protected roots and credentials in it masked; one made in it later is not

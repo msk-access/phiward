@@ -68,6 +68,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux: `phiward launch` no longer fails to start (`bwrap: Can't get type of source ...`,
+  `Can't find source path /proc/self/fd/N`) when the host removes an entry of a rebuilt folder
+  while the session starts (systemd's private folders in `/var/tmp`, on GitHub's runners). The
+  entry is left out of the view. A short window stays: an entry removed between bubblewrap's own
+  check and its mount still stops the start (`Can't bind mount ...`). The session's view is now
+  checked against what was checked before the tool starts; an entry the host replaces while the
+  session starts stops the start (nothing runs; start again).
 - Linux: a wrapped MCP server inside `phiward launch` (Mode B) now starts. Its own launch used
   to wrap itself again and fail on the read-only `~/.phiward`. The session's seccomp filter now
   answers one unused system call (360) with an error number nothing else returns (3917); a

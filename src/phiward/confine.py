@@ -199,8 +199,9 @@ _BWRAP_BASE = ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--die-with-
 
 def open_place(path: str) -> int:
     """An O_PATH descriptor of the folder `path`, reached part by part without following a
-    link, so the folder checked is the folder bound (check by path, then bind
-    by path, let a swap in between move the bind)."""
+    link. bwrap reads the folder's current name back from it and binds that name: a folder
+    renamed after the check is still the one bound, a name replaced in between is not checked
+    here (launch checks it inside the session: wholetool._write_checks)."""
     flags = os.O_PATH | os.O_NOFOLLOW | os.O_DIRECTORY | os.O_CLOEXEC  # type: ignore[attr-defined]
     fd = os.open("/", flags)
     try:
