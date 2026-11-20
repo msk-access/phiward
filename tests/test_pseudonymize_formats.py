@@ -1,13 +1,15 @@
-"""`phiward pseudonymize`, more kinds of input (step 1 of the formats plan): the extension chain
-picks the parser and the content must agree; plain gzip in and out; `.txt` read as TSV; MAF;
-the scan of the whole output. Made-up data only (`FAKE-PT-0007`, `P-9990001-T01-IM6`, MAF
+"""`phiward pseudonymize`, more kinds of input: the extension chain picks the parser and the
+content must agree; plain gzip in and out; `.txt` read as TSV; MAF; the scan of the whole
+output (step 1 of the formats plan). VCF, BGZF in and out, the sample-name rule (step 2). Made-up data only (`FAKE-PT-0007`, `P-9990001-T01-IM6`, MAF
 barcodes `FAKE-AB-0001-01A`, MRNs from 9990001), in a scratch HOME."""
 
 import csv
 import gzip
 import io
 import os
+import shutil
 import struct
+import subprocess
 import zlib
 
 import pytest
@@ -157,7 +159,6 @@ def test_a_broken_gzip_gives_one_fixed_refusal(tree, ps, case):
     ("labs.md", b"| mrn |\n|---|\n| 9990001 |\n", "out.md"),
     ("labs.tsv", b"##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n", "out.tsv"),
     ("labs.maf.gz", gz("##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n"), "out.maf.gz"),
-    ("labs.tsv.gz", _bgzf(TABLE), "out.tsv.gz"),      # BGZF: a later step
 ])
 def test_a_chain_or_content_that_does_not_fit_is_refused(tree, ps, name, data, out):
     p = put(tree, name, data)
@@ -474,3 +475,399 @@ def test_every_gzip_member_header_is_checked(tree, ps, case):
     code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
     assert code == 2, text
     none_written(tree, "out.tsv.gz")
+
+
+# === step 2: VCF, BGZF, the sample rule ======================================================
+
+FIXED = ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]
+SAMPLES = ["P-9990001-T01-IM6", "P-9990002-T01-IM6", "P-9990003-T01-IM6"]
+KEPT_META = ['##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">',
+             '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">',
+             '##FORMAT=<ID=AD,Number=R,Type=Integer,Description="Allelic depths">',
+             '##FILTER=<ID=q10,Description="Quality below 10">',
+             '##ALT=<ID=DEL,Description="Deletion">']
+META = (["##fileformat=VCFv4.2", "##fileDate=20261119", "##source=FAKEcaller",
+         "##reference=file:///x/FAKE-PT-0007.fa"] + KEPT_META +
+        ['##contig=<ID=chr1,length=248956422,assembly="FAKE build, 1">',
+         '##contig=<ID=chr2,length=242193529>',
+         '##SAMPLE=<ID=P-9990001-T01-IM6,Description="FAKE-PT-0007 tumor">',
+         '##PEDIGREE=<Child=P-9990002-T01-IM6>',
+         '##commandline="caller --in /x/FAKE-PT-0007.bam"',
+         "##bcftools_viewCommand=view /x/FAKE-PT-0007.vcf",
+         "##other=FAKE-PT-0007"])
+VCF_IDS = tuple(SAMPLES) + ("FAKE-PT-0007", "/x/", "commandline", "TUMOR", "normal")
+
+
+def records(n_samples, n=4, chrom="chr1"):
+    """Records sorted by position; sample j's AD holds (j + 1) * 10, so its column can be
+    followed."""
+    return [[chrom, str(10000 + 7 * i), ".", "A", "G", "50", "PASS", f"DP={30 + i}", "GT:AD"] +
+            [f"0/1:{(j + 1) * 10},{i}" for j in range(n_samples)] for i in range(n)]
+
+
+def vcf_text(samples=SAMPLES, recs=None, meta=META, fixed=FIXED):
+    recs = records(len(samples)) if recs is None else recs
+    lines = list(meta) + ["\t".join(list(fixed) + list(samples))] + ["\t".join(r) for r in recs]
+    return "\n".join(lines) + "\n"
+
+
+def vcf_run(tree, p, out="out.vcf", more=("--keep-order",), key="vcf", new=True, extra=()):
+    args = ["--new-key" if new else "--key", key, *more, p, tree / "phi" / out]
+    return run(tree, args, extra=VCF_IDS + tuple(extra))
+
+
+def vcf_lines(path):
+    raw = path.read_bytes()
+    text = gzip.decompress(raw).decode() if raw[:2] == b"\x1f\x8b" else raw.decode()
+    return text.split("\n")[:-1]
+
+
+# --- 11. a VCF: the samples coded, the ## lines from an allow list, records in order ----------
+
+def test_a_vcf_codes_its_samples_and_keeps_only_the_allowed_meta_lines(tree, ps):
+    p = put(tree, "calls.vcf", vcf_text().encode())
+    code, text = vcf_run(tree, p)
+    assert code == 0 and "4 record(s)" in text, text
+    lines = vcf_lines(tree / "phi" / "out.vcf")
+    assert lines[0] == "##fileformat=VCFv4.2"
+    assert lines[1:7] == KEPT_META + ["##contig=<ID=chr1>"]
+    assert lines[7] == "##contig=<ID=chr2>"
+    got = key_map(tree / "home", "vcf")
+    assert sorted(got) == sorted(SAMPLES)
+    assert lines[8].split("\t") == FIXED + [got[s] for s in SAMPLES]
+    assert [ln.split("\t") for ln in lines[9:]] == records(3)
+    out = "\n".join(lines)
+    for s in VCF_IDS[:4] + ("source", "fileDate", "reference", "248956422", "PEDIGREE", "other"):
+        assert s not in out, s
+    assert os.stat(tree / "phi" / "out.vcf").st_mode & 0o777 == 0o600
+
+
+def test_a_vcf_gz_in_plain_gzip_gives_plain_gzip(tree, ps):
+    p = put(tree, "calls.vcf.gz", gz(vcf_text()))
+    assert vcf_run(tree, p, out="out.vcf.gz")[0] == 0
+    raw = (tree / "phi" / "out.vcf.gz").read_bytes()
+    assert raw[3] == 0  # no FEXTRA: plain gzip for plain gzip
+    assert vcf_lines(tree / "phi" / "out.vcf.gz")[0] == "##fileformat=VCFv4.2"
+
+
+def test_a_known_sample_keeps_its_code_in_the_next_vcf(tree, ps):
+    assert vcf_run(tree, put(tree, "a.vcf", vcf_text().encode()), out="a.vcf")[0] == 0
+    first = key_map(tree / "home", "vcf")
+    samples = [SAMPLES[1], "P-9990004-T01-IM6"]
+    p = put(tree, "b.vcf", vcf_text(samples=samples).encode())
+    assert vcf_run(tree, p, out="b.vcf", new=False, extra=("P-9990004-T01-IM6",))[0] == 0
+    got = key_map(tree / "home", "vcf")
+    assert got[SAMPLES[1]] == first[SAMPLES[1]] and len(got) == 4
+    assert vcf_lines(tree / "phi" / "b.vcf")[8].split("\t")[9:] == [got[s] for s in samples]
+
+
+@pytest.mark.parametrize("bad", [
+    {"meta": ["##fileformat=VCFv4.2x"] + META[1:]},           # the first line
+    {"meta": META[1:]},                                        # no fileformat line
+    {"meta": ["##fileformat=VCFv4.2", "#a comment"] + META[1:]},  # a # line that is not ##
+    {"meta": META + ["##contig=<length=5>"]},                  # a contig without an ID
+    {"meta": META + ['##contig=<ID="chr3>']},                  # a broken quote
+    {"meta": META + ["##INFO"]},                               # no `=`
+    {"fixed": FIXED[:8]},                                      # no FORMAT
+    {"fixed": ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INF", "FORMAT"]},
+    {"samples": []},                                           # no sample
+    {"samples": [SAMPLES[0], SAMPLES[0]]},                     # a sample twice
+    {"samples": [SAMPLES[0], " "]},                            # an empty name
+    {"samples": [SAMPLES[0], "P-9990002\u200b-T01"]},          # an invisible character
+    {"recs": records(3)[:1] + [records(3)[1][:-1]]},           # a record of another width
+    {"recs": records(3)[:1] + [["#x"] + records(3)[1][1:]]},   # a # line after the header
+    {"recs": records(3)[:1] + [[""]]},                         # an empty line
+])
+def test_a_vcf_that_does_not_fit_is_refused(tree, ps, bad):
+    p = put(tree, "calls.vcf", vcf_text(**bad).encode())
+    code, text = vcf_run(tree, p)
+    assert code == 2, (bad, text)
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_a_vcf_with_crlf_line_ends_is_refused(tree, ps):
+    p = put(tree, "calls.vcf", vcf_text().replace("\n", "\r\n").encode())
+    assert vcf_run(tree, p)[0] == 2
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_vcf_content_under_another_name_and_other_content_as_vcf_are_refused(tree, ps):
+    p = put(tree, "calls.tsv", vcf_text().encode())
+    assert run(tree, base(tree, inp=p))[0] == 2
+    p = put(tree, "labs.vcf", TABLE.encode())
+    assert vcf_run(tree, p)[0] == 2
+    none_written(tree, "out.vcf", "vcf")
+
+
+# --- 12. the sample columns are shuffled, one permutation for every line ----------------------
+
+def test_the_sample_columns_are_shuffled_the_same_in_every_record(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    p = put(tree, "calls.vcf", vcf_text().encode())
+    assert vcf_run(tree, p, more=())[0] == 0
+    lines = vcf_lines(tree / "phi" / "out.vcf")
+    got = key_map(tree / "home", "vcf")
+    assert lines[8].split("\t")[9:] == [got[s] for s in reversed(SAMPLES)]
+    for i, ln in enumerate(lines[9:]):
+        assert ln.split("\t") == records(3)[i][:9] + [f"0/1:{k * 10},{i}" for k in (3, 2, 1)]
+
+
+def test_keep_order_keeps_the_sample_columns(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    assert vcf_run(tree, put(tree, "calls.vcf", vcf_text().encode()))[0] == 0
+    got = key_map(tree / "home", "vcf")
+    assert vcf_lines(tree / "phi" / "out.vcf")[8].split("\t")[9:] == [got[s] for s in SAMPLES]
+
+
+def test_the_real_shuffle_moves_the_sample_columns(tree, ps):
+    samples = [f"P-{9990001 + i}-T01-IM6" for i in range(12)]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples).encode())
+    assert vcf_run(tree, p, more=(), extra=tuple(samples))[0] == 0
+    got = key_map(tree / "home", "vcf")
+    head = vcf_lines(tree / "phi" / "out.vcf")[8].split("\t")[9:]
+    assert sorted(head) == sorted(got.values()) and head != [got[s] for s in samples]
+
+
+# --- 13. sample names that are words never enter a key (inv. 8) -------------------------------
+
+@pytest.mark.parametrize("name", ["TUMOR", "normal", "S1", "Sample", "sample1", "NA", "none",
+                                  "Germline", "blood", "x7"])
+def test_a_sample_name_that_is_a_word_is_refused(tree, ps, name):
+    samples = [SAMPLES[0], name, SAMPLES[2]]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples).encode())
+    code, text = vcf_run(tree, p, extra=(name,))
+    assert code == 2 and "sample 2" in text and "--keep-samples" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_keep_samples_keeps_a_word_name_out_of_the_key(tree, ps):
+    samples = [SAMPLES[0], "TUMOR", "normal"]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples).encode())
+    code, text = vcf_run(tree, p, more=("--keep-order", "--keep-samples", "2,3"))
+    assert code == 0, text
+    got = key_map(tree / "home", "vcf")
+    assert list(got) == [SAMPLES[0]]
+    assert vcf_lines(tree / "phi" / "out.vcf")[8].split("\t")[9:] == \
+        [got[SAMPLES[0]], "TUMOR", "normal"]
+
+
+@pytest.mark.parametrize("value", ["0", "4", "1,1", "a", "", "2,", "-1"])
+def test_keep_samples_must_name_samples_by_number(tree, ps, value):
+    p = put(tree, "calls.vcf", vcf_text().encode())
+    code, text = vcf_run(tree, p, more=("--keep-samples", value))
+    assert code == 2, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_keep_samples_goes_with_a_vcf_only(tree, ps):
+    code, text = run(tree, base(tree, more=["--keep-samples", "1"]))
+    assert code == 2 and "VCF" in text, text
+    none_written(tree)
+
+
+# --- 14. an ID left in a record or a kept ## line; the column options -------------------------
+
+def _with(rec_i, col, value):
+    recs = records(3)
+    recs[rec_i][col] = value
+    return recs
+
+
+@pytest.mark.parametrize("recs,meta", [
+    (_with(1, 7, "DP=31;TUMOR=P-9990001-T01-IM6"), META),          # an INFO value
+    (_with(2, 2, "P-9990002-T01-IM6"), META),                       # the ID column
+    (_with(0, 6, "q10;P-9990003-T01-IM6"), META),                   # FILTER
+    (_with(3, 10, "0/1:P-9990001-T01-IM6"), META),                  # a sample value
+    (None, META + ['##INFO=<ID=XS,Number=0,Type=Flag,Description="in P-9990002-T01-IM6">']),
+    (None, META + ['##contig=<ID=P-9990001-T01-IM6>']),
+])
+def test_a_sample_name_left_in_a_record_or_a_kept_line_is_refused(tree, ps, recs, meta):
+    p = put(tree, "calls.vcf", vcf_text(recs=recs, meta=meta).encode())
+    code, text = vcf_run(tree, p)
+    assert code == 2, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+@pytest.mark.parametrize("meta", [
+    META + ['##INFO=<ID=XS,Number=0,Type=Flag,Description="seen in ab12c only">'],
+    META + ['##contig=<ID=AB12C>'],
+])
+def test_a_kept_meta_line_that_names_a_sample_is_refused_by_the_scan(tree, ps, meta):
+    """A sample name the sanitizer leaves alone (`AB12C`) in a kept line: the scan finds it."""
+    samples = [SAMPLES[0], "AB12C"]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples, recs=records(2), meta=meta).encode())
+    code, text = vcf_run(tree, p, extra=("AB12C", "ab12c"))
+    assert code == 2 and "holds an ID of a sample" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_an_id_with_a_colon_split_across_format_values_is_refused(tree, ps):
+    samples = [SAMPLES[0], "FK:9990005"]
+    recs = records(2)
+    recs[1][8], recs[1][10] = "GT:AD:XX", "0/1:FK:9990005"
+    p = put(tree, "calls.vcf", vcf_text(samples=samples, recs=recs).encode())
+    code, text = vcf_run(tree, p, extra=("FK:9990005",))
+    assert code == 2, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_a_key_id_in_a_vcf_record_is_refused(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [["9990009", "lab"]])
+    assert run(tree, base(tree, key="vcf"))[0] == 0
+    p = put(tree, "calls.vcf", vcf_text(recs=_with(1, 7, "DP=31;M=9990009")).encode())
+    code, text = vcf_run(tree, p, new=False, extra=("9990009",))
+    assert code == 2, text
+    assert not (tree / "phi" / "out.vcf").exists()
+
+
+def test_a_position_that_holds_a_key_id_inside_a_longer_run_passes(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [["9990009", "lab"]])
+    assert run(tree, base(tree, key="vcf"))[0] == 0
+    p = put(tree, "calls.vcf", vcf_text(recs=_with(1, 1, "19990009")).encode())
+    code, text = vcf_run(tree, p, new=False, extra=("9990009",))
+    assert code == 0, text
+
+
+@pytest.mark.parametrize("opt", [["--columns", "FORMAT"], ["--drop", "INFO"],
+                                 ["--keep", "ID"]])
+def test_the_column_options_are_refused_with_a_vcf(tree, ps, opt):
+    p = put(tree, "calls.vcf", vcf_text().encode())
+    code, text = vcf_run(tree, p, more=opt)
+    assert code == 2 and "VCF" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_a_kept_meta_line_the_sanitizer_masks_is_refused(tree, ps):
+    meta = META + ['##INFO=<ID=XM,Number=1,Type=String,Description="see /x/FAKE-PT-0001.bam">']
+    p = put(tree, "calls.vcf", vcf_text(meta=meta).encode())
+    code, text = vcf_run(tree, p, extra=("FAKE-PT-0001",))
+    assert code == 2 and "##" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+# --- 15. BGZF in gives BGZF out (inv. 6) ------------------------------------------------------
+
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def bgzf(data, size=65280):
+    """BGZF blocks of `size` input bytes each, then the EOF block, as bgzip writes them."""
+    data = data.encode() if isinstance(data, str) else data
+    out = b""
+    for i in range(0, len(data), size):
+        raw = data[i:i + size]
+        c = zlib.compressobj(6, zlib.DEFLATED, -15)
+        body = c.compress(raw) + c.flush()
+        out += (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
+                struct.pack("<HH", 2, 25 + len(body)) + body +
+                struct.pack("<II", zlib.crc32(raw), len(raw)))
+    return out + BGZF_EOF
+
+
+def bgzf_blocks(raw):
+    """The blocks of a BGZF file, each checked against the SAM spec (section 4.1): the header
+    with FEXTRA, XLEN 6, the subfield BC with SLEN 2, BSIZE (the block size - 1) that chains to
+    the next block, at most 64 KiB a block, ISIZE and CRC32 of its data; the last block is the
+    28-byte EOF block."""
+    pos, blocks = 0, []
+    while pos < len(raw):
+        assert raw[pos:pos + 4] == b"\x1f\x8b\x08\x04", pos
+        mtime, _, _, xlen = struct.unpack("<IBBH", raw[pos + 4:pos + 12])
+        assert mtime == 0 and xlen == 6
+        si1, si2, slen, bsize = struct.unpack("<BBHH", raw[pos + 12:pos + 18])
+        assert (si1, si2, slen) == (66, 67, 2)
+        block = raw[pos:pos + bsize + 1]
+        assert len(block) == bsize + 1 <= 65536
+        data = zlib.decompress(block[18:-8], -15)
+        crc, isize = struct.unpack("<II", block[-8:])
+        assert crc == zlib.crc32(data) and isize == len(data) <= 65536
+        blocks.append((block, data))
+        pos += bsize + 1
+    assert pos == len(raw) and blocks[-1][0] == BGZF_EOF
+    return blocks
+
+
+def big_vcf():
+    recs = records(3, n=4000)
+    return vcf_text(recs=recs)
+
+
+def test_a_bgzf_vcf_gives_a_bgzf_vcf(tree, ps):
+    text = big_vcf()
+    assert len(text) > 3 * 65280
+    p = put(tree, "calls.vcf.gz", bgzf(text, size=40000))
+    code, msg = vcf_run(tree, p, out="out.vcf.gz")
+    assert code == 0 and "4000 record(s)" in msg, msg
+    raw = (tree / "phi" / "out.vcf.gz").read_bytes()
+    blocks = bgzf_blocks(raw)
+    assert len(blocks) >= 3 and all(len(d) == 65280 for _, d in blocks[:-2])
+    out = gzip.decompress(raw).decode()
+    assert b"".join(d for _, d in blocks).decode() == out
+    assert out.startswith("##fileformat=VCFv4.2\n") and out.count("\n") == 4000 + 9
+
+
+def test_a_bgzf_tsv_gives_a_bgzf_tsv(tree, ps):
+    """Was: BGZF was refused (step 1, `test_a_chain_or_content_that_does_not_fit_is_refused`);
+    BGZF in now gives BGZF out for every kind."""
+    p = put(tree, "labs.tsv.gz", bgzf(TABLE))
+    assert run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))[0] == 0
+    raw = (tree / "phi" / "out.tsv.gz").read_bytes()
+    assert len(bgzf_blocks(raw)) == 2
+    assert gzip.decompress(raw).decode().startswith("pseudonym\tsite\tvalue\n")
+
+
+def _extra(data, sub):
+    """A one-member gzip whose FEXTRA field is `sub`."""
+    c = zlib.compressobj(6, zlib.DEFLATED, -15)
+    body = c.compress(data) + c.flush()
+    return (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", len(sub)) + sub +
+            body + struct.pack("<II", zlib.crc32(data), len(data)))
+
+
+def _bsize(data, delta):
+    b = bytearray(bgzf(data))
+    b[16:18] = struct.pack("<H", struct.unpack("<H", b[16:18])[0] + delta)
+    return bytes(b)
+
+
+@pytest.mark.parametrize("case", ["bgzf_then_gzip", "gzip_then_bgzf", "other_extra",
+                                  "bsize_short", "bsize_long", "bc_slen"])
+def test_a_bgzf_that_does_not_fit_is_refused(tree, ps, case):
+    text = vcf_text()
+    half = text.index("#CHROM")
+    data = {"bgzf_then_gzip": bgzf(text[:half])[:-28] + gz(text[half:]),
+            "gzip_then_bgzf": gz(text[:half]) + bgzf(text[half:]),
+            "other_extra": _extra(text.encode(), b"XY\x02\x00ab"),
+            "bsize_short": _bsize(text, -1),
+            "bsize_long": _bsize(text, 1),
+            "bc_slen": _extra(text.encode(), b"BC\x04\x00abcd")}[case]
+    p = put(tree, "calls.vcf.gz", data)
+    code, text = vcf_run(tree, p, out="out.vcf.gz")
+    assert code == 2, (case, text)
+    none_written(tree, "out.vcf.gz", "vcf")
+
+
+def test_a_bgzf_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatch):
+    real = ps._bgzf
+
+    def bad(data):
+        return real(data[:-1])
+    monkeypatch.setattr(ps, "_bgzf", bad)
+    p = put(tree, "calls.vcf.gz", bgzf(vcf_text()))
+    code, text = vcf_run(tree, p, out="out.vcf.gz")
+    assert code == 2, text
+    none_written(tree, "out.vcf.gz", "vcf")
+
+
+@pytest.mark.skipif(not shutil.which("tabix"), reason="tabix is not on PATH (htslib)")
+def test_tabix_indexes_the_bgzf_copy(tree, ps):
+    text = vcf_text(recs=records(3, n=3000) + records(3, n=3000, chrom="chr2"))
+    p = put(tree, "calls.vcf.gz", bgzf(text))
+    assert vcf_run(tree, p, out="out.vcf.gz")[0] == 0
+    out = tree / "phi" / "out.vcf.gz"
+    r = subprocess.run(["tabix", "-p", "vcf", str(out)], capture_output=True, text=True,
+                       timeout=60, check=False)
+    assert r.returncode == 0, r.stderr
+    r = subprocess.run(["tabix", str(out), "chr2:10000-10010"], capture_output=True, text=True,
+                       timeout=60, check=False)
+    assert r.returncode == 0 and len(r.stdout.splitlines()) == 2, (r.stdout, r.stderr)

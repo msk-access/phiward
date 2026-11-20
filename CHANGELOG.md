@@ -19,8 +19,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   with no name or time, checked by reading it back). The extensions decide the kind and the
   content must fit them; OUT has the same extensions. No field of the copy, codes, headers and
   the kept line included, may hold an ID of the run or the key, also in another Unicode form
-  or escaped. bgzip, VCF, JSON and Markdown are refused for now; Parquet is not read (convert
-  it to TSV first).
+  or escaped. VCF (`.vcf`, `.vcf.gz`): the sample names are coded, with no `--columns`; only
+  the `fileformat`, `INFO`, `FORMAT`, `FILTER`, `ALT` and `contig` (its ID only) `##` lines
+  are kept; a sample name that is a word (`TUMOR`), has no digit or is under 3 characters is
+  refused unless kept by number with `--keep-samples N`; the records keep their order and the
+  sample columns are shuffled. A bgzip (BGZF) input gives a BGZF copy that `tabix` indexes.
+  JSON and Markdown are refused for now; Parquet is not read (convert it to TSV first).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.

@@ -170,11 +170,34 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
 
     A coded MAF column keeps its header, so MAF tools still read the copy. Tumor and normal
     get unrelated codes. A free-text column (`BAM_File`) that names a sample is refused: drop it.
-  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`). Every member is read, up to 1 GiB
-    expanded. The copy is plain gzip with no name and no time, and it must read back as the
-    coded table before it is written.
-  - Not covered yet: bgzip (BGZF) files, `.vcf`, `.json`, `.md`. Not covered: Parquet; convert
-    it to TSV with your own tools first.
+  - `.vcf`: the first line is `##fileformat=VCFv4.N`. The IDs are the sample names after
+    `FORMAT`, all coded, so give no `--columns`, `--drop` or `--keep`:
+
+    ```bash
+    phiward pseudonymize --new-key samples ~/raw/calls.vcf.gz ~/data/patients/calls-coded.vcf.gz
+    ```
+
+    - Of the `##` lines only `fileformat`, `INFO`, `FORMAT`, `FILTER` and `ALT` are kept,
+      and `contig` with its `ID` only (`##contig=<ID=chr1>`). The others are dropped:
+      `reference`, `source`, `fileDate`, the command lines, `SAMPLE`, `PEDIGREE`. A kept line
+      the sanitizer would mask is refused.
+    - A sample name that is a word (`tumor`, `normal`, `sample`, `sample1`, `control`,
+      `germline`, `blood`, `unknown`, `na`, `none`, in any case), has no digit or is under 3
+      characters is refused: it would link unrelated subjects in the key. Rename it first
+      (`bcftools reheader`), or keep it as it is by number: `--keep-samples 2` keeps the name
+      of the second sample, out of the key. A word with a digit (`TUMOR1`) is coded.
+    - The records keep their order (`tabix` needs sorted positions) and their values. The
+      sample columns are shuffled instead, the same in every record (`--keep-order` keeps
+      them). A record or a kept line that holds a sample's ID (an `INFO` value, the `ID`
+      column) is refused: clean it first (`bcftools annotate`).
+    - The run reports the record count.
+  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`). Every member is read, up to
+    1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
+    the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
+    BGZF copy, so `tabix -p vcf OUT` indexes it; an index (`.tbi`, `.csi`) is never read or
+    copied. A file that mixes BGZF blocks and plain gzip members is refused.
+  - Not covered yet: `.json`, `.md`. Not covered: Parquet; convert it to TSV with your own
+    tools first.
   - A file that cannot be read or written as its kind gives one fixed refusal.
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.

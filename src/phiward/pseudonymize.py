@@ -1,5 +1,6 @@
 """`phiward pseudonymize`: the operator's own command that makes a pseudonymized copy of one
-table (TSV, CSV, a tab-separated .txt or a MAF, each plain or gzip-compressed) for the agent.
+table (TSV, CSV, a tab-separated .txt, a MAF or a VCF, each plain, gzip- or bgzip-compressed)
+for the agent.
 
 The identifier columns the operator names get codes (`S0042`): a prefix fixed in the key, then 4
 digits drawn with `secrets` from the codes not used yet, so neither an ID nor its place in the
@@ -35,7 +36,9 @@ from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_
 
 USAGE = ("usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
          "                            --columns H[=NEW],... [--drop H,...] [--keep H,...]\n"
-         "                            [--keep-order] IN OUT\n")
+         "                            [--keep-order] IN OUT\n"
+         "       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
+         "                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf\n")
 HELP = USAGE + """
 Make a copy of one table (IN) in which the identifier columns you name hold codes (S0042) in
 place of the IDs. The agent then reads the copy through `phiward run`.
@@ -51,8 +54,12 @@ Options:
                    pseudonym, then pseudonym_2, ...; in a MAF the header stays)
   --drop H,...     columns to leave out
   --keep H,...     columns that look like identifiers, kept as they are on your word
-  --keep-order     keep the order of the rows (by default they are shuffled, so the order of
-                   a sorted file does not give away the order of the IDs)
+  --keep-samples N,...
+                   with a VCF: keep the names of these samples (1 is the first sample) as they
+                   are, out of the key (TUMOR, NORMAL)
+  --keep-order     keep the order of the rows, or of a VCF's sample columns (by default they
+                   are shuffled, so the order of a sorted file does not give away the order
+                   of the IDs)
   -h, --help       show this help
 
 The key: ~/.phiward/backups/keys/NAME.tsv (ID, a tab, the code). No agent session, launch or
@@ -67,10 +74,20 @@ The kinds (the extensions decide; the content must fit them):
   refused. Name the barcode columns in --columns (Tumor_Sample_Barcode,
   Matched_Norm_Sample_Barcode, one key) and the columns that look like IDs but are not
   (Entrez_Gene_Id, Exon_Number) in --keep;
+- .vcf: its first line is ##fileformat=VCFv4.N. The IDs are the sample names after FORMAT,
+  all coded (no --columns, --drop or --keep). Of the ## lines only fileformat, INFO, FORMAT,
+  FILTER and ALT are kept, and contig with its ID only; the others (reference, source,
+  command lines, SAMPLE, PEDIGREE) are dropped. A sample name that is a word (tumor,
+  normal, sample, sample1, control, germline, blood, unknown, na, none, in any case), has no
+  digit or is under 3 characters is refused: rename it first (bcftools reheader), or keep
+  it by number with --keep-samples. The records keep their order (tabix needs it) and their
+  values; the sample columns are shuffled instead. A record that holds a sample's ID is
+  refused: clean it first (bcftools annotate);
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
-  coded table. bgzip (BGZF) files, .vcf, .json and .md are not covered yet; Parquet is not:
-  convert it to TSV with your own tools first.
+  coded table. A bgzip (BGZF) input, every block of it, gives a BGZF copy: run
+  `tabix -p vcf` on it to index it (an index is never read or copied). .json and .md are not
+  covered yet; Parquet is not: convert it to TSV with your own tools first.
 Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
@@ -94,7 +111,8 @@ The rules:
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
   your user config and outside every write_to folder (never replaced, mode 0600).
-- Messages never name a cell, a header, a path or a key line; a run reports the row count only.
+- Messages never name a cell, a header, a path or a key line; a run reports the row (or VCF
+  record) count only.
 """
 
 PREFIX = re.compile(r"[A-Z]{1,3}")
@@ -104,9 +122,23 @@ DIGITS = 4
 LIMIT = 1 << 30  # the largest table read, compressed or expanded (it is held in memory)
 # the kinds, by the last extension before an optional `.gz`: (delimiter, name in messages)
 KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separated text"),
-         ".maf": ("\t", "MAF")}
-LATER = (".vcf", ".json", ".md")  # kinds of a later version: refused for now
+         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF")}
+LATER = (".json", ".md")  # kinds of a later version: refused for now
 GZIP_MAGIC = b"\x1f\x8b"
+# BGZF (the SAM spec, 4.1): a gzip member with the extra subfield `BC` (BSIZE, the block size
+# - 1); a block holds at most 64 KiB, so bgzip puts 0xff00 input bytes in each; the EOF block
+BGZF_BLOCK = 0xff00
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+VCF_FORMAT = re.compile(r"##fileformat=VCFv4\.\d{1,2}")
+VCF_FIXED = ["#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", "FORMAT"]
+VCF_META_KEPT = ("INFO", "FORMAT", "FILTER", "ALT")  # kept whole; `contig` keeps its ID only
+VCF_META = re.compile(r"##([A-Za-z0-9_.-]+)=(.*)")
+# a contig ID (VCF 4.3, 1.4.7), and one `key=value` of a structured `##` line
+CONTIG_ID = re.compile(r"[0-9A-Za-z!#$%&+./:;?@^_|~-][0-9A-Za-z!#$%&*+./:;=?@^_|~-]*")
+META_ITEM = re.compile(r'([A-Za-z0-9_.-]+)=("(?:[^"\\]|\\.)*"|[^,"<>]*)')
+# sample names that are words, not IDs: coded, they would link unrelated subjects in the key
+SAMPLE_WORDS = {"tumor", "normal", "sample", "sample1", "control", "germline", "blood",
+                "unknown", "na", "none"}
 _ZEROS = re.compile(rb"\0*")
 MAF_VERSION = re.compile(r"#version \d{1,3}(?:\.\d{1,3})?")  # the one `#` line a MAF keeps
 
@@ -151,10 +183,26 @@ def _names(value: str) -> List[str]:
     return out
 
 
+def _numbers(value: str) -> List[int]:
+    out = value.split(",")
+    if not all(re.fullmatch(r"[1-9][0-9]{0,5}", v) for v in out) or len(set(out)) != len(out):
+        raise Refused("--keep-samples takes sample numbers (1 for the first sample), each "
+                      "once, separated by commas.")
+    return [int(v) for v in out]
+
+
+def _is_vcf(path: str) -> bool:
+    try:
+        return _kind(path)[0] == ".vcf"
+    except Refused:
+        return False
+
+
 def _parse(argv: Sequence[str]) -> Dict[str, object]:
-    opts: Dict[str, object] = {"keep_order": False, "drop": [], "keep": [], "prefix": None}
+    opts: Dict[str, object] = {"keep_order": False, "drop": [], "keep": [], "prefix": None,
+                               "keep_samples": []}
     files: List[str] = []
-    takes = {"--key", "--new-key", "--prefix", "--columns", "--drop", "--keep"}
+    takes = {"--key", "--new-key", "--prefix", "--columns", "--drop", "--keep", "--keep-samples"}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -173,6 +221,8 @@ def _parse(argv: Sequence[str]) -> Dict[str, object]:
                 raise Refused(f"{name} is given twice, or with another key option.")
             if key in ("columns", "drop", "keep"):
                 opts[key] = _names(val)
+            elif key == "keep_samples":
+                opts[key] = _numbers(val)
             else:
                 opts[key] = val
         elif a == "--" and not files:
@@ -185,10 +235,16 @@ def _parse(argv: Sequence[str]) -> Dict[str, object]:
         i += 1
     if "key" not in opts and "new_key" not in opts:
         raise Refused("give --new-key NAME or --key NAME.")
-    if "columns" not in opts:
-        raise Refused("give the identifier columns with --columns.")
     if len(files) != 2:
         raise Refused("give one input table and one output file.")
+    vcf = _is_vcf(files[0])
+    if vcf and ("columns" in opts or opts["drop"] or opts["keep"]):
+        raise Refused("a VCF's IDs are its sample names: --columns, --drop and --keep do not "
+                      "apply to it (see --keep-samples).")
+    if not vcf and "columns" not in opts:
+        raise Refused("give the identifier columns with --columns.")
+    if opts["keep_samples"] and not vcf:
+        raise Refused("--keep-samples goes with a VCF input only.")
     name = str(opts.get("key", opts.get("new_key")))
     if not KEY_NAME.fullmatch(name):
         raise Refused("a key name is 1 to 64 letters, digits, `_` or `-` (never a path).")
@@ -309,10 +365,10 @@ def _kind(path: str) -> Tuple[str, bool]:
     if last == ".parquet":
         raise Refused("Parquet is not covered: convert it to TSV with your own tools first.")
     if last in LATER:
-        raise Refused("VCF, JSON and Markdown files are not covered yet.")
+        raise Refused("JSON and Markdown files are not covered yet.")
     if last not in KINDS or not stem:
-        raise Refused("the input must be a .tsv, .csv, .txt or .maf file, or one of them "
-                      "compressed with gzip (.tsv.gz).")
+        raise Refused("the input must be a .tsv, .csv, .txt, .maf or .vcf file, or one of them "
+                      "compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
     return last, gz
 
 
@@ -439,17 +495,20 @@ def _read_key(kfd: int, file: str) -> Key:
 
 # --- the table ----------------------------------------------------------------------------------
 
-def _member_start(data: bytes, pos: int) -> int:
-    """Where the deflate data of the gzip member at `pos` starts. Its header is checked: the
-    magic, deflate, no reserved flag bit (RFC 1952), no extra field (bgzip puts BGZF there)."""
+def _member_start(data: bytes, pos: int) -> Tuple[int, Optional[int]]:
+    """(where the deflate data of the gzip member at `pos` starts, its BSIZE when it is a BGZF
+    block). Its header is checked: the magic, deflate, no reserved flag bit (RFC 1952). An extra
+    field is taken only as bgzip writes it: FEXTRA alone, XLEN 6, the one subfield `BC` with
+    SLEN 2 (the SAM spec, 4.1)."""
     if data[pos:pos + 2] != GZIP_MAGIC or len(data) < pos + 10 or data[pos + 2] != 8:
         raise ValueError("not a gzip member")
     flg = data[pos + 3]
     if flg & 0xE0:
         raise ValueError("reserved flag bits")
     if flg & 4:
-        raise Refused("the input has gzip extra fields (bgzip, BGZF): not covered yet; "
-                      "decompress it first.")
+        if flg != 4 or data[pos + 10:pos + 16] != b"\x06\x00BC\x02\x00" or len(data) < pos + 18:
+            raise ValueError("an extra field that is not BGZF")
+        return pos + 18, struct.unpack("<H", data[pos + 16:pos + 18])[0]
     p = pos + 10
     for bit in (8, 16):  # FNAME, FCOMMENT: skipped, never kept
         if flg & bit:
@@ -458,21 +517,27 @@ def _member_start(data: bytes, pos: int) -> int:
         p += 2
     if p > len(data):
         raise EOFError("a member header ends early")
-    return p
+    return p, None
 
 
-def _decompress(data: bytes) -> bytes:
-    """The text of a plain gzip file: every member, each header checked (`_member_start`) and
-    each CRC and length; zero padding after a member is allowed, other trailing bytes are not.
-    Expanded in 1 MiB steps: no more than LIMIT bytes. No header field of the input (name,
-    comment, time) is kept."""
+def _decompress(data: bytes) -> Tuple[bytes, bool]:
+    """(the text of a gzip file, whether it is BGZF): every member, each header checked
+    (`_member_start`) and each CRC and length, and a BGZF block's BSIZE; every member is BGZF or
+    none is. Zero padding after a member is allowed, other trailing bytes are not. Expanded in
+    1 MiB steps: no more than LIMIT bytes. No header field of the input (name, comment, time)
+    is kept."""
     if data[:2] != GZIP_MAGIC:
         raise Refused("the input is named .gz but is not gzip data.")
     chunks: List[bytes] = []
     size = pos = 0
     step = 1 << 20
+    kinds = set()
     while pos < len(data):
-        pos = _member_start(data, pos)
+        start = pos
+        pos, bsize = _member_start(data, pos)
+        kinds.add(bsize is not None)
+        if len(kinds) > 1:
+            raise Refused("the input mixes bgzip (BGZF) blocks and plain gzip members.")
         d = zlib.decompressobj(-zlib.MAX_WBITS)
         crc = length = 0
         while not d.eof:
@@ -495,11 +560,32 @@ def _decompress(data: bytes) -> bytes:
         if data[pos:pos + 8] != struct.pack("<II", crc, length & 0xFFFFFFFF):
             raise ValueError("a member's CRC or length")
         pos += 8
+        if bsize is not None and pos - start != bsize + 1:
+            raise ValueError("a BGZF block's BSIZE")
         pos = _ZEROS.match(data, pos).end()  # padding
-    return b"".join(chunks)
+    return b"".join(chunks), kinds == {True}
 
 
-def _decode(data: bytes) -> str:
+def _bgzf(data: bytes) -> bytes:
+    """BGZF (the SAM spec, 4.1): blocks of at most BGZF_BLOCK input bytes, each a gzip member
+    with time 0, the subfield `BC` and its BSIZE, raw deflate, CRC32 and ISIZE; then the EOF
+    block."""
+    out = []
+    for i in range(0, len(data), BGZF_BLOCK):
+        raw = data[i:i + BGZF_BLOCK]
+        c = zlib.compressobj(6, zlib.DEFLATED, -zlib.MAX_WBITS)
+        body = c.compress(raw) + c.flush()
+        size = 18 + len(body) + 8
+        if size > 1 << 16:
+            raise ValueError("a BGZF block over 64 KiB")
+        out.append(b"\x1f\x8b\x08\x04\x00\x00\x00\x00\x00\xff\x06\x00BC\x02\x00" +
+                   struct.pack("<H", size - 1) + body +
+                   struct.pack("<II", zlib.crc32(raw), len(raw)))
+    out.append(BGZF_EOF)
+    return b"".join(out)
+
+
+def _decode(data: bytes, kind: str) -> str:
     """The text of the input; the content must fit the kind its name gives."""
     if not data:
         raise Refused("the input is empty.")
@@ -512,9 +598,9 @@ def _decode(data: bytes) -> str:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise Refused("the input is not UTF-8.")
-    if text.startswith("##fileformat=VCF"):
-        raise Refused("the input is a VCF file: VCF is not covered yet.")
-    return text
+    if kind != ".vcf" and text.startswith("##fileformat=VCF"):
+        raise Refused("the input is a VCF file: name it .vcf.")
+    return text  # a VCF's first line is checked by its reader (`_read_vcf`)
 
 
 def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
@@ -559,12 +645,17 @@ def _write_table(kept: List[str], table: List[List[str]], kind: str) -> str:
     return buf.getvalue()
 
 
-def _encode(text: str, gz: bool) -> bytes:
-    """The bytes of OUT: the text, or its gzip form with no name and time 0, which must read
-    back as the text (what is written is what was scanned)."""
+def _encode(text: str, gz: bool, bgzf: bool) -> bytes:
+    """The bytes of OUT: the text, or its gzip form (BGZF for a BGZF input) with no name and
+    time 0, which must read back as the text (what is written is what was scanned)."""
     data = text.encode("utf-8")
     if not gz:
         return data
+    if bgzf:
+        out = _bgzf(data)
+        if _decompress(out) != (data, True):
+            raise Refused("the compressed copy does not read back as the table.")
+        return out
     out = gzip.compress(data, mtime=0)
     if gzip.decompress(out) != data:
         raise Refused("the compressed copy does not read back as the table.")
@@ -673,6 +764,33 @@ def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[
                               "drop it, or clean it first.")
 
 
+def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[str]"
+          ) -> Tuple[Dict[str, str], List[Tuple[str, str]]]:
+    """(every ID's code, the new key lines): a code for each ID the key does not hold, drawn
+    from every code not used yet, skipping one the sanitizer would touch, one the scan would
+    flag (`m`), or one that is a value of the input (`values`) or the key."""
+    used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
+    used |= {v.casefold() for v in values}
+    free = [n for n in range(1, 10 ** DIGITS)
+            if f"{key.prefix}{n:0{DIGITS}d}".casefold() not in used]
+    added: List[Tuple[str, str]] = []
+    codes = dict(key.codes)
+    for v in ids:
+        if v in codes:
+            continue
+        while True:
+            if not free:
+                raise Refused(f"the key has no code left (at most {10 ** DIGITS - 1} IDs).")
+            j = secrets.randbelow(len(free))
+            free[j], free[-1] = free[-1], free[j]
+            code = f"{key.prefix}{free.pop():0{DIGITS}d}"
+            if _clean_both(san, code) and not m.hit(code):
+                break
+        codes[v] = code
+        added.append((v, code))
+    return codes, added
+
+
 def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: List[List[str]],
           key: Key, keep_headers: bool = False
           ) -> Tuple[List[List[str]], List[Tuple[str, str]], List[int], "set[int]", _Matcher]:
@@ -741,29 +859,10 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
             if v not in seen:
                 seen.add(v)
                 ids.append(v)
-    new_ids = [v for v in ids if v not in key.codes]
     # an ID of the key or of a coded column left anywhere in the output would link its code to
     # it: the scan of the output (`_scan`) refuses it
     m = _Matcher(set(ids) | set(key.codes))
-    # the draw: from every code not used yet, skipping one the sanitizer would touch, one the
-    # scan would flag, or one that is a value of the input or the key
-    used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
-    used |= {c.strip().casefold() for r in rows for c in r}
-    free = [n for n in range(1, 10 ** DIGITS)
-            if f"{key.prefix}{n:0{DIGITS}d}".casefold() not in used]
-    added: List[Tuple[str, str]] = []
-    codes = dict(key.codes)
-    for v in new_ids:
-        while True:
-            if not free:
-                raise Refused(f"the key has no code left (at most {10 ** DIGITS - 1} IDs).")
-            j = secrets.randbelow(len(free))
-            free[j], free[-1] = free[-1], free[j]
-            code = f"{key.prefix}{free.pop():0{DIGITS}d}"
-            if _clean_both(san, code) and not m.hit(code):
-                break
-        codes[v] = code
-        added.append((v, code))
+    codes, added = _draw(ids, key, san, m, {c.strip() for r in rows for c in r})
     body = []
     for r in rows[1:]:
         body.append([codes[r[i].strip()] if i in coded and r[i].strip() else
@@ -771,6 +870,156 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
     if not opts["keep_order"]:
         _shuffle(body)
     return [out_header] + body, added, cols, set(coded), m
+
+
+# --- VCF ----------------------------------------------------------------------------------------
+
+def _contig_id(value: str) -> str:
+    """The ID of a `##contig=<...>` line, its only part kept (its length is a long number the
+    packs mask, and its other parts may name a file)."""
+    if not (value.startswith("<") and value.endswith(">")):
+        raise Refused("a ##contig line is not of the form <ID=...>.")
+    body, pos, ids = value[1:-1], 0, []
+    while True:
+        item = META_ITEM.match(body, pos)
+        if not item:
+            raise Refused("a ##contig line cannot be read.")
+        if item.group(1) == "ID":
+            ids.append(item.group(2))
+        pos = item.end()
+        if pos == len(body):
+            break
+        if body[pos] != ",":
+            raise Refused("a ##contig line cannot be read.")
+        pos += 1
+    if len(ids) != 1 or not CONTIG_ID.fullmatch(ids[0]):
+        raise Refused("a ##contig line has no ID, or one that is not a plain name.")
+    return ids[0]
+
+
+def _read_vcf(text: str) -> Tuple[List[str], List[str], List[List[str]]]:
+    """(the `##` lines kept, the `#CHROM` line's fields, the records). Kept: the first
+    `##fileformat` line, the INFO, FORMAT, FILTER and ALT lines, and each contig line's ID; every
+    other `##` line is dropped. Every record is as wide as the `#CHROM` line, which has the 9
+    fixed fields and one sample or more."""
+    if "\r" in text:
+        raise Refused("the VCF has a carriage return: give it Unix line ends.")
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    if not lines or not VCF_FORMAT.fullmatch(lines[0]):
+        raise Refused("the first line of a VCF must be ##fileformat=VCFv4.N.")
+    meta, i = [lines[0]], 1
+    while i < len(lines) and lines[i].startswith("##"):
+        hit = VCF_META.fullmatch(lines[i])
+        if not hit:
+            raise Refused(f"line {i + 1} of the VCF is not a ##KEY=VALUE line.")
+        if hit.group(1) in VCF_META_KEPT:
+            meta.append(lines[i])
+        elif hit.group(1) == "contig":
+            meta.append(f"##contig=<ID={_contig_id(hit.group(2))}>")
+        i += 1
+    if i >= len(lines) or lines[i].split("\t")[:9] != VCF_FIXED:
+        raise Refused(f"line {i + 1} of the VCF is not its #CHROM header line with the 9 fixed "
+                      "fields.")
+    header = lines[i].split("\t")
+    if len(header) == len(VCF_FIXED):
+        raise Refused("the VCF has no sample column.")
+    recs = [ln.split("\t") for ln in lines[i + 1:]]
+    for n, r in enumerate(recs, i + 2):
+        if len(r) != len(header):
+            raise Refused(f"line {n} of the VCF has another number of fields than its header.")
+        if r[0].startswith("#"):
+            raise Refused(f"line {n} of the VCF, after its header, starts with #.")
+    return meta, header, recs
+
+
+def _write_vcf(meta: List[str], header: List[str], recs: List[List[str]]) -> str:
+    return "".join(ln + "\n" for ln in meta + ["\t".join(r) for r in [header] + recs])
+
+
+def _vcf_hit(field: str, m: _Matcher) -> bool:
+    """The whole field (an ID with a colon is not cut), then each part of it split on
+    `; , = | :` (INFO, FORMAT and sample values; a short ID as a whole part)."""
+    return m.hit(field) or any(m.hit(p) for p in re.split(r"[;,=|:]", field) if p != field)
+
+
+def _sample_check(samples: List[str], keep: "set[int]", san: Sanitizer) -> None:
+    """Every sample name is an ID to code, or kept by number (`--keep-samples`). A name that is
+    a word (TUMOR), has no digit or is under 3 characters is refused: coded, it would link
+    unrelated subjects in the key, and as a known ID it would refuse every later file that says
+    it."""
+    if len(set(samples)) != len(samples):
+        raise Refused("the VCF names a sample twice.")
+    if any(n > len(samples) for n in keep):
+        raise Refused("--keep-samples names a sample number the VCF does not have.")
+    for n, s in enumerate(samples, 1):
+        if not s.strip() or s != s.strip() or \
+                any(unicodedata.category(ch).startswith("C") for ch in s):
+            raise Refused(f"the name of sample {n} (column {n + 9}) is empty, has outer spaces "
+                          "or holds an invisible or control character.")
+        if n in keep:
+            if not _clean_both(san, s):
+                raise Refused(f"the kept name of sample {n} (column {n + 9}) holds what the "
+                              "sanitizer masks.")
+        elif s.casefold() in SAMPLE_WORDS or not re.search(r"[0-9]", s) or len(s) < 3:
+            raise Refused(f"the name of sample {n} (column {n + 9}) is not an ID: a word of "
+                          "the list in --help, a name with no digit, or one under 3 characters. "
+                          f"Rename it first, or keep its name with --keep-samples {n}.")
+
+
+def _scan_vcf(meta: List[str], header: List[str], recs: List[List[str]], coded: "set[int]",
+              m: _Matcher) -> None:
+    """The scan of the whole VCF as it was read back, codes included (`_vcf_hit`). A place is
+    named by its number, never by a value."""
+    for n, line in enumerate(meta, 1):
+        if _has_cf(line) or _vcf_hit(line, m):
+            raise Refused(f"the kept ## line {n} of the output holds an ID of a sample or of the "
+                          "key, or an invisible format character.")
+    for j, name in enumerate(header[9:]):
+        if _has_cf(name) or _vcf_hit(name, m):
+            if j in coded:
+                raise Refused(f"the code of sample column {j + 10} matches an ID of this VCF or "
+                              "of the key.")
+            raise Refused(f"the kept name of sample column {j + 10} holds an ID of a sample or "
+                          "of the key.")
+    for n, r in enumerate(recs, 1):
+        for f in r:
+            if _has_cf(f) or _vcf_hit(f, m):
+                raise Refused(f"record {n} holds an ID of a sample or of the key, or an "
+                              "invisible format character: clean it first (bcftools "
+                              "annotate).")
+
+
+def _code_vcf(opts: Dict[str, object], san: Sanitizer, text: str, key: Key
+              ) -> Tuple[str, List[Tuple[str, str]], int, _Matcher]:
+    """(the written VCF, the new key lines, the record count, the matcher): the sample names
+    coded, the sample columns shuffled (one permutation for the header and every record) unless
+    --keep-order; the records keep their order (tabix needs it)."""
+    meta, header, recs = _read_vcf(text)
+    for n, line in enumerate(meta, 1):
+        if not _clean_both(san, line):
+            raise Refused(f"the kept ## line {n} of the output holds what the sanitizer masks: "
+                          "clean it first.")
+    samples = header[9:]
+    keep = set(opts["keep_samples"])  # type: ignore[call-overload]
+    _sample_check(samples, keep, san)
+    ids = [s for n, s in enumerate(samples, 1) if n not in keep]
+    m = _Matcher(set(ids) | set(key.codes))
+    values = set(samples) | {f for r in recs for f in r if len(f) <= len(key.prefix) + DIGITS}
+    codes, added = _draw(ids, key, san, m, values)
+    perm = list(range(len(samples)))
+    if not opts["keep_order"]:
+        _shuffle(perm)
+    out_head = VCF_FIXED + [samples[j] if j + 1 in keep else codes[samples[j]] for j in perm]
+    out_recs = [r[:9] + [r[9 + j] for j in perm] for r in recs]
+    coded = {k for k, j in enumerate(perm) if j + 1 not in keep}
+    written = _write_vcf(meta, out_head, out_recs)
+    back = _read_vcf(written)
+    if back != (meta, out_head, out_recs):
+        raise Refused("the copy does not read back as the coded VCF.")
+    _scan_vcf(back[0], back[1], back[2], coded, m)
+    return written, added, len(recs), m
 
 
 # --- the run ------------------------------------------------------------------------------------
@@ -817,7 +1066,7 @@ def _open_walk(folder: str) -> int:
     return fd
 
 
-def run(argv: Sequence[str]) -> int:
+def run(argv: Sequence[str]) -> Tuple[int, str]:
     opts = _parse(argv)
     home = _home()
     bfd, kfd = _open_state(home)
@@ -829,7 +1078,7 @@ def run(argv: Sequence[str]) -> int:
             os.close(kfd)
 
 
-def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> int:
+def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, str]:
     if kfd < 0 and not opts["new"]:
         raise Refused("the key does not exist (start one with --new-key).")
     cfg = config.load(os.getcwd())
@@ -857,45 +1106,50 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> int:
     except SanitizerError:
         raise Refused("the sanitizer cannot be built from the config.")
     try:
-        table, added, data = _code(opts, cfg, san, raw, kind, gz, key)
+        count, added, data = _code(opts, cfg, san, raw, kind, gz, key)
     except Refused:
         raise
     except Exception:
         # any failure of a reader, a writer or the check-back (deep nesting, a damaged gzip
         # member, a decode error, memory): one fixed text, never the exception's own
         raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
-    return _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data,
-                   len(table) - 1)
+    _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data)
+    return count, "VCF, {} record(s)" if kind == ".vcf" else "table, {} row(s)"
 
 
 def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: bytes, kind: str,
-          gz: bool, key: Key) -> Tuple[List[List[str]], List[Tuple[str, str]], bytes]:
-    """(the output rows, the new key lines, the bytes of OUT): read, code, write, then read the
-    written text back and scan it whole."""
-    kept, rows = _read_table(_decode(_decompress(raw) if gz else raw), kind)
-    for line in kept:
-        if not _clean_both(san, line):
-            raise Refused("the #version line holds what the sanitizer masks.")
-    table, added, cols, coded, m = build(opts, cfg, san, rows, key, keep_headers=kind == ".maf")
-    text = _write_table(kept, table, kind)
-    back = _read_table(text, kind)
-    if back != (kept, table):
-        raise Refused("the copy does not read back as the coded table.")
-    _scan(back[0], back[1], cols, coded, m)
-    data = _encode(text, gz)
+          gz: bool, key: Key) -> Tuple[int, List[Tuple[str, str]], bytes]:
+    """(the row or record count, the new key lines, the bytes of OUT): read, code, write, then
+    read the written text back and scan it whole."""
+    plain, bgzf = _decompress(raw) if gz else (raw, False)
+    if kind == ".vcf":
+        text, added, count, m = _code_vcf(opts, san, _decode(plain, kind), key)
+    else:
+        kept, rows = _read_table(_decode(plain, kind), kind)
+        for line in kept:
+            if not _clean_both(san, line):
+                raise Refused("the #version line holds what the sanitizer masks.")
+        table, added, cols, coded, m = build(opts, cfg, san, rows, key,
+                                             keep_headers=kind == ".maf")
+        text = _write_table(kept, table, kind)
+        back = _read_table(text, kind)
+        if back != (kept, table):
+            raise Refused("the copy does not read back as the coded table.")
+        _scan(back[0], back[1], cols, coded, m)
+        count = len(table) - 1
+    data = _encode(text, gz, bgzf)
     # the lines as written: an ID can span two fields (`Doe, John` as the CSV fields `Doe` and
     # ` John`)
-    written = (_decompress(data) if gz else data).decode("utf-8")
+    written = (_decompress(data)[0] if gz else data).decode("utf-8")
     for n, line in enumerate(written.split("\n"), 1):
         if m.hit(line, whole=False):
             raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
                           "across its fields: drop or clean those columns first.")
-    return table, added, data
+    return count, added, data
 
 
 def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
-            added: List[Tuple[str, str]], out_dir: str, out_name: str, data: bytes,
-            count: int) -> int:
+            added: List[Tuple[str, str]], out_dir: str, out_name: str, data: bytes) -> None:
     """Create OUT, append the key, write OUT; OUT is removed on any failure after it exists."""
     dfd = _open_walk(out_dir)
     try:
@@ -929,7 +1183,6 @@ def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
                 os.close(ofd)
     finally:
         os.close(dfd)
-    return count
 
 
 def _append_key(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
@@ -984,7 +1237,7 @@ def main(argv: List[str], fin: Optional[TextIO] = None, fout: Optional[TextIO] =
                    "terminal, not through an agent tool. Nothing was written.\n")
         return 2
     try:
-        n = run(argv)
+        n, what = run(argv)
     except Refused as exc:
         done = "" if isinstance(exc, Removed) else " Nothing was written."
         ferr.write(f"phiward pseudonymize: {exc}{done}\n")
@@ -993,6 +1246,6 @@ def main(argv: List[str], fin: Optional[TextIO] = None, fout: Optional[TextIO] =
         ferr.write(f"phiward pseudonymize: a file operation failed ({type(exc).__name__}). "
                    "Nothing was written.\n")
         return 1
-    fout.write(f"phiward pseudonymize: wrote the coded table, {n} row(s). Read it with "
+    fout.write(f"phiward pseudonymize: wrote the coded {what.format(n)}. Read it with "
                "`phiward run`.\n")
     return 0
