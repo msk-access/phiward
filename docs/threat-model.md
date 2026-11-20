@@ -459,11 +459,13 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   - A gzip or bgzip input is read up to 1 GiB expanded; the copy is checked by reading it back.
     A bug in the BGZF writer gives a file `tabix` rejects, never a leak (the scan and the
     check-back come first). Markdown is refused for now, and Parquet is not read.
-  - A JSON copy keeps every value at a path you did not name. The ID-glob rule sees only key
-    names: an ID under a key no glob matches (`note`, `label`) or in an array of strings goes
-    into the copy, masked only by the rules, unless it is an ID of the run or the key. Only
-    the array at the last `[]` of a coded path is shuffled: the order of the other arrays and
-    of the keys stays, and it can follow the IDs. Keys that are IDs are refused, not coded.
+  - A JSON copy keeps every value at a path you did not name. The ID-glob rule sees only the
+    key that holds a value: an ID under a key no glob matches (`note`, `label`) goes into the
+    copy, masked only by the rules, unless it is an ID of the run or the key. Only the array
+    at the last `[]` of a coded path is shuffled: the order of the other arrays and of the
+    keys stays, and it can follow the IDs. A shuffle is refused only when an array of the
+    same length sits beside the shuffled one; arrays paired by position across objects or
+    files are not seen. Keys that are IDs are refused, not coded.
   - A code that is also a file name under a root reads `<ENTRY>`, and a later `[sanitize]
     patterns` rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
     as headers are refused, not covered.

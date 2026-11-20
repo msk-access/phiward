@@ -200,8 +200,8 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
     `[]` stands for every element of an array (`[].mrn` for an array at the top):
 
     ```bash
-    phiward pseudonymize --new-key samples --columns 'samples[].id,samples[].mrn' \
-      --keep samples ~/raw/study.json ~/data/patients/study-coded.json
+    phiward pseudonymize --new-key samples --columns 'samples[].id, samples[].mrn' \
+      ~/raw/study.json ~/data/patients/study-coded.json
     ```
 
     - A key is matched exactly; a key with `.`, `[` or `]` cannot be named. A path that
@@ -210,17 +210,25 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
     - A coded value is a string or an integer; it becomes a string code (`9990001` and
       `"9990001"` get the same code, as in a table). `null` stays `null`. A `true`, a decimal
       number, an object or an array at a coded path is refused.
-    - Every key that looks like an identifier, at any depth, is named by its path in
-      `--columns`, `--drop` or `--keep`, also a key that holds other values (`samples`
-      above). `--drop` and `--keep` paths end in a key. A key the sanitizer would mask is
-      refused: keys that are IDs are not coded.
+    - Every key that looks like an identifier and holds values (strings, numbers, `true`,
+      `false`, `null`) is named by their path in `--columns`, `--drop` or `--keep`:
+      `samples[]` for strings in an array under `samples`, `samples[].id` for the `id` of its
+      objects. A key that holds only objects or arrays (`samples` above) needs no name.
+      `--keep` names such a path; `--drop` names a key, and drops a container whole. A key
+      the sanitizer would mask is refused: keys that are IDs are not coded.
     - The array at the last `[]` of a coded path (`samples[]` for `samples[].id`, an array of
-      objects) is shuffled; `--keep-order` keeps it. A path that ends in `[]` (`ids[]`, the
-      elements themselves) needs `--keep-order`: shuffling one array alone would break its
-      pairing with the arrays beside it. Other arrays and the order of keys are kept.
+      objects) is shuffled. It is refused when an array of the same length sits beside it in
+      the same object: arrays side by side may be paired by position (`samples` and
+      `purity`), and a shuffle would break the pairing without a word. Give `--keep-order`
+      (it is for the whole run, never one array), or drop the other array. A path that ends in
+      `[]` (`ids[]`, the elements themselves) needs `--keep-order`: an array of IDs may be
+      paired by position with arrays in other files. Other arrays and the order of keys are
+      kept.
     - Refused as unreadable: a key twice in one object, `NaN`, `Infinity`, a number out of
-      range (`1e400`), an integer of more than 4300 digits, nesting deeper than 100 levels.
-    - Every key and every value of the copy is a field for the scan below. The copy is
+      range (`1e400`), an integer of more than 4300 digits, nesting deeper than 100 levels, a
+      lone surrogate (`\ud800`, which has no UTF-8 form).
+    - Every key and every value of the copy is a field for the scan below; a number that is
+      whole is also read as its integer (`1234.0`, `"9.990001e6"` for `9990001`). The copy is
       written with an indent of 2, and it must read back as the coded document. A message
       names a key by its number in the order of the file. The run reports no count.
   - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`, `.json.gz`). Every member is read, up to

@@ -27,9 +27,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   a BGZF copy that `tabix` indexes. Two IDs that differ only in letter case or Unicode form
   are refused, in every kind. JSON (`.json`, `.json.gz`): `--columns` takes key paths
   (`samples[].id`, `patient.mrn`); a string or an integer there gets a code, `null` stays;
-  every key that looks like an identifier is named by its path; a key twice, `NaN`,
-  `Infinity` and deep nesting are refused; the array of objects at the last `[]` of a coded
-  path is shuffled, and a path ending in `[]` needs `--keep-order`.
+  every key that looks like an identifier and holds values is named by its path; a key
+  twice, `NaN`, `Infinity`, a lone surrogate and deep nesting are refused; the array of
+  objects at the last `[]` of a coded path is shuffled (refused beside an array of the same
+  length, unless `--keep-order`), and a path ending in `[]` needs `--keep-order`. Any
+  unexpected error of a run is one fixed refusal, and a new key the failed run made is
+  removed.
   Markdown is refused for now; Parquet is not read (convert it to TSV first).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
