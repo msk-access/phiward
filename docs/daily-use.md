@@ -156,8 +156,8 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
 - The kinds: the extensions decide, and the content must fit them. OUT has the same
   extensions as IN (`labs.tsv.gz` gives a `.tsv.gz`).
   - `.tsv`, `.csv`; `.txt` is read as a TSV and needs 2 or more columns (free text is refused).
-  - `.maf`: a TSV after its `#` lines. Of these only an exact `#version 2.4` is kept; the other
-    `#` lines (commands, paths) are dropped, and a `#` line after the header is refused. Name
+  - `.maf`: a TSV after its `#` lines. Only the first `#version` line with a number
+    (`#version 2.4`) is kept; the other `#` lines (commands, paths) are dropped, and a `#` line after the header is refused. Name
     the barcode columns, and keep the columns that look like IDs but are not:
 
     ```bash
@@ -186,8 +186,9 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   folders, the sandbox's `allowWrite` and `additionalDirectories`,
   a `write_to` folder, the spool and `~/.phiward`. No field of the output (a cell, a header, the
   kept `#version` line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case or Unicode form, or escaped (`%2D`, `\u002D`): an ID of 5 or more
-  characters anywhere in a field; one of 5 or more digits as a whole run of digits, so
+  another letter case, Unicode form or script of digits, or escaped (`%2D`, `\u002D`, also
+  escaped twice): an ID of 5 or more characters anywhere in a field, or across the fields of a
+  line as written (`Doe, John` as the CSV fields `Doe` and ` John`); one of 5 or more digits as a whole run of digits, so
   `see 9990002` refuses and `19990001` does not; a shorter one with a letter as a whole word;
   a shorter one of digits only as the whole field. No field may hold an invisible format
   character. Not found: a short digit ID

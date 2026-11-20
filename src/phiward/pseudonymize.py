@@ -24,7 +24,9 @@ import random
 import re
 import secrets
 import stat
+import struct
 import unicodedata
+import zlib
 import sys
 from typing import Dict, List, Optional, Sequence, TextIO, Tuple
 
@@ -60,10 +62,11 @@ holds at most 9999 IDs. The same ID gets the same code in every table coded with
 
 The kinds (the extensions decide; the content must fit them):
 - .tsv, .csv; .txt, read as a TSV, with 2 or more columns (free text is refused);
-- .maf: a TSV after its # lines. Of those only an exact `#version 2.4` is kept; the others
-  are dropped, and a # line after the header is refused. Name the barcode columns in
-  --columns (Tumor_Sample_Barcode,Matched_Norm_Sample_Barcode, one key) and the columns that
-  look like IDs but are not (Entrez_Gene_Id, Exon_Number) in --keep;
+- .maf: a TSV after its # lines. Only the first `#version` line with a number
+  (`#version 2.4`) is kept; the others are dropped, and a # line after the header is
+  refused. Name the barcode columns in --columns (Tumor_Sample_Barcode,
+  Matched_Norm_Sample_Barcode, one key) and the columns that look like IDs but are not
+  (Entrez_Gene_Id, Exon_Number) in --keep;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
   coded table. bgzip (BGZF) files, .vcf, .json and .md are not covered yet; Parquet is not:
@@ -83,13 +86,14 @@ The rules:
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
   with an invisible format character is refused. No field of the output (a cell, a header,
   the kept # line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or escaped (%2D, \u002D): one of 5 or more characters
-  anywhere in a field; one of 5 or more digits as a whole run of digits; a shorter one with
-  a letter as a whole word; a shorter one of digits only as the whole field. Drop such a
+  another letter case, Unicode form or digits, or escaped (%2D, \\u002D, also twice): one
+  of 5 or more characters anywhere in a field, or across the fields of a line as written;
+  one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
+  word; a shorter one of digits only as the whole field. Drop such a
   column or clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
-- OUT is a new file of the same kind as IN (the same extensions), inside a protected root of your user config and
-  outside every write_to folder (never replaced, mode 0600).
+- OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
+  your user config and outside every write_to folder (never replaced, mode 0600).
 - Messages never name a cell, a header, a path or a key line; a run reports the row count only.
 """
 
@@ -103,6 +107,7 @@ KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separa
          ".maf": ("\t", "MAF")}
 LATER = (".vcf", ".json", ".md")  # kinds of a later version: refused for now
 GZIP_MAGIC = b"\x1f\x8b"
+_ZEROS = re.compile(rb"\0*")
 MAF_VERSION = re.compile(r"#version \d{1,3}(?:\.\d{1,3})?")  # the one `#` line a MAF keeps
 
 
@@ -434,25 +439,63 @@ def _read_key(kfd: int, file: str) -> Key:
 
 # --- the table ----------------------------------------------------------------------------------
 
-def _decompress(data: bytes) -> bytes:
-    """The text of a plain gzip file (every member, each checked; zero padding after the last
-    is allowed), read in chunks: no more than LIMIT bytes are expanded. No header field of the
-    input (name, comment, extra, time) is kept."""
-    if data[:2] != GZIP_MAGIC:
-        raise Refused("the input is named .gz but is not gzip data.")
-    if len(data) > 3 and data[3] & 4:
+def _member_start(data: bytes, pos: int) -> int:
+    """Where the deflate data of the gzip member at `pos` starts. Its header is checked: the
+    magic, deflate, no reserved flag bit (RFC 1952), no extra field (bgzip puts BGZF there)."""
+    if data[pos:pos + 2] != GZIP_MAGIC or len(data) < pos + 10 or data[pos + 2] != 8:
+        raise ValueError("not a gzip member")
+    flg = data[pos + 3]
+    if flg & 0xE0:
+        raise ValueError("reserved flag bits")
+    if flg & 4:
         raise Refused("the input has gzip extra fields (bgzip, BGZF): not covered yet; "
                       "decompress it first.")
-    chunks, size = [], 0
-    with gzip.GzipFile(fileobj=io.BytesIO(data), mode="rb") as f:
-        while True:
-            b = f.read(1 << 20)
-            if not b:
-                break
-            size += len(b)
-            if size > LIMIT:
-                raise Refused("the input is too large.")
-            chunks.append(b)
+    p = pos + 10
+    for bit in (8, 16):  # FNAME, FCOMMENT: skipped, never kept
+        if flg & bit:
+            p = data.index(b"\0", p) + 1
+    if flg & 2:  # FHCRC
+        p += 2
+    if p > len(data):
+        raise EOFError("a member header ends early")
+    return p
+
+
+def _decompress(data: bytes) -> bytes:
+    """The text of a plain gzip file: every member, each header checked (`_member_start`) and
+    each CRC and length; zero padding after a member is allowed, other trailing bytes are not.
+    Expanded in 1 MiB steps: no more than LIMIT bytes. No header field of the input (name,
+    comment, time) is kept."""
+    if data[:2] != GZIP_MAGIC:
+        raise Refused("the input is named .gz but is not gzip data.")
+    chunks: List[bytes] = []
+    size = pos = 0
+    step = 1 << 20
+    while pos < len(data):
+        pos = _member_start(data, pos)
+        d = zlib.decompressobj(-zlib.MAX_WBITS)
+        crc = length = 0
+        while not d.eof:
+            if pos >= len(data):
+                raise EOFError("a member ends early")
+            end = min(pos + step, len(data))
+            tail = data[pos:end]
+            while tail and not d.eof:
+                b = d.decompress(tail, step)
+                tail = d.unconsumed_tail
+                size += len(b)
+                if size > LIMIT:
+                    raise Refused("the input is too large.")
+                crc = zlib.crc32(b, crc)
+                length += len(b)
+                chunks.append(b)
+            pos = end - len(d.unused_data) if d.eof else end
+        if len(data) < pos + 8:
+            raise EOFError("a member ends early")
+        if data[pos:pos + 8] != struct.pack("<II", crc, length & 0xFFFFFFFF):
+            raise ValueError("a member's CRC or length")
+        pos += 8
+        pos = _ZEROS.match(data, pos).end()  # padding
     return b"".join(chunks)
 
 
@@ -476,7 +519,8 @@ def _decode(data: bytes) -> str:
 
 def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
     """(the `#` lines kept, the rows, header first). A MAF's `#` lines before the header are
-    dropped, but for an exact `#version N.N`; a `#` line after its header is refused."""
+    dropped, but for the first `#version` and a number (`#version 2.4`); a `#` line after its
+    header is refused."""
     kept: List[str] = []
     if kind == ".maf":
         pos = 0
@@ -539,26 +583,45 @@ def _clean_both(san: Sanitizer, text: str) -> bool:
     return san.clean(text) == text and san.clean(text, table=True) == text
 
 
-def _norm(text: str) -> str:
-    """As masking sees text (NFKC, format characters removed), in any letter case."""
-    return inventory.normalize(text).casefold()
-
-
 def _long(norm_id: str) -> bool:
     """An ID of 5 or more characters, not digits only: matched anywhere in a cell."""
     return len(norm_id) >= 5 and not norm_id.isdigit()
 
 
+ROUNDS = 4  # rounds of normalizing and decoding escapes, at most
+
+
+def _ascii_digits(text: str) -> str:
+    """Every Unicode decimal digit as its ASCII digit (`٩` -> `9`): for the scan only."""
+    return "".join(str(unicodedata.decimal(ch)) if ch > "\x7f" and
+                   unicodedata.category(ch) == "Nd" else ch for ch in text)
+
+
+def _forms(text: str) -> "set[str]":
+    """Every form a text takes on the way to its fixed point, in any letter case: one round is
+    NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII, then
+    `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no longer changes, or
+    after ROUNDS. So an escape that NFKC makes (`％２Ｄ`) or one escaped twice (`%252D`) is
+    decoded too."""
+    forms = {text.casefold()}
+    for _ in range(ROUNDS):
+        nxt = unescape(_ascii_digits(inventory.normalize(text)))
+        forms.add(_ascii_digits(inventory.normalize(nxt)).casefold())
+        if nxt == text:
+            break
+        text = nxt
+    return forms
+
+
 class _Matcher:
-    """Whether a field holds an ID of the run or of the key, in the form masking sees (NFKC,
-    format characters removed, any letter case) and with `\\u`, `\\x` and `%XX` escapes decoded:
+    """Whether a field holds an ID of the run or of the key, in any of its forms (`_forms`):
     a long ID (`_long`) anywhere in the field; an ID of 5 or more digits as a whole run of
     digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID
     with a letter as a whole word (`see ab12`); a shorter ID of digits only as the whole field
     (`12` is not in `0.12`)."""
 
     def __init__(self, ids: "set[str]"):
-        norm_ids = {_norm(v) for v in ids} - {""}
+        norm_ids = {f for v in ids for f in _forms(v)} - {""}
         long_ids = sorted((v for v in norm_ids if _long(v)), key=len, reverse=True)
         self.numbers = {v for v in norm_ids if v.isdigit() and len(v) >= 5}
         self.whole = {v for v in norm_ids if v.isdigit() and len(v) < 5}
@@ -568,13 +631,12 @@ class _Matcher:
         self.wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
                              r")(?![0-9a-z])") if words else None
 
-    def hit(self, field: str) -> bool:
-        forms = {_norm(field)}
-        decoded = unescape(field)
-        if decoded != field:
-            forms.add(_norm(decoded))
-        for norm in forms:
-            if norm.strip() in self.whole or (self.rx is not None and self.rx.search(norm)) or \
+    def hit(self, field: str, whole: bool = True) -> bool:
+        """`whole`: also the rule of a short digit ID as the whole text (a field; not a line,
+        where it would be every field's rule at once)."""
+        for norm in _forms(field):
+            if (whole and norm.strip() in self.whole) or \
+                    (self.rx is not None and self.rx.search(norm)) or \
                     (self.wx is not None and self.wx.search(norm)) or \
                     (self.numbers and any(d in self.numbers
                                           for d in re.findall(r"[0-9]+", norm))):
@@ -820,7 +882,15 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     if back != (kept, table):
         raise Refused("the copy does not read back as the coded table.")
     _scan(back[0], back[1], cols, coded, m)
-    return table, added, _encode(text, gz)
+    data = _encode(text, gz)
+    # the lines as written: an ID can span two fields (`Doe, John` as the CSV fields `Doe` and
+    # ` John`)
+    written = (_decompress(data) if gz else data).decode("utf-8")
+    for n, line in enumerate(written.split("\n"), 1):
+        if m.hit(line, whole=False):
+            raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
+                          "across its fields: drop or clean those columns first.")
+    return table, added, data
 
 
 def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,

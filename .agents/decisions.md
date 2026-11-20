@@ -19,7 +19,7 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   (a TSV of 2 or more columns: free text is refused) and `.maf`, each also `.gz`; the content
   must fit the chain, and OUT has the same one. gzip is read in chunks up to 1 GiB expanded
   and written with `gzip.compress(mtime=0)` (no input header field), checked by reading it
-  back. A MAF keeps only an exact `#version` line and its coded headers; the operator names
+  back. A MAF keeps only a `#version` line with a number and its coded headers; the operator names
   the barcode columns and keeps the other ID-glob columns by name. One scan of the whole
   output (codes, headers and the kept line included) replaces the scan of kept cells; the draw
   skips a code it would flag. Any exception in reading or writing is one fixed refusal.

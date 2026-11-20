@@ -14,7 +14,7 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   shuffled by default. Every column that looks like an identifier must be coded, dropped or
   kept by name. The hook refuses it as an agent command, and its messages give the row count
   only (issue #1). It reads `.tsv`, `.csv`, `.txt` (a TSV of 2 or more columns) and MAF
-  (`.maf`: only an exact `#version` line is kept, the coded barcode columns keep their
+  (`.maf`: only a `#version` line with a number is kept, the coded barcode columns keep their
   headers), each also gzip-compressed (`.tsv.gz`, read up to 1 GiB expanded; the copy is gzip
   with no name or time, checked by reading it back). The extensions decide the kind and the
   content must fit them; OUT has the same extensions. No field of the copy, codes, headers and

@@ -180,20 +180,19 @@ def test_the_extension_chain_is_case_blind(tree, ps):
 # --- 3. a gzip bomb costs at most LIMIT (inv. 3) ----------------------------------------------
 
 def test_a_gzip_that_expands_past_the_limit_is_refused(tree, ps, monkeypatch):
-    monkeypatch.setattr(ps, "LIMIT", 4 << 20)
-    p = put(tree, "labs.tsv.gz", gz("mrn\tsite\n" + "9990001\tlab\n" * (1 << 20)))
+    import tracemalloc
+    monkeypatch.setattr(ps, "LIMIT", 8 << 20)
+    p = put(tree, "labs.tsv.gz", gz("mrn\tsite\n" + "9990001\tlab\n" * (4 << 20)))
     assert p.stat().st_size < (1 << 20)
-    total = []
-    real = gzip.GzipFile.read
-
-    def counted(self, *a):
-        b = real(self, *a)
-        total.append(len(b))
-        return b
-    monkeypatch.setattr(gzip.GzipFile, "read", counted)
-    code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
+    tracemalloc.start()
+    try:
+        code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
+        peak = tracemalloc.get_traced_memory()[1]
+    finally:
+        tracemalloc.stop()
     assert code == 2 and "too large" in text, text
-    assert sum(total) <= ps.LIMIT + (1 << 20), sum(total)
+    # what is held: the expanded chunks up to LIMIT and one step more, never the whole 48 MiB
+    assert peak < ps.LIMIT + (4 << 20), peak
     none_written(tree, "out.tsv.gz")
 
 
@@ -427,3 +426,51 @@ def test_the_draw_uses_the_scan(ps):
 def test_a_plain_tsv_still_works_and_reports_the_row_count_only(tree, ps):
     code, text = run(tree, base(tree), extra=["mrn", "labs.tsv"])
     assert code == 0 and text.strip().endswith("20 row(s). Read it with `phiward run`."), text
+
+
+# --- review round 1 ---------------------------------------------------------------------------
+
+def test_a_key_id_that_spans_two_written_fields_is_refused(tree, ps):
+    """The scan reads the written lines too: a key ID `Doe, John` split over two CSV fields
+    (`Doe`, ` John`) is found in the line as written."""
+    write_table(tree / "data" / "names.tsv", ["name", "value"], [["Doe, John", "1"]])
+    assert run(tree, base(tree, key="k", inp=tree / "data" / "names.tsv", cols="name",
+                          out=tree / "phi" / "names.tsv"), extra=["Doe"])[0] == 0
+    p = put(tree, "labs.csv", b'mrn,last,first\n9990001,Doe," John"\n9990002,Roe,Ann\n')
+    code, text = run(tree, base(tree, key="k", new=False, inp=p, out=tree / "phi" / "out.csv"),
+                     extra=["Doe", "John"])
+    assert code == 2, text
+    assert not (tree / "phi" / "out.csv").exists()
+
+
+@pytest.mark.parametrize("ident,cell", [
+    ("FAKE-PT-0007", "FAKE％２ＤPT-0007"),      # full-width %2D
+    ("FAKE-PT-0007", "FAKE＼u002DPT-0007"),             # full-width backslash, u002D
+    ("FAKE-PT-0007", "FAKE%252DPT-0007"),                   # %2D escaped twice
+    ("9990002", "٩٩٩٠٠٠٢"),  # Arabic-Indic digits
+    ("9990002", "see ٩٩٩٠٠٠٢ again"),
+])
+def test_an_id_behind_nfkc_escapes_or_other_digits_is_refused(tree, ps, ident, cell):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"], [[ident, cell], ["9990009", "ok"]])
+    code, text = run(tree, base(tree), extra=[ident, "note"])
+    assert code == 2 and "column 2" in text, (cell, text)
+    none_written(tree)
+
+
+def _flags(data, bits):
+    b = bytearray(data)
+    b[3] |= bits
+    return bytes(b)
+
+
+@pytest.mark.parametrize("case", ["bgzf_second", "reserved_first", "reserved_second"])
+def test_every_gzip_member_header_is_checked(tree, ps, case):
+    first, rest = TABLE.split("\n", 3)[:3], TABLE.split("\n", 3)[3]
+    first = "\n".join(first) + "\n"
+    data = {"bgzf_second": gz(first) + _bgzf(rest),
+            "reserved_first": _flags(gz(first), 0x20) + gz(rest),
+            "reserved_second": gz(first) + _flags(gz(rest), 0x80)}[case]
+    p = put(tree, "labs.tsv.gz", data)
+    code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
+    assert code == 2, text
+    none_written(tree, "out.tsv.gz")
