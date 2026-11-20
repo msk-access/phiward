@@ -3,7 +3,8 @@
 # inside `phiward launch` (Mode B). The targets are in paths.txt (not in this file or the
 # command), so phiward's hook sees no protected path and the sandbox alone must refuse them.
 # Writes one line per probe to results.txt; prints no content. When `phiward run` fails for
-# another reason, gateway-err keeps the first two lines of its output, the paths replaced.
+# another reason, gateway-err keeps the first two lines of its output (the judge prints them only
+# if they name no protected data).
 # A refusal is recorded with its reason class (judge.py decides which classes pass where):
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
@@ -42,6 +43,26 @@ if err=$(cat "$prot" 2>&1 >/dev/null); then
 else
   echo "read-protected DENIED $(class "$err")"
 fi >> results.txt
+# is each write's target hidden from the session (an empty view, /dev/null)? Looked at before the
+# writes, which could fill an empty view: ~/.phiward without the sentinel check.sh put there,
+# the settings empty or not there (the protected file's read above covers the data folder)
+if out=$(ls -A "$(p phiward)" 2>&1); then
+  case "
+$out
+" in *"
+sbx-sentinel
+"*) r=present ;; *) r=hidden ;; esac
+else
+  case $(class "$out") in no-such) r=hidden ;; *) r=unreadable ;; esac
+fi
+echo "hidden-phiward $r" >> results.txt
+s=$(p settings)
+if err=$(cat "$s" 2>&1 >/dev/null); then
+  if [ "$(cat "$s" 2>/dev/null | wc -c)" -eq 0 ]; then r=hidden; else r=present; fi
+else
+  case $(class "$err") in no-such) r=hidden ;; *) r=unreadable ;; esac
+fi
+echo "hidden-settings $r" >> results.txt
 try write-data touch "$(p data)/sbx-probe-$mode"
 try write-phiward touch "$(p phiward)/sbx-probe-$mode"
 try write-settings sh -c 'printf x >> "$1"' sh "$(p settings)"
@@ -61,16 +82,10 @@ else
   esac
 fi
 echo "gateway-run $r" >> results.txt
-# why it failed, for the report: the first two lines of its output on one line, the protected
-# file and the data folder replaced (an output that names either is "BAD unmasked", never kept)
+# why it failed, for the report: the first two lines of its output on one line (the judge prints
+# them only if they name no protected data)
 if [ "$r" = "BAD other" ]; then
-  printf '%s\n' "$out" | head -n 2 | A=$prot B=$(p data) awk '
-    function rep(s, n, r,   i, o) {
-      o = ""
-      while (n != "" && (i = index(s, n)) > 0) { o = o substr(s, 1, i - 1) r; s = substr(s, i + length(n)) }
-      return o s
-    }
-    { printf "%s%s", (NR > 1 ? " | " : "gateway-err "), rep(rep($0, ENVIRON["A"], "<PROTECTED-FILE>"), ENVIRON["B"], "<DATA>") }
+  printf '%s\n' "$out" | head -n 2 | awk '{ printf "%s%s", (NR > 1 ? " | " : "gateway-err "), $0 }
     END { if (NR == 0) printf "gateway-err "; printf "\n" }' | tr '\000-\011\013-\037\177' ' ' | cut -c 1-320 >> results.txt
 fi
 
