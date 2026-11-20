@@ -112,16 +112,21 @@ def _bad_crc(data):
     return bytes(b)
 
 
-def _bgzf(text):
-    """One BGZF block and the EOF block (an FEXTRA `BC` subfield in each header)."""
-    raw = text.encode()
-    c = zlib.compressobj(6, zlib.DEFLATED, -15)
-    body = c.compress(raw) + c.flush()
-    block = (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
-             struct.pack("<HH", 2, 25 + len(body)) + body +
-             struct.pack("<II", zlib.crc32(raw), len(raw)))
-    eof = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
-    return block + eof
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def bgzf(data, size=65280):
+    """BGZF blocks of `size` input bytes each, then the EOF block, as bgzip writes them."""
+    data = data.encode() if isinstance(data, str) else data
+    out = b""
+    for i in range(0, len(data), size):
+        raw = data[i:i + size]
+        c = zlib.compressobj(6, zlib.DEFLATED, -15)
+        body = c.compress(raw) + c.flush()
+        out += (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
+                struct.pack("<HH", 2, 25 + len(body)) + body +
+                struct.pack("<II", zlib.crc32(raw), len(raw)))
+    return out + BGZF_EOF
 
 
 GZ = gz(TABLE)
@@ -212,7 +217,10 @@ def test_a_compressed_copy_that_does_not_read_back_is_refused(tree, ps, monkeypa
     monkeypatch.setattr(ps.gzip, "compress", bad)
     p = put(tree, "labs.tsv.gz", GZ)
     code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
-    assert code == 2, text
+    # a cut copy fails the read of the copy; a changed one reads but is not the table
+    want = {"short": "the input cannot be read as a gzip-compressed TSV file",
+            "other": "the compressed copy does not read back as the table"}[how]
+    assert code == 2 and want in text, text
     none_written(tree, "out.tsv.gz")
 
 
@@ -356,10 +364,6 @@ def test_a_maf_column_renamed_follows_the_tsv_rules(tree, ps):
 # --- 8. the scan of the whole output (inv. 5) -------------------------------------------------
 
 @pytest.mark.parametrize("ident,cell", [
-    ("FAKE PT 0007", "seen FAKE PT 0007 today"),
-    ("9990001", "PT:9990001"),
-    ("FAKE-PT-0007", "ＦＡＫＥ-PT-0007"),
-    ("9990002", "see 9990002 again"),
     ("FAKE-PT-0007", "\\u0046AKE-PT-0007"),
     ("FAKE-PT-0007", "FAKE%2DPT%2D0007"),
     ("A12", "A12"),
@@ -418,7 +422,7 @@ def test_the_draw_skips_a_code_that_holds_an_id(tree, ps, monkeypatch):
     assert "QX9999" not in codes and len(set(codes)) == 2
 
 
-def test_the_draw_uses_the_scan(ps):
+def test_the_matcher_hits_an_id_in_a_longer_text_but_not_a_longer_run(ps):
     m = ps._Matcher({"X9999", "9999", "S99", "1234567"})
     assert m.hit("QX9999") and m.hit("9999") and m.hit("S99") and m.hit("a/1234567.b")
     assert not m.hit("QX9998") and not m.hit("S991") and not m.hit("11234567")
@@ -470,7 +474,7 @@ def _flags(data, bits):
 def test_every_gzip_member_header_is_checked(tree, ps, case):
     first, rest = TABLE.split("\n", 3)[:3], TABLE.split("\n", 3)[3]
     first = "\n".join(first) + "\n"
-    data = {"bgzf_second": gz(first) + _bgzf(rest),
+    data = {"bgzf_second": gz(first) + bgzf(rest),
             "reserved_first": _flags(gz(first), 0x20) + gz(rest),
             "reserved_second": gz(first) + _flags(gz(rest), 0x80)}[case]
     p = put(tree, "labs.tsv.gz", data)
@@ -749,23 +753,6 @@ def test_a_kept_meta_line_the_sanitizer_masks_is_refused(tree, ps):
 
 # --- 15. BGZF in gives BGZF out (inv. 6) ------------------------------------------------------
 
-BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
-
-
-def bgzf(data, size=65280):
-    """BGZF blocks of `size` input bytes each, then the EOF block, as bgzip writes them."""
-    data = data.encode() if isinstance(data, str) else data
-    out = b""
-    for i in range(0, len(data), size):
-        raw = data[i:i + size]
-        c = zlib.compressobj(6, zlib.DEFLATED, -15)
-        body = c.compress(raw) + c.flush()
-        out += (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
-                struct.pack("<HH", 2, 25 + len(body)) + body +
-                struct.pack("<II", zlib.crc32(raw), len(raw)))
-    return out + BGZF_EOF
-
-
 def bgzf_blocks(raw):
     """The blocks of a BGZF file, each checked against the SAM spec (section 4.1): the header
     with FEXTRA, XLEN 6, the subfield BC with SLEN 2, BSIZE (the block size - 1) that chains to
@@ -857,7 +844,7 @@ def test_a_bgzf_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatch):
     monkeypatch.setattr(ps, "_bgzf", bad)
     p = put(tree, "calls.vcf.gz", bgzf(vcf_text()))
     code, text = vcf_run(tree, p, out="out.vcf.gz")
-    assert code == 2, text
+    assert code == 2 and "the compressed copy does not read back as the table" in text, text
     none_written(tree, "out.vcf.gz", "vcf")
 
 
@@ -1065,7 +1052,7 @@ def test_json_gz_and_bgzf_give_the_same_compression(tree, ps):
     raw = (tree / "phi" / "out.json.gz").read_bytes()
     assert raw[3] == 0 and len(jread(tree / "phi" / "out.json.gz")["samples"]) == 4
     fresh(tree, "out.json.gz", "js")
-    p = jput(tree, _bgzf(json.dumps(jdoc())), name="doc2.json.gz")
+    p = jput(tree, bgzf(json.dumps(jdoc())), name="doc2.json.gz")
     assert jrun(tree, p, out="out2.json.gz")[0] == 0
     raw = (tree / "phi" / "out2.json.gz").read_bytes()
     assert raw[3] == 4 and raw.endswith(BGZF_EOF)

@@ -18,7 +18,7 @@ import pytest
 
 from phiward import config, confine, core, pathmatch
 from phiward.guards import protected_paths
-from phiward.sanitize import Sanitizer
+from phiward.sanitize import Sanitizer, SanitizerError
 from helpers import confinement, needs_confine
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
@@ -122,7 +122,7 @@ def test_k5_a_names_file_that_is_a_fifo_does_not_block(tree):
     os.mkfifo(fifo)
     cfg = config.load(str(tree / "repo"))
     t = time.time()
-    with pytest.raises(Exception):
+    with pytest.raises(SanitizerError, match="a names file cannot be read"):
         Sanitizer.from_config(cfg, [str(fifo)], entries=False)
     assert time.time() - t < 5
 
@@ -133,7 +133,7 @@ def test_k5_a_names_file_inside_a_root_is_readable_but_a_link_out_is_not(tree):
     san = Sanitizer.from_config(cfg, [str(tree / "phi" / "names.txt")], entries=False)
     assert "FAKE-NAME-ZZZZ" not in san.clean("a FAKE-NAME-ZZZZ b")
     os.symlink(tree / "phi" / "names.txt", tree / "repo" / "n.txt")
-    with pytest.raises(Exception):
+    with pytest.raises(SanitizerError, match="a names file cannot be read"):
         Sanitizer.from_config(cfg, [str(tree / "repo" / "n.txt")], entries=False)
 
 
