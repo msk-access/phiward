@@ -153,10 +153,10 @@ The rules:
   the key, also in another letter case, Unicode form, dash (U+2010, U+2013, U+2212, every
   Unicode dash) or digits, or escaped (%2D, \\u002D, also twice): one of 5 or more
   characters anywhere in a field, or across the fields of a line as written, and one with a
-  letter also with every character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
-  one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
-  word; a shorter one of digits only as the whole field. Drop such a
-  column or clean it first. Run it from the folder of the
+  letter also with every character but letters and digits removed (FAKE PT 0001,
+  FAKE.PT.0001 for FAKE-PT-0001); one of 5 or more digits as a whole run of digits; a
+  shorter one with a letter as a whole word; a shorter one of digits only as the whole
+  field. Drop such a column or clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
   your user config and outside every write_to folder (never replaced, mode 0600).
