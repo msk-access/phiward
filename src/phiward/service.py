@@ -214,7 +214,7 @@ def load(path: str, runner=None) -> bool:
         except (OSError, subprocess.SubprocessError):
             # no service manager here (a container, WSL), or it hangs: not loaded
             return subprocess.CompletedProcess(cmd, 127, "", "")
-    q = dict(capture_output=True, text=True, timeout=30)
+    q = {"capture_output": True, "text": True, "timeout": 30}
     uid = os.getuid()
     if sys.platform == "darwin":
         target = f"gui/{uid}/{LABEL}"

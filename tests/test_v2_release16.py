@@ -38,7 +38,7 @@ def test_the_launcher_cache_sees_a_changed_temp_folder(tree, monkeypatch):
     monkeypatch.setenv("PATH", str(bin_dir))
     monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     mcp_config._launcher_exes.cache_clear()
-    monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [])
+    monkeypatch.setattr(claude_settings, "_temp_roots", list)
     first = mcp_config._launcher_exes(str(bin_dir))
     monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [str(bin_dir)])
     second = mcp_config._launcher_exes(str(bin_dir))

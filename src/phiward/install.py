@@ -74,7 +74,7 @@ def pattern_sandbox(patterns: List[str], home: str) -> "tuple":
     from phiward import claude_settings
     entries = []
     for p in patterns:
-        for e in map(lambda x: _home_short(x, home), claude_settings.pattern_entries(p)):
+        for e in (_home_short(x, home) for x in claude_settings.pattern_entries(p)):
             if e not in entries:
                 entries.append(e)
     return entries, (entries if sys.platform == "darwin" else [])

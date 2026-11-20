@@ -393,8 +393,9 @@ def levels(project: Optional[str], home: str, env: Optional[Mapping[str, str]] =
     for m in MANAGED:
         # the drop-ins merge on top of the base file in name order, so the last one wins: listed
         # first here (highest precedence first)
-        files += [("managed", p) for p in reversed(sorted(
-            glob.glob(os.path.join(os.path.dirname(m), "managed-settings.d", "*.json"))))]
+        files += [("managed", p) for p in sorted(
+            glob.glob(os.path.join(os.path.dirname(m), "managed-settings.d", "*.json")),
+            reverse=True)]
         files.append(("managed", m))
     if project:
         files += [("project local", local or local_file(project, home)),
@@ -475,7 +476,7 @@ def _paths(levels_, project: str, home: str, env, key: str, deny: bool) -> List[
             if deny and wild:
                 continue
             bases = _bases(level, project, home, env)
-            if deny and level == "managed" and not (v.startswith("/") or v.startswith("~")):
+            if deny and level == "managed" and not v.startswith(("/", "~")):
                 continue
             if wild:  # an allow pattern stays a pattern; _reopened matches it
                 for p in _resolve(v, bases, home):

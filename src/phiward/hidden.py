@@ -100,7 +100,7 @@ def _token_paths(v: str, home: str) -> List[str]:
         return [v]
     import glob
     pat = re.sub(r"%[A-Za-z%]|\$\{[^}]*\}", "*", v)
-    out = [m for m in glob.glob(pat)[:256]]
+    out = glob.glob(pat)[:256]
     head = os.path.dirname(v[:cut]) if "/" in v[:cut] else ""
     if head.startswith("/") and not _inside(os.path.normpath(home), os.path.normpath(head)):
         out.append(head)

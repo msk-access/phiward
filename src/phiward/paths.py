@@ -56,7 +56,7 @@ class ProtectedSet:
         # the roots and patterns whose names are secret (set by the hook; None: all of these).
         # A glob may be listed above a path that is only hidden (a credential), not above one
         # of these
-        self.secret: Optional["ProtectedSet"] = None
+        self.secret: Optional[ProtectedSet] = None
         # where the glob is decided (`glob_relation`): "confined", "shell" or "file"
         self.mode = "shell"
         self._roots_f = [_fold(r) for r in rs]

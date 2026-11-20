@@ -185,7 +185,7 @@ def _built_at_run_time(w: "shell.Word") -> bool:
 
 
 def _simple_commands(parsed: "shell.Parsed") -> "List[List[shell.Word]]":
-    out: "List[List[shell.Word]]" = [[]]
+    out: List[List[shell.Word]] = [[]]
     for it in parsed.items:
         if isinstance(it, shell.Word):
             if not it.redirect_target:

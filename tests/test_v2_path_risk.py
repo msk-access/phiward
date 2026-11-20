@@ -27,7 +27,7 @@ def t(tree, monkeypatch):
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     # the made-up tree lies under the temp folder, which the agent can write: here it stands for
     # the rest of the machine
-    monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [])
+    monkeypatch.setattr(claude_settings, "_temp_roots", list)
     (tree / "home" / ".claude.json").write_text(json.dumps(
         {"mcpServers": {"docs": {"command": "npx", "args": ["-y", "some-server"]}}}))
     return tree
