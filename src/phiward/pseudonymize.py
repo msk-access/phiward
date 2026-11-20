@@ -1,6 +1,6 @@
 """`phiward pseudonymize`: the operator's own command that makes a pseudonymized copy of one
-table (TSV, CSV, a tab-separated .txt, a MAF or a VCF, each plain, gzip- or bgzip-compressed)
-for the agent.
+table (TSV, CSV, a tab-separated .txt, a MAF, a VCF or a JSON file, each plain, gzip- or
+bgzip-compressed) for the agent.
 
 The identifier columns the operator names get codes (`S0042`): a prefix fixed in the key, then 4
 digits drawn with `secrets` from the codes not used yet, so neither an ID nor its place in the
@@ -16,9 +16,12 @@ IDs would confirm guessed IDs).
 """
 
 import csv
+import decimal
 import fnmatch
 import gzip
 import io
+import json
+import math
 import os
 import pwd
 import random
@@ -38,7 +41,10 @@ USAGE = ("usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
          "                            --columns H[=NEW],... [--drop H,...] [--keep H,...]\n"
          "                            [--keep-order] IN OUT\n"
          "       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
-         "                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf\n")
+         "                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf\n"
+         "       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
+         "                            --columns PATH,... [--drop PATH,...] [--keep PATH,...]\n"
+         "                            [--keep-order] IN.json OUT.json\n")
 HELP = USAGE + """
 Make a copy of one table (IN) in which the identifier columns you name hold codes (S0042) in
 place of the IDs. The agent then reads the copy through `phiward run`.
@@ -51,15 +57,18 @@ Options:
   --prefix P       with --new-key: 1 to 3 capital letters before the digits (default S)
   --columns H[=NEW],...
                    the identifier columns to code; each one's header becomes NEW (default
-                   pseudonym, then pseudonym_2, ...; in a MAF the header stays)
-  --drop H,...     columns to leave out
-  --keep H,...     columns that look like identifiers, kept as they are on your word
+                   pseudonym, then pseudonym_2, ...; in a MAF the header stays); in JSON,
+                   key paths (below)
+  --drop H,...     columns (in JSON, key paths) to leave out
+  --keep H,...     columns (in JSON, key paths) that look like identifiers, kept as they are
+                   on your word
   --keep-samples N,...
                    with a VCF: keep the names of these samples (1 is the first sample) as they
                    are, out of the key (TUMOR, NORMAL), on your word
-  --keep-order     keep the order of the rows, or of a VCF's sample columns (by default they
-                   are shuffled, so the order of a sorted file does not give away the order
-                   of the IDs)
+  --keep-order     keep the order of the rows, of a VCF's sample columns or of the JSON
+                   arrays of objects (by default they are shuffled, so the order of a sorted
+                   file does not give away the order of the IDs); for the whole run, never
+                   for one array alone
   -h, --help       show this help
 
 The key: ~/.phiward/backups/keys/NAME.tsv (ID, a tab, the code). No agent session, launch or
@@ -85,11 +94,32 @@ The kinds (the extensions decide; the content must fit them):
   needs it) and their values; the sample columns are shuffled instead. A record that holds a
   sample's ID is refused: clean it first (bcftools annotate). A short sample name of digits
   only (123) refuses every record that holds that number: rename it first;
+- .json: the IDs are the values at the key paths in --columns: keys joined by `.`, `[]` for
+  every element of an array (--columns 'samples[].id,samples[].mrn'; `[].mrn` for a
+  top-level array). A key is matched exactly; one with `.`, `[` or `]` cannot be named. A
+  path that matches nothing, or meets a value of another kind (a key where there is no
+  object), is refused. A coded value is a string or an integer (it becomes a string code);
+  null stays null; any other value is refused. Every key that looks like an identifier and
+  holds values (a string, a number, true, false or null, also in an array: samples[] for
+  strings under samples, samples[].id) is named by that path in --columns, --drop or --keep;
+  a key that holds only objects or arrays needs no name. --keep names such a path; --drop a
+  key, a container whole. A key the sanitizer would mask is refused (keys that are IDs are
+  not coded). The array at the last [] of a coded path (an array of objects, samples[] for
+  samples[].id) is shuffled, unless --keep-order; it is refused when an array of the same
+  length sits beside it in the same object (arrays side by side may be paired by position,
+  and a shuffle would break the pairing): give --keep-order, or drop the other array. A path
+  that ends in [] (ids[], the elements themselves) needs --keep-order: an array of IDs may be
+  paired by position with arrays phiward cannot see. Other arrays and the order of keys are
+  kept. Refused as unreadable: a key twice in one object, NaN, Infinity, a number out of
+  range, an integer of more than 4300 digits, nesting deeper than 100, a lone surrogate
+  (\\ud800). For the scan, a number that is whole is also read as its integer (1234.0,
+  "9.990001e6"). The copy is written with an indent of 2 and read back. A key is named in
+  messages by its number in the order of the file. The run reports no count;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
   coded table. A bgzip (BGZF) input, every block of it and its EOF block, gives a BGZF
   copy; for a VCF, run `tabix -p vcf` on it to index it (an index is never read or copied).
-  .json and .md are not covered yet; Parquet is not: convert it to TSV with your own tools first.
+  .md is not covered yet; Parquet is not: convert it to TSV with your own tools first.
 Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
@@ -100,6 +130,7 @@ The rules:
   A file inside a protected root may still be the agent's (`phiward copy` puts files there):
   never run this on a file the agent made or asked for, wherever it is.
   Every row has the header's number of fields (UTF-8).
+  In JSON, a key is a header and a scalar a cell in the rules below.
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
@@ -115,8 +146,8 @@ The rules:
   project whose agent will read the copy (its sandbox settings name the places refused).
 - OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
   your user config and outside every write_to folder (never replaced, mode 0600).
-- Messages never name a cell, a header, a path or a key line; a run reports the row (or VCF
-  record) count only.
+- Messages never name a cell, a header, a key path, a path or a key line; a run reports the
+  row (or VCF record) count only, and a JSON run no count.
 """
 
 PREFIX = re.compile(r"[A-Z]{1,3}")
@@ -126,8 +157,8 @@ DIGITS = 4
 LIMIT = 1 << 30  # the largest table read, compressed or expanded (it is held in memory)
 # the kinds, by the last extension before an optional `.gz`: (delimiter, name in messages)
 KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separated text"),
-         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF")}
-LATER = (".json", ".md")  # kinds of a later version: refused for now
+         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF"), ".json": ("", "JSON")}
+LATER = (".md",)  # kinds of a later version: refused for now
 GZIP_MAGIC = b"\x1f\x8b"
 # BGZF (the SAM spec, 4.1): a gzip member with the extra subfield `BC` (BSIZE, the block size
 # - 1); a block holds at most 64 KiB, so bgzip puts 0xff00 input bytes in each; the EOF block
@@ -146,6 +177,11 @@ SAMPLE_WORDS = {"tumor", "normal", "sample", "sample1", "control", "germline", "
                 "unknown", "na", "none"}
 _ZEROS = re.compile(rb"\0*")
 MAF_VERSION = re.compile(r"#version \d{1,3}(?:\.\d{1,3})?")  # the one `#` line a MAF keeps
+JSON_DEPTH = 100  # objects and arrays nested deeper are refused
+JSON_DIGITS = 4300  # an integer of more digits is refused (Python 3.11's own limit, on 3.9 too)
+JSON_STEP = re.compile(r"([^.\[\]]*)((?:\[\])*)")  # one part of a key path: a key, then []s
+JSON_NUMBER = re.compile(r"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
+SURROGATE = re.compile("[\ud800-\udfff]")  # a lone surrogate: no UTF-8 form
 
 
 class Refused(Exception):
@@ -370,10 +406,10 @@ def _kind(path: str) -> Tuple[str, bool]:
     if last == ".parquet":
         raise Refused("Parquet is not covered: convert it to TSV with your own tools first.")
     if last in LATER:
-        raise Refused("JSON and Markdown files are not covered yet.")
+        raise Refused("Markdown files are not covered yet.")
     if last not in KINDS or not stem:
-        raise Refused("the input must be a .tsv, .csv, .txt, .maf or .vcf file, or one of them "
-                      "compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
+        raise Refused("the input must be a .tsv, .csv, .txt, .maf, .vcf or .json file, or one "
+                      "of them compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
     return last, gz
 
 
@@ -1049,6 +1085,269 @@ def _code_vcf(opts: Dict[str, object], san: Sanitizer, text: str, key: Key
     return written, added, len(recs), m
 
 
+# --- JSON ---------------------------------------------------------------------------------------
+
+def _no_twins(pairs: List[Tuple[str, object]]) -> Dict[str, object]:
+    out: Dict[str, object] = {}
+    for k, v in pairs:
+        if k in out:
+            raise ValueError("a key twice in one object")
+        out[k] = v
+    return out
+
+
+def _no_constant(name: str) -> object:
+    raise ValueError("NaN or Infinity")
+
+
+def _finite(text: str) -> float:
+    f = float(text)
+    if not math.isfinite(f):  # 1e400 reads as inf, which JSON cannot write
+        raise ValueError("a number out of range")
+    return f
+
+
+def _integer(text: str) -> int:
+    if len(text.lstrip("-")) > JSON_DIGITS:
+        raise ValueError("an integer too long")
+    return int(text)
+
+
+def _read_json(text: str) -> object:
+    """The document: a key twice in one object, NaN, Infinity, a number out of range, an
+    integer of more than JSON_DIGITS digits, objects or arrays nested deeper than JSON_DEPTH and
+    a lone surrogate (`\\ud800`, which has no UTF-8 form) in a key or a string are refused (as
+    any error: the one fixed refusal)."""
+    doc = json.loads(text, object_pairs_hook=_no_twins, parse_constant=_no_constant,
+                     parse_float=_finite, parse_int=_integer)
+    stack = [(doc, 1)]
+    while stack:
+        v, depth = stack.pop()
+        if isinstance(v, str) and SURROGATE.search(v):
+            raise ValueError("a lone surrogate")
+        if isinstance(v, (dict, list)):
+            if depth > JSON_DEPTH:
+                raise ValueError("nested too deep")
+            if isinstance(v, dict) and any(SURROGATE.search(k) for k in v):
+                raise ValueError("a lone surrogate")
+            stack += [(c, depth + 1) for c in (v.values() if isinstance(v, dict) else v)]
+    return doc
+
+
+def _write_json(doc: object) -> str:
+    return json.dumps(doc, ensure_ascii=False, indent=2, allow_nan=False) + "\n"
+
+
+Steps = Tuple[Optional[str], ...]  # a key path: a key, or None for every element of an array
+
+
+def _json_path(spec: str, n: int, opt: str) -> Steps:
+    """`samples[].id` as ("samples", None, "id"); `[].mrn` names the elements of a top-level
+    array. A key is matched exactly; one with `.`, `[` or `]` cannot be named."""
+    steps: List[Optional[str]] = []
+    for k, part in enumerate(spec.split(".")):
+        hit = JSON_STEP.fullmatch(part)
+        if not hit or not hit.group(1) and (k > 0 or not hit.group(2)):
+            raise Refused(f"path {n} of {opt} is not a key path (see --help).")
+        if hit.group(1):
+            steps.append(hit.group(1))
+        steps += [None] * (len(hit.group(2)) // 2)
+    return tuple(steps)
+
+
+def _json_at(box: List[object], steps: Steps, n: int, opt: str, last: int = -1
+             ) -> Tuple[List[Tuple[object, object]], List[Tuple[object, object]]]:
+    """(the places the path reaches, each a (container, key or index); the places of the arrays
+    met at step `last`). A missing key or a null on the way reaches nothing there; any other
+    value where the path needs an object or an array is refused."""
+    places: List[Tuple[object, object]] = [(box, 0)]
+    arrays: List[Tuple[object, object]] = []
+    for i, step in enumerate(steps):
+        nxt: List[Tuple[object, object]] = []
+        for parent, slot in places:
+            v = parent[slot]  # type: ignore[index]
+            if v is None:
+                continue
+            if step is None and isinstance(v, list):
+                nxt += [(v, j) for j in range(len(v))]
+                if i == last:
+                    arrays.append((parent, slot))
+            elif step is not None and isinstance(v, dict):
+                if step in v:
+                    nxt.append((v, step))
+            else:
+                raise Refused(f"path {n} of {opt} meets a value of another kind (a key where "
+                              "there is no object, or brackets where there is no array).")
+        places = nxt
+    return places, arrays
+
+
+def _json_items(doc: object):
+    """Every value of `doc` in the order of the file: (its path, the object it is in or None,
+    the key it is under or None, the value, the nearest (object, key) above it or None)."""
+    stack: List[Tuple[Steps, object, Optional[str], object, object]] = [
+        ((), None, None, doc, None)]
+    while stack:
+        path, parent, k, v, owner = stack.pop()
+        yield path, parent, k, v, owner
+        if isinstance(v, dict):
+            stack += [(path + (c,), v, c, x, (v, c)) for c, x in reversed(list(v.items()))]
+        elif isinstance(v, list):
+            stack += [(path + (None,), v, None, x, owner) for x in reversed(v)]
+
+
+def _bare(steps: Steps) -> Steps:
+    """The path without the `[]`s at its end: `samples[]` and `samples` name one key."""
+    while steps and steps[-1] is None:
+        steps = steps[:-1]
+    return steps
+
+
+def _json_forms(text: str) -> List[str]:
+    """The text, and its integer form when it is a number that is whole (`1234.0`,
+    `9.990001e6` -> `9990001`): for the scan only."""
+    t = text.strip()
+    if JSON_NUMBER.fullmatch(t):
+        d = decimal.Decimal(t)
+        if abs(d.adjusted()) <= 40 and d == d.to_integral_value():
+            return [text, str(int(d))]
+    return [text]
+
+
+def _json_text(v: object) -> Optional[str]:
+    """The text of a scalar for the scan: a string, or a number as written."""
+    if isinstance(v, str):
+        return v
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return json.dumps(v)
+    return None
+
+
+def _scan_json(doc: object, m: _Matcher) -> None:
+    """The scan of the whole document as it was read back, codes included: no key and no
+    scalar may hold an invisible format character or an ID (`_Matcher`)."""
+    for _, _, k, v, _ in _json_items(doc):
+        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_forms(k))):
+            raise Refused("a key of the output holds an ID of a coded path or of the key, or an "
+                          "invisible format character.")
+        text = _json_text(v)
+        if text is not None and (_has_cf(text) or any(m.hit(f) for f in _json_forms(text))):
+            raise Refused("a value of the output holds an ID of a coded path or of the key, or "
+                          "an invisible format character: drop it, or clean it first.")
+
+
+def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: str, key: Key
+               ) -> Tuple[str, List[Tuple[str, str]], _Matcher]:
+    """(the written JSON, the new key lines, the matcher). The values at the paths of --columns
+    (a string or an integer; null stays) get codes; the keys at the paths of --drop are
+    removed, a container whole; every scalar path an ID glob matches (`samples[]`,
+    `samples[].id`) is named. The array at the last [] of a coded path that goes on to a key
+    (an array of objects) is shuffled unless --keep-order, and refused when an array of the
+    same length sits beside it (their pairing by position would break); a coded path that
+    ends in [] (the elements themselves) needs --keep-order."""
+    doc = _read_json(text)
+    box: List[object] = [doc]
+    # a key is named in messages by its number in the input, never by its text or its path
+    keys = (x for x in _json_items(doc) if x[2] is not None)
+    number = {(id(p), k): n for n, (_, p, k, _, _) in enumerate(keys, 1)}
+    specs: Dict[str, List[Tuple[int, Steps]]] = {}
+    named = set()
+    for opt in ("columns", "drop", "keep"):
+        flag = f"--{opt}"
+        specs[opt] = []
+        for n, spec in enumerate(opts.get(opt, []), 1):  # type: ignore[union-attr]
+            spec = str(spec).strip()  # `a, b` as in a table's list of columns
+            if opt == "columns" and "=" in spec:
+                raise Refused("a key path takes no new name (=NEW): a coded value keeps its key.")
+            steps = _json_path(spec, n, flag)
+            if opt == "drop" and (not steps or steps[-1] is None):
+                raise Refused(f"path {n} of --drop does not end in a key.")
+            if _bare(steps) in named:
+                raise Refused("a key path is named twice in --columns, --drop and --keep.")
+            named.add(_bare(steps))
+            specs[opt].append((n, steps))
+    for n, steps in specs["drop"]:
+        places, _ = _json_at(box, steps, n, "--drop")
+        if not places:
+            raise Refused(f"path {n} of --drop matches nothing.")
+        for parent, slot in places:
+            del parent[slot]  # type: ignore[attr-defined]
+    # the scalar paths of the document (strings, numbers, true, false, null), without their
+    # last []s, each with the key it is under
+    scalars: Dict[Steps, Tuple[object, str]] = {}
+    for path, _, _, v, owner in _json_items(box[0]):
+        if not isinstance(v, (dict, list)) and owner is not None:
+            scalars.setdefault(_bare(path), owner)  # type: ignore[arg-type]
+    for n, steps in specs["keep"]:
+        _json_at(box, steps, n, "--keep")
+        if _bare(steps) not in scalars:
+            raise Refused(f"path {n} of --keep names no value (a string, a number, true, "
+                          "false or null).")
+    fills: List[Tuple[object, object, str]] = []
+    shuffled: Dict[int, Tuple[int, object, object]] = {}
+    for n, steps in specs["columns"]:
+        if steps[-1] is None and not opts["keep_order"]:
+            raise Refused(f"path {n} of --columns codes the elements of an array, whose order "
+                          "may follow the IDs and cannot be shuffled alone: give --keep-order.")
+        last = max([i for i, s in enumerate(steps) if s is None], default=-1)
+        places, arrays = _json_at(box, steps, n, "--columns", last)
+        if not places:
+            raise Refused(f"path {n} of --columns matches nothing.")
+        for parent, slot in places:
+            v = parent[slot]  # type: ignore[index]
+            if v is None:
+                continue
+            if isinstance(v, bool) or not isinstance(v, (str, int)):
+                raise Refused(f"a value at path {n} of --columns is not a string, an integer "
+                              "or null.")
+            s = (v if isinstance(v, str) else str(v)).strip()
+            if "\t" in s or "\n" in s or "\r" in s or _has_cf(s):
+                raise Refused(f"a value at path {n} of --columns holds a tab, a line break or "
+                              "an invisible format character.")
+            fills.append((parent, slot, s))
+        for parent, slot in arrays:
+            shuffled[id(parent[slot])] = (n, parent, slot)  # type: ignore[index]
+    if not opts["keep_order"]:
+        for n, parent, slot in shuffled.values():
+            a = parent[slot]  # type: ignore[index]
+            beside = parent.values() if isinstance(parent, dict) else parent  # type: ignore
+            if any(isinstance(b, list) and b is not a and len(b) == len(a) for b in beside):
+                raise Refused(f"an array that path {n} of --columns would shuffle has an array "
+                              "of the same length beside it: they may be paired by position, "
+                              "and a shuffle would break the pairing. Give --keep-order (for "
+                              "the whole run), or drop the other array.")
+    globs = list(BUILTIN_ID_COLUMNS) + [col_key(g) for g in cfg.sanitize_id_columns]
+    for path, (p, k) in scalars.items():
+        if any(fnmatch.fnmatchcase(col_key(k), g) for g in globs) and path not in named:
+            raise Refused(f"key {number[(id(p), k)]} (in the order of the file) looks like an "
+                          "identifier: name its path in --columns, --drop or --keep.")
+    for _, p, k, _, _ in _json_items(box[0]):
+        if k is not None and not _clean_both(san, k):
+            raise Refused(f"key {number[(id(p), k)]} (in the order of the file) holds what the "
+                          "sanitizer masks (a key that is an ID is refused).")
+    ids = list(dict.fromkeys(s for _, _, s in fills if s))  # in order of first appearance
+    m = _Matcher(set(ids) | set(key.codes))
+    for _, p, k, _, _ in _json_items(box[0]):
+        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_forms(k))):
+            raise Refused(f"key {number[(id(p), k)]} (in the order of the file) holds an ID of "
+                          "a coded path or of the key, or an invisible format character.")
+    values = {c for _, _, k, v, _ in _json_items(box[0])
+              for c in (k, _json_text(v)) if c is not None}
+    codes, added = _draw(ids, key, san, m, {v.strip() for v in values})
+    for parent, slot, s in fills:
+        parent[slot] = codes[s] if s else ""  # type: ignore[index]
+    if not opts["keep_order"]:
+        for _, parent, slot in shuffled.values():
+            _shuffle(parent[slot])  # type: ignore[index]
+    written = _write_json(box[0])
+    back = _read_json(written)
+    # `==` takes 1 for true and 1.0: the compact text also compares the kinds and the order
+    if back != box[0] or json.dumps(back) != json.dumps(box[0]):
+        raise Refused("the copy does not read back as the coded JSON.")
+    _scan_json(back, m)
+    return written, added, m
+
+
 # --- the run ------------------------------------------------------------------------------------
 
 def _out_place(path: str, kind: Tuple[str, bool], cfg: config.Config) -> Tuple[str, str]:
@@ -1141,7 +1440,7 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
         # member, a decode error, memory): one fixed text, never the exception's own
         raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
     _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data)
-    return count, "VCF, {} record(s)" if kind == ".vcf" else "table, {} row(s)"
+    return count, {".vcf": "VCF, {} record(s)", ".json": "JSON file"}.get(kind, "table, {} row(s)")
 
 
 def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: bytes, kind: str,
@@ -1151,6 +1450,9 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     plain, bgzf = _decompress(raw) if gz else (raw, False)
     if kind == ".vcf":
         text, added, count, m = _code_vcf(opts, san, _decode(plain, kind), key)
+    elif kind == ".json":
+        text, added, m = _code_json(opts, cfg, san, _decode(plain, kind), key)
+        count = 0  # a JSON file reports no count (decision G)
     else:
         kept, rows = _read_table(_decode(plain, kind), kind)
         for line in kept:
@@ -1177,8 +1479,14 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
 
 def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
             added: List[Tuple[str, str]], out_dir: str, out_name: str, data: bytes) -> None:
-    """Create OUT, append the key, write OUT; OUT is removed on any failure after it exists."""
+    """Create OUT, append the key, write OUT. On any failure OUT is removed, and so is a new key
+    this run made (its codes were never given out); an existing key keeps what was appended."""
+    text = "".join(f"{v}\t{c}\n" for v, c in added)
+    if opts["new"]:
+        text = f"{KEY_MAGIC}\t1\t{key.prefix}\n" + text
+    line_bytes = text.encode("utf-8")  # before any file is made: an error here leaves none
     dfd = _open_walk(out_dir)
+    own = made = -1
     try:
         try:
             ofd = os.open(out_name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
@@ -1188,63 +1496,70 @@ def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
                           "writable).")
         try:
             try:
-                _append_key(opts, key, bfd, kfd, file, added)
+                if kfd < 0:
+                    # made now, in the backups folder opened before (never by its path again)
+                    os.mkdir("keys", 0o700, dir_fd=bfd)
+                    own = kfd = os.open("keys", _DIR, dir_fd=bfd)
+                    os.fchmod(kfd, 0o700)  # the umask may have taken bits away
+                made = _append_key(opts, key, kfd, file, line_bytes, bool(added))
             except OSError:
                 raise Refused("the key cannot be written.")
             os.fchmod(ofd, 0o600)
             try:
                 _write_out(ofd, data)
             except OSError:
-                raise Removed("the output cannot be written; it was removed. The key keeps "
-                              "the codes it was given.")
+                raise Removed("the output cannot be written; it was removed. " +
+                              ("The new key was removed." if opts["new"] else
+                               "The key keeps the codes it was given."))
         except BaseException:
             os.close(ofd)
             ofd = -1
-            try:
-                os.unlink(out_name, dir_fd=dfd)
-            except OSError:
-                pass
+            for name, fd in ((out_name, dfd), (file, kfd if made >= 0 else -1)):
+                if fd >= 0:
+                    try:
+                        os.unlink(name, dir_fd=fd)
+                    except OSError:
+                        pass
             raise
         finally:
             if ofd >= 0:
                 os.close(ofd)
     finally:
         os.close(dfd)
-
-
-def _append_key(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
-                added: List[Tuple[str, str]]) -> None:
-    text = "".join(f"{v}\t{c}\n" for v, c in added)
-    own = -1
-    if kfd < 0:
-        # made now, in the backups folder opened before (never by its path again)
-        os.mkdir("keys", 0o700, dir_fd=bfd)
-        own = os.open("keys", _DIR, dir_fd=bfd)
-        kfd = own
-    try:
-        if own >= 0:
-            os.fchmod(kfd, 0o700)  # the umask may have taken bits away
-        _check_dir(kfd, "~/.phiward/backups/keys")
-        if opts["new"]:
-            fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
-                         dir_fd=kfd)
-            text = f"{KEY_MAGIC}\t1\t{key.prefix}\n" + text
-        else:
-            if not added:
-                return
-            fd = os.open(file, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW, dir_fd=kfd)
-        try:
-            st = os.fstat(fd)
-            if opts["new"]:
-                os.fchmod(fd, 0o600)
-            elif (st.st_dev, st.st_ino, st.st_size) != key.ident or st.st_nlink != 1:
-                raise Refused("the key changed while it was read.")
-            _write_all(fd, text.encode("utf-8"))
-        finally:
-            os.close(fd)
-    finally:
         if own >= 0:
             os.close(own)
+
+
+def _append_key(opts: Dict[str, object], key: Key, kfd: int, file: str, data: bytes,
+                any_added: bool) -> int:
+    """Write the key lines; 1 when this run made the key file (it is removed on a failure, also
+    one of its own write), -1 when it only appended or wrote nothing."""
+    _check_dir(kfd, "~/.phiward/backups/keys")
+    if opts["new"]:
+        fd = os.open(file, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600,
+                     dir_fd=kfd)
+    else:
+        if not any_added:
+            return -1
+        fd = os.open(file, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW, dir_fd=kfd)
+    try:
+        if opts["new"]:
+            os.fchmod(fd, 0o600)
+        else:
+            st = os.fstat(fd)
+            if (st.st_dev, st.st_ino, st.st_size) != key.ident or st.st_nlink != 1:
+                raise Refused("the key changed while it was read.")
+        _write_all(fd, data)
+    except BaseException:
+        if opts["new"]:
+            try:
+                os.unlink(file, dir_fd=kfd)
+            except OSError:
+                pass
+        raise
+    finally:
+        os.close(fd)
+    return 1 if opts["new"] else -1
 
 
 def main(argv: List[str], fin: Optional[TextIO] = None, fout: Optional[TextIO] = None,
@@ -1272,6 +1587,11 @@ def main(argv: List[str], fin: Optional[TextIO] = None, fout: Optional[TextIO] =
     except OSError as exc:
         ferr.write(f"phiward pseudonymize: a file operation failed ({type(exc).__name__}). "
                    "Nothing was written.\n")
+        return 1
+    except Exception:
+        # never the exception's own text or a traceback: either may hold a value of the table
+        ferr.write("phiward pseudonymize: the run stopped on an unexpected error. No output "
+                   "was kept, and no new key; an existing key may keep codes appended to it.\n")
         return 1
     fout.write(f"phiward pseudonymize: wrote the coded {what.format(n)}. Read it with "
                "`phiward run`.\n")

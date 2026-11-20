@@ -1,11 +1,13 @@
 """`phiward pseudonymize`, more kinds of input: the extension chain picks the parser and the
 content must agree; plain gzip in and out; `.txt` read as TSV; MAF; the scan of the whole
-output (step 1 of the formats plan). VCF, BGZF in and out, the sample-name rule (step 2). Made-up data only (`FAKE-PT-0007`, `P-9990001-T01-IM6`, MAF
-barcodes `FAKE-AB-0001-01A`, MRNs from 9990001), in a scratch HOME."""
+output (step 1 of the formats plan). VCF, BGZF in and out, the sample-name rule (step 2). JSON,
+its key paths and the array rule (step 3). Made-up data only (`FAKE-PT-0007`,
+`P-9990001-T01-IM6`, MAF barcodes `FAKE-AB-0001-01A`, MRNs from 9990001), in a scratch HOME."""
 
 import csv
 import gzip
 import io
+import json
 import os
 import shutil
 import struct
@@ -155,7 +157,7 @@ def test_a_broken_gzip_gives_one_fixed_refusal(tree, ps, case):
     ("labs.xlsx", TABLE.encode(), "out.xlsx"),
     ("labs.vcf", b"##fileformat=VCFv4.2\n", "out.vcf"),
     ("labs.vcf.gz", gz("##fileformat=VCFv4.2\n"), "out.vcf.gz"),
-    ("labs.json", b'{"mrn": "9990001"}\n', "out.json"),
+    ("labs.json", TABLE.encode(), "out.json"),           # a table under a .json name
     ("labs.md", b"| mrn |\n|---|\n| 9990001 |\n", "out.md"),
     ("labs.tsv", b"##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n", "out.tsv"),
     ("labs.maf.gz", gz("##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n"), "out.maf.gz"),
@@ -944,3 +946,439 @@ def test_the_vcf_draw_avoids_a_value_inside_a_field(tree, ps, monkeypatch):
     p = put(tree, "calls.vcf", vcf_text(recs=_with(1, 7, "DP=31;X=S9999")).encode())
     assert vcf_run(tree, p)[0] == 0
     assert "S9999" not in key_map(tree / "home", "vcf").values()
+
+
+# === step 3: JSON =============================================================================
+
+JSON_COLS = "samples[].id,samples[].mrn"
+JSON_IDS = ("FAKE-PT-0001", "FAKE-PT-0002", "FAKE-PT-0003", "FAKE-PT-0004", "9990002",
+            "samples", "[]", ".id", ".mrn", "patient_id", "Traceback", "Error")
+FIXED_JSON = "phiward pseudonymize: the input cannot be read as a JSON file. Nothing was written."
+
+
+def jdoc(n=4, **more):
+    """A study of `n` made-up samples: an ID string, an MRN integer (the third one null), a
+    value that follows its sample."""
+    doc = {"study": "lab",
+           "samples": [{"id": f"FAKE-PT-{i:04d}", "mrn": None if i == 3 else 9990000 + i,
+                        "assay": "panel", "value": i} for i in range(1, n + 1)]}
+    doc.update(more)
+    return doc
+
+
+def jput(tree, doc, name="doc.json"):
+    data = doc if isinstance(doc, bytes) else (doc if isinstance(doc, str) else
+                                               json.dumps(doc)).encode()
+    return put(tree, name, data)
+
+
+def jrun(tree, p, cols=JSON_COLS, out="out.json", more=(), new=True,
+         extra=()):
+    args = ["--new-key" if new else "--key", "js", "--columns", cols, *more, p, tree / "phi" / out]
+    code, text = run(tree, args, extra=JSON_IDS + tuple(extra))
+    assert "not covered" not in text, text  # a refusal of the JSON rules, not of the kind
+    return code, text
+
+
+def jread(path):
+    raw = path.read_bytes()
+    return json.loads(gzip.decompress(raw) if raw[:2] == b"\x1f\x8b" else raw)
+
+
+# --- 16. the IDs at the key paths coded, null kept, the array of objects shuffled -------------
+
+def test_json_codes_the_values_at_the_paths_keeps_null_and_shuffles_the_objects(tree, ps,
+                                                                                  monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    p = jput(tree, jdoc())
+    code, text = jrun(tree, p)
+    assert code == 0, text
+    assert text.strip() == ("phiward pseudonymize: wrote the coded JSON file. Read it with "
+                            "`phiward run`."), text
+    got = key_map(tree / "home", "js")
+    assert sorted(got) == sorted([f"FAKE-PT-{i:04d}" for i in (1, 2, 3, 4)] +
+                                 ["9990001", "9990002", "9990004"])
+    want = {"study": "lab", "samples": [
+        {"id": got[f"FAKE-PT-{i:04d}"], "mrn": None if i == 3 else got[str(9990000 + i)],
+         "assay": "panel", "value": i} for i in (4, 3, 2, 1)]}
+    out = tree / "phi" / "out.json"
+    assert out.read_text() == json.dumps(want, ensure_ascii=False, indent=2) + "\n"
+    assert os.stat(out).st_mode & 0o777 == 0o600
+
+
+def test_json_keep_order_keeps_the_array(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    assert jrun(tree, jput(tree, jdoc()), more=("--keep-order",))[0] == 0
+    assert [s["value"] for s in jread(tree / "phi" / "out.json")["samples"]] == [1, 2, 3, 4]
+
+
+def test_json_the_real_shuffle_moves_the_objects_and_keeps_each_whole(tree, ps):
+    assert jrun(tree, jput(tree, jdoc(30)))[0] == 0
+    got = key_map(tree / "home", "js")
+    samples = jread(tree / "phi" / "out.json")["samples"]
+    assert [s["value"] for s in samples] != list(range(1, 31))
+    for s in samples:
+        assert s["id"] == got[f"FAKE-PT-{s['value']:04d}"]
+
+
+def test_json_an_integer_id_gets_the_code_of_the_same_id_in_a_table(tree, ps):
+    write_table(tree / "data" / "a.tsv", ["mrn", "site"], [["9990001", "lab"]])
+    args = ["--new-key", "js", "--columns", "mrn", tree / "data" / "a.tsv", tree / "phi" / "a.tsv"]
+    assert run(tree, args)[0] == 0
+    first = key_map(tree / "home", "js")["9990001"]
+    p = jput(tree, {"patient": {"mrn": 9990001}})
+    assert jrun(tree, p, cols="patient.mrn", new=False)[0] == 0
+    assert jread(tree / "phi" / "out.json") == {"patient": {"mrn": first}}
+
+
+def test_json_a_top_level_array_is_named_with_brackets(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    p = jput(tree, [{"mrn": 9990001, "v": 1}, {"mrn": 9990002, "v": 2}])
+    assert jrun(tree, p, cols="[].mrn", more=())[0] == 0
+    got = key_map(tree / "home", "js")
+    assert jread(tree / "phi" / "out.json") == [{"mrn": got["9990002"], "v": 2},
+                                                 {"mrn": got["9990001"], "v": 1}]
+
+
+def test_json_drop_removes_a_key_and_keep_keeps_one(tree, ps):
+    p = jput(tree, jdoc(patient_id="FAKE-PT-0009", visit_no="v1"))
+    code, text = jrun(tree, p, more=("--keep", "visit_no", "--drop", "patient_id"),
+                      extra=("FAKE-PT-0009",))
+    assert code == 0, text
+    doc = jread(tree / "phi" / "out.json")
+    assert "patient_id" not in doc and doc["visit_no"] == "v1"
+    assert "FAKE-PT-0009" not in (tree / "phi" / "out.json").read_text()
+
+
+def test_json_a_key_is_named_by_its_number_in_the_input(tree, ps):
+    """Counted in IN, dropped keys too (OUT is never written on a refusal)."""
+    doc = {"study": "lab", "extra": {"a": 1, "b": 2}}
+    doc.update(jdoc(), patient_id="x")
+    code, text = jrun(tree, jput(tree, doc), more=("--drop", "extra"),
+                      extra=("extra",))
+    assert code == 2 and "key 22 (in the order of the file) looks like" in text, text
+
+
+def test_json_gz_and_bgzf_give_the_same_compression(tree, ps):
+    p = jput(tree, gz(json.dumps(jdoc())), name="doc.json.gz")
+    assert jrun(tree, p, out="out.json.gz")[0] == 0
+    raw = (tree / "phi" / "out.json.gz").read_bytes()
+    assert raw[3] == 0 and len(jread(tree / "phi" / "out.json.gz")["samples"]) == 4
+    fresh(tree, "out.json.gz", "js")
+    p = jput(tree, _bgzf(json.dumps(jdoc())), name="doc2.json.gz")
+    assert jrun(tree, p, out="out2.json.gz")[0] == 0
+    raw = (tree / "phi" / "out2.json.gz").read_bytes()
+    assert raw[3] == 4 and raw.endswith(BGZF_EOF)
+
+
+def test_json_keeps_text_that_is_not_ascii_as_it_is(tree, ps):
+    assert jrun(tree, jput(tree, jdoc(study="Zürich")))[0] == 0
+    assert '"study": "Zürich"' in (tree / "phi" / "out.json").read_text(encoding="utf-8")
+
+
+# --- 17. a path that ends in [] codes scalars whose order may follow the IDs ------------------
+
+def test_json_a_path_on_an_array_of_strings_needs_keep_order(tree, ps):
+    p = jput(tree, {"ids": ["FAKE-PT-0001", "FAKE-PT-0002"]})
+    code, text = jrun(tree, p, cols="ids[]", more=(), extra=("ids",))
+    assert code == 2 and "--keep-order" in text, text
+    none_written(tree, "out.json", "js")
+    assert jrun(tree, p, cols="ids[]", more=("--keep-order",))[0] == 0
+    got = key_map(tree / "home", "js")
+    assert jread(tree / "phi" / "out.json") == {"ids": [got["FAKE-PT-0001"], got["FAKE-PT-0002"]]}
+
+
+# --- 18. what is refused ----------------------------------------------------------------------
+
+def _deep(n):
+    return "[" * n + "]" * n
+
+
+def _text_with(extra):
+    """The study as JSON text, with `extra` (raw JSON text) as its last member."""
+    return json.dumps(jdoc())[:-1] + ", " + extra + "}"
+
+
+FIXED_CASES = {
+    "duplicate_key": _text_with('"study": "lab2"'),
+    "nan": _text_with('"x": NaN'),
+    "infinity": _text_with('"x": Infinity'),
+    "minus_infinity": _text_with('"x": -Infinity'),
+    "float_overflow": _text_with('"x": 1e400'),
+    "deep_past_the_limit": _text_with('"x": ' + _deep(150)),
+    "deep_past_the_recursion_limit": _text_with('"x": ' + _deep(100000)),
+    "huge_integer": _text_with('"x": ' + "7" * 5000),
+    "not_json": "mrn\tsite\n9990001\tlab\n",
+    "two_documents": json.dumps(jdoc()) + "\n" + json.dumps(jdoc()),
+    "lone_surrogate": _text_with('"x": "\\ud800"'),
+}
+
+
+@pytest.mark.parametrize("case", sorted(FIXED_CASES))
+def test_json_that_cannot_be_read_gives_the_one_fixed_refusal(tree, ps, case):
+    p = jput(tree, FIXED_CASES[case])
+    code, text = jrun(tree, p, extra=("RecursionError", "ValueError", "lab2"))
+    assert code == 2 and text.strip() == FIXED_JSON, text
+    none_written(tree, "out.json", "js")
+
+
+def _set_mrn(value):
+    doc = jdoc()
+    doc["samples"][1]["mrn"] = value
+    return doc
+
+
+REFUSED = {
+    "key_is_an_id": jdoc(notes={"FAKE-PT-0002": "seen"}),
+    "key_is_a_key_id_inside": jdoc(notes={"x-FAKE-PT-0001-y": "seen"}),
+    "key_the_sanitizer_masks": jdoc(notes={"P-9990001-T01-IM6": 1}),
+    "key_is_a_coded_mrn": jdoc(notes={"9990002": "seen"}),
+    "key_holds_a_coded_mrn": jdoc(notes={"x/9990002.bam": "seen"}),
+    "unnamed_patient_id": jdoc(patient_id="x"),
+    "unnamed_id_deep_inside": jdoc(meta={"runs": [{"specimen": "x"}]}),
+    "bool_at_a_coded_path": _set_mrn(True),
+    "float_at_a_coded_path": _set_mrn(9990002.0),
+    "object_at_a_coded_path": _set_mrn({"v": "9990002"}),
+    "array_at_a_coded_path": _set_mrn(["9990002"]),
+    "id_in_a_kept_value": jdoc(note="FAKE-PT-0002"),
+    "id_inside_a_kept_value": jdoc(note="see FAKE-PT-0002 again"),
+    "mrn_as_a_kept_number": jdoc(count=9990002),
+    "mrn_inside_a_kept_string": jdoc(note="x/9990002.bam"),
+    "id_in_a_kept_array": jdoc(more=["a", ["FAKE-PT-0001"]]),
+    "invisible_character_in_a_key": jdoc(notes={"a​b": 1}),
+    "invisible_character_in_a_value": jdoc(note="a​b"),
+    "tab_in_a_coded_value": jdoc(samples=[{"id": "FAKE-PT-0001\tx", "mrn": None}]),
+}
+
+
+@pytest.mark.parametrize("case", sorted(REFUSED))
+def test_json_refuses(tree, ps, case):
+    p = jput(tree, REFUSED[case])
+    code, text = jrun(tree, p, extra=("P-9990001-T01-IM6", "notes", "meta", "runs", "specimen"))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+
+
+def test_json_a_key_that_is_a_coded_id_is_refused_by_the_scan(tree, ps):
+    """A short ID the sanitizer leaves alone, as a whole word of a key."""
+    p = jput(tree, {"samples": [{"id": "AB12"}], "notes": {"seen AB12": 1}})
+    code, text = jrun(tree, p, cols="samples[].id", extra=("AB12",))
+    assert code == 2 and "key 4 (in the order of the file) holds an ID" in text, text
+    none_written(tree, "out.json", "js")
+
+
+def test_json_the_scan_covers_every_key_and_scalar(ps):
+    m = ps._Matcher({"FAKE-PT-0001", "9990001"})
+    for doc in ({"a": {"FAKE-PT-0001": 1}}, {"a": [{"b": "x FAKE-PT-0001"}]}, {"a\u200bb": 1},
+                [1, [9990001]], {"a": "x\u200by"}, {"a": 9990001.5}):
+        with pytest.raises(ps.Refused):
+            ps._scan_json(doc, m)
+    ps._scan_json({"a": [{"b": 19990001, "c": "FAKE-PT-0002", "d": None, "e": True}]}, m)
+
+
+def test_json_an_id_escaped_in_the_input_is_refused(tree, ps):
+    """19: an ID under a kept key written with JSON escapes in IN is the ID once read."""
+    p = jput(tree, json.dumps(jdoc())[:-1] + ', "note": "\\u0046AKE\\u002dPT-0002"}')
+    assert jrun(tree, p)[0] == 2
+    none_written(tree, "out.json", "js")
+
+
+def test_json_an_old_code_of_the_key_as_a_kept_value_is_refused(tree, ps):
+    assert jrun(tree, jput(tree, jdoc()))[0] == 0
+    old = key_map(tree / "home", "js")["FAKE-PT-0002"]
+    os.unlink(tree / "phi" / "out.json")
+    p = jput(tree, jdoc(1, note="was FAKE-PT-0002"), name="b.json")
+    code, text = jrun(tree, p, new=False, extra=(old,))
+    assert code == 2, text
+    assert not (tree / "phi" / "out.json").exists()
+
+
+@pytest.mark.parametrize("cols,more", [
+    ("samples[].id,patient.mrn", ()),                        # matches nothing
+    ("samples.id", ()),                                      # a key where there is an array
+    ("study[].id", ()),                                      # [] where there is a string
+    ("samples[].id=zzname", ()),                             # no new name in JSON
+    ("samples[].id,samples[].id", ()),                       # twice
+    ("samples[].id", ("--keep", "samples[].id")),            # in two options
+    ("samples[].id", ("--drop", "zzgone")),                  # matches nothing
+    ("samples[].id", ("--keep", "samples")),                 # a container, not a value
+    ("samples[].id", ("--drop", "samples[]")),               # --drop names a key
+    ("samples[.id", ()),
+    ("a..b", ()),
+])
+def test_json_paths_that_do_not_fit_are_refused(tree, ps, cols, more):
+    code, text = jrun(tree, jput(tree, jdoc()), cols=cols, more=more,
+                      extra=("zzgone", "patient", "zzname", "study"))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+
+
+def test_json_the_draw_avoids_a_kept_value(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    assert jrun(tree, jput(tree, jdoc(1, note="S9999")))[0] == 0
+    assert "S9999" not in key_map(tree / "home", "js").values()
+
+
+@pytest.mark.parametrize("how", ["changed", "kind"])
+def test_json_a_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatch, how):
+    """The read-back compares the kinds too: `true == 1` in Python."""
+    real = ps._write_json
+
+    def bad(doc):
+        return real(doc).replace('"value": 1', '"value": 7' if how == "changed" else
+                                 '"value": true')
+    monkeypatch.setattr(ps, "_write_json", bad)
+    code, text = jrun(tree, jput(tree, jdoc()))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+
+
+@pytest.mark.parametrize("where", ["_read_json", "_write_json"])
+@pytest.mark.parametrize("exc", ERRORS, ids=lambda e: type(e).__name__)
+def test_json_any_exception_in_reading_or_writing_gives_the_one_refusal(tree, ps, monkeypatch,
+                                                                          where, exc):
+    def boom(*a, **kw):
+        raise exc
+    monkeypatch.setattr(ps, where, boom)
+    code, text = jrun(tree, jput(tree, jdoc()), extra=("FAKE-PT-0007", type(exc).__name__))
+    assert code == 2 and text.strip() == FIXED_JSON, text
+    none_written(tree, "out.json", "js")
+
+
+# --- review round 1 of step 3 -----------------------------------------------------------------
+
+SURROGATE = '{"a": [{"id": "\\ud800"}, {"id": "FAKE-PT-0001"}, {"id": "FAKE-PT-0002"}]}'
+
+
+@pytest.mark.parametrize("new", [True, False])
+def test_json_a_lone_surrogate_in_a_coded_value_is_the_fixed_refusal(tree, ps, new):
+    keys = tree / "home" / ".phiward" / "backups" / "keys"
+    if not new:
+        assert jrun(tree, jput(tree, {"a": [{"id": "FAKE-PT-0003"}, {"id": "FAKE-PT-0004"}]},
+                               name="first.json"), cols="a[].id", out="first.json")[0] == 0
+    before = (keys / "js.tsv").read_bytes() if not new else None
+    code, text = jrun(tree, jput(tree, SURROGATE), cols="a[].id", new=new,
+                      extra=("\ud800", "\udc00", "UnicodeEncodeError"))
+    assert code == 2 and text.strip() == FIXED_JSON, text
+    assert not (tree / "phi" / "out.json").exists()
+    if new:
+        assert not (keys / "js.tsv").exists()
+        p = jput(tree, {"a": [{"id": "FAKE-PT-0001"}, {"id": "FAKE-PT-0002"}]}, name="ok.json")
+        assert jrun(tree, p, cols="a[].id")[0] == 0  # the name can be used again
+    else:
+        assert (keys / "js.tsv").read_bytes() == before
+
+
+@pytest.mark.parametrize("value", ['"\\udc00"', '{"\\ud83d": 1}', '["x\\ud800y"]'])
+def test_json_a_lone_surrogate_anywhere_is_the_fixed_refusal(tree, ps, value):
+    code, text = jrun(tree, jput(tree, _text_with('"note": ' + value)))
+    assert code == 2 and text.strip() == FIXED_JSON, text
+    none_written(tree, "out.json", "js")
+
+
+def test_any_unexpected_error_of_the_run_is_one_fixed_refusal(tree, ps, monkeypatch):
+    def boom(*a, **kw):
+        raise UnicodeEncodeError("utf-8", "FAKE-PT-0001\ud800", 12, 13, "surrogates")
+    monkeypatch.setattr(ps, "_append_key", boom)
+    code, text = jrun(tree, jput(tree, jdoc()), extra=("UnicodeEncodeError", "surrogates"))
+    assert code == 1, text
+    assert text.strip() == ("phiward pseudonymize: the run stopped on an unexpected error. "
+                            "No output was kept, and no new key; an existing key may keep codes "
+                            "appended to it."), text
+    none_written(tree, "out.json", "js")
+
+
+def test_a_new_key_file_is_removed_when_its_write_fails(tree, ps, monkeypatch):
+    real = ps._write_all
+    calls = []
+
+    def fail_first(fd, data):
+        calls.append(1)
+        if len(calls) == 1:
+            os.write(fd, data[:5])
+            raise OSError("disk full")
+        return real(fd, data)
+    monkeypatch.setattr(ps, "_write_all", fail_first)
+    code, text = jrun(tree, jput(tree, jdoc()))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+    monkeypatch.setattr(ps, "_write_all", real)
+    assert jrun(tree, jput(tree, jdoc()))[0] == 0
+
+
+def test_a_new_key_is_removed_when_the_output_cannot_be_written(tree, ps, monkeypatch):
+    def fail(*a, **kw):
+        raise OSError("disk full")
+    monkeypatch.setattr(ps, "_write_out", fail)
+    code, text = jrun(tree, jput(tree, jdoc()))
+    assert code == 2 and "new key was removed" in text, text
+    none_written(tree, "out.json", "js")
+
+
+def _paired(n=6, **more):
+    doc = {"a": [{"id": f"FAKE-PT-{i:04d}"} for i in range(1, n + 1)],
+           "purity": [i / 10 for i in range(1, n + 1)]}
+    doc.update(more)
+    return doc
+
+
+def test_json_a_shuffled_array_beside_an_array_of_its_length_is_refused(tree, ps):
+    code, text = jrun(tree, jput(tree, _paired()), cols="a[].id", extra=("purity",))
+    assert code == 2 and "pairing" in text and "--keep-order" in text, text
+    none_written(tree, "out.json", "js")
+    assert jrun(tree, jput(tree, _paired()), cols="a[].id", more=("--keep-order",))[0] == 0
+    assert jread(tree / "phi" / "out.json")["purity"] == [i / 10 for i in range(1, 7)]
+
+
+def test_json_a_sibling_array_of_another_length_does_not_stop_the_shuffle(tree, ps):
+    doc = _paired()
+    doc["purity"] = doc["purity"][:5]
+    assert jrun(tree, jput(tree, doc), cols="a[].id")[0] == 0
+
+
+def test_json_two_coded_arrays_of_one_length_side_by_side_are_refused(tree, ps):
+    doc = _paired()
+    doc["b"] = [{"id": f"FAKE-PT-{i:04d}"} for i in range(11, 17)]
+    del doc["purity"]
+    code, text = jrun(tree, jput(tree, doc), cols="a[].id,b[].id")
+    assert code == 2 and "pairing" in text, text
+
+
+def test_json_a_container_key_needs_no_name(tree, ps):
+    """`samples` holds objects: only its scalar paths (`samples[].id`) are named."""
+    assert jrun(tree, jput(tree, jdoc()))[0] == 0
+
+
+def test_json_an_unnamed_array_of_strings_under_an_id_key_is_refused(tree, ps):
+    doc = {"x": [{"id": "FAKE-PT-0001"}, {"id": "FAKE-PT-0002"}], "samples": ["FAKE-PT-0009"]}
+    code, text = jrun(tree, jput(tree, doc), cols="x[].id", extra=("FAKE-PT-0009",))
+    assert code == 2 and "looks like an identifier" in text, text
+    none_written(tree, "out.json", "js")
+    assert jrun(tree, jput(tree, doc), cols="x[].id", more=("--keep", "samples[]"),
+                extra=("FAKE-PT-0009",))[0] == 0
+
+
+def test_json_drop_takes_a_container_whole(tree, ps):
+    p = jput(tree, jdoc(meta={"runs": [{"specimen": "x"}]}))
+    assert jrun(tree, p, more=("--drop", "meta"), extra=("meta", "specimen"))[0] == 0
+    assert "meta" not in jread(tree / "phi" / "out.json")
+
+
+@pytest.mark.parametrize("ident,note", [("9990001", "9.990001e6"), ("9990001", 9990001.0),
+                                        ("1234", 1234.0), ("1234", "1234.0"),
+                                        ("1234", "1.234E3")])
+def test_json_a_number_matches_an_id_by_its_integer_form(tree, ps, ident, note):
+    doc = {"a": [{"id": ident}, {"id": "FAKE-PT-0001"}], "note": note}
+    code, text = jrun(tree, jput(tree, doc), cols="a[].id", extra=(ident,))
+    assert code == 2, text
+    none_written(tree, "out.json", "js")
+
+
+def test_json_a_number_that_is_not_whole_or_another_number_passes(ps):
+    m = ps._Matcher({"1234", "FAKE-PT-0001"})
+    ps._scan_json({"a": [1234.5, "12.34", 12340.0, "1.2345e3", "x1234.0"]}, m)
+
+
+def test_json_paths_take_spaces_after_commas(tree, ps):
+    assert jrun(tree, jput(tree, jdoc(visit_no="v1")), cols="samples[].id, samples[].mrn",
+                more=("--keep", "study, visit_no"))[0] == 0

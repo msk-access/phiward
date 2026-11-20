@@ -23,9 +23,27 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   the barcode columns and keeps the other ID-glob columns by name. One scan of the whole
   output (codes, headers and the kept line included) replaces the scan of kept cells; the draw
   skips a code it would flag. Any exception in reading or writing is one fixed refusal.
-  Parquet is never read (convert it first); JSON and Markdown come in later steps.
+  Parquet is never read (convert it first); Markdown comes in a later step.
   (Why: one shape for every kind, and what is written is what was scanned. Cost: a long
   `--keep` for a MAF; Parquet needs a step.)
+- **`phiward pseudonymize` codes JSON values at key paths.** `--columns`, `--drop` and
+  `--keep` take paths (`.` a key, `[]` every element; keys matched exactly). A coded value is
+  a string or an integer (a string code); `null` stays; other kinds are refused. Keys that are
+  IDs are refused, not coded (decision F): every key passes the sanitizer unchanged and the
+  scan. The ID-glob rule applies to scalar paths only (`samples[]`, `samples[].id`; a `[]` at
+  the end of a path is dropped for this): a key that holds only objects or arrays needs no
+  name (a rule for containers was tried in review and removed). `--drop` takes a container
+  whole. A path that matches nothing or meets another kind of value is refused. Only the
+  array at the last `[]` of a coded path that goes on to a key is shuffled, and that is
+  refused when an array of the same length sits beside it (pairing by position), unless
+  `--keep-order`, which stays one switch for the whole run; a coded path ending in `[]` needs
+  `--keep-order`. Duplicate keys, `NaN`, `Infinity`, a number out of range, more than 4300
+  digits, nesting past 100 and a lone surrogate are the one fixed refusal; any top level is
+  taken. The scan also reads a whole number as its integer (`1234.0`). Output:
+  `json.dumps(ensure_ascii=False, indent=2)`, read back and compared with the kinds; the run
+  prints a fixed line, no count (decision G). `main` turns any unexpected exception into one
+  fixed text, and a new key file a failed run made is removed. (Why: the same rules as a
+  table, with the path as the header. Cost: keys with `.` or `[` cannot be named.)
 - **`phiward pseudonymize` codes a VCF's sample names.** All of them, with no `--columns`,
   `--drop` or `--keep`. A name that is a word (a short stop list), has no digit or is under 3
   characters is refused; `--keep-samples N` keeps one by sample number, out of the key, with

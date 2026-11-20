@@ -196,14 +196,49 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
       them). A record or a kept line that holds a sample's ID (an `INFO` value, the `ID`
       column) is refused: clean it first (`bcftools annotate`).
     - The run reports the record count.
-  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`). Every member is read, up to
+  - `.json`: the IDs are the values at the key paths you name. Keys are joined by `.`, and
+    `[]` stands for every element of an array (`[].mrn` for an array at the top):
+
+    ```bash
+    phiward pseudonymize --new-key samples --columns 'samples[].id, samples[].mrn' \
+      ~/raw/study.json ~/data/patients/study-coded.json
+    ```
+
+    - A key is matched exactly; a key with `.`, `[` or `]` cannot be named. A path that
+      matches nothing, or meets a value of another kind (a key where there is no object), is
+      refused.
+    - A coded value is a string or an integer; it becomes a string code (`9990001` and
+      `"9990001"` get the same code, as in a table). `null` stays `null`. A `true`, a decimal
+      number, an object or an array at a coded path is refused.
+    - Every key that looks like an identifier and holds values (strings, numbers, `true`,
+      `false`, `null`) is named by their path in `--columns`, `--drop` or `--keep`:
+      `samples[]` for strings in an array under `samples`, `samples[].id` for the `id` of its
+      objects. A key that holds only objects or arrays (`samples` above) needs no name.
+      `--keep` names such a path; `--drop` names a key, and drops a container whole. A key
+      the sanitizer would mask is refused: keys that are IDs are not coded.
+    - The array at the last `[]` of a coded path (`samples[]` for `samples[].id`, an array of
+      objects) is shuffled. It is refused when an array of the same length sits beside it in
+      the same object: arrays side by side may be paired by position (`samples` and
+      `purity`), and a shuffle would break the pairing without a word. Give `--keep-order`
+      (it is for the whole run, never one array), or drop the other array. A path that ends in
+      `[]` (`ids[]`, the elements themselves) needs `--keep-order`: an array of IDs may be
+      paired by position with arrays in other files. Other arrays and the order of keys are
+      kept.
+    - Refused as unreadable: a key twice in one object, `NaN`, `Infinity`, a number out of
+      range (`1e400`), an integer of more than 4300 digits, nesting deeper than 100 levels, a
+      lone surrogate (`\ud800`, which has no UTF-8 form).
+    - Every key and every value of the copy is a field for the scan below; a number that is
+      whole is also read as its integer (`1234.0`, `"9.990001e6"` for `9990001`). The copy is
+      written with an indent of 2, and it must read back as the coded document. A message
+      names a key by its number in the order of the file. The run reports no count.
+  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`, `.json.gz`). Every member is read, up to
     1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
     the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
     BGZF copy; for a VCF, `tabix -p vcf OUT` indexes it. An index (`.tbi`, `.csi`) is never
     read or copied. A BGZF file must end with its EOF block (one cut short is refused), and a
     file that mixes BGZF blocks and plain gzip members is refused.
-  - Not covered yet: `.json`, `.md`. Not covered: Parquet; convert it to TSV with your own
-    tools first.
+  - Not covered yet: `.md`. Not covered: Parquet; convert it to TSV with your own tools
+    first.
   - A file that cannot be read or written as its kind gives one fixed refusal.
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.
