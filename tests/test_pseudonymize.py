@@ -980,3 +980,56 @@ def test_a_drawn_code_that_holds_a_long_id_is_skipped(tree, ps, monkeypatch):
     monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
     assert run(tree, base(tree, more=["--keep-order"]))[0] == 0
     assert "S9999" not in key_map(tree / "home", "labs").values()
+
+
+# --- review round 4 ---------------------------------------------------------------------------
+
+def test_an_input_in_the_home_folder_is_taken_though_the_home_has_claude_settings(
+        tree, ps, monkeypatch):
+    """`~/.claude` is the user's Claude Code folder, not a project above every file of home."""
+    home = tree / "home"
+    (home / ".claude").mkdir(exist_ok=True)
+    p = write_table(home / "raw" / "labs.tsv", ["mrn", "site"], [["9990001", "lab"]])
+    monkeypatch.chdir(tree / "repo")
+    code, text = run(tree, base(tree, inp=p))
+    assert code == 0, text
+    # a project inside home is still one
+    (home / "proj" / ".claude").mkdir(parents=True)
+    q = write_table(home / "proj" / "in.tsv", ["mrn", "site"], [["9990001", "lab"]])
+    assert run(tree, base(tree, new=False, inp=q, out=tree / "phi" / "o2.tsv"))[0] == 2
+
+
+@pytest.mark.parametrize("cmd", ["for f in a b; do phiward $f; done",
+                                 "if true; then phiward $X; fi",
+                                 "if false; then :; else phiward $X; fi",
+                                 "if false; then :; elif true; then phiward $X; fi",
+                                 "{ phiward $X; }", "! phiward $X", "coproc phiward $X",
+                                 "while true; do phiward $X; done", "f(){ phiward $X; }",
+                                 "sudo -u me phiward $X", "doas -u me phiward $X",
+                                 "env -u HOME phiward $X", "exec -a name phiward $X",
+                                 "timeout -s KILL 10 phiward $X", "xargs -I {} phiward {}",
+                                 "xargs -a list phiward", "xargs -n 1 phiward",
+                                 "python3 -X dev -m phiward $X", "uv run --with x phiward $X",
+                                 "stdbuf -oL phiward $X", "stdbuf -o L phiward $X",
+                                 "taskset 0x1 phiward $X", "taskset -c 1 phiward $X",
+                                 "chrt -f 10 phiward $X", "arch -x86_64 phiward $X",
+                                 "caffeinate -w 12 phiward $X", "script -q /dev/null phiward $X",
+                                 "unbuffer phiward $X", "uv tool run phiward $X"])
+def test_phiward_after_reserved_words_and_wrappers_with_values_is_in_command_position(cmd):
+    assert gateway.is_operator_command(cmd), cmd
+
+
+@pytest.mark.parametrize("cmd", ["for f in a b; do echo phiward $f; done",
+                                 "if true; then grep -c phiward $f; fi",
+                                 "sudo -u me grep phiward $X", "xargs -I {} grep phiward {}",
+                                 "time phiward run -- ls", "{ phiward doctor; }"])
+def test_honest_loops_that_name_phiward_still_pass(cmd):
+    assert not gateway.is_operator_command(cmd), cmd
+
+
+@pytest.mark.parametrize("cell,refused", [("see ab12", True), ("AB12", True), ("x-ab12-y", True),
+                                          ("xab12", False), ("ab123", False)])
+def test_a_short_letter_id_is_found_as_a_whole_word(tree, ps, cell, refused):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "note"], [["AB12", cell], ["CD34", "ok"]])
+    code, text = run(tree, base(tree))
+    assert (code == 2) == refused, (cell, text)
