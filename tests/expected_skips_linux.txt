@@ -1,6 +1,8 @@
 # Tests that skip on Linux (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
-# macOS-only tests, and a few that need what a system may lack (node, an overlay). Made in
-# Docker (arm64, Python 3.12 and 3.9); remake with PHIWARD_WRITE_SKIPS=FILE.
+# macOS-only tests, and a few that need what a system may lack. Made in Docker (arm64, Python
+# 3.12 and 3.9; scripts/linux-check installs node, as CI's runners have it); remake with
+# PHIWARD_WRITE_SKIPS=FILE. One entry runs on CI and skips only in Docker (no overlay in a user
+# namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
 tests/test_confinement.py::test_gateway_network_grant
 tests/test_protected_paths.py::test_case_folding_on_macos
 tests/test_round2.py::test_c_no_clipboard
@@ -61,7 +63,6 @@ tests/test_v2_release_review.py::test_install_writes_sandbox_entries_in_the_cano
 tests/test_v2_release_review.py::test_only_homebrews_admin_group_folders_stay_on_the_broker_path
 tests/test_v2_release_review.py::test_the_config_is_refused_through_the_data_volume_before_its_folder_exists
 tests/test_v2_release_review.py::test_the_user_config_is_refused_in_any_letter_case
-tests/test_v2_review_round4.py::test_phiward_never_calls_remote_what_node_reads_as_this_machine
 tests/test_v2_round12.py::test_a_letter_with_a_longer_case_fold_still_matches[{t}/d/*ss-Stra\xdf]
 tests/test_v2_round12.py::test_a_letter_with_a_longer_case_fold_still_matches[{t}/d/i*-\u0130x_raw]
 tests/test_v2_round13.py::test_a_root_is_found_in_another_case_with_a_longer_fold
@@ -71,7 +72,6 @@ tests/test_v2_round9.py::test_the_named_project_holds_a_folder_written_in_anothe
 tests/test_v2_s17.py::test_17_6_a_locked_file_does_not_break_later_launches
 tests/test_v2_s17.py::test_r19_4_a_locked_folder_inside_the_run_does_not_block_removal
 tests/test_v2_unattended.py::test_launch_report_refuses_the_project_in_another_case
-tests/test_v2_unattended.py::test_the_javascript_callback_decides_like_the_python_one
 tests/test_v2_w1.py::test_w1_the_tool_cannot_reach_a_unix_socket_peer
 tests/test_v2_w1b.py::test_a2_a_write_place_replaced_by_a_link_does_not_widen_the_next_session
 tests/test_v2_w1b.py::test_a4_ordinary_permissions_are_not_taken_for_the_sandbox

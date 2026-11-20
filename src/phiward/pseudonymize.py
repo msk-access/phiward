@@ -33,7 +33,7 @@ import struct
 import unicodedata
 import zlib
 import sys
-from typing import Dict, List, Optional, Sequence, TextIO, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from phiward import config, copying, inventory, sanitize
 from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_key
@@ -451,9 +451,7 @@ def _input_place(path: str, cfg: config.Config, home: str) -> str:
                 raise Refused("the input is reached through a link; name its real path.")
         except FileNotFoundError:
             raise Refused("the input does not exist.") from None
-        except OSError as exc:
-            if isinstance(exc, Refused):
-                raise
+        except OSError:
             raise Refused("the input cannot be checked.") from None
     # places an agent can write: a file there may be planted (a guess list confirmed by codes)
     from phiward import claude_settings
@@ -828,6 +826,27 @@ def _has_cf(text: str) -> bool:
     return any(unicodedata.category(ch) == "Cf" for ch in text)
 
 
+def _bad_id_text(text: str) -> bool:
+    """Whether a value to code holds a tab, a line break or an invisible format character."""
+    return "\t" in text or "\n" in text or "\r" in text or _has_cf(text)
+
+
+def _is_id_header(name: str, globs: List[str]) -> bool:
+    """Whether a header or a JSON key, as written, looks like an identifier: its `col_key`
+    form matches a glob. It takes the name as written: `col_key` drops one `#` each time."""
+    return any(fnmatch.fnmatchcase(col_key(name), g) for g in globs)
+
+
+def _coded_cells(rows: List[List[str]], cols: List[int]) -> Iterator[Tuple[int, str]]:
+    """(column, value) of each coded cell that is not empty, its outer spaces removed, row by
+    row and in each row in the order of `cols`: the order of first appearance of the IDs."""
+    for r in rows:
+        for i in cols:
+            v = r[i].strip()
+            if v:
+                yield i, v
+
+
 def _scan(meta: List[str], table: List[List[str]], cols: List[int], coded: "set[int]",
           m: _Matcher) -> None:
     """The scan of the whole output as it was read back, codes included: no field may hold an
@@ -938,12 +957,8 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
     if (drop & keep) or (drop & set(coded)) or (keep & set(coded)):
         raise Refused("a column is named in more than one of --columns, --drop and --keep.")
     globs = list(BUILTIN_ID_COLUMNS) + [col_key(g) for g in cfg.sanitize_id_columns]
-
-    def is_id(k: str) -> bool:
-        return any(fnmatch.fnmatchcase(k, g) for g in globs)
-
-    for i, k in enumerate(keys):
-        if is_id(k) and i not in coded and i not in drop and i not in keep:
+    for i, h in enumerate(header):
+        if _is_id_header(h, globs) and i not in coded and i not in drop and i not in keep:
             raise Refused(f"column {i + 1} looks like an identifier: name it in --columns, "
                           "--drop or --keep.")
     # the new headers
@@ -957,7 +972,7 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
             coded[i] = "pseudonym" if auto == 1 else f"pseudonym_{auto}"
         new = str(coded[i])
         if not new.strip() or "\t" in new or "," in new or "\n" in new or \
-                is_id(col_key(new)) or not _clean_both(san, new):
+                _is_id_header(new, globs) or not _clean_both(san, new):
             raise Refused(f"the new header of column {i + 1} is empty, looks like an identifier "
                           "or holds what the sanitizer masks.")
     cols = [i for i in range(len(header)) if i not in drop]
@@ -968,18 +983,13 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
     # the IDs, in order of first appearance
     ids: List[str] = []
     seen = set()
-    for r in rows[1:]:
-        for i in coded:
-            v = r[i].strip()
-            if not v:
-                continue
-            if "\t" in v or "\n" in v or "\r" in v or \
-                    any(unicodedata.category(ch) == "Cf" for ch in v):
-                raise Refused(f"a cell of column {i + 1} holds a tab, a line break or an "
-                              "invisible format character.")
-            if v not in seen:
-                seen.add(v)
-                ids.append(v)
+    for i, v in _coded_cells(rows[1:], list(coded)):
+        if _bad_id_text(v):
+            raise Refused(f"a cell of column {i + 1} holds a tab, a line break or an "
+                          "invisible format character.")
+        if v not in seen:
+            seen.add(v)
+            ids.append(v)
     # an ID of the key or of a coded column left anywhere in the output would link its code to
     # it: the scan of the output (`_scan`) refuses it
     if m is None:
@@ -1365,7 +1375,7 @@ def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text
                 raise Refused(f"a value at path {n} of --columns is not a string, an integer "
                               "or null.")
             s = (v if isinstance(v, str) else str(v)).strip()
-            if "\t" in s or "\n" in s or "\r" in s or _has_cf(s):
+            if _bad_id_text(s):
                 raise Refused(f"a value at path {n} of --columns holds a tab, a line break or "
                               "an invisible format character.")
             fills.append((parent, slot, s))
@@ -1382,7 +1392,7 @@ def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text
                               "the whole run), or drop the other array.")
     globs = list(BUILTIN_ID_COLUMNS) + [col_key(g) for g in cfg.sanitize_id_columns]
     for path, (p, k) in scalars.items():
-        if any(fnmatch.fnmatchcase(col_key(k), g) for g in globs) and path not in named:
+        if _is_id_header(k, globs) and path not in named:
             raise Refused(f"key {number[(id(p), k)]} (in the order of the file) looks like an "
                           "identifier: name its path in --columns, --drop or --keep.")
     for _, p, k, _, _ in _json_items(box[0]):
@@ -1489,6 +1499,11 @@ def _md_readings(text: str) -> List[str]:
     raise ValueError("entities nested too deep")
 
 
+def _md_header_markup(header: str) -> bool:
+    """Whether a Markdown header holds emphasis markup (`MD_MARKUP`) or an HTML entity."""
+    return bool(MD_MARKUP.search(header)) or html.unescape(header) != header
+
+
 def _scan_md(tables: List[List[List[str]]], cols: List[List[int]], m: _Matcher) -> None:
     """The scan of every cell of the output as it was read back, codes, headers and alignment
     rows included, in each of its forms (`_md_readings`). A place is named by the table and the
@@ -1518,7 +1533,7 @@ def _code_md(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: 
     ids = set()
     for t, rows in enumerate(tables, 1):
         for c, h in enumerate(rows[0], 1):
-            if MD_MARKUP.search(h) or html.unescape(h) != h:
+            if _md_header_markup(h):
                 raise Refused(f"table {t}: the header of column {c} holds Markdown or HTML "
                               "markup or an entity: write it plain.")
         keys = [col_key(h) for h in rows[0]]
@@ -1527,9 +1542,9 @@ def _code_md(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: 
             sub[opt] = [s for s in specs
                         if col_key(s.partition("=")[0] if opt == "columns" else s) in keys]
             found |= {(opt, s) for s in sub[opt]}  # type: ignore[attr-defined]
-        for s in sub["columns"]:  # type: ignore[attr-defined]
-            i = keys.index(col_key(s.partition("=")[0]))
-            ids |= {r[i].strip() for r in rows[2:] if r[i].strip()}
+        coded = [keys.index(col_key(s.partition("=")[0]))
+                 for s in sub["columns"]]  # type: ignore[attr-defined]
+        ids |= {v for _, v in _coded_cells(rows[2:], coded)}
         sub["keep_order"] = opts["keep_order"] or not sub["columns"]
         subs.append(sub)
     if any((opt, s) not in found for opt, specs in names.items() for s in specs):
@@ -1547,7 +1562,7 @@ def _code_md(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: 
         except Refused as exc:
             raise Refused(f"table {t}: {exc}") from None
         for h in table[0]:
-            if "|" in h or "\\" in h or "`" in h or MD_MARKUP.search(h) or html.unescape(h) != h:
+            if "|" in h or "\\" in h or "`" in h or _md_header_markup(h):
                 raise Refused(f"table {t}: a new header holds a pipe, a backslash, a backtick, "
                               "markup or an entity.")
         work.codes.update(new)
