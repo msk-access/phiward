@@ -57,3 +57,15 @@ testpaths = ["tests"]
 addopts = "-q --strict-markers"
 # `-m "not slow"` is the quick loop; every full run (and CI) runs them too
 markers = ["slow: a cost or property test over many made-up entries (seconds each)"]
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+# Syntax errors, pyflakes, bugbear, comprehensions, misc, and five pyupgrade rules that
+# keep Python 3.9 code. B904 (raise ... from) holds in pseudonymize only, where no
+# exception context may carry a cell value.
+select = ["E9", "F", "B", "C4", "PIE", "UP015", "UP021", "UP022", "UP032", "UP037"]
+
+[tool.ruff.lint.per-file-ignores]
+"!src/phiward/pseudonymize.py" = ["B904"]

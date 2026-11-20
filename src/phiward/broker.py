@@ -534,7 +534,7 @@ class Broker:
             self.unapproved = ["unreadable"]
         # claimed jobs wait here for one of `max_jobs` workers; the main loop never blocks, so
         # the heartbeat goes on while every worker is busy
-        self.jobs: "queue.Queue[Any]" = queue.Queue()
+        self.jobs: queue.Queue[Any] = queue.Queue()
         self.max_jobs = max_jobs
         self.stop = threading.Event()
 

@@ -54,7 +54,7 @@ class GitError(Exception):
 def _git(args: Sequence[str], cwd: str, stdin: Optional[bytes] = None) -> bytes:
     try:
         proc = subprocess.run(["git"] + list(args), cwd=cwd, input=stdin,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                              capture_output=True, check=False)
     except OSError as exc:
         raise GitError(type(exc).__name__)
     if proc.returncode != 0:
@@ -203,7 +203,7 @@ def install(cwd: str, force: bool) -> int:
         target = os.path.join(hdir, name)
         if os.path.lexists(target) and not force:
             try:
-                with open(target, "r", encoding="utf-8", errors="replace") as fh:
+                with open(target, encoding="utf-8", errors="replace") as fh:
                     ours = MARKER in fh.read()
             except OSError:
                 ours = False

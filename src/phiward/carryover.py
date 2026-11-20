@@ -1003,8 +1003,8 @@ class Store:
                 c["paths"], c["json"] = rest_paths, rest_json
                 c["copied"] = [r for r in c.get("copied", []) if r in rest_paths]
                 c["details"] = [d for d in c.get("details", [])
-                                if not any(d == o or d.startswith(o + "/") or d.startswith(o + " ")
-                                           or d.startswith(o + ":") for o in only)]
+                                if not any(d == o or d.startswith((o + "/", o + " ", o + ":"))
+                                           for o in only)]
                 _write_json(os.path.join(qdir, "changes.json"), c)
                 return [n for n, _ in items]
         os.rename(qdir, qdir + ".accepted")
@@ -1358,7 +1358,7 @@ def project_state(project: str, limit: int = 200_000, scan_limit: int = 2_000_00
     out: Dict[str, tuple] = {}
     # breadth first, dot-folders first: instructions and settings live near the top and in dot
     # folders, so a flood of files deep in the tree is visited last
-    stack: "collections.deque[str]" = collections.deque([""])
+    stack: collections.deque[str] = collections.deque([""])
     seen = 0
     while stack:
         rel = stack.popleft()

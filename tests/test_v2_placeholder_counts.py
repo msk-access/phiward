@@ -98,14 +98,14 @@ def test_note_equals_the_placeholders_in_the_text_above_it(tree):
     import random
     subjects()
     rnd = random.Random(5)
-    parts = ["FAKE-PT-0{}".format(100 + i) for i in range(30)] + ["x.bam", "y.bam", "word", "chr1:1234567"]
+    parts = [f"FAKE-PT-0{100 + i}" for i in range(30)] + ["x.bam", "y.bam", "word", "chr1:1234567"]
     lines = [f"{i:02d} " + " ".join(rnd.choice(parts) for _ in range(3)) for i in range(40)] + ["end"]
     rc, out = go(tree, lines)
     want = {}
     for l in shown(out):
         for p in re.findall(r"<[A-Z][A-Z0-9_]*>", l):
             want[p] = want.get(p, 0) + 1
-    got = dict((p, int(n)) for n, p in re.findall(r"(\d+) (<[A-Z][A-Z0-9_]*>)", note(out)))
+    got = {p: int(n) for n, p in re.findall(r"(\d+) (<[A-Z][A-Z0-9_]*>)", note(out))}
     assert got == want, (got, want, out)
 
 

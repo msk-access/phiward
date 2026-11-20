@@ -406,7 +406,7 @@ def _table(rng, counter):
             if kind == "wide":
                 width += rng.choice([-1, 1])
             cells, plain, number = [], [], False
-            for i in range(max(1, width)):
+            for _ in range(max(1, width)):
                 c = rng.random()
                 if c < 0.4:
                     s = mrn()

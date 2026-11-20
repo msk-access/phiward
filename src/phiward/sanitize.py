@@ -156,7 +156,7 @@ class Pack:
         self.paths: List[Rule] = []
         self.identifiers: List[Rule] = []
         self.positions: List[Rule] = []
-        self.keep_files: List["Pattern[str]"] = []
+        self.keep_files: List[Pattern[str]] = []
 
 
 def pack_path(name: str) -> str:
@@ -222,7 +222,7 @@ def name_tokens(lines: Iterable[str], stop: Optional[Iterable[str]] = None) -> "
     dot), and the dash/underscore pieces of the sample part, of 4 or more characters, never a
     stop word and never a bare number. Case does not matter."""
     stops = {s.lower() for s in (STOP_WORDS if stop is None else stop)}
-    toks: "set[str]" = set()
+    toks: set[str] = set()
 
     def add(t: str) -> None:
         if len(t) >= 4 and not t.isdigit() and t.lower() not in stops and t.isascii():
@@ -281,7 +281,7 @@ class Sanitizer:
         self.pos_rules = list(pos_rules)
         self.keep_files = list(keep_files)
         self.tokens = sorted(set(tokens), key=len, reverse=True)
-        self.re_names: Optional["Pattern[str]"] = None
+        self.re_names: Optional[Pattern[str]] = None
         if self.tokens:
             alt = "|".join(re.escape(t) for t in self.tokens)
             self.re_names = re.compile(rf"(?<![A-Za-z0-9])(?:{alt})(?![A-Za-z0-9])", re.I)
@@ -325,7 +325,7 @@ class Sanitizer:
                      } if entries else set()
             pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
             roots = {f for r in pset.roots for f in (r, normalize(r))}
-            ents: "set[str]" = set()
+            ents: set[str] = set()
             if entries:
                 try:
                     ents = inventory.build(cfg.roots, cfg.patterns, cfg.inventory_limit,

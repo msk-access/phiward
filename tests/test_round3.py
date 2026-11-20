@@ -195,7 +195,7 @@ def test_b4_a_relative_user_entry_is_relative_to_the_user_folder(tree):
 def test_b8_the_heartbeat_continues_while_every_slot_is_busy(tree, broker):
     p = broker(args=["--max-jobs", "1"])
     rids = []
-    for n in range(2):
+    for _ in range(2):
         rid = uuid.uuid4().hex
         rids.append(rid)
         tmp = os.path.join(broker.spool, f".tmp-{rid}")

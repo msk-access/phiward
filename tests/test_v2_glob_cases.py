@@ -366,7 +366,7 @@ def test_the_corpus(tree, row, mode):
     if rid.startswith("mac-") and sys.platform != "darwin":
         pytest.skip("macOS folds case and Unicode form")
     setup(tree)
-    f = dict(t=str(tree), h=str(tree / "home"), tp=str(tree.parent), tn=tree.name[:-1] + "?")
+    f = {"t": str(tree), "h": str(tree / "home"), "tp": str(tree.parent), "tn": tree.name[:-1] + "?"}
     got = verdict(tree, mode, (cmd or "").format(**f), (path or "").format(**f))
     assert got == expect, f"{rid} in {mode}: {got}"
 

@@ -240,7 +240,7 @@ def _write_out(fd: int, data: bytes) -> None:
 # --- arguments ----------------------------------------------------------------------------------
 
 def _names(value: str) -> List[str]:
-    out = [v for v in value.split(",")]
+    out = value.split(",")
     if not value or any(not v.strip() for v in out):
         raise Refused("a list of column names has an empty name.")
     return out
@@ -874,7 +874,7 @@ def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[st
     what may be one subject. A code for each ID the key does not hold, drawn
     from every code not used yet, skipping one the sanitizer would touch, one the scan would
     flag (`m`), or one that is a value of the input (`values`) or the key."""
-    forms: Dict[str, "set[str]"] = {}
+    forms: Dict[str, set[str]] = {}
     for v in key.codes:
         forms.setdefault(_fold(v), set()).add(v)
     for v in ids:

@@ -74,7 +74,7 @@ def pytest_sessionfinish(session, exitstatus):
     # a listed test that ran: only for exact lines, in a run of the whole suite
     whole_run = not session.config.option.keyword and not session.config.option.markexpr and \
         [os.path.basename(a.rstrip("/")) for a in session.config.args] in ([], ["tests"])
-    stale = sorted(set(w for w in want if "*" not in w) - set(_SKIPPED))
+    stale = sorted({w for w in want if "*" not in w} - set(_SKIPPED))
     if stale and whole_run:
         print(f"\nNOTE: {len(stale)} test(s) in tests/expected_skips_{sys.platform}.txt ran "
               "this time; remove them from the list if they now always run.", file=sys.stderr)
@@ -161,7 +161,7 @@ def _temp_is_the_machine(monkeypatch):
     (claude_settings.agent_writable): in tests it stands for the rest of the machine. A test of
     that rule sets `claude_settings._temp_roots` itself."""
     from phiward import claude_settings
-    monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [])
+    monkeypatch.setattr(claude_settings, "_temp_roots", list)
 
 
 @pytest.fixture

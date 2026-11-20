@@ -237,7 +237,7 @@ def test_the_hooks_clear_the_other_glibc_and_macos_malloc_variables(tree):
     names = ["LOCALDOMAIN", "RES_OPTIONS", "RESOLV_HOST_CONF", "NIS_PATH", "TZDIR", "GETCONF_DIR",
              "MallocStackLogging", "MallocNanoZone"]
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True,
-                         env=dict({n: "x" for n in names}, PATH="/usr/bin:/bin",
+                         env=dict(dict.fromkeys(names, "x"), PATH="/usr/bin:/bin",
                                   KEEP_ME="yes", TZ="UTC")).stdout
     assert "KEEP_ME=yes" in out and "TZ=UTC" in out, out
     for n in names:

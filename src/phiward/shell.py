@@ -107,7 +107,7 @@ def expand(word: Word, env: Mapping[str, str], bound: Set[str], home: str) -> Tu
     """
     unknown = False
     parts: List[str] = []
-    for kind, text, quoted in word.segs:
+    for kind, text, _quoted in word.segs:
         if kind in ("lit", "ansi"):  # $'...' keeps its escapes as written
             parts.append(text)
         elif kind == "tilde":

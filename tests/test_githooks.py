@@ -43,7 +43,7 @@ class Env:
     def git(self, *args: str, check: bool = True) -> "subprocess.CompletedProcess[str]":
         return subprocess.run(["git", *args], cwd=str(self.repo), env=self.env(),
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True, check=check)
+                              text=True, check=check)
 
     def init(self, repo: Optional[Path] = None) -> None:
         if repo is not None:
@@ -68,8 +68,7 @@ class Env:
     def hook(self, *args: str, stdin: str = "") -> "subprocess.CompletedProcess[str]":
         return subprocess.run([sys.executable, "-m", "phiward", "git-hook", *args],
                               cwd=str(self.repo), env=self.env(), input=stdin,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              universal_newlines=True)
+                              capture_output=True, text=True)
 
 
 @pytest.fixture

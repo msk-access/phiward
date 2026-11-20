@@ -675,7 +675,7 @@ def main(argv: List[str]) -> int:
     if show:
         for p in cfg.roots + cfg.patterns + cfg.derived_roots:
             print(f"  {p}")
-    if any(r.endswith("/.git") or r.endswith(".git") for r in cfg.derived_roots):
+    if any(r.endswith(("/.git", ".git")) for r in cfg.derived_roots):
         print("NOTE: a protected root sits in a git work tree; its .git is protected too, so the "
               "agent cannot use git in that repository.")
     from phiward import confine
