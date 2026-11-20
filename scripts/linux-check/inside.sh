@@ -4,7 +4,7 @@
 # Exits non-zero if any run failed.
 set -e
 apt-get update -qq >/dev/null
-apt-get install -y -qq bubblewrap git rsync tabix >/dev/null
+apt-get install -y -qq bubblewrap git nodejs rsync tabix >/dev/null  # node: CI's runners have it
 useradd -m tester
 # a Docker socket where a host with Docker has one (GitHub's runners, most workstations), behind
 # the /var/run -> /run link: the gateway must still start (it once failed on this)

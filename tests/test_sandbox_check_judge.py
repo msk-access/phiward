@@ -758,7 +758,7 @@ def test_keep_writes_nothing_when_interrupted(tmp_path, monkeypatch):
             raise KeyboardInterrupt
         os.replace(a, b)
     monkeypatch.setattr(launch.os, "rename", rename)
-    with pytest.raises(BaseException):
+    with pytest.raises(KeyboardInterrupt):
         launch.keep(TOKEN, str(h / "report.txt"), [str(h / "run-A")], str(out))
     assert os.listdir(out) == []
 
@@ -809,7 +809,7 @@ def test_keep_never_removes_a_file_it_did_not_make(tmp_path):
     out.mkdir()
     theirs = out / ".stream-A.jsonl.part"
     theirs.write_text("not ours\n")
-    with pytest.raises(BaseException):
+    with pytest.raises(FileExistsError):
         _launch_module().keep(TOKEN, str(h / "report.txt"), [str(h / "run-A")], str(out))
     assert theirs.read_text() == "not ours\n"
     assert sorted(os.listdir(out)) == [".stream-A.jsonl.part"]

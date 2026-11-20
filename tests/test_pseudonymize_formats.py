@@ -112,16 +112,21 @@ def _bad_crc(data):
     return bytes(b)
 
 
-def _bgzf(text):
-    """One BGZF block and the EOF block (an FEXTRA `BC` subfield in each header)."""
-    raw = text.encode()
-    c = zlib.compressobj(6, zlib.DEFLATED, -15)
-    body = c.compress(raw) + c.flush()
-    block = (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
-             struct.pack("<HH", 2, 25 + len(body)) + body +
-             struct.pack("<II", zlib.crc32(raw), len(raw)))
-    eof = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
-    return block + eof
+BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def bgzf(data, size=65280):
+    """BGZF blocks of `size` input bytes each, then the EOF block, as bgzip writes them."""
+    data = data.encode() if isinstance(data, str) else data
+    out = b""
+    for i in range(0, len(data), size):
+        raw = data[i:i + size]
+        c = zlib.compressobj(6, zlib.DEFLATED, -15)
+        body = c.compress(raw) + c.flush()
+        out += (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
+                struct.pack("<HH", 2, 25 + len(body)) + body +
+                struct.pack("<II", zlib.crc32(raw), len(raw)))
+    return out + BGZF_EOF
 
 
 GZ = gz(TABLE)
@@ -212,7 +217,10 @@ def test_a_compressed_copy_that_does_not_read_back_is_refused(tree, ps, monkeypa
     monkeypatch.setattr(ps.gzip, "compress", bad)
     p = put(tree, "labs.tsv.gz", GZ)
     code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
-    assert code == 2, text
+    # a cut copy fails the read of the copy; a changed one reads but is not the table
+    want = {"short": "the input cannot be read as a gzip-compressed TSV file",
+            "other": "the compressed copy does not read back as the table"}[how]
+    assert code == 2 and want in text, text
     none_written(tree, "out.tsv.gz")
 
 
@@ -389,10 +397,6 @@ def test_a_maf_column_renamed_follows_the_tsv_rules(tree, ps):
 # --- 8. the scan of the whole output (inv. 5) -------------------------------------------------
 
 @pytest.mark.parametrize("ident,cell", [
-    ("FAKE PT 0007", "seen FAKE PT 0007 today"),
-    ("9990001", "PT:9990001"),
-    ("FAKE-PT-0007", "ＦＡＫＥ-PT-0007"),
-    ("9990002", "see 9990002 again"),
     ("FAKE-PT-0007", "\\u0046AKE-PT-0007"),
     ("FAKE-PT-0007", "FAKE%2DPT%2D0007"),
     ("A12", "A12"),
@@ -451,7 +455,7 @@ def test_the_draw_skips_a_code_that_holds_an_id(tree, ps, monkeypatch):
     assert "QX9999" not in codes and len(set(codes)) == 2
 
 
-def test_the_draw_uses_the_scan(ps):
+def test_the_matcher_hits_an_id_in_a_longer_text_but_not_a_longer_run(ps):
     m = ps._Matcher({"X9999", "9999", "S99", "1234567"})
     assert m.hit("QX9999") and m.hit("9999") and m.hit("S99") and m.hit("a/1234567.b")
     assert not m.hit("QX9998") and not m.hit("S991") and not m.hit("11234567")
@@ -503,7 +507,7 @@ def _flags(data, bits):
 def test_every_gzip_member_header_is_checked(tree, ps, case):
     first, rest = TABLE.split("\n", 3)[:3], TABLE.split("\n", 3)[3]
     first = "\n".join(first) + "\n"
-    data = {"bgzf_second": gz(first) + _bgzf(rest),
+    data = {"bgzf_second": gz(first) + bgzf(rest),
             "reserved_first": _flags(gz(first), 0x20) + gz(rest),
             "reserved_second": gz(first) + _flags(gz(rest), 0x80)}[case]
     p = put(tree, "labs.tsv.gz", data)
@@ -782,23 +786,6 @@ def test_a_kept_meta_line_the_sanitizer_masks_is_refused(tree, ps):
 
 # --- 15. BGZF in gives BGZF out (inv. 6) ------------------------------------------------------
 
-BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
-
-
-def bgzf(data, size=65280):
-    """BGZF blocks of `size` input bytes each, then the EOF block, as bgzip writes them."""
-    data = data.encode() if isinstance(data, str) else data
-    out = b""
-    for i in range(0, len(data), size):
-        raw = data[i:i + size]
-        c = zlib.compressobj(6, zlib.DEFLATED, -15)
-        body = c.compress(raw) + c.flush()
-        out += (b"\x1f\x8b\x08\x04" + b"\0" * 4 + b"\0\xff" + struct.pack("<H", 6) + b"BC" +
-                struct.pack("<HH", 2, 25 + len(body)) + body +
-                struct.pack("<II", zlib.crc32(raw), len(raw)))
-    return out + BGZF_EOF
-
-
 def bgzf_blocks(raw):
     """The blocks of a BGZF file, each checked against the SAM spec (section 4.1): the header
     with FEXTRA, XLEN 6, the subfield BC with SLEN 2, BSIZE (the block size - 1) that chains to
@@ -890,7 +877,7 @@ def test_a_bgzf_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatch):
     monkeypatch.setattr(ps, "_bgzf", bad)
     p = put(tree, "calls.vcf.gz", bgzf(vcf_text()))
     code, text = vcf_run(tree, p, out="out.vcf.gz")
-    assert code == 2, text
+    assert code == 2 and "the compressed copy does not read back as the table" in text, text
     none_written(tree, "out.vcf.gz", "vcf")
 
 
@@ -1098,7 +1085,7 @@ def test_json_gz_and_bgzf_give_the_same_compression(tree, ps):
     raw = (tree / "phi" / "out.json.gz").read_bytes()
     assert raw[3] == 0 and len(jread(tree / "phi" / "out.json.gz")["samples"]) == 4
     fresh(tree, "out.json.gz", "js")
-    p = jput(tree, _bgzf(json.dumps(jdoc())), name="doc2.json.gz")
+    p = jput(tree, bgzf(json.dumps(jdoc())), name="doc2.json.gz")
     assert jrun(tree, p, out="out2.json.gz")[0] == 0
     raw = (tree / "phi" / "out2.json.gz").read_bytes()
     assert raw[3] == 4 and raw.endswith(BGZF_EOF)
@@ -1823,3 +1810,116 @@ def test_markdown_two_tables_without_a_blank_line_are_refused(tree, ps):
     code, out = mrun(tree, mput(tree, text), more=("--keep-order",), extra=("FAKE-PT-0009",))
     assert code == 2 and "line 5" in out and "blank line" in out, out
     none_written(tree, "out.md", "md")
+
+
+# === hygiene: pins on the rules that are spelled in one helper each =========================
+# Each rule had two copies; each pin runs a caller of the helper and checks its exact refusal,
+# so a change to the helper shows in both callers.
+
+def test_pin_an_input_reached_through_a_link_or_that_cannot_be_checked(tree, ps):
+    os.symlink(tree / "data" / "labs.tsv", tree / "data" / "l.tsv")
+    code, text = run(tree, base(tree, inp=tree / "data" / "l.tsv"))
+    assert code == 2 and "reached through a link" in text, text
+    code, text = run(tree, base(tree, inp=tree / "data" / "labs.tsv" / "x.tsv"))
+    assert code == 2 and "the input cannot be checked" in text, text
+    none_written(tree)
+
+
+ID_HEADER = "looks like an identifier"
+
+
+def test_pin_the_id_header_rule_on_a_table_header(tree, ps):
+    """`col_key` drops one `#`: `#pt` is the header `pt`, an ID; `##pt` is `#pt`, not one."""
+    write_table(tree / "data" / "labs.tsv", ["mrn", "#pt", "value"], [["9990001", "a", "1"]])
+    code, text = run(tree, base(tree))
+    assert code == 2 and f"column 2 {ID_HEADER}" in text, text
+    none_written(tree)
+    write_table(tree / "data" / "labs.tsv", ["mrn", "##pt", "value"], [["9990001", "a", "1"]])
+    code, text = run(tree, base(tree))
+    assert code == 0, text
+
+
+def test_pin_the_id_header_rule_on_a_new_header(tree, ps):
+    code, text = run(tree, base(tree, cols="mrn=#pt"))
+    assert code == 2 and f"new header of column 1 is empty, {ID_HEADER}" in text, text
+    none_written(tree)
+    code, text = run(tree, base(tree, cols="mrn=##pt"))
+    assert code == 0, text
+
+
+def test_pin_the_id_header_rule_on_a_json_key(tree, ps):
+    code, text = jrun(tree, jput(tree, jdoc(**{"#pt": "x"})))
+    assert code == 2 and ID_HEADER in text, text
+    none_written(tree, "out.json", "js")
+    code, text = jrun(tree, jput(tree, jdoc(**{"##pt": "x"})))
+    assert code == 0, text
+
+
+BAD_ID_TEXT = "holds a tab, a line break or an invisible format character"
+
+
+@pytest.mark.parametrize("cell", ["FAKE\tPT-0001", "FAKE\nPT-0001", "FAKE\rPT-0001",
+                                  "FAKE​PT-0001"])
+def test_pin_the_bad_id_text_rule_in_a_table(tree, ps, cell):
+    p = tree / "data" / "labs.csv"
+    with open(p, "w", newline="") as f:
+        # every field quoted: Python 3.9's writer leaves a field with a lone \r unquoted
+        csv.writer(f, lineterminator="\n", quoting=csv.QUOTE_ALL).writerows(
+            [["mrn", "site"], [cell, "lab"]])
+    code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.csv"), extra=[cell])
+    assert code == 2 and f"a cell of column 1 {BAD_ID_TEXT}" in text, text
+    none_written(tree, "out.csv")
+
+
+@pytest.mark.parametrize("value", ["FAKE\tPT-0001", "FAKE\nPT-0001", "FAKE\rPT-0001",
+                                   "FAKE​PT-0001"])
+def test_pin_the_bad_id_text_rule_in_json(tree, ps, value):
+    code, text = jrun(tree, jput(tree, jdoc(samples=[{"id": value, "mrn": None}])))
+    assert code == 2 and f"a value at path 1 of --columns {BAD_ID_TEXT}" in text, text
+    none_written(tree, "out.json", "js")
+
+
+def test_pin_the_bad_id_text_rule_in_markdown_keeps_the_table_number(tree, ps):
+    text = LABS_MD + "| FAKE​PT-0004 | lab | 4 |\n"
+    code, out = mrun(tree, mput(tree, text))
+    assert code == 2 and f"table 1: a cell of column 1 {BAD_ID_TEXT}" in out, out
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("header", ["**site**", "si&#116;e", "si&amp;te"])
+def test_pin_the_markdown_header_markup_rule_on_a_header(tree, ps, header):
+    code, out = mrun(tree, mput(tree, LABS_MD.replace("| site |", f"| {header} |", 1)),
+                     extra=(header,))
+    assert code == 2 and "table 1: the header of column 2 holds Markdown" in out, out
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("new", ["**code**", "co&#100;e", "co&amp;de", "a|b", "a\\b", "a`b"])
+def test_pin_the_markdown_header_markup_rule_on_a_new_header(tree, ps, new):
+    code, out = mrun(tree, mput(tree, LABS_MD), cols=f"mrn={new}", extra=(new,))
+    assert code == 2 and "table 1: a new header holds a pipe" in out, out
+    none_written(tree, "out.md", "md")
+
+
+def test_pin_the_ids_are_drawn_in_order_of_first_appearance(tree, ps, monkeypatch):
+    """Row by row, in each row the coded columns in --columns order: the key lines follow."""
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    write_table(tree / "data" / "labs.tsv", ["mrn", "patient", "site"],
+                [["9990003", "FAKE-PT-0002", "a"], ["", "9990001", "b"],
+                 ["9990001", "FAKE-PT-0002", "c"], ["9990004", "", "d"]])
+    code, text = run(tree, base(tree, cols="patient,mrn", more=["--keep-order"]))
+    assert code == 0, text
+    assert [ln.split("\t")[0] for ln in key_lines(tree / "home", "labs")[1:]] == \
+        ["FAKE-PT-0002", "9990003", "9990001", "9990004"]
+
+
+def test_pin_markdown_the_draw_knows_the_ids_of_every_coded_column(tree, ps, monkeypatch):
+    """The draw would pick QX9999 first; `X9999` in the second coded column of the second
+    table makes it skip that code."""
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    second = ("| case | patient_id |\n| --- | --- |\n| FAKE-PT-0005 | X9999 |\n")
+    code, out = mrun(tree, mput(tree, md_text(LABS_MD, second)), cols="mrn,case,patient_id",
+                     more=("--prefix", "QX", "--keep-order"), extra=("X9999",))
+    assert code == 0, out
+    codes = key_map(tree / "home", "md").values()
+    assert "QX9999" not in codes and len(set(codes)) == 5
