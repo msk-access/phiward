@@ -23,9 +23,21 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   the barcode columns and keeps the other ID-glob columns by name. One scan of the whole
   output (codes, headers and the kept line included) replaces the scan of kept cells; the draw
   skips a code it would flag. Any exception in reading or writing is one fixed refusal.
-  Parquet is never read (convert it first); Markdown comes in a later step.
+  Parquet is never read (convert it first).
   (Why: one shape for every kind, and what is written is what was scanned. Cost: a long
   `--keep` for a MAF; Parquet needs a step.)
+- **`phiward pseudonymize` codes Markdown pipe tables.** Only tables and blank lines; every
+  other line is free text, refused (decision C). Each line of a table starts and ends with
+  `|`, and the second is the alignment row. A line with a backslash or a backtick is refused
+  (an escaped pipe or a code span has no safe split), and so is a header with markup or an
+  entity (it would dodge the ID-glob rule). Each table goes through the table rules
+  (`build`) with the names its header holds; each name is in some table; one draw knows the
+  IDs and values of all tables. Only a table with a coded column is shuffled. The scan reads
+  each cell raw and in each round of NFKC, `sanitize.unescape` and `html.unescape` (a
+  superset of the entities CommonMark decodes), each also with tags, link destinations and
+  emphasis marks removed; a cell still changing after 4 rounds is the one fixed refusal.
+  (Why: the same rules as a table, and a cell's rendered or decoded form is what a reader
+  sees. Cost: tables with escaped pipes or code spans, and reports with prose, are refused.)
 - **`phiward pseudonymize` codes JSON values at key paths.** `--columns`, `--drop` and
   `--keep` take paths (`.` a key, `[]` every element; keys matched exactly). A coded value is
   a string or an integer (a string code); `null` stays; other kinds are refused. Keys that are

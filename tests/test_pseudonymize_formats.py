@@ -1,7 +1,7 @@
 """`phiward pseudonymize`, more kinds of input: the extension chain picks the parser and the
 content must agree; plain gzip in and out; `.txt` read as TSV; MAF; the scan of the whole
 output (step 1 of the formats plan). VCF, BGZF in and out, the sample-name rule (step 2). JSON,
-its key paths and the array rule (step 3). Made-up data only (`FAKE-PT-0007`,
+its key paths and the array rule (step 3). Markdown pipe tables (step 4). Made-up data only (`FAKE-PT-0007`,
 `P-9990001-T01-IM6`, MAF barcodes `FAKE-AB-0001-01A`, MRNs from 9990001), in a scratch HOME."""
 
 import csv
@@ -158,7 +158,7 @@ def test_a_broken_gzip_gives_one_fixed_refusal(tree, ps, case):
     ("labs.vcf", b"##fileformat=VCFv4.2\n", "out.vcf"),
     ("labs.vcf.gz", gz("##fileformat=VCFv4.2\n"), "out.vcf.gz"),
     ("labs.json", TABLE.encode(), "out.json"),           # a table under a .json name
-    ("labs.md", b"| mrn |\n|---|\n| 9990001 |\n", "out.md"),
+    ("labs.md", b"##fileformat=VCFv4.2\n", "out.md"),           # a VCF under a .md name
     ("labs.tsv", b"##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n", "out.tsv"),
     ("labs.maf.gz", gz("##fileformat=VCFv4.2\nmrn\tsite\n9990001\tlab\n"), "out.maf.gz"),
 ])
@@ -1382,3 +1382,307 @@ def test_json_a_number_that_is_not_whole_or_another_number_passes(ps):
 def test_json_paths_take_spaces_after_commas(tree, ps):
     assert jrun(tree, jput(tree, jdoc(visit_no="v1")), cols="samples[].id, samples[].mrn",
                 more=("--keep", "study, visit_no"))[0] == 0
+
+
+# === step 4: Markdown pipe tables =============================================================
+
+MD_IDS = ("FAKE-PT-0001", "FAKE-PT-0002", "9990001", "9990002", "patient_id", "Traceback",
+          "Error", "| mrn")
+FIXED_MD = ("phiward pseudonymize: the input cannot be read as a Markdown file. Nothing was "
+            "written.")
+LABS_MD = ("| mrn | site | value |\n"
+           "|:----|:----:|------:|\n"
+           "| FAKE-PT-0001 | lab | 1 |\n"
+           "| 9990002 | lab | 2 |\n"
+           "| FAKE-PT-0003 | clinic | 3 |\n")
+ASSAY_MD = ("| assay | count |\n"
+            "| --- | --- |\n"
+            "| panel | 10 |\n"
+            "| exome | 20 |\n")
+
+
+def md_text(*tables):
+    return "\n".join(tables)
+
+
+def mput(tree, text, name="notes.md"):
+    return put(tree, name, text.encode() if isinstance(text, str) else text)
+
+
+def mrun(tree, p, cols="mrn", out="out.md", more=(), new=True, extra=()):
+    args = ["--new-key" if new else "--key", "md", "--columns", cols, *more, p,
+            tree / "phi" / out]
+    code, text = run(tree, args, extra=MD_IDS + tuple(extra))
+    assert "not covered yet" not in text, text  # a refusal of the Markdown rules, not of the kind
+    return code, text
+
+
+def md_cells(text):
+    """The tables of a Markdown text: each a list of rows of stripped cells."""
+    tables, cur = [], []
+    for line in text.split("\n"):
+        if not line.strip():
+            if cur:
+                tables.append(cur)
+            cur = []
+            continue
+        cur.append([c.strip() for c in line.strip()[1:-1].split("|")])
+    if cur:
+        tables.append(cur)
+    return tables
+
+
+# --- 20. pipe tables: the named column coded, its rows shuffled, the rest kept ----------------
+
+def test_markdown_codes_the_named_column_and_shuffles_its_table_only(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    p = mput(tree, md_text(LABS_MD, ASSAY_MD))
+    code, text = mrun(tree, p)
+    assert code == 0, text
+    assert text.strip() == ("phiward pseudonymize: wrote the coded Markdown tables, 5 row(s). "
+                            "Read it with `phiward run`."), text
+    got = key_map(tree / "home", "md")
+    assert sorted(got) == ["9990002", "FAKE-PT-0001", "FAKE-PT-0003"]
+    out = (tree / "phi" / "out.md").read_text()
+    assert out == ("| pseudonym | site | value |\n"
+                   "| :---- | :----: | ------: |\n"
+                   f"| {got['FAKE-PT-0003']} | clinic | 3 |\n"
+                   f"| {got['9990002']} | lab | 2 |\n"
+                   f"| {got['FAKE-PT-0001']} | lab | 1 |\n"
+                   "\n"
+                   "| assay | count |\n"
+                   "| --- | --- |\n"
+                   "| panel | 10 |\n"
+                   "| exome | 20 |\n"), out
+    assert os.stat(tree / "phi" / "out.md").st_mode & 0o777 == 0o600
+
+
+def test_markdown_keep_order_and_a_new_header(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps, "_shuffle", lambda xs: xs.reverse())
+    p = mput(tree, LABS_MD)
+    assert mrun(tree, p, cols="mrn=code", more=("--keep-order",))[0] == 0
+    got = key_map(tree / "home", "md")
+    t = md_cells((tree / "phi" / "out.md").read_text())
+    assert t == [[["code", "site", "value"], [":----", ":----:", "------:"],
+                  [got["FAKE-PT-0001"], "lab", "1"], [got["9990002"], "lab", "2"],
+                  [got["FAKE-PT-0003"], "clinic", "3"]]]
+
+
+def test_markdown_the_real_shuffle_keeps_each_row_whole(tree, ps):
+    rows = "".join(f"| FAKE-PT-{i:04d} | v{i} |\n" for i in range(1, 41))
+    p = mput(tree, "| mrn | value |\n| --- | --- |\n" + rows)
+    assert mrun(tree, p, extra=("FAKE-PT-0040",))[0] == 0
+    back = {v: k for k, v in key_map(tree / "home", "md").items()}
+    body = md_cells((tree / "phi" / "out.md").read_text())[0][2:]
+    assert sorted(back[c] + " " + v for c, v in body) == sorted(
+        f"FAKE-PT-{i:04d} v{i}" for i in range(1, 41))
+    assert [back[c] for c, _ in body] != [f"FAKE-PT-{i:04d}" for i in range(1, 41)]
+
+
+def test_markdown_gz_is_coded_and_compressed(tree, ps):
+    p = put(tree, "notes.md.gz", gz(md_text(LABS_MD, ASSAY_MD)))
+    assert mrun(tree, p, out="out.md.gz")[0] == 0
+    out = gzip.decompress((tree / "phi" / "out.md.gz").read_bytes()).decode()
+    assert md_cells(out)[0][0] == ["pseudonym", "site", "value"]
+
+
+def test_markdown_a_column_named_in_two_tables_codes_both_with_one_code_per_id(tree, ps):
+    second = "| mrn | note |\n| --- | --- |\n| FAKE-PT-0001 | again |\n| FAKE-PT-0002 | x |\n"
+    p = mput(tree, md_text(LABS_MD, second))
+    assert mrun(tree, p, more=("--keep-order",))[0] == 0
+    got = key_map(tree / "home", "md")
+    t = md_cells((tree / "phi" / "out.md").read_text())
+    assert t[0][2][0] == t[1][2][0] == got["FAKE-PT-0001"]
+    assert t[1][3][0] == got["FAKE-PT-0002"]
+
+
+def test_markdown_a_known_id_keeps_its_code_from_a_table(tree, ps):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [["FAKE-PT-0001", "lab"]])
+    assert run(tree, base(tree, key="md"))[0] == 0
+    code = key_map(tree / "home", "md")["FAKE-PT-0001"]
+    assert mrun(tree, mput(tree, LABS_MD), new=False)[0] == 0
+    assert code in (tree / "phi" / "out.md").read_text()
+
+
+# --- what is not a table is free text: refused (decision C) -----------------------------------
+
+@pytest.mark.parametrize("extra_line", [
+    "Seen today: FAKE-PT-0001.",              # prose
+    "# Labs",                                  # a heading
+    "- FAKE-PT-0001",                          # a list
+    "```",                                     # a code fence
+    "    | mrn | site | value |",              # indented: a code block
+    "---",                                     # a rule, or front matter
+    "<!-- FAKE-PT-0001 -->",                   # an HTML comment
+    "mrn | site | value",                      # a row without its outer pipes
+    "| FAKE-PT-0004 | lab | 4",                # a row that does not end with a pipe
+])
+def test_markdown_any_line_outside_a_table_is_refused(tree, ps, extra_line):
+    for text in (extra_line + "\n\n" + LABS_MD, LABS_MD + "\n" + extra_line + "\n",
+                 LABS_MD + extra_line + "\n"):
+        fresh(tree, "out.md", "md")
+        code, text = mrun(tree, mput(tree, text))
+        assert code == 2 and "free text" in text, text
+        none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("bad", [
+    "| mrn | site |\n| FAKE-PT-0001 | lab |\n",                 # no alignment row
+    "| mrn | site |\n| --- |\n| FAKE-PT-0001 | lab |\n",         # an alignment row too short
+    "| mrn | site |\n| --- | x |\n| FAKE-PT-0001 | lab |\n",     # not an alignment row
+    "| mrn | site |\n| --- | --- |\n| FAKE-PT-0001 |\n",         # a row too short
+    "| mrn | site |\n| --- | --- |\n| FAKE-PT-0001 | lab | x |\n",  # a row too wide
+    "| mrn | site |\r\n| --- | --- |\r\n| FAKE-PT-0001 | lab |\r\n",  # CRLF
+    "",                                                           # empty
+    "\n\n",                                                       # no table
+])
+def test_markdown_a_table_that_does_not_fit_is_refused(tree, ps, bad):
+    code, text = mrun(tree, mput(tree, bad))
+    assert code == 2, text
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("line", [
+    "| FAKE\\-PT\\-0001 | lab | 4 |",         # a backslash escape
+    "| FAKE-PT-0004 | a \\| b | 4 |",         # an escaped pipe
+    "| FAKE-PT-0004 | `x|y` | 4 |",          # a code span
+    "| FAKE-PT-0004 | ``x`` | 4 |",
+])
+def test_markdown_a_row_with_a_backslash_or_a_backtick_is_refused(tree, ps, line):
+    code, text = mrun(tree, mput(tree, LABS_MD + line + "\n"))
+    assert code == 2 and "backslash" in text, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_a_header_or_alignment_row_with_a_backslash_is_refused(tree, ps):
+    for text in ("| mrn | si\\|te | value |\n" + LABS_MD.split("\n", 1)[1],
+                 LABS_MD.replace("|:----|", "|:--\\-|")):
+        fresh(tree, "out.md", "md")
+        code, out = mrun(tree, mput(tree, text))
+        assert code == 2, out
+        none_written(tree, "out.md", "md")
+
+
+# --- the scan reads each cell raw and with Markdown and HTML decoded (inv. 5) -----------------
+
+@pytest.mark.parametrize("cell", [
+    "&#70;AKE-PT-0001", "FAKE&#45;PT&#x2D;0001", "FAKE&amp;#45;PT-0001",
+    "FAKE&amp;amp;#45;PT-0001", "**FAKE**-PT-0001", "*FAKE*-PT-*0001*", "~~FAKE~~-PT-0001",
+    "__FAKE__-PT-0001", "[FAKE-PT](x)-0001", "![FAKE-PT](x)-0001", "[x](FAKE-PT-0001)",
+    "[x](&#70;AKE-PT-0001)", "FAKE<b></b>-PT-0001", "FAKE-PT-<!-- x -->0001",
+    "<a href=\"&#70;AKE-PT-0001\">x</a>", "FAKE%26%2345%3BPT-0001", "ＦＡＫＥ&#45;PT-0001",
+    "see &#57;990002 again", "999**0002**", "x/9990&#48;02.bam", "[999](x)0002",
+])
+def test_markdown_an_id_behind_an_entity_or_markup_in_a_kept_cell_is_refused(tree, ps, cell):
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"),
+                      extra=(cell,))
+    assert code == 2 and "column 2" in text and "table 1" in text, text
+    none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("cell", ["&#8203;", "a&#x200B;b", "&amp;#8203;", "​"])
+def test_markdown_an_invisible_format_character_also_by_an_entity_is_refused(tree, ps, cell):
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"))
+    assert code == 2, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_entities_nested_past_the_rounds_are_refused(tree, ps):
+    cell = "&amp;amp;amp;amp;amp;amp;#45;"
+    code, text = mrun(tree, mput(tree, LABS_MD + f"| FAKE-PT-0004 | {cell} | 4 |\n"))
+    assert code == 2, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_markup_and_entities_with_no_id_pass(tree, ps):
+    cells = ["**bold**", "[link](https://example.org/a_b)", "a &amp; b", "&lt;x&gt;",
+             "<br>", "1999**0001**", "snake_case_name", "100%"]
+    rows = "".join(f"| FAKE-PT-{i + 4:04d} | {c} | {i} |\n" for i, c in enumerate(cells))
+    assert mrun(tree, mput(tree, LABS_MD + rows), more=("--keep-order",))[0] == 0
+    body = md_cells((tree / "phi" / "out.md").read_text())[0][5:]
+    assert [r[1] for r in body] == cells
+
+
+def test_markdown_an_id_of_another_table_in_a_kept_cell_is_refused(tree, ps):
+    second = "| mrn | note |\n| --- | --- |\n| FAKE-PT-0002 | x |\n"
+    first = LABS_MD + "| FAKE-PT-0004 | see FAKE-PT-0002 | 4 |\n"
+    code, text = mrun(tree, mput(tree, md_text(first, second)))
+    assert code == 2 and "table 1" in text, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_twin_ids_across_tables_are_refused(tree, ps):
+    second = "| mrn | note |\n| --- | --- |\n| fake-pt-0001 | x |\n"
+    code, text = mrun(tree, mput(tree, md_text(LABS_MD, second)), extra=("fake-pt-0001",))
+    assert code == 2 and "letter case" in text, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_the_draw_avoids_a_kept_value_also_decoded(tree, ps, monkeypatch):
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    p = mput(tree, LABS_MD + "| FAKE-PT-0004 | S&#57;999 | 4 |\n")
+    assert mrun(tree, p)[0] == 0
+    assert "S9999" not in key_map(tree / "home", "md").values()
+
+
+# --- the ID-glob rule per table; headers ------------------------------------------------------
+
+def test_markdown_an_unnamed_id_column_in_any_table_is_refused(tree, ps):
+    second = "| patient_id | note |\n| --- | --- |\n| FAKE-PT-0009 | x |\n"
+    code, text = mrun(tree, mput(tree, md_text(LABS_MD, second)), extra=("FAKE-PT-0009",))
+    assert code == 2 and "table 2" in text and "column 1" in text, text
+    none_written(tree, "out.md", "md")
+    assert mrun(tree, tree / "data" / "notes.md", more=("--drop", "patient_id"),
+                extra=("FAKE-PT-0009",))[0] == 0
+    out = (tree / "phi" / "out.md").read_text()
+    assert "FAKE-PT-0009" not in out and md_cells(out)[1][0] == ["note"]
+
+
+def test_markdown_a_name_found_in_no_table_is_refused(tree, ps):
+    for cols, more in (("mrn", ("--drop", "zzgone")), ("zzgone", ()), ("mrn", ("--keep", "zz"))):
+        fresh(tree, "out.md", "md")
+        code, text = mrun(tree, mput(tree, LABS_MD), cols=cols, more=more,
+                          extra=("zzgone", "zz"))
+        assert code == 2 and "not found" in text, text
+        none_written(tree, "out.md", "md")
+
+
+@pytest.mark.parametrize("header", ["**patient_id**", "_mrn_", "[pid](x)", "<b>id</b>",
+                                    "patient&#95;id", "pat*ient_id*"])
+def test_markdown_a_header_with_markup_or_an_entity_is_refused(tree, ps, header):
+    text = LABS_MD.replace("| site |", f"| {header} |", 1)
+    code, out = mrun(tree, mput(tree, text), extra=(header,))
+    assert code == 2 and "column 2" in out, out
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_a_new_header_that_breaks_the_table_is_refused(tree, ps):
+    for new in ("a|b", "a\\b", "a`b"):
+        fresh(tree, "out.md", "md")
+        code, text = mrun(tree, mput(tree, LABS_MD), cols=f"mrn={new}", extra=(new,))
+        assert code == 2, text
+        none_written(tree, "out.md", "md")
+
+
+# --- errors (inv. 10) -------------------------------------------------------------------------
+
+@pytest.mark.parametrize("where", ["_read_md", "_write_md"])
+@pytest.mark.parametrize("exc", ERRORS, ids=lambda e: type(e).__name__)
+def test_markdown_any_exception_in_reading_or_writing_gives_the_one_refusal(tree, ps,
+                                                                              monkeypatch,
+                                                                              where, exc):
+    def boom(*a, **kw):
+        raise exc
+    monkeypatch.setattr(ps, where, boom)
+    code, text = mrun(tree, mput(tree, LABS_MD), extra=("FAKE-PT-0007", type(exc).__name__))
+    assert code == 2 and text.strip() == FIXED_MD, text
+    none_written(tree, "out.md", "md")
+
+
+def test_markdown_a_copy_that_does_not_read_back_is_refused(tree, ps, monkeypatch):
+    real = ps._write_md
+    monkeypatch.setattr(ps, "_write_md", lambda tables: real(tables).replace("| lab |",
+                                                                              "| lbb |"))
+    code, text = mrun(tree, mput(tree, LABS_MD))
+    assert code == 2 and "read back" in text, text
+    none_written(tree, "out.md", "md")

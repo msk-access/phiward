@@ -21,7 +21,7 @@ The operator's commands (run them in your own terminal, not through an agent):
                      ID columns coded (S0042), inside a protected root; the key stays in
                      ~/.phiward/backups/keys. A .vcf (also .vcf.gz) needs no --columns:
                      its sample names are coded. A .json (also .json.gz) takes key paths:
-                     --columns 'samples[].id'
+                     --columns 'samples[].id'. A .md (also .md.gz): its pipe tables only
 
 Wire a project and a tool:
   init [--root DIR]  set up a project: AGENTS.md rules, settings, git hooks (it only adds)

@@ -458,7 +458,11 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     where the genomics pack is on.
   - A gzip or bgzip input is read up to 1 GiB expanded; the copy is checked by reading it back.
     A bug in the BGZF writer gives a file `tabix` rejects, never a leak (the scan and the
-    check-back come first). Markdown is refused for now, and Parquet is not read.
+    check-back come first). Parquet is not read.
+  - A Markdown copy keeps every cell of the columns you did not name. The scan reads each cell
+    raw, with its entities decoded and its markup removed, and finds only the IDs of the run
+    and the key. Prose is refused, not scanned. The other tables of the file keep their row
+    order, which may pair them with a shuffled table.
   - A JSON copy keeps every value at a path you did not name. The ID-glob rule sees only the
     key that holds a value: an ID under a key no glob matches (`note`, `label`) goes into the
     copy, masked only by the rules, unless it is an ID of the run or the key. Only the array
