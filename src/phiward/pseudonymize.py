@@ -721,7 +721,7 @@ def _encode(text: str, gz: bool, bgzf: bool) -> bytes:
             raise Refused("the compressed copy does not read back as the table.")
         return out
     out = gzip.compress(data, mtime=0)
-    if gzip.decompress(out) != data:
+    if _decompress(out) != (data, False):
         raise Refused("the compressed copy does not read back as the table.")
     return out
 
@@ -1662,10 +1662,10 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
         _scan(back[0], back[1], cols, coded, m)
         count = len(table) - 1
     data = _encode(text, gz, bgzf)
-    # the lines as written: an ID can span two fields (`Doe, John` as the CSV fields `Doe` and
-    # ` John`); a Markdown line in its decoded forms too
-    written = (_decompress(data)[0] if gz else data).decode("utf-8")
-    for n, line in enumerate(written.split("\n"), 1):
+    # the lines as written (`_encode` has shown that the bytes read back as `text`): an ID can
+    # span two fields (`Doe, John` as the CSV fields `Doe` and ` John`); a Markdown line in its
+    # decoded forms too
+    for n, line in enumerate(text.split("\n"), 1):
         if any(m.hit(f, whole=False) for f in (_md_readings(line) if kind == ".md" else [line])):
             raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
                           "across its fields: drop or clean those columns first.")
