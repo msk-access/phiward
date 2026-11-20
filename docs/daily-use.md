@@ -290,8 +290,9 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   inside a cell (`12` in `12 mg`), an ID glued to other digits (`19990001`), an ID written
   another way (with spaces or other hyphens, `9 990 001`), an ID with its leading zeros
   dropped or added (`0001` and `1`). Check such columns yourself, or drop them. Two IDs
-  that differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width `Ｐ-1`), in
-  the input or in the input and the key, are refused: make them one first. The output is a new file of the same kind inside a protected root of your user
+  that the scan reads as one (`P-1`, `p-1`, a full-width `Ｐ-1`; `FAKE%2DPT-0001`,
+  `FAKE PT 0001` for `FAKE-PT-0001`), in the input or in the input and the key, are refused:
+  make them one first. The output is a new file of the same kind inside a protected root of your user
   config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
 - The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
   or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;

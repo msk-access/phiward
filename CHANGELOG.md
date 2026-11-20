@@ -24,8 +24,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   are kept; a sample name that is a word (`TUMOR`), has no digit or is under 3 characters is
   refused unless kept by number with `--keep-samples N`; the records keep their order and the
   sample columns are shuffled. A bgzip (BGZF) input, which must end with its EOF block, gives
-  a BGZF copy that `tabix` indexes. Two IDs that differ only in letter case or Unicode form
-  are refused, in every kind. JSON (`.json`, `.json.gz`): `--columns` takes key paths
+  a BGZF copy that `tabix` indexes. Two IDs that the scan reads as one (another letter case,
+  Unicode form, dash, digits or escape, or for an ID with a letter other separators) are
+  refused, in every kind. JSON (`.json`, `.json.gz`): `--columns` takes key paths
   (`samples[].id`, `patient.mrn`); a string or an integer there gets a code, `null` stays;
   every key that looks like an identifier and holds values is named by its path; a key
   twice, `NaN`, `Infinity`, a lone surrogate and deep nesting are refused; the array of
@@ -37,9 +38,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   alignment row in a table and a header with emphasis or an entity are refused; each table
   follows the table rules with the names its header holds, one code per ID across tables; the
   rows of a coded table are shuffled; the scan also reads each cell with its HTML entities
-  decoded and its emphasis removed. In every kind, the scan and the twin rule read Unicode
+  decoded and its emphasis removed. In every kind, the scan reads Unicode
   dashes as `-`, and an ID with a letter is also found with its separators removed
-  (`FAKE PT 0001`). Parquet is not read (convert it to TSV first).
+  (`FAKE PT 0001`); the twin rule is the scan's own match. Parquet is not read (convert it to TSV first).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.
