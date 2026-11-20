@@ -2,7 +2,8 @@
 # The probes, run by the real Claude Code as one Bash command inside its sandbox (Mode A), or
 # inside `phiward launch` (Mode B). The targets are in paths.txt (not in this file or the
 # command), so phiward's hook sees no protected path and the sandbox alone must refuse them.
-# Writes one line per probe to results.txt; prints no content.
+# Writes one line per probe to results.txt; prints no content. When `phiward run` fails for
+# another reason, gateway-err keeps the first two lines of its output, the paths replaced.
 # A refusal is recorded with its reason class (judge.py decides which classes pass where):
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
@@ -60,6 +61,18 @@ else
   esac
 fi
 echo "gateway-run $r" >> results.txt
+# why it failed, for the report: the first two lines of its output on one line, the protected
+# file and the data folder replaced (an output that names either is "BAD unmasked", never kept)
+if [ "$r" = "BAD other" ]; then
+  printf '%s\n' "$out" | head -n 2 | A=$prot B=$(p data) awk '
+    function rep(s, n, r,   i, o) {
+      o = ""
+      while (n != "" && (i = index(s, n)) > 0) { o = o substr(s, 1, i - 1) r; s = substr(s, i + length(n)) }
+      return o s
+    }
+    { printf "%s%s", (NR > 1 ? " | " : "gateway-err "), rep(rep($0, ENVIRON["A"], "<PROTECTED-FILE>"), ENVIRON["B"], "<DATA>") }
+    END { if (NR == 0) printf "gateway-err "; printf "\n" }' | tr '\000-\011\013-\037\177' ' ' | cut -c 1-320 >> results.txt
+fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
 # pre-commit hook without being shown

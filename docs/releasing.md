@@ -76,6 +76,11 @@ Then push `main`, `develop` and the tag.
    it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the
    session must mask its output, a commit of a made-up identifier must be refused by the git
    hook without showing it, the wrapped MCP server must start, and `doctor` must stay clean.
+   For a write that worked, the report says whether the file reached the host. On Linux, in
+   either mode, the sandbox may put an empty, writable view over a folder it hides: a write
+   there that reaches nothing on the host is a note, not a failure. When `phiward run` fails in
+   the session for another reason, the report notes the first lines of what it said, with the
+   paths replaced.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only

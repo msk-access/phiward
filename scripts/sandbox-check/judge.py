@@ -7,7 +7,11 @@ identifier without printing it, the wrapped MCP server started in this run witho
 protected file, and neither the protected content nor the token reached the session's output.
 The reasons: macOS (Seatbelt) refuses with EPERM ("not-permitted") only, in both modes. On Linux
 the sandbox hides a file (an empty view, or no such file) or binds it read-only, so any known
-reason class passes there, never "other" or an unknown one.
+reason class passes there, never "other" or an unknown one. A write that worked is FAIL, and the
+report says whether its file reached the host; on Linux only, in both modes, a write that worked
+but reached nothing on the host is a note: the sandbox put an empty, writable view over a folder
+it hides, and the write vanished with it. When `phiward run` failed for another reason, the
+report notes what it said (probes.sh keeps its first lines, the paths replaced).
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -108,12 +112,16 @@ def _read_tool(events, results, protected, marker, platform, report, fails, unsu
 
 def _denied(name, got, platform, mode, on_host, report, fails, unsure):
     if not got.startswith("DENIED"):
-        if (got == "OK" and platform == "linux" and mode == "B" and name != "read-protected"
-                and not on_host):
-            report.append(f"note {name}: the write worked inside launch, and nothing reached "
-                          "the host")
-        else:
+        if name == "read-protected":
             fails.append(f"{name}: {got}: it got through")
+        elif got == "OK" and platform == "linux" and not on_host:
+            # both modes' sandboxes may put an empty, writable view over a folder they hide; a
+            # write there never reaches the host, and harms nothing
+            report.append(f"note {name}: the write worked inside the sandbox (Mode {mode}), and "
+                          "nothing reached the host")
+        else:
+            fails.append(f"{name}: {got}: it got through, " + (
+                "and the file reached the host" if on_host else "but nothing reached the host"))
         return
     cls = got[len("DENIED "):]
     if platform == "darwin" and cls == "not-permitted":
@@ -125,6 +133,17 @@ def _denied(name, got, platform, mode, on_host, report, fails, unsure):
         report.append(f"ok   {name}: refused by the sandbox ({cls})")
     else:
         unsure.append(f"{name}: {got} (failed, but not as the sandbox refuses)")
+
+
+def _said(text, protected, marker):
+    """What `phiward run` said (probes.sh kept its first lines, the paths replaced): the
+    protected file replaced again, on one line, short; withheld if it holds the protected
+    content. The report is then redacted of the token, as every kept file (launch.py --keep)."""
+    if marker and marker in text:
+        return "(withheld: it held the protected content)"
+    if protected:
+        text = text.replace(protected, "<PROTECTED-FILE>")
+    return " ".join(text.split())[:300]
 
 
 def _landlock(facts):
@@ -202,6 +221,9 @@ def judge(results, stream_lines, server, marker, created, facts):
         report.append(f"ok   gateway-run: refused as documented (Landlock ABI {abi} < 2)")
     elif got is not None:
         unsure.append(f"gateway-run: {got}")
+    said = lines.get("gateway-err")
+    if said is not None and got != "OK masked":
+        report.append("note gateway-run said: " + _said(said, facts.get("protected_file"), marker))
 
     got = lines.get("control-commit")
     if got is not None and got != "OK":

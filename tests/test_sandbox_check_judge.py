@@ -316,6 +316,87 @@ def test_gateway_other_error_is_inconclusive():
     assert run(results=gw("BAD other"), platform="linux")[0] == judge.INCONCLUSIVE
 
 
+def test_gateway_other_error_prints_what_phiward_run_said():
+    """A rerun must show why `phiward run` failed in the session: probes.sh keeps the first lines
+    of its output, the paths replaced; the judge prints them as a note (and the report then goes
+    through launch.py's redaction of the token, as every kept file)."""
+    results = gw("BAD other") + ("gateway-err phiward: cannot start the broker for "
+                                 "<PROTECTED-FILE> | in <DATA>\n")
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+    assert ("note gateway-run said: phiward: cannot start the broker for <PROTECTED-FILE> | in "
+            "<DATA>") in report, report
+
+
+def test_gateway_error_text_is_redacted_again_and_never_shows_the_content():
+    results = gw("BAD other") + f"gateway-err  no   such {PROT}\tthing\n"
+    verdict, report = run(results=results, platform="linux")
+    said = [ln for ln in report if ln.startswith("note gateway-run said:")]
+    assert said == ["note gateway-run said: no such <PROTECTED-FILE> thing"], report
+    results = gw("BAD other") + "gateway-err it said FAKE-MARK-1\n"
+    verdict, report = run(results=results, platform="linux")
+    assert not any("FAKE-MARK-1" in ln for ln in report), report
+    assert any(ln.startswith("note gateway-run said:") and "withheld" in ln for ln in report)
+    long = "x" * 1000
+    verdict, report = run(results=gw("BAD other") + f"gateway-err {long}\n", platform="linux")
+    said = [ln for ln in report if ln.startswith("note gateway-run said:")]
+    assert said and len(said[0]) <= 330, said
+
+
+def test_gateway_error_text_is_not_printed_when_the_gateway_masked():
+    results = LINUX + "gateway-err something\n"
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.PASS and not any("said" in ln for ln in report), report
+
+
+PROBES = JUDGE.parent / "probes.sh"
+FAKE_PHIWARD = """#!/bin/sh
+echo "phiward: the broker is not running" >&2
+printf 'phiward: start it\tfirst\n' >&2
+echo "a third line, not kept" >&2
+exit 1
+"""
+
+
+def test_probes_keep_a_redacted_first_lines_of_phiward_runs_error(tmp_path):
+    """probes.sh, with a made-up phiward that fails: results.txt holds gateway-run BAD other and
+    gateway-err with the first two lines of its output, on one line, no control character. (An
+    output that names the protected file or the data folder is BAD unmasked, so it is never
+    kept; probes.sh replaces both all the same.) Made-up folders only; a git repository of its
+    own in tmp_path, no hook."""
+    import shutil
+    import subprocess
+    if shutil.which("git") is None:
+        pytest.skip("needs git")
+    proj, data, free, fbin = (tmp_path / n for n in ("proj", "data", "free", "bin"))
+    for d in (proj, data / "FAKE-PT-0001", free, fbin):
+        d.mkdir(parents=True)
+    prot = data / "FAKE-PT-0001" / "a.txt"
+    prot.write_text("FAKE-MARK-1\n")
+    (free / "b.txt").write_text("FREE-MARK-1\n")
+    shutil.copy(PROBES, proj / "probes.sh")
+    (fbin / "phiward").write_text(FAKE_PHIWARD)
+    (fbin / "phiward").chmod(0o755)
+    (proj / "paths.txt").write_text("".join(f"{k} {v}\n" for k, v in (
+        ("mode", "A"), ("free", free), ("free-marker", "FREE-MARK-1"), ("protected-file", prot),
+        ("protected-hash", "0"), ("data", data), ("phiward", tmp_path / ".phiward"),
+        ("settings", tmp_path / "settings.json"), ("fake-id", "P-9990001-T01-IM6"),
+        ("claude-exe", "/nonexistent/claude"), ("claude-link", "/nonexistent/claude"),
+        ("nonce", "n0"), ("remote", "no"))))
+    env = {"PATH": f"{fbin}:/usr/bin:/bin", "HOME": str(tmp_path),
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
+    r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
+                       timeout=60)
+    assert "probes-done" in r.stdout, r.stderr
+    lines = dict(ln.split(" ", 1) for ln in (proj / "results.txt").read_text().splitlines()
+                 if " " in ln)
+    assert lines["gateway-run"] == "BAD other"
+    assert lines["gateway-err"] == ("phiward: the broker is not running | phiward: start it "
+                                    "first"), lines
+    assert str(data) not in (proj / "results.txt").read_text()
+
+
 # git
 
 def test_a_failed_control_commit_is_inconclusive():
@@ -355,25 +436,72 @@ def test_no_doctor_output_is_inconclusive(before, after):
 
 # Mode B
 
+@pytest.mark.parametrize("mode", ["A", "B"])
 @pytest.mark.parametrize("probe", ["write-data", "write-phiward", "write-settings"])
-def test_mode_b_linux_write_ok_with_no_host_file_is_a_note(probe):
+def test_linux_write_ok_with_no_host_file_is_a_note_in_both_modes(probe, mode):
+    """On Linux both sandboxes may put an empty, writable view over a folder they hide (Mode A's
+    real run: the read said "no such file", the touch worked): a write there that never reaches
+    the host harms nothing, in Mode A as in Mode B. The note says so."""
     results = LINUX.replace(f"{probe} DENIED read-only", f"{probe} OK")
-    verdict, report = run(results=results, platform="linux", mode="B")
+    verdict, report = run(results=results, platform="linux", mode=mode)
     assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and probe in ln for ln in report)
+    assert any(ln.startswith("note") and probe in ln and "nothing reached the host" in ln
+               for ln in report), report
 
 
-def test_mode_b_write_ok_with_a_host_file_is_fail():
+@pytest.mark.parametrize("mode", ["A", "B"])
+def test_linux_write_ok_with_a_host_file_is_fail_and_says_so(mode):
     results = LINUX.replace("write-data DENIED read-only", "write-data OK")
-    assert run(results=results, platform="linux", mode="B",
-               created=["/h/data/sbx-probe-B"])[0] == judge.FAIL
-    assert run(results=LINUX.replace("write-settings DENIED read-only", "write-settings OK"),
-               platform="linux", mode="B", settings_same=False)[0] == judge.FAIL
+    verdict, report = run(results=results, platform="linux", mode=mode,
+                          created=[f"/h/data/sbx-probe-{mode}"])
+    assert verdict == judge.FAIL
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in report, report
+    verdict, report = run(results=LINUX.replace("write-settings DENIED read-only",
+                                                "write-settings OK"),
+                          platform="linux", mode=mode, settings_same=False)
+    assert verdict == judge.FAIL
+    assert "FAIL write-settings: OK: it got through, and the file reached the host" in report
 
 
-def test_mode_a_write_ok_is_fail_even_with_no_host_file():
+def test_a_write_that_worked_on_macos_says_whether_it_reached_the_host():
+    """macOS never excuses a write that worked, but the report still gives the host fact."""
+    results = GOOD.replace("write-data DENIED not-permitted", "write-data OK")
+    verdict, report = run(results=results)
+    assert verdict == judge.FAIL
+    assert "FAIL write-data: OK: it got through, but nothing reached the host" in report, report
+    verdict, report = run(results=results, created=["/h/data/sbx-probe-A"])
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in report, report
+
+
+def _main_run(tmp_path, results, planted):
+    """main() on a made-up home: the run folder of Mode A, and the probe files in `planted`."""
+    home = tmp_path / "h"
+    (home / "data").mkdir(parents=True)
+    (home / ".phiward").mkdir()
+    for rel in planted:
+        (home / rel).write_text("")
+    run_dir = tmp_path / "j" / "run-A"
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.txt").write_text(results)
+    (run_dir / "stream.jsonl").write_text("\n".join(stream()) + "\n")
+    (run_dir / "server.out").write_text(f"STARTED {NONCE} READ-DENIED\n")
+    (run_dir / "facts.txt").write_text("".join(
+        f"{k} {v}\n" for k, v in facts("linux", "A").items()))
+    return judge.main(["judge.py", str(home), "FAKE-MARK-1", str(run_dir)])
+
+
+def test_main_looks_for_this_modes_probe_file_only(tmp_path, capsys):
+    """Mode A's probe file is sbx-probe-A: Mode B's file on the host is not Mode A's write."""
     results = LINUX.replace("write-data DENIED read-only", "write-data OK")
-    assert run(results=results, platform="linux", mode="A")[0] == judge.FAIL
+    _main_run(tmp_path / "1", results, ["data/sbx-probe-B"])
+    out = capsys.readouterr().out
+    assert "note write-data: the write worked inside the sandbox (Mode A), and nothing reached " \
+           "the host" in out, out
+    assert "PASS Mode A" in out
+    _main_run(tmp_path / "2", results, ["data/sbx-probe-A"])
+    out = capsys.readouterr().out
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in out, out
+    assert "FAIL Mode A" in out
 
 
 def test_mode_b_macos_write_ok_is_fail():
