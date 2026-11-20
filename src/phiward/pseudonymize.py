@@ -1590,8 +1590,8 @@ def main(argv: List[str], fin: Optional[TextIO] = None, fout: Optional[TextIO] =
         return 1
     except Exception:
         # never the exception's own text or a traceback: either may hold a value of the table
-        ferr.write("phiward pseudonymize: the run stopped on an unexpected error. Nothing was "
-                   "written.\n")
+        ferr.write("phiward pseudonymize: the run stopped on an unexpected error. No output "
+                   "was kept, and no new key; an existing key may keep codes appended to it.\n")
         return 1
     fout.write(f"phiward pseudonymize: wrote the coded {what.format(n)}. Read it with "
                "`phiward run`.\n")

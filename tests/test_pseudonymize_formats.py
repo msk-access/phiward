@@ -1283,7 +1283,8 @@ def test_any_unexpected_error_of_the_run_is_one_fixed_refusal(tree, ps, monkeypa
     code, text = jrun(tree, jput(tree, jdoc()), extra=("UnicodeEncodeError", "surrogates"))
     assert code == 1, text
     assert text.strip() == ("phiward pseudonymize: the run stopped on an unexpected error. "
-                            "Nothing was written."), text
+                            "No output was kept, and no new key; an existing key may keep codes "
+                            "appended to it."), text
     none_written(tree, "out.json", "js")
 
 
