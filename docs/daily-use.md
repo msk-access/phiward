@@ -231,14 +231,41 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
       whole is also read as its integer (`1234.0`, `"9.990001e6"` for `9990001`). The copy is
       written with an indent of 2, and it must read back as the coded document. A message
       names a key by its number in the order of the file. The run reports no count.
-  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`, `.json.gz`). Every member is read, up to
+  - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`, `.json.gz`, `.md.gz`). Every member is read, up to
     1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
     the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
     BGZF copy; for a VCF, `tabix -p vcf OUT` indexes it. An index (`.tbi`, `.csi`) is never
     read or copied. A BGZF file must end with its EOF block (one cut short is refused), and a
     file that mixes BGZF blocks and plain gzip members is refused.
-  - Not covered yet: `.md`. Not covered: Parquet; convert it to TSV with your own tools
-    first.
+  - `.md`: the file holds only pipe tables and blank lines. The names of `--columns`,
+    `--drop` and `--keep` apply to each table whose header holds them:
+
+    ```bash
+    phiward pseudonymize --new-key labs --columns mrn ~/raw/labs.md ~/data/patients/labs-coded.md
+    ```
+
+    - Each line of a table starts and ends with `|`, and the second line is the alignment row
+      (`| --- | :---: |`). Any other line is free text and is refused: prose, a heading, a
+      list, code, front matter, an HTML comment, a row without its outer pipes.
+    - A line with a backslash or a backtick is refused: an escaped pipe (`\|`) or a code span
+      has no safe split into cells. A line with `<`, `[` or `]` is refused: inline HTML,
+      links, images and autolinks are not covered (write `&lt;` for a `<`). A header with
+      emphasis or an entity (`**id**`, `_mrn_`, `patient&#95;id`) is refused: write it plain.
+    - Two tables need a blank line between them: a row inside a table whose cells are all
+      like `---` is refused (it would read as a second header, coded as IDs). So is a body
+      row of dashes only (`| - | - |`).
+    - Each table follows the table rules: every column that looks like an identifier is
+      named, in that table. Each name is found in some table, and one ID gets one code in
+      all of them.
+    - The body rows of a table with a coded column are shuffled (`--keep-order` keeps them);
+      the other tables keep their order. The header and the alignment row are kept. The copy
+      is written as `| a | b |` lines, one blank line between tables, and read back.
+    - For the scan, every cell is also read with its HTML entities decoded (`&#45;`,
+      `&amp;#45;`, `&hyphen;`, also nested up to 4 times; deeper is refused) and its
+      emphasis marks removed (`**`, `_`, `~~`): `&#70;AKE-PT-0001` and `999**0001**` are
+      found. A message names a table by its number. The run reports the row count of all
+      tables.
+  - Not covered: Parquet; convert it to TSV with your own tools first.
   - A file that cannot be read or written as its kind gives one fixed refusal.
 - The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
   `--keep-order` keeps the order.
@@ -250,9 +277,13 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   folders, the sandbox's `allowWrite` and `additionalDirectories`,
   a `write_to` folder, the spool and `~/.phiward`. No field of the output (a cell, a header, the
   kept `#version` line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or script of digits, or escaped (`%2D`, `\u002D`, also
-  escaped twice): an ID of 5 or more characters anywhere in a field, or across the fields of a
-  line as written (`Doe, John` as the CSV fields `Doe` and ` John`); one of 5 or more digits as a whole run of digits, so
+  another letter case, Unicode form, dash (`‐`, `–`, `−` and the other Unicode dashes) or
+  script of digits, or escaped (`%2D`, `\u002D`, `%E2%80%90`, also escaped twice): an ID of
+  5 or more characters anywhere in a field, or across the fields of a line as written (`Doe,
+  John` as the CSV fields `Doe` and ` John`), and one with a letter also with every
+  character but letters and digits removed (`FAKE PT 0001`, `FAKE.PT.0001`,
+  `FAKE-**PT**-0001` for `FAKE-PT-0001`; digits are never joined, so `999 0001` is not
+  `9990001`); one of 5 or more digits as a whole run of digits, so
   `see 9990002` refuses and `19990001` does not; a shorter one with a letter as a whole word;
   a shorter one of digits only as the whole field. No field may hold an invisible format
   character. Not found: a short digit ID

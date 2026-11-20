@@ -458,7 +458,12 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     where the genomics pack is on.
   - A gzip or bgzip input is read up to 1 GiB expanded; the copy is checked by reading it back.
     A bug in the BGZF writer gives a file `tabix` rejects, never a leak (the scan and the
-    check-back come first). Markdown is refused for now, and Parquet is not read.
+    check-back come first). Parquet is not read.
+  - A Markdown copy keeps every cell of the columns you did not name. The scan reads each cell
+    raw, with its entities decoded and its emphasis marks removed, and finds only the IDs of
+    the run and the key. Prose, inline HTML, links, images, code spans and escapes are
+    refused, not scanned. The other tables of the file keep their row
+    order, which may pair them with a shuffled table.
   - A JSON copy keeps every value at a path you did not name. The ID-glob rule sees only the
     key that holds a value: an ID under a key no glob matches (`note`, `label`) goes into the
     copy, masked only by the rules, unless it is an ID of the run or the key. Only the array
@@ -497,9 +502,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     an ID of 5 or more characters anywhere in a cell (after NFKC, in any letter case), an ID of 5
     or more digits as a whole run of digits, a shorter ID with a letter as a whole word, a
     shorter ID of digits only as the whole cell. Not found: a short digit ID inside a cell
-    (`12` in `12 mg`), an MRN glued to other digits (`19990001`, a position may look so), an ID
-    written another way (with spaces or other hyphens, split across cells), an ID with its
-    leading zeros dropped or added.
+    (`12` in `12 mg`), an MRN glued to other digits (`19990001`, a position may look so), an
+    MRN of digits only written with separators (`999 0001`), an ID split across cells, an ID
+    with its leading zeros dropped or added. Unicode dashes read as `-`, and an ID with a letter
+    is also matched with its separators removed (`FAKE PT 0001`).
 
 - **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and

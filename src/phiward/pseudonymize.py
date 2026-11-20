@@ -1,6 +1,6 @@
 """`phiward pseudonymize`: the operator's own command that makes a pseudonymized copy of one
-table (TSV, CSV, a tab-separated .txt, a MAF, a VCF or a JSON file, each plain, gzip- or
-bgzip-compressed) for the agent.
+table (TSV, CSV, a tab-separated .txt, a MAF, a VCF, a JSON file or the pipe tables of a
+Markdown file, each plain, gzip- or bgzip-compressed) for the agent.
 
 The identifier columns the operator names get codes (`S0042`): a prefix fixed in the key, then 4
 digits drawn with `secrets` from the codes not used yet, so neither an ID nor its place in the
@@ -19,6 +19,7 @@ import csv
 import decimal
 import fnmatch
 import gzip
+import html
 import io
 import json
 import math
@@ -115,11 +116,22 @@ The kinds (the extensions decide; the content must fit them):
   (\\ud800). For the scan, a number that is whole is also read as its integer (1234.0,
   "9.990001e6"). The copy is written with an indent of 2 and read back. A key is named in
   messages by its number in the order of the file. The run reports no count;
+- .md: only pipe tables (| a | b |, each line starting and ending with |, the alignment row
+  | --- | second) and blank lines. Any other line (prose, a heading, a list, code, front
+  matter, an HTML comment) is free text, refused. A line with a backslash or a backtick (an
+  escaped pipe, a code span), with <, [ or ] (inline HTML, a link, an image), or a second
+  alignment row (two tables need a blank line between them) is refused, and so is a header
+  with emphasis or an entity (**id**, _mrn_, &#95;). Each table follows the table rules
+  with the names of --columns, --drop and --keep that its header holds; each name is in
+  some table, and one ID gets one code in all of them. The body rows of a table with a
+  coded column are shuffled; the header and the alignment row are kept. For the scan, each
+  cell is also read with its HTML entities (&#45;, &amp;#45;, &hyphen;) decoded and its
+  emphasis marks (**, _, ~~) removed. Messages name a table by its number;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
   coded table. A bgzip (BGZF) input, every block of it and its EOF block, gives a BGZF
   copy; for a VCF, run `tabix -p vcf` on it to index it (an index is never read or copied).
-  .md is not covered yet; Parquet is not: convert it to TSV with your own tools first.
+  Parquet is not covered: convert it to TSV with your own tools first.
 Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
@@ -134,12 +146,14 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. Two IDs that differ only in letter case or
-  Unicode form (P-1, p-1, a full-width P), in IN or in IN and the key, are refused: make
-  them one first. No field of the output (a cell, a header,
-  the kept # line, the codes too) may hold an ID of a coded column or of the key, also in
-  another letter case, Unicode form or digits, or escaped (%2D, \\u002D, also twice): one
-  of 5 or more characters anywhere in a field, or across the fields of a line as written;
+  with an invisible format character is refused. Two IDs that differ only in letter case,
+  Unicode form or dash (P-1, p-1, a full-width P, an en dash), in IN or in IN and the key,
+  are refused: make them one first. No field of the output (a cell, a header, the kept #
+  line, the codes too) may hold an ID of a coded column or of the key, also in another
+  letter case, Unicode form, dash (U+2010, U+2013, U+2212, every Unicode dash) or digits,
+  or escaped (%2D, \\u002D, also twice): one of 5 or more characters anywhere in a field,
+  or across the fields of a line as written, and one with a letter also with every
+  character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
   one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
   word; a shorter one of digits only as the whole field. Drop such a
   column or clean it first. Run it from the folder of the
@@ -157,8 +171,8 @@ DIGITS = 4
 LIMIT = 1 << 30  # the largest table read, compressed or expanded (it is held in memory)
 # the kinds, by the last extension before an optional `.gz`: (delimiter, name in messages)
 KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separated text"),
-         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF"), ".json": ("", "JSON")}
-LATER = (".md",)  # kinds of a later version: refused for now
+         ".maf": ("\t", "MAF"), ".vcf": ("\t", "VCF"), ".json": ("", "JSON"),
+         ".md": ("|", "Markdown")}
 GZIP_MAGIC = b"\x1f\x8b"
 # BGZF (the SAM spec, 4.1): a gzip member with the extra subfield `BC` (BSIZE, the block size
 # - 1); a block holds at most 64 KiB, so bgzip puts 0xff00 input bytes in each; the EOF block
@@ -182,6 +196,13 @@ JSON_DIGITS = 4300  # an integer of more digits is refused (Python 3.11's own li
 JSON_STEP = re.compile(r"([^.\[\]]*)((?:\[\])*)")  # one part of a key path: a key, then []s
 JSON_NUMBER = re.compile(r"-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")
 SURROGATE = re.compile("[\ud800-\udfff]")  # a lone surrogate: no UTF-8 form
+MD_ALIGN = re.compile(r":?-+:?")  # a cell of a pipe table's alignment row
+MD_MARKS = re.compile(r"[*_~]")  # the marks of emphasis and strike-through
+# every dash (Unicode category Pd) and the look-alikes outside it, as `-`: for the scan and the
+# twin rule only
+DASHES = {c: "-" for c in range(sys.maxunicode + 1)
+          if unicodedata.category(chr(c)) == "Pd" or c in (0x2212, 0x2043, 0x02D7, 0x30FC)}
+MD_MARKUP = re.compile(r"[*~]|(?<![0-9A-Za-z])_|_(?![0-9A-Za-z])")  # emphasis: not in a header
 
 
 class Refused(Exception):
@@ -405,11 +426,9 @@ def _kind(path: str) -> Tuple[str, bool]:
         stem, last = os.path.splitext(stem)
     if last == ".parquet":
         raise Refused("Parquet is not covered: convert it to TSV with your own tools first.")
-    if last in LATER:
-        raise Refused("Markdown files are not covered yet.")
     if last not in KINDS or not stem:
-        raise Refused("the input must be a .tsv, .csv, .txt, .maf, .vcf or .json file, or one "
-                      "of them compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
+        raise Refused("the input must be a .tsv, .csv, .txt, .maf, .vcf, .json or .md file, or "
+                      "one of them compressed with gzip or bgzip (.tsv.gz, .vcf.gz).")
     return last, gz
 
 
@@ -732,16 +751,21 @@ def _ascii_digits(text: str) -> str:
                    unicodedata.category(ch) == "Nd" else ch for ch in text)
 
 
+def _plain(text: str) -> str:
+    """NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII and
+    every dash as `-` (`DASHES`: `FAKE‐PT`, `FAKE–PT`, `FAKE−PT` read `FAKE-PT`)."""
+    return _ascii_digits(inventory.normalize(text)).translate(DASHES)
+
+
 def _forms(text: str) -> "set[str]":
     """Every form a text takes on the way to its fixed point, in any letter case: one round is
-    NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII, then
-    `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no longer changes, or
-    after ROUNDS. So an escape that NFKC makes (`％２Ｄ`) or one escaped twice (`%252D`) is
-    decoded too."""
-    forms = {text.casefold()}
+    `_plain`, then `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no
+    longer changes, or after ROUNDS. So an escape that NFKC makes (`％２Ｄ`), one escaped twice
+    (`%252D`) or a dash escaped (`%E2%80%90`) is decoded too."""
+    forms = {text.casefold(), text.translate(DASHES).casefold()}
     for _ in range(ROUNDS):
-        nxt = unescape(_ascii_digits(inventory.normalize(text)))
-        forms.add(_ascii_digits(inventory.normalize(nxt)).casefold())
+        nxt = unescape(_plain(text))
+        forms.add(_plain(nxt).casefold())
         if nxt == text:
             break
         text = nxt
@@ -750,7 +774,10 @@ def _forms(text: str) -> "set[str]":
 
 class _Matcher:
     """Whether a field holds an ID of the run or of the key, in any of its forms (`_forms`):
-    a long ID (`_long`) anywhere in the field; an ID of 5 or more digits as a whole run of
+    a long ID (`_long`) anywhere in the field, also with every character that is not a letter or
+    a digit removed from both when the ID has a letter (`FAKE PT 0001`, `FAKE.PT.0001` for
+    `FAKE-PT-0001`; never digits joined: `999 0001` is not `9990001`); an ID of 5 or more digits
+    as a whole run of
     digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID
     with a letter as a whole word (`see ab12`); a shorter ID of digits only as the whole field
     (`12` is not in `0.12`)."""
@@ -763,6 +790,9 @@ class _Matcher:
         words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len,
                        reverse=True)
         self.rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
+        bare = sorted({b for v in long_ids if re.search(r"[^\W\d_]", v)
+                       for b in [_alnum(v)] if len(b) >= 5}, key=len, reverse=True)
+        self.sx = re.compile("|".join(re.escape(v) for v in bare)) if bare else None
         self.wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
                              r")(?![0-9a-z])") if words else None
 
@@ -772,11 +802,17 @@ class _Matcher:
         for norm in _forms(field):
             if (whole and norm.strip() in self.whole) or \
                     (self.rx is not None and self.rx.search(norm)) or \
+                    (self.sx is not None and self.sx.search(_alnum(norm))) or \
                     (self.wx is not None and self.wx.search(norm)) or \
                     (self.numbers and any(d in self.numbers
                                           for d in re.findall(r"[0-9]+", norm))):
                 return True
         return False
+
+
+def _alnum(text: str) -> str:
+    """The letters and digits of a text, every other character removed."""
+    return "".join(ch for ch in text if ch.isalnum())
 
 
 def _has_cf(text: str) -> bool:
@@ -809,9 +845,10 @@ def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[
 
 
 def _fold(text: str) -> str:
-    """NFKC with format characters removed, then a case fold: the form two IDs share when they
-    differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width `Ｐ-1`)."""
-    return inventory.normalize(text).casefold()
+    """NFKC with format characters removed, every dash as `-`, then a case fold: the form two
+    IDs share when they differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width
+    `Ｐ-1`, `P–1`)."""
+    return inventory.normalize(text).translate(DASHES).casefold()
 
 
 def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[str]"
@@ -853,11 +890,14 @@ def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[st
 
 
 def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: List[List[str]],
-          key: Key, keep_headers: bool = False
+          key: Key, keep_headers: bool = False, m: Optional[_Matcher] = None,
+          values: "Optional[set[str]]" = None
           ) -> Tuple[List[List[str]], List[Tuple[str, str]], List[int], "set[int]", _Matcher]:
     """(the output rows, header first; the new key lines; the input column of each output
     column; the coded columns; the matcher of the run's and the key's IDs). Refuses on any
-    rule. With `keep_headers` (MAF) a coded column keeps its header unless one is given."""
+    rule. With `keep_headers` (MAF) a coded column keeps its header unless one is given. `m`
+    and `values`, when given, are the matcher and the input values of the whole file (several
+    Markdown tables) for the draw, in place of this table's own."""
     header = rows[0]
     keys = [col_key(h) for h in header]
     if len(set(keys)) != len(keys):
@@ -922,8 +962,11 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
                 ids.append(v)
     # an ID of the key or of a coded column left anywhere in the output would link its code to
     # it: the scan of the output (`_scan`) refuses it
-    m = _Matcher(set(ids) | set(key.codes))
-    codes, added = _draw(ids, key, san, m, {c.strip() for r in rows for c in r})
+    if m is None:
+        m = _Matcher(set(ids) | set(key.codes))
+    if values is None:
+        values = {c.strip() for r in rows for c in r}
+    codes, added = _draw(ids, key, san, m, values)
     body = []
     for r in rows[1:]:
         body.append([codes[r[i].strip()] if i in coded and r[i].strip() else
@@ -1348,6 +1391,157 @@ def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text
     return written, added, m
 
 
+# --- Markdown -----------------------------------------------------------------------------------
+
+def _read_md(text: str) -> List[List[List[str]]]:
+    """The pipe tables of a Markdown file, each its rows of cells (outer spaces removed): the
+    header, the alignment row, the body rows. Only tables and blank lines are taken: any other
+    line (prose, a heading, a list, code, a row without its outer pipes) is free text, refused.
+    A line with a backslash or a backtick is refused: an escaped pipe or a code span has no
+    safe split. Every row of a table is as wide as its header."""
+    if "\r" in text:
+        raise Refused("the Markdown file has a carriage return: give it Unix line ends.")
+    tables: List[List[List[str]]] = []
+    cur: List[List[str]] = []
+    lines = text.split("\n")
+    for n, line in enumerate(lines + [""], 1):
+        row = line.rstrip(" \t")
+        if not row:
+            if cur:
+                if len(cur) < 2:
+                    raise Refused(f"line {n - 1} of the Markdown file is not in a table (a "
+                                  "table has a header and an alignment row): free text is not "
+                                  "covered.")
+                tables.append(cur)
+            cur = []
+            continue
+        if len(row) < 2 or row[0] != "|" or row[-1] != "|":
+            raise Refused(f"line {n} of the Markdown file is not a table row (| a | b |): free "
+                          "text (prose, headings, lists, code) is not covered.")
+        if "\\" in row or "`" in row:
+            raise Refused(f"line {n} of the Markdown file holds a backslash or a backtick (an "
+                          "escape or a code span): its cells cannot be split safely.")
+        if "<" in row or "[" in row or "]" in row:
+            raise Refused(f"line {n} of the Markdown file holds <, [ or ] (inline HTML, a link, "
+                          "an image or an autolink), which is not covered: write &lt; or "
+                          "remove it.")
+        cells = [c.strip(" \t") for c in row[1:-1].split("|")]
+        if cur and len(cells) != len(cur[0]):
+            raise Refused(f"line {n} of the Markdown file has another number of cells than the "
+                          "header of its table.")
+        if len(cur) == 1 and not all(MD_ALIGN.fullmatch(c) for c in cells):
+            raise Refused(f"line {n} of the Markdown file is not the alignment row of its table "
+                          "(| --- |): free text is not covered.")
+        if len(cur) > 1 and all(MD_ALIGN.fullmatch(c) for c in cells):
+            raise Refused(f"line {n} of the Markdown file is an alignment row inside a table: "
+                          "put a blank line between two tables.")
+        cur.append(cells)
+    if not tables:
+        raise Refused("the Markdown file holds no table.")
+    return tables
+
+
+def _write_md(tables: List[List[List[str]]]) -> str:
+    return "\n".join("".join("| " + " | ".join(r) + " |\n" for r in t) for t in tables)
+
+
+def _md_render(text: str) -> str:
+    """A cell with the marks of emphasis and strike-through removed (`999**0001**`), for the
+    scan only. A cell has no HTML, link or image: `_read_md` refuses `<`, `[` and `]`."""
+    return MD_MARKS.sub("", text)
+
+
+def _md_forms(text: str) -> List[str]:
+    """The forms of a Markdown cell for the scan: the text, then each round of NFKC, the
+    escapes of `sanitize.unescape` and HTML entities decoded (`&#45;`, `&amp;#45;`, `%26%2345%3B`,
+    `&hyphen;`),
+    each also rendered (`_md_render`). A text still changing after ROUNDS rounds cannot be
+    decided: ValueError (the one fixed refusal)."""
+    forms: List[str] = []
+    cur = text
+    for _ in range(ROUNDS + 1):
+        forms += [cur, _md_render(cur)]
+        nxt = html.unescape(unescape(inventory.normalize(cur)))
+        if nxt == cur:
+            return forms
+        cur = nxt
+    raise ValueError("entities nested too deep")
+
+
+def _scan_md(tables: List[List[List[str]]], cols: List[List[int]], m: _Matcher) -> None:
+    """The scan of every cell of the output as it was read back, codes, headers and alignment
+    rows included, in each of its forms (`_md_forms`). A place is named by the table and the
+    input's column number, never by a value."""
+    for t, rows in enumerate(tables, 1):
+        for row in rows:
+            for c, cell in enumerate(row):
+                if any(_has_cf(f) or m.hit(f) for f in _md_forms(cell)):
+                    raise Refused(f"table {t}: column {cols[t - 1][c] + 1} of the output holds "
+                                  "an ID of a coded column or of the key, or an invisible "
+                                  "format character (also behind an entity or markup): drop "
+                                  "it, or clean it first.")
+
+
+def _code_md(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: str, key: Key
+             ) -> Tuple[str, List[Tuple[str, str]], int, _Matcher]:
+    """(the written Markdown, the new key lines, the body row count, the matcher). Each table
+    follows the table rules (`build`) with the names of --columns, --drop and --keep its header
+    holds; each name is found in some table. One draw knows the IDs and the values of every
+    table, and one ID gets one code in all of them. The body rows of a table with a coded
+    column are shuffled unless --keep-order; the header and the alignment row are kept."""
+    tables = _read_md(text)
+    names = {opt: [str(s) for s in opts.get(opt, [])]  # type: ignore[union-attr]
+             for opt in ("columns", "drop", "keep")}
+    subs: List[Dict[str, object]] = []
+    found = set()
+    ids = set()
+    for t, rows in enumerate(tables, 1):
+        for c, h in enumerate(rows[0], 1):
+            if MD_MARKUP.search(h) or html.unescape(h) != h:
+                raise Refused(f"table {t}: the header of column {c} holds Markdown or HTML "
+                              "markup or an entity: write it plain.")
+        keys = [col_key(h) for h in rows[0]]
+        sub: Dict[str, object] = {}
+        for opt, specs in names.items():
+            sub[opt] = [s for s in specs
+                        if col_key(s.partition("=")[0] if opt == "columns" else s) in keys]
+            found |= {(opt, s) for s in sub[opt]}  # type: ignore[attr-defined]
+        for s in sub["columns"]:  # type: ignore[attr-defined]
+            i = keys.index(col_key(s.partition("=")[0]))
+            ids |= {r[i].strip() for r in rows[2:] if r[i].strip()}
+        sub["keep_order"] = opts["keep_order"] or not sub["columns"]
+        subs.append(sub)
+    if any((opt, s) not in found for opt, specs in names.items() for s in specs):
+        raise Refused("a column named in --columns, --drop or --keep is not found in any table.")
+    m = _Matcher(ids | set(key.codes))
+    values = {f.strip() for rows in tables for r in rows for c in r for f in _md_forms(c)}
+    work = Key(key.prefix, dict(key.codes), key.ident)
+    out: List[List[List[str]]] = []
+    cols_of: List[List[int]] = []
+    added: List[Tuple[str, str]] = []
+    for t, (rows, sub) in enumerate(zip(tables, subs), 1):
+        try:
+            table, new, cols, _, _ = build(sub, cfg, san, [rows[0]] + rows[2:], work, m=m,
+                                           values=values)
+        except Refused as exc:
+            raise Refused(f"table {t}: {exc}") from None
+        for h in table[0]:
+            if "|" in h or "\\" in h or "`" in h or MD_MARKUP.search(h) or html.unescape(h) != h:
+                raise Refused(f"table {t}: a new header holds a pipe, a backslash, a backtick, "
+                              "markup or an entity.")
+        work.codes.update(new)
+        added += new
+        out.append([table[0], [rows[1][i] for i in cols]] + table[1:])
+        cols_of.append(cols)
+    written = _write_md(out)
+    back = _read_md(written)
+    if back != out:
+        raise Refused("the copy does not read back as the coded tables.")
+    m = _Matcher(set(work.codes))  # every ID of the key and of this run
+    _scan_md(back, cols_of, m)
+    return written, added, sum(len(t) - 2 for t in out), m
+
+
 # --- the run ------------------------------------------------------------------------------------
 
 def _out_place(path: str, kind: Tuple[str, bool], cfg: config.Config) -> Tuple[str, str]:
@@ -1440,7 +1634,8 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
         # member, a decode error, memory): one fixed text, never the exception's own
         raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
     _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data)
-    return count, {".vcf": "VCF, {} record(s)", ".json": "JSON file"}.get(kind, "table, {} row(s)")
+    return count, {".vcf": "VCF, {} record(s)", ".json": "JSON file",
+                   ".md": "Markdown tables, {} row(s)"}.get(kind, "table, {} row(s)")
 
 
 def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: bytes, kind: str,
@@ -1453,6 +1648,8 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     elif kind == ".json":
         text, added, m = _code_json(opts, cfg, san, _decode(plain, kind), key)
         count = 0  # a JSON file reports no count (decision G)
+    elif kind == ".md":
+        text, added, count, m = _code_md(opts, cfg, san, _decode(plain, kind), key)
     else:
         kept, rows = _read_table(_decode(plain, kind), kind)
         for line in kept:
@@ -1468,10 +1665,10 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
         count = len(table) - 1
     data = _encode(text, gz, bgzf)
     # the lines as written: an ID can span two fields (`Doe, John` as the CSV fields `Doe` and
-    # ` John`)
+    # ` John`); a Markdown line in its decoded forms too
     written = (_decompress(data)[0] if gz else data).decode("utf-8")
     for n, line in enumerate(written.split("\n"), 1):
-        if m.hit(line, whole=False):
+        if any(m.hit(f, whole=False) for f in (_md_forms(line) if kind == ".md" else [line])):
             raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
                           "across its fields: drop or clean those columns first.")
     return count, added, data
