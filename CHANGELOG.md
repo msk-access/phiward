@@ -34,12 +34,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   unexpected error of a run is one fixed refusal, and a new key the failed run made is
   removed. Markdown (`.md`, `.md.gz`): only pipe tables and blank lines (any other line is
   free text, refused); a line with a backslash, a backtick, `<`, `[` or `]`, a second
-  alignment row in a table and a header with emphasis are refused; each table follows the
-  table rules with the names its header holds, one code per ID across tables; the rows of a
-  coded table are shuffled; the scan also reads each cell with its HTML entities decoded and
-  its emphasis removed. In every kind, the scan and the twin rule read Unicode dashes as `-`,
-  and an ID with a letter is also found with its separators removed (`FAKE PT 0001`). Parquet is not read (convert it to
-  TSV first).
+  alignment row in a table and a header with emphasis or an entity are refused; each table
+  follows the table rules with the names its header holds, one code per ID across tables; the
+  rows of a coded table are shuffled; the scan also reads each cell with its HTML entities
+  decoded and its emphasis removed. In every kind, the scan and the twin rule read Unicode
+  dashes as `-`, and an ID with a letter is also found with its separators removed
+  (`FAKE PT 0001`). Parquet is not read (convert it to TSV first).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.

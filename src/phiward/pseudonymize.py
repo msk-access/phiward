@@ -11,8 +11,8 @@ reads it through `phiward run`, masked, and every code passes the sanitizer in f
 
 Only the operator runs it, in a terminal: it refuses without one, and the hook refuses it as an
 agent command. Its messages never name a cell, a key line, a header or a path, and on success
-give the row count only (the agent may read the operator's terminal, and counts of new or known
-IDs would confirm guessed IDs).
+give the row count only (a JSON run gives none; the agent may read the operator's terminal, and
+counts of new or known IDs would confirm guessed IDs).
 """
 
 import csv
@@ -202,6 +202,7 @@ MD_MARKS = re.compile(r"[*_~]")  # the marks of emphasis and strike-through
 # twin rule only
 DASHES = {c: "-" for c in range(sys.maxunicode + 1)
           if unicodedata.category(chr(c)) == "Pd" or c in (0x2212, 0x2043, 0x02D7, 0x30FC)}
+ROUNDS = 4  # rounds of normalizing and decoding escapes, at most
 MD_MARKUP = re.compile(r"[*~]|(?<![0-9A-Za-z])_|_(?![0-9A-Za-z])")  # emphasis: not in a header
 
 
@@ -583,9 +584,9 @@ def _member_start(data: bytes, pos: int) -> Tuple[int, Optional[int]]:
 def _decompress(data: bytes) -> Tuple[bytes, bool]:
     """(the text of a gzip file, whether it is BGZF): every member, each header checked
     (`_member_start`) and each CRC and length, and a BGZF block's BSIZE; every member is BGZF or
-    none is, and a BGZF file ends with the EOF block. Zero padding after a member is allowed, other trailing bytes are not. Expanded in
-    1 MiB steps: no more than LIMIT bytes. No header field of the input (name, comment, time)
-    is kept."""
+    none is, and a BGZF file ends with the EOF block. Zero padding after a member is allowed,
+    other trailing bytes are not. Expanded in 1 MiB steps: no more than LIMIT bytes. No header
+    field of the input (name, comment, time) is kept."""
     if data[:2] != GZIP_MAGIC:
         raise Refused("the input is named .gz but is not gzip data.")
     chunks: List[bytes] = []
@@ -742,9 +743,6 @@ def _long(norm_id: str) -> bool:
     return len(norm_id) >= 5 and not norm_id.isdigit()
 
 
-ROUNDS = 4  # rounds of normalizing and decoding escapes, at most
-
-
 def _ascii_digits(text: str) -> str:
     """Every Unicode decimal digit as its ASCII digit (`٩` -> `9`): for the scan only."""
     return "".join(str(unicodedata.decimal(ch)) if ch > "\x7f" and
@@ -777,10 +775,9 @@ class _Matcher:
     a long ID (`_long`) anywhere in the field, also with every character that is not a letter or
     a digit removed from both when the ID has a letter (`FAKE PT 0001`, `FAKE.PT.0001` for
     `FAKE-PT-0001`; never digits joined: `999 0001` is not `9990001`); an ID of 5 or more digits
-    as a whole run of
-    digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID
-    with a letter as a whole word (`see ab12`); a shorter ID of digits only as the whole field
-    (`12` is not in `0.12`)."""
+    as a whole run of digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a
+    position); a shorter ID with a letter as a whole word (`see ab12`); a shorter ID of digits
+    only as the whole field (`12` is not in `0.12`)."""
 
     def __init__(self, ids: "set[str]"):
         norm_ids = {f for v in ids for f in _forms(v)} - {""}
@@ -1226,8 +1223,9 @@ def _json_at(box: List[object], steps: Steps, n: int, opt: str, last: int = -1
 
 
 def _json_items(doc: object):
-    """Every value of `doc` in the order of the file: (its path, the object it is in or None,
-    the key it is under or None, the value, the nearest (object, key) above it or None)."""
+    """Every value of `doc` in the order of the file: (its path, the object or array it is in
+    or None, the key it is under or None, the value, the nearest (object, key) above it or
+    None)."""
     stack: List[Tuple[Steps, object, Optional[str], object, object]] = [
         ((), None, None, doc, None)]
     while stack:
@@ -1398,7 +1396,8 @@ def _read_md(text: str) -> List[List[List[str]]]:
     header, the alignment row, the body rows. Only tables and blank lines are taken: any other
     line (prose, a heading, a list, code, a row without its outer pipes) is free text, refused.
     A line with a backslash or a backtick is refused: an escaped pipe or a code span has no
-    safe split. Every row of a table is as wide as its header."""
+    safe split; so is a line with `<`, `[` or `]` (inline HTML, a link, an image). Every row of
+    a table is as wide as its header; a second alignment row inside a table is refused."""
     if "\r" in text:
         raise Refused("the Markdown file has a carriage return: give it Unix line ends.")
     tables: List[List[List[str]]] = []
@@ -1454,9 +1453,8 @@ def _md_render(text: str) -> str:
 def _md_forms(text: str) -> List[str]:
     """The forms of a Markdown cell for the scan: the text, then each round of NFKC, the
     escapes of `sanitize.unescape` and HTML entities decoded (`&#45;`, `&amp;#45;`, `%26%2345%3B`,
-    `&hyphen;`),
-    each also rendered (`_md_render`). A text still changing after ROUNDS rounds cannot be
-    decided: ValueError (the one fixed refusal)."""
+    `&hyphen;`), each also rendered (`_md_render`). A text still changing after ROUNDS rounds
+    cannot be decided: ValueError (the one fixed refusal)."""
     forms: List[str] = []
     cur = text
     for _ in range(ROUNDS + 1):
