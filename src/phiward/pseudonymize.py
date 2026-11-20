@@ -35,8 +35,8 @@ import zlib
 import sys
 from typing import Dict, List, Optional, Sequence, TextIO, Tuple
 
-from phiward import config, copying, inventory
-from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_key, unescape
+from phiward import config, copying, inventory, sanitize
+from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_key
 
 USAGE = ("usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
          "                            --columns H[=NEW],... [--drop H,...] [--keep H,...]\n"
@@ -333,7 +333,7 @@ def _open_part(parent: int, name: str, what: str, mode: Optional[int]) -> int:
         raise
     except OSError:
         raise Refused(f"{what} is not a real folder of yours (a link, a file, or another "
-                      "account's).")
+                      "account's).") from None
     try:
         _check_dir(fd, what, mode)
     except BaseException:
@@ -357,7 +357,7 @@ def _open_state(home: str) -> Tuple[int, int]:
     try:
         hfd = os.open(home, os.O_RDONLY | os.O_DIRECTORY)
     except OSError:
-        raise Refused("the home folder cannot be opened.")
+        raise Refused("the home folder cannot be opened.") from None
     pfd = bfd = -1
     try:
         try:
@@ -365,7 +365,7 @@ def _open_state(home: str) -> Tuple[int, int]:
             bfd = _open_part(pfd, "backups", "~/.phiward/backups", 0o700)
         except FileNotFoundError:
             raise Refused("~/.phiward/backups is missing: run `phiward install claude` first "
-                          "(it makes it).")
+                          "(it makes it).") from None
         try:
             kfd = _open_part(bfd, "keys", "~/.phiward/backups/keys", 0o700)
         except FileNotFoundError:
@@ -447,11 +447,11 @@ def _input_place(path: str, cfg: config.Config, home: str) -> str:
             if stat.S_ISLNK(os.lstat(d).st_mode):
                 raise Refused("the input is reached through a link; name its real path.")
         except FileNotFoundError:
-            raise Refused("the input does not exist.")
+            raise Refused("the input does not exist.") from None
         except OSError as exc:
             if isinstance(exc, Refused):
                 raise
-            raise Refused("the input cannot be checked.")
+            raise Refused("the input cannot be checked.") from None
     # places an agent can write: a file there may be planted (a guess list confirmed by codes)
     from phiward import claude_settings
     cwd = os.path.realpath(os.getcwd())
@@ -476,7 +476,7 @@ def _read_input(full: str) -> bytes:
     try:
         fd = os.open(full, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except OSError:
-        raise Refused("the input cannot be opened as a plain file.")
+        raise Refused("the input cannot be opened as a plain file.") from None
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode):
@@ -510,9 +510,9 @@ def _read_key(kfd: int, file: str) -> Key:
     try:
         fd = os.open(file, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=kfd)
     except FileNotFoundError:
-        raise Refused("the key does not exist (start one with --new-key).")
+        raise Refused("the key does not exist (start one with --new-key).") from None
     except OSError:
-        raise Refused("the key cannot be opened as a plain file.")
+        raise Refused("the key cannot be opened as a plain file.") from None
     try:
         st = os.fstat(fd)
         if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or \
@@ -530,7 +530,7 @@ def _read_key(kfd: int, file: str) -> Key:
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError:
-        raise Refused("the key is damaged (not UTF-8).")
+        raise Refused("the key is damaged (not UTF-8).") from None
     if not text.endswith("\n"):
         raise Refused("the key is damaged (its last line does not end).")
     lines = text[:-1].split("\n")
@@ -660,7 +660,7 @@ def _decode(data: bytes, kind: str) -> str:
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
-        raise Refused("the input is not UTF-8.")
+        raise Refused("the input is not UTF-8.") from None
     if kind != ".vcf" and text.startswith("##fileformat=VCF"):
         raise Refused("the input is a VCF file: name it .vcf.")
     return text  # a VCF's first line is checked by its reader (`_read_vcf`)
@@ -670,7 +670,7 @@ def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
     """(the `#` lines kept, the rows, header first). A MAF's `#` lines before the header are
     dropped, but for the first `#version` and a number (`#version 2.4`); a `#` line after its
     header is refused."""
-    kept: List[str] = []
+    meta: List[str] = []
     if kind == ".maf":
         pos = 0
         while text.startswith("#", pos):
@@ -678,14 +678,14 @@ def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
             end = len(text) if end < 0 else end
             line = text[pos:end]
             pos = end + 1
-            if MAF_VERSION.fullmatch(line.rstrip("\r")) and not kept:
-                kept.append(line.rstrip("\r"))
+            if MAF_VERSION.fullmatch(line.rstrip("\r")) and not meta:
+                meta.append(line.rstrip("\r"))
         text = text[pos:]
     try:
         rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=KINDS[kind][0],
                                strict=True))
     except csv.Error:
-        raise Refused("the input cannot be read as a table (its quoting).")
+        raise Refused("the input cannot be read as a table (its quoting).") from None
     if not rows or not rows[0]:
         raise Refused("the input has no header line.")
     width = len(rows[0])
@@ -697,12 +697,12 @@ def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
                       "is free text, which is not covered.")
     if kind == ".maf" and any(r[0].startswith("#") for r in rows[1:]):
         raise Refused("a line after the header of the MAF starts with #.")
-    return kept, rows
+    return meta, rows
 
 
-def _write_table(kept: List[str], table: List[List[str]], kind: str) -> str:
+def _write_table(meta: List[str], table: List[List[str]], kind: str) -> str:
     buf = io.StringIO()
-    for line in kept:
+    for line in meta:
         buf.write(line + "\n")
     csv.writer(buf, delimiter=KINDS[kind][0], lineterminator="\n").writerows(table)
     return buf.getvalue()
@@ -764,7 +764,7 @@ def _forms(text: str) -> "set[str]":
     (`%252D`) or a dash escaped (`%E2%80%90`) is decoded too."""
     forms = {text.casefold(), text.translate(DASHES).casefold()}
     for _ in range(ROUNDS):
-        nxt = unescape(_plain(text))
+        nxt = sanitize.unescape(_plain(text))
         forms.add(_plain(nxt).casefold())
         if nxt == text:
             break
@@ -819,12 +819,12 @@ def _has_cf(text: str) -> bool:
     return any(unicodedata.category(ch) == "Cf" for ch in text)
 
 
-def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[int]",
+def _scan(meta: List[str], table: List[List[str]], cols: List[int], coded: "set[int]",
           m: _Matcher) -> None:
     """The scan of the whole output as it was read back, codes included: no field may hold an
     invisible format character or an ID (`_Matcher`). A place is named by the input's column
     number, never by a value."""
-    for line in kept:
+    for line in meta:
         if _has_cf(line) or m.hit(line):
             raise Refused("the kept # line holds an ID of a coded column or of the key.")
     for j, i in enumerate(cols):
@@ -1246,7 +1246,7 @@ def _bare(steps: Steps) -> Steps:
     return steps
 
 
-def _json_forms(text: str) -> List[str]:
+def _json_readings(text: str) -> List[str]:
     """The text, and its integer form when it is a number that is whole (`1234.0`,
     `9.990001e6` -> `9990001`): for the scan only."""
     t = text.strip()
@@ -1270,11 +1270,11 @@ def _scan_json(doc: object, m: _Matcher) -> None:
     """The scan of the whole document as it was read back, codes included: no key and no
     scalar may hold an invisible format character or an ID (`_Matcher`)."""
     for _, _, k, v, _ in _json_items(doc):
-        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_forms(k))):
+        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_readings(k))):
             raise Refused("a key of the output holds an ID of a coded path or of the key, or an "
                           "invisible format character.")
         text = _json_text(v)
-        if text is not None and (_has_cf(text) or any(m.hit(f) for f in _json_forms(text))):
+        if text is not None and (_has_cf(text) or any(m.hit(f) for f in _json_readings(text))):
             raise Refused("a value of the output holds an ID of a coded path or of the key, or "
                           "an invisible format character: drop it, or clean it first.")
 
@@ -1371,7 +1371,7 @@ def _code_json(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text
     ids = list(dict.fromkeys(s for _, _, s in fills if s))  # in order of first appearance
     m = _Matcher(set(ids) | set(key.codes))
     for _, p, k, _, _ in _json_items(box[0]):
-        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_forms(k))):
+        if k is not None and (_has_cf(k) or any(m.hit(f) for f in _json_readings(k))):
             raise Refused(f"key {number[(id(p), k)]} (in the order of the file) holds an ID of "
                           "a coded path or of the key, or an invisible format character.")
     values = {c for _, _, k, v, _ in _json_items(box[0])
@@ -1451,7 +1451,7 @@ def _md_render(text: str) -> str:
     return MD_MARKS.sub("", text)
 
 
-def _md_forms(text: str) -> List[str]:
+def _md_readings(text: str) -> List[str]:
     """The forms of a Markdown cell for the scan: the text, then each round of NFKC, the
     escapes of `sanitize.unescape` and HTML entities decoded (`&#45;`, `&amp;#45;`, `%26%2345%3B`,
     `&hyphen;`),
@@ -1461,7 +1461,7 @@ def _md_forms(text: str) -> List[str]:
     cur = text
     for _ in range(ROUNDS + 1):
         forms += [cur, _md_render(cur)]
-        nxt = html.unescape(unescape(inventory.normalize(cur)))
+        nxt = html.unescape(sanitize.unescape(inventory.normalize(cur)))
         if nxt == cur:
             return forms
         cur = nxt
@@ -1470,12 +1470,12 @@ def _md_forms(text: str) -> List[str]:
 
 def _scan_md(tables: List[List[List[str]]], cols: List[List[int]], m: _Matcher) -> None:
     """The scan of every cell of the output as it was read back, codes, headers and alignment
-    rows included, in each of its forms (`_md_forms`). A place is named by the table and the
+    rows included, in each of its forms (`_md_readings`). A place is named by the table and the
     input's column number, never by a value."""
     for t, rows in enumerate(tables, 1):
         for row in rows:
             for c, cell in enumerate(row):
-                if any(_has_cf(f) or m.hit(f) for f in _md_forms(cell)):
+                if any(_has_cf(f) or m.hit(f) for f in _md_readings(cell)):
                     raise Refused(f"table {t}: column {cols[t - 1][c] + 1} of the output holds "
                                   "an ID of a coded column or of the key, or an invisible "
                                   "format character (also behind an entity or markup): drop "
@@ -1514,7 +1514,7 @@ def _code_md(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, text: 
     if any((opt, s) not in found for opt, specs in names.items() for s in specs):
         raise Refused("a column named in --columns, --drop or --keep is not found in any table.")
     m = _Matcher(ids | set(key.codes))
-    values = {f.strip() for rows in tables for r in rows for c in r for f in _md_forms(c)}
+    values = {f.strip() for rows in tables for r in rows for c in r for f in _md_readings(c)}
     work = Key(key.prefix, dict(key.codes), key.ident)
     out: List[List[List[str]]] = []
     cols_of: List[List[int]] = []
@@ -1567,7 +1567,7 @@ def _out_place(path: str, kind: Tuple[str, bool], cfg: config.Config) -> Tuple[s
         if not os.path.samefile(real, parent) or os.path.islink(parent):
             raise Refused("the folder of the output does not exist.")
     except OSError:
-        raise Refused("the folder of the output does not exist.")
+        raise Refused("the folder of the output does not exist.") from None
     return real, os.path.basename(full)
 
 
@@ -1582,7 +1582,7 @@ def _open_walk(folder: str) -> int:
             fd = nxt
     except OSError:
         os.close(fd)
-        raise Refused("the folder of the output is reached through a link or cannot be opened.")
+        raise Refused("the folder of the output is reached through a link or cannot be opened.") from None
     return fd
 
 
@@ -1624,7 +1624,7 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
     try:
         san = Sanitizer.from_config(cfg, entries=True)
     except SanitizerError:
-        raise Refused("the sanitizer cannot be built from the config.")
+        raise Refused("the sanitizer cannot be built from the config.") from None
     try:
         count, added, data = _code(opts, cfg, san, raw, kind, gz, key)
     except Refused:
@@ -1632,7 +1632,7 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
     except Exception:
         # any failure of a reader, a writer or the check-back (deep nesting, a damaged gzip
         # member, a decode error, memory): one fixed text, never the exception's own
-        raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
+        raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.") from None
     _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data)
     return count, {".vcf": "VCF, {} record(s)", ".json": "JSON file",
                    ".md": "Markdown tables, {} row(s)"}.get(kind, "table, {} row(s)")
@@ -1651,15 +1651,15 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     elif kind == ".md":
         text, added, count, m = _code_md(opts, cfg, san, _decode(plain, kind), key)
     else:
-        kept, rows = _read_table(_decode(plain, kind), kind)
-        for line in kept:
+        meta, rows = _read_table(_decode(plain, kind), kind)
+        for line in meta:
             if not _clean_both(san, line):
                 raise Refused("the #version line holds what the sanitizer masks.")
         table, added, cols, coded, m = build(opts, cfg, san, rows, key,
                                              keep_headers=kind == ".maf")
-        text = _write_table(kept, table, kind)
+        text = _write_table(meta, table, kind)
         back = _read_table(text, kind)
-        if back != (kept, table):
+        if back != (meta, table):
             raise Refused("the copy does not read back as the coded table.")
         _scan(back[0], back[1], cols, coded, m)
         count = len(table) - 1
@@ -1668,7 +1668,7 @@ def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: byte
     # ` John`); a Markdown line in its decoded forms too
     written = (_decompress(data)[0] if gz else data).decode("utf-8")
     for n, line in enumerate(written.split("\n"), 1):
-        if any(m.hit(f, whole=False) for f in (_md_forms(line) if kind == ".md" else [line])):
+        if any(m.hit(f, whole=False) for f in (_md_readings(line) if kind == ".md" else [line])):
             raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
                           "across its fields: drop or clean those columns first.")
     return count, added, data
@@ -1690,7 +1690,7 @@ def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
                           dir_fd=dfd)
         except OSError:
             raise Refused("the output cannot be made (it exists, or the folder is not "
-                          "writable).")
+                          "writable).") from None
         try:
             try:
                 if kfd < 0:
@@ -1700,14 +1700,14 @@ def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,
                     os.fchmod(kfd, 0o700)  # the umask may have taken bits away
                 made = _append_key(opts, key, kfd, file, line_bytes, bool(added))
             except OSError:
-                raise Refused("the key cannot be written.")
+                raise Refused("the key cannot be written.") from None
             os.fchmod(ofd, 0o600)
             try:
                 _write_out(ofd, data)
             except OSError:
                 raise Removed("the output cannot be written; it was removed. " +
                               ("The new key was removed." if opts["new"] else
-                               "The key keeps the codes it was given."))
+                               "The key keeps the codes it was given.")) from None
         except BaseException:
             os.close(ofd)
             ofd = -1
