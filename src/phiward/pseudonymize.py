@@ -149,11 +149,11 @@ The rules:
   with an invisible format character is refused. Two IDs that the scan below reads as one
   (P-1, p-1, a full-width P, an en dash; FAKE%2DPT-0001, FAKE PT 0001 for FAKE-PT-0001), in
   IN or in IN and the key, are refused: make them one first. No field of the output (a
-  cell, a header, the kept # line, the codes too) may hold an ID of a coded column or of the key, also in another
-  letter case, Unicode form, dash (U+2010, U+2013, U+2212, every Unicode dash) or digits,
-  or escaped (%2D, \\u002D, also twice): one of 5 or more characters anywhere in a field,
-  or across the fields of a line as written, and one with a letter also with every
-  character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
+  cell, a header, the kept # line, the codes too) may hold an ID of a coded column or of
+  the key, also in another letter case, Unicode form, dash (U+2010, U+2013, U+2212, every
+  Unicode dash) or digits, or escaped (%2D, \\u002D, also twice): one of 5 or more
+  characters anywhere in a field, or across the fields of a line as written, and one with a
+  letter also with every character but letters and digits removed (FAKE PT 0001, FAKE.PT.0001 for FAKE-PT-0001);
   one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
   word; a shorter one of digits only as the whole field. Drop such a
   column or clean it first. Run it from the folder of the
