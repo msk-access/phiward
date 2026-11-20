@@ -451,8 +451,14 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     name or an ID glued to other digits (`19990001` for `9990001`) in a kept field goes into
     the copy, masked only by the rules. A MAF's dropped `#` lines may be provenance you need;
     its tumor and normal barcodes get unrelated codes; its other values stay as they are.
-  - A gzip input is read up to 1 GiB expanded; the copy is checked by reading it back. bgzip,
-    VCF, JSON and Markdown are refused for now, and Parquet is not read.
+  - A VCF keeps its records whole: genotypes and every other value stay, and genotypes can
+    re-identify a subject. Its dropped `##` lines (reference, command lines, contig lengths)
+    may be provenance you need. The stop list of sample names that are words is short: a word
+    with a digit (`TUMOR1`) gets a code like an ID. The agent reads VCF positions as `<LOCUS>`
+    where the genomics pack is on.
+  - A gzip or bgzip input is read up to 1 GiB expanded; the copy is checked by reading it back.
+    A bug in the BGZF writer gives a file `tabix` rejects, never a leak (the scan and the
+    check-back come first). JSON and Markdown are refused for now, and Parquet is not read.
   - A code that is also a file name under a root reads `<ENTRY>`, and a later `[sanitize]
     patterns` rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
     as headers are refused, not covered.

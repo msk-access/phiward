@@ -1,5 +1,7 @@
 # Tests that skip on macOS (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
-# Linux-only tests, and two that skip by design. Remake with PHIWARD_WRITE_SKIPS=FILE.
+# Linux-only tests, two that skip by design, and the tabix check (no tabix on GitHub's macOS
+# runners). Remake with PHIWARD_WRITE_SKIPS=FILE.
+tests/test_pseudonymize_formats.py::test_tabix_indexes_the_bgzf_copy
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[io_uring_setup]
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[ptrace]
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[unshare]

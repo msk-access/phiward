@@ -23,9 +23,24 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   the barcode columns and keeps the other ID-glob columns by name. One scan of the whole
   output (codes, headers and the kept line included) replaces the scan of kept cells; the draw
   skips a code it would flag. Any exception in reading or writing is one fixed refusal.
-  Parquet is never read (convert it first); bgzip, VCF, JSON and Markdown come in later steps.
+  Parquet is never read (convert it first); JSON and Markdown come in later steps.
   (Why: one shape for every kind, and what is written is what was scanned. Cost: a long
   `--keep` for a MAF; Parquet needs a step.)
+- **`phiward pseudonymize` codes a VCF's sample names.** All of them, with no `--columns`,
+  `--drop` or `--keep`. A name that is a word (a short stop list), has no digit or is under 3
+  characters is refused; `--keep-samples N` keeps one by sample number, out of the key, with
+  no name typed (decision J). The `##` lines come from an allow list (`fileformat`, `INFO`,
+  `FORMAT`, `FILTER`, `ALT`), each passing the sanitizer unchanged; `contig` keeps its `ID`
+  only (decision K). The `#CHROM` line keeps its fixed headers and the codes take the sample
+  names' places (decision E). Records keep their order and values; the sample columns are
+  shuffled, one permutation for every line. The scan reads each tab field whole and split on
+  `; , = | :`, and the draw avoids each of those parts. The stop list is matched on the
+  NFKC, case-folded name. Two IDs with one NFKC, case-folded form but other text (in the
+  input, or in the input and the key) are refused, in every kind (one rule, in the draw). A
+  BGZF input must end with the EOF block. BGZF in gives BGZF out (blocks of 0xff00 bytes, the EOF block), plain gzip
+  gives plain gzip, a mix is refused (decision H); 1 GiB in memory, no streaming path
+  (decision I). (Why: a word in the key links unrelated subjects; `tabix` needs sorted
+  records and BGZF. Cost: provenance in dropped lines; genotypes stay.)
 - **`phiward run --table` reads CSV/TSV by column.** Cells under an identifier header (a
   built-in glob list plus `[sanitize] id_columns`, user config only, additive) are masked whole;
   plain numbers pass only in parsed cells of other columns; every other line is text mode.
