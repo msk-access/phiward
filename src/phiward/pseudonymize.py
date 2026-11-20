@@ -1,5 +1,5 @@
 """`phiward pseudonymize`: the operator's own command that makes a pseudonymized copy of one
-CSV/TSV table for the agent.
+table (TSV, CSV, a tab-separated .txt or a MAF, each plain or gzip-compressed) for the agent.
 
 The identifier columns the operator names get codes (`S0042`): a prefix fixed in the key, then 4
 digits drawn with `secrets` from the codes not used yet, so neither an ID nor its place in the
@@ -16,6 +16,7 @@ IDs would confirm guessed IDs).
 
 import csv
 import fnmatch
+import gzip
 import io
 import os
 import pwd
@@ -23,19 +24,21 @@ import random
 import re
 import secrets
 import stat
+import struct
 import unicodedata
+import zlib
 import sys
 from typing import Dict, List, Optional, Sequence, TextIO, Tuple
 
 from phiward import config, copying, inventory
-from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_key
+from phiward.sanitize import BUILTIN_ID_COLUMNS, Sanitizer, SanitizerError, col_key, unescape
 
 USAGE = ("usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)\n"
          "                            --columns H[=NEW],... [--drop H,...] [--keep H,...]\n"
          "                            [--keep-order] IN OUT\n")
 HELP = USAGE + """
-Make a copy of one table (IN, a .tsv or .csv file) in which the identifier columns you name
-hold codes (S0042) in place of the IDs. The agent then reads the copy through `phiward run`.
+Make a copy of one table (IN) in which the identifier columns you name hold codes (S0042) in
+place of the IDs. The agent then reads the copy through `phiward run`.
 Type the command yourself, in your own terminal: never run it on a file the agent made or asked
 for, and never on a key name the agent chose.
 
@@ -45,7 +48,7 @@ Options:
   --prefix P       with --new-key: 1 to 3 capital letters before the digits (default S)
   --columns H[=NEW],...
                    the identifier columns to code; each one's header becomes NEW (default
-                   pseudonym, then pseudonym_2, ...)
+                   pseudonym, then pseudonym_2, ...; in a MAF the header stays)
   --drop H,...     columns to leave out
   --keep H,...     columns that look like identifiers, kept as they are on your word
   --keep-order     keep the order of the rows (by default they are shuffled, so the order of
@@ -56,6 +59,19 @@ The key: ~/.phiward/backups/keys/NAME.tsv (ID, a tab, the code). No agent sessio
 gateway command can read or write it. Keep a backup of it where no agent can reach it: a lost
 key cannot be rebuilt, and new runs give new codes. A code is `PREFIX` and 4 digits, so a key
 holds at most 9999 IDs. The same ID gets the same code in every table coded with one key.
+
+The kinds (the extensions decide; the content must fit them):
+- .tsv, .csv; .txt, read as a TSV, with 2 or more columns (free text is refused);
+- .maf: a TSV after its # lines. Only the first `#version` line with a number
+  (`#version 2.4`) is kept; the others are dropped, and a # line after the header is
+  refused. Name the barcode columns in --columns (Tumor_Sample_Barcode,
+  Matched_Norm_Sample_Barcode, one key) and the columns that look like IDs but are not
+  (Entrez_Gene_Id, Exon_Number) in --keep;
+- each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
+  expanded; the copy is gzip again, with no name and no time, and must read back as the
+  coded table. bgzip (BGZF) files, .vcf, .json and .md are not covered yet; Parquet is not:
+  convert it to TSV with your own tools first.
+Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
 - IN is a regular file reached with no link, outside every place an agent can write: the
@@ -68,13 +84,16 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. A column that is not coded may not hold an
-  ID of a coded column or of the key (one of 5 or more characters anywhere in a cell; one of
-  5 or more digits as a whole run of digits; a shorter one with a letter as a whole word; a
-  shorter one of digits only as the whole cell): drop it or clean it first. Run it from the folder of the
+  with an invisible format character is refused. No field of the output (a cell, a header,
+  the kept # line, the codes too) may hold an ID of a coded column or of the key, also in
+  another letter case, Unicode form or digits, or escaped (%2D, \\u002D, also twice): one
+  of 5 or more characters anywhere in a field, or across the fields of a line as written;
+  one of 5 or more digits as a whole run of digits; a shorter one with a letter as a whole
+  word; a shorter one of digits only as the whole field. Drop such a
+  column or clean it first. Run it from the folder of the
   project whose agent will read the copy (its sandbox settings name the places refused).
-- OUT is a new file of the same kind as IN, inside a protected root of your user config and
-  outside every write_to folder (never replaced, mode 0600).
+- OUT is a new file of the same kind as IN (the same extensions), inside a protected root of
+  your user config and outside every write_to folder (never replaced, mode 0600).
 - Messages never name a cell, a header, a path or a key line; a run reports the row count only.
 """
 
@@ -82,7 +101,14 @@ PREFIX = re.compile(r"[A-Z]{1,3}")
 KEY_NAME = re.compile(r"[A-Za-z0-9_-]{1,64}")
 KEY_MAGIC = "#phiward-key"
 DIGITS = 4
-LIMIT = 1 << 30  # the largest table read (it is held in memory)
+LIMIT = 1 << 30  # the largest table read, compressed or expanded (it is held in memory)
+# the kinds, by the last extension before an optional `.gz`: (delimiter, name in messages)
+KINDS = {".tsv": ("\t", "TSV"), ".csv": (",", "CSV"), ".txt": ("\t", "tab-separated text"),
+         ".maf": ("\t", "MAF")}
+LATER = (".vcf", ".json", ".md")  # kinds of a later version: refused for now
+GZIP_MAGIC = b"\x1f\x8b"
+_ZEROS = re.compile(rb"\0*")
+MAF_VERSION = re.compile(r"#version \d{1,3}(?:\.\d{1,3})?")  # the one `#` line a MAF keeps
 
 
 class Refused(Exception):
@@ -273,11 +299,30 @@ def _project_top(start: str, home: str) -> Optional[str]:
         d = up
 
 
+def _kind(path: str) -> Tuple[str, bool]:
+    """(the kind, compressed): the extension chain of the name decides the parser. One `.gz`
+    may follow the kind; anything else is refused."""
+    stem, last = os.path.splitext(os.path.basename(path).lower())
+    gz = last == ".gz"
+    if gz:
+        stem, last = os.path.splitext(stem)
+    if last == ".parquet":
+        raise Refused("Parquet is not covered: convert it to TSV with your own tools first.")
+    if last in LATER:
+        raise Refused("VCF, JSON and Markdown files are not covered yet.")
+    if last not in KINDS or not stem:
+        raise Refused("the input must be a .tsv, .csv, .txt or .maf file, or one of them "
+                      "compressed with gzip (.tsv.gz).")
+    return last, gz
+
+
+def _label(kind: str, gz: bool) -> str:
+    return ("gzip-compressed " if gz else "") + KINDS[kind][1]
+
+
 def _input_place(path: str, cfg: config.Config, home: str) -> str:
     full = os.path.normpath(os.path.join(os.getcwd(), path))
-    ext = os.path.splitext(full)[1].lower()
-    if ext not in (".tsv", ".csv"):
-        raise Refused("the input must be a .tsv or .csv file.")
+    _kind(full)
     # no link anywhere on the way: each part as it is on disk
     d = "/"
     for part in full.split("/")[1:]:
@@ -394,17 +439,102 @@ def _read_key(kfd: int, file: str) -> Key:
 
 # --- the table ----------------------------------------------------------------------------------
 
-def _parse_table(data: bytes, delim: str) -> List[List[str]]:
+def _member_start(data: bytes, pos: int) -> int:
+    """Where the deflate data of the gzip member at `pos` starts. Its header is checked: the
+    magic, deflate, no reserved flag bit (RFC 1952), no extra field (bgzip puts BGZF there)."""
+    if data[pos:pos + 2] != GZIP_MAGIC or len(data) < pos + 10 or data[pos + 2] != 8:
+        raise ValueError("not a gzip member")
+    flg = data[pos + 3]
+    if flg & 0xE0:
+        raise ValueError("reserved flag bits")
+    if flg & 4:
+        raise Refused("the input has gzip extra fields (bgzip, BGZF): not covered yet; "
+                      "decompress it first.")
+    p = pos + 10
+    for bit in (8, 16):  # FNAME, FCOMMENT: skipped, never kept
+        if flg & bit:
+            p = data.index(b"\0", p) + 1
+    if flg & 2:  # FHCRC
+        p += 2
+    if p > len(data):
+        raise EOFError("a member header ends early")
+    return p
+
+
+def _decompress(data: bytes) -> bytes:
+    """The text of a plain gzip file: every member, each header checked (`_member_start`) and
+    each CRC and length; zero padding after a member is allowed, other trailing bytes are not.
+    Expanded in 1 MiB steps: no more than LIMIT bytes. No header field of the input (name,
+    comment, time) is kept."""
+    if data[:2] != GZIP_MAGIC:
+        raise Refused("the input is named .gz but is not gzip data.")
+    chunks: List[bytes] = []
+    size = pos = 0
+    step = 1 << 20
+    while pos < len(data):
+        pos = _member_start(data, pos)
+        d = zlib.decompressobj(-zlib.MAX_WBITS)
+        crc = length = 0
+        while not d.eof:
+            if pos >= len(data):
+                raise EOFError("a member ends early")
+            end = min(pos + step, len(data))
+            tail = data[pos:end]
+            while tail and not d.eof:
+                b = d.decompress(tail, step)
+                tail = d.unconsumed_tail
+                size += len(b)
+                if size > LIMIT:
+                    raise Refused("the input is too large.")
+                crc = zlib.crc32(b, crc)
+                length += len(b)
+                chunks.append(b)
+            pos = end - len(d.unused_data) if d.eof else end
+        if len(data) < pos + 8:
+            raise EOFError("a member ends early")
+        if data[pos:pos + 8] != struct.pack("<II", crc, length & 0xFFFFFFFF):
+            raise ValueError("a member's CRC or length")
+        pos += 8
+        pos = _ZEROS.match(data, pos).end()  # padding
+    return b"".join(chunks)
+
+
+def _decode(data: bytes) -> str:
+    """The text of the input; the content must fit the kind its name gives."""
     if not data:
         raise Refused("the input is empty.")
+    if data[:2] == GZIP_MAGIC:
+        raise Refused("the input holds gzip data where text belongs (a compressed file with a "
+                      "plain name, or gzip inside gzip).")
     if b"\0" in data:
         raise Refused("the input holds a NUL byte.")
     try:
         text = data.decode("utf-8-sig")
     except UnicodeDecodeError:
         raise Refused("the input is not UTF-8.")
+    if text.startswith("##fileformat=VCF"):
+        raise Refused("the input is a VCF file: VCF is not covered yet.")
+    return text
+
+
+def _read_table(text: str, kind: str) -> Tuple[List[str], List[List[str]]]:
+    """(the `#` lines kept, the rows, header first). A MAF's `#` lines before the header are
+    dropped, but for the first `#version` and a number (`#version 2.4`); a `#` line after its
+    header is refused."""
+    kept: List[str] = []
+    if kind == ".maf":
+        pos = 0
+        while text.startswith("#", pos):
+            end = text.find("\n", pos)
+            end = len(text) if end < 0 else end
+            line = text[pos:end]
+            pos = end + 1
+            if MAF_VERSION.fullmatch(line.rstrip("\r")) and not kept:
+                kept.append(line.rstrip("\r"))
+        text = text[pos:]
     try:
-        rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=delim, strict=True))
+        rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=KINDS[kind][0],
+                               strict=True))
     except csv.Error:
         raise Refused("the input cannot be read as a table (its quoting).")
     if not rows or not rows[0]:
@@ -413,7 +543,32 @@ def _parse_table(data: bytes, delim: str) -> List[List[str]]:
     for r in rows[1:]:
         if len(r) != width:
             raise Refused("a row has another number of fields than the header.")
-    return rows
+    if kind == ".txt" and width < 2:
+        raise Refused("a .txt file is read as a table with tabs: one with fewer than 2 columns "
+                      "is free text, which is not covered.")
+    if kind == ".maf" and any(r[0].startswith("#") for r in rows[1:]):
+        raise Refused("a line after the header of the MAF starts with #.")
+    return kept, rows
+
+
+def _write_table(kept: List[str], table: List[List[str]], kind: str) -> str:
+    buf = io.StringIO()
+    for line in kept:
+        buf.write(line + "\n")
+    csv.writer(buf, delimiter=KINDS[kind][0], lineterminator="\n").writerows(table)
+    return buf.getvalue()
+
+
+def _encode(text: str, gz: bool) -> bytes:
+    """The bytes of OUT: the text, or its gzip form with no name and time 0, which must read
+    back as the text (what is written is what was scanned)."""
+    data = text.encode("utf-8")
+    if not gz:
+        return data
+    out = gzip.compress(data, mtime=0)
+    if gzip.decompress(out) != data:
+        raise Refused("the compressed copy does not read back as the table.")
+    return out
 
 
 def _find(header_keys: List[str], name: str) -> int:
@@ -428,46 +583,102 @@ def _clean_both(san: Sanitizer, text: str) -> bool:
     return san.clean(text) == text and san.clean(text, table=True) == text
 
 
-def _norm(text: str) -> str:
-    """As masking sees text (NFKC, format characters removed), in any letter case."""
-    return inventory.normalize(text).casefold()
-
-
 def _long(norm_id: str) -> bool:
     """An ID of 5 or more characters, not digits only: matched anywhere in a cell."""
     return len(norm_id) >= 5 and not norm_id.isdigit()
 
 
-def _ids_elsewhere(rows: List[List[str]], kept: List[int], ids: "set[str]") -> None:
-    """Refuse when a cell of a kept column holds an invisible format character, or an ID: a
-    long ID (`_long`) anywhere in the cell; an ID of 5 or more digits as a whole run of digits
-    (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID with a
-    letter as a whole word (`see ab12`); a shorter ID of digits only as the whole cell (`12`
-    is not in `0.12`)."""
-    norm_ids = {_norm(v) for v in ids}
-    long_ids = sorted((v for v in norm_ids if _long(v)), key=len, reverse=True)
-    numbers = {v for v in norm_ids if v.isdigit() and len(v) >= 5}
-    whole = {v for v in norm_ids if v.isdigit() and len(v) < 5}
-    words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len, reverse=True)
-    rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
-    wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
-                    r")(?![0-9a-z])") if words else None
-    for i in kept:
-        for r in rows[1:]:
-            cell = r[i]
-            if any(unicodedata.category(ch) == "Cf" for ch in cell):
+ROUNDS = 4  # rounds of normalizing and decoding escapes, at most
+
+
+def _ascii_digits(text: str) -> str:
+    """Every Unicode decimal digit as its ASCII digit (`٩` -> `9`): for the scan only."""
+    return "".join(str(unicodedata.decimal(ch)) if ch > "\x7f" and
+                   unicodedata.category(ch) == "Nd" else ch for ch in text)
+
+
+def _forms(text: str) -> "set[str]":
+    """Every form a text takes on the way to its fixed point, in any letter case: one round is
+    NFKC with format characters removed (`inventory.normalize`), decimal digits as ASCII, then
+    `\\u`, `\\x` and `%XX` escapes decoded; the rounds stop when the text no longer changes, or
+    after ROUNDS. So an escape that NFKC makes (`％２Ｄ`) or one escaped twice (`%252D`) is
+    decoded too."""
+    forms = {text.casefold()}
+    for _ in range(ROUNDS):
+        nxt = unescape(_ascii_digits(inventory.normalize(text)))
+        forms.add(_ascii_digits(inventory.normalize(nxt)).casefold())
+        if nxt == text:
+            break
+        text = nxt
+    return forms
+
+
+class _Matcher:
+    """Whether a field holds an ID of the run or of the key, in any of its forms (`_forms`):
+    a long ID (`_long`) anywhere in the field; an ID of 5 or more digits as a whole run of
+    digits (`see 9990002`, `x/9990002.bam`; not inside `19990001`, a position); a shorter ID
+    with a letter as a whole word (`see ab12`); a shorter ID of digits only as the whole field
+    (`12` is not in `0.12`)."""
+
+    def __init__(self, ids: "set[str]"):
+        norm_ids = {f for v in ids for f in _forms(v)} - {""}
+        long_ids = sorted((v for v in norm_ids if _long(v)), key=len, reverse=True)
+        self.numbers = {v for v in norm_ids if v.isdigit() and len(v) >= 5}
+        self.whole = {v for v in norm_ids if v.isdigit() and len(v) < 5}
+        words = sorted((v for v in norm_ids if len(v) < 5 and not v.isdigit()), key=len,
+                       reverse=True)
+        self.rx = re.compile("|".join(re.escape(v) for v in long_ids)) if long_ids else None
+        self.wx = re.compile(r"(?<![0-9a-z])(?:" + "|".join(re.escape(v) for v in words) +
+                             r")(?![0-9a-z])") if words else None
+
+    def hit(self, field: str, whole: bool = True) -> bool:
+        """`whole`: also the rule of a short digit ID as the whole text (a field; not a line,
+        where it would be every field's rule at once)."""
+        for norm in _forms(field):
+            if (whole and norm.strip() in self.whole) or \
+                    (self.rx is not None and self.rx.search(norm)) or \
+                    (self.wx is not None and self.wx.search(norm)) or \
+                    (self.numbers and any(d in self.numbers
+                                          for d in re.findall(r"[0-9]+", norm))):
+                return True
+        return False
+
+
+def _has_cf(text: str) -> bool:
+    return any(unicodedata.category(ch) == "Cf" for ch in text)
+
+
+def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[int]",
+          m: _Matcher) -> None:
+    """The scan of the whole output as it was read back, codes included: no field may hold an
+    invisible format character or an ID (`_Matcher`). A place is named by the input's column
+    number, never by a value."""
+    for line in kept:
+        if _has_cf(line) or m.hit(line):
+            raise Refused("the kept # line holds an ID of a coded column or of the key.")
+    for j, i in enumerate(cols):
+        h = table[0][j]
+        if _has_cf(h) or m.hit(h):
+            raise Refused(f"the header of column {i + 1} in the output holds an ID or an "
+                          "invisible format character.")
+        for r in table[1:]:
+            cell = r[j]
+            if _has_cf(cell):
                 raise Refused(f"a cell of column {i + 1} holds an invisible format character.")
-            norm = _norm(cell)
-            if norm.strip() in whole or (rx is not None and rx.search(norm)) or \
-                    (wx is not None and wx.search(norm)) or \
-                    (numbers and any(d in numbers for d in re.findall(r"[0-9]+", norm))):
+            if m.hit(cell):
+                if i in coded:
+                    raise Refused(f"a code in column {i + 1} matches an ID of this table or of "
+                                  "the key.")
                 raise Refused(f"column {i + 1} holds an ID of a coded column or of the key: "
                               "drop it, or clean it first.")
 
 
 def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: List[List[str]],
-          key: Key) -> Tuple[List[List[str]], List[Tuple[str, str]]]:
-    """(the output rows, header first; the new key lines). Refuses on any rule."""
+          key: Key, keep_headers: bool = False
+          ) -> Tuple[List[List[str]], List[Tuple[str, str]], List[int], "set[int]", _Matcher]:
+    """(the output rows, header first; the new key lines; the input column of each output
+    column; the coded columns; the matcher of the run's and the key's IDs). Refuses on any
+    rule. With `keep_headers` (MAF) a coded column keeps its header unless one is given."""
     header = rows[0]
     keys = [col_key(h) for h in header]
     if len(set(keys)) != len(keys):
@@ -499,6 +710,9 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
     # the new headers
     auto = 0
     for i in sorted(coded):
+        if coded[i] is None and keep_headers:
+            coded[i] = header[i]  # checked above as every header is
+            continue
         if coded[i] is None:
             auto += 1
             coded[i] = "pseudonym" if auto == 1 else f"pseudonym_{auto}"
@@ -528,13 +742,13 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
                 seen.add(v)
                 ids.append(v)
     new_ids = [v for v in ids if v not in key.codes]
-    # an ID of the key or of a coded column left in another column would link its code to it
-    _ids_elsewhere(rows, [i for i in cols if i not in coded], set(ids) | set(key.codes))
-    # the draw: from every code not used yet, skipping one the sanitizer would touch or that is
-    # a value of the input or the key
+    # an ID of the key or of a coded column left anywhere in the output would link its code to
+    # it: the scan of the output (`_scan`) refuses it
+    m = _Matcher(set(ids) | set(key.codes))
+    # the draw: from every code not used yet, skipping one the sanitizer would touch, one the
+    # scan would flag, or one that is a value of the input or the key
     used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
     used |= {c.strip().casefold() for r in rows for c in r}
-    long_ids = [v for v in (_norm(x) for x in set(ids) | set(key.codes)) if len(v) >= 5]
     free = [n for n in range(1, 10 ** DIGITS)
             if f"{key.prefix}{n:0{DIGITS}d}".casefold() not in used]
     added: List[Tuple[str, str]] = []
@@ -546,7 +760,7 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
             j = secrets.randbelow(len(free))
             free[j], free[-1] = free[-1], free[j]
             code = f"{key.prefix}{free.pop():0{DIGITS}d}"
-            if _clean_both(san, code) and not any(v in code.casefold() for v in long_ids):
+            if _clean_both(san, code) and not m.hit(code):
                 break
         codes[v] = code
         added.append((v, code))
@@ -556,16 +770,21 @@ def build(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, rows: Lis
                      ("" if i in coded else r[i]) for i in cols])
     if not opts["keep_order"]:
         _shuffle(body)
-    return [out_header] + body, added
+    return [out_header] + body, added, cols, set(coded), m
 
 
 # --- the run ------------------------------------------------------------------------------------
 
-def _out_place(path: str, ext: str, cfg: config.Config) -> Tuple[str, str]:
+def _out_place(path: str, kind: Tuple[str, bool], cfg: config.Config) -> Tuple[str, str]:
     """(the real folder of OUT, its file name)."""
     full = os.path.normpath(os.path.join(os.getcwd(), path))
-    if os.path.splitext(full)[1].lower() != ext:
-        raise Refused("the output must be a file of the same kind (.tsv or .csv) as the input.")
+    try:
+        same = _kind(full) == kind
+    except Refused:
+        same = False
+    if not same:
+        raise Refused("the output must be a file of the same kind as the input, with the same "
+                      "extensions (.tsv.gz for a .tsv.gz).")
     if os.path.lexists(full):
         raise Refused("the output exists; it is never replaced: name a new file.")
     real, why = copying.dest_place(full, os.getcwd(), cfg)
@@ -619,8 +838,8 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> int:
     if not cfg.user_roots:
         raise Refused("the user config has no protected root to put the output in.")
     full_in = _input_place(str(opts["inp"]), cfg, home)
-    ext = os.path.splitext(full_in)[1].lower()
-    out_dir, out_name = _out_place(str(opts["out"]), ext, cfg)
+    kind, gz = _kind(full_in)
+    out_dir, out_name = _out_place(str(opts["out"]), (kind, gz), cfg)
     file = f"{opts['name']}.tsv"
     if opts["new"]:
         if kfd >= 0:
@@ -632,18 +851,46 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> int:
         key = Key(str(opts["prefix"]), {}, None)
     else:
         key = _read_key(kfd, file)
-    rows = _parse_table(_read_input(full_in), "\t" if ext == ".tsv" else ",")
+    raw = _read_input(full_in)
     try:
         san = Sanitizer.from_config(cfg, entries=True)
     except SanitizerError:
         raise Refused("the sanitizer cannot be built from the config.")
-    table, added = build(opts, cfg, san, rows, key)
-    buf = io.StringIO()
-    csv.writer(buf, delimiter="\t" if ext == ".tsv" else ",",
-               lineterminator="\n").writerows(table)
-    data = buf.getvalue().encode("utf-8")
+    try:
+        table, added, data = _code(opts, cfg, san, raw, kind, gz, key)
+    except Refused:
+        raise
+    except Exception:
+        # any failure of a reader, a writer or the check-back (deep nesting, a damaged gzip
+        # member, a decode error, memory): one fixed text, never the exception's own
+        raise Refused(f"the input cannot be read as a {_label(kind, gz)} file.")
     return _commit(opts, key, bfd, kfd, file, added, out_dir, out_name, data,
                    len(table) - 1)
+
+
+def _code(opts: Dict[str, object], cfg: config.Config, san: Sanitizer, raw: bytes, kind: str,
+          gz: bool, key: Key) -> Tuple[List[List[str]], List[Tuple[str, str]], bytes]:
+    """(the output rows, the new key lines, the bytes of OUT): read, code, write, then read the
+    written text back and scan it whole."""
+    kept, rows = _read_table(_decode(_decompress(raw) if gz else raw), kind)
+    for line in kept:
+        if not _clean_both(san, line):
+            raise Refused("the #version line holds what the sanitizer masks.")
+    table, added, cols, coded, m = build(opts, cfg, san, rows, key, keep_headers=kind == ".maf")
+    text = _write_table(kept, table, kind)
+    back = _read_table(text, kind)
+    if back != (kept, table):
+        raise Refused("the copy does not read back as the coded table.")
+    _scan(back[0], back[1], cols, coded, m)
+    data = _encode(text, gz)
+    # the lines as written: an ID can span two fields (`Doe, John` as the CSV fields `Doe` and
+    # ` John`)
+    written = (_decompress(data) if gz else data).decode("utf-8")
+    for n, line in enumerate(written.split("\n"), 1):
+        if m.hit(line, whole=False):
+            raise Refused(f"line {n} of the output holds an ID of a coded column or of the key "
+                          "across its fields: drop or clean those columns first.")
+    return table, added, data
 
 
 def _commit(opts: Dict[str, object], key: Key, bfd: int, kfd: int, file: str,

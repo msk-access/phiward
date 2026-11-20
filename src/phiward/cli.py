@@ -17,8 +17,9 @@ The operator's commands (run them in your own terminal, not through an agent):
   carryover status|add|show|accept|reset
                      read and keep what `launch` sessions put in quarantine
   pseudonymize (--new-key NAME | --key NAME) --columns H[=NEW],... IN OUT
-                     a copy of one table with its ID columns coded (S0042), inside a
-                     protected root; the key stays in ~/.phiward/backups/keys
+                     a copy of one table (.tsv, .csv, .txt, .maf, each also .gz) with its
+                     ID columns coded (S0042), inside a protected root; the key stays in
+                     ~/.phiward/backups/keys
 
 Wire a project and a tool:
   init [--root DIR]  set up a project: AGENTS.md rules, settings, git hooks (it only adds)

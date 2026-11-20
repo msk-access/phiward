@@ -13,7 +13,14 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   session, launch and gateway command; the copy is a new file inside a protected root, its rows
   shuffled by default. Every column that looks like an identifier must be coded, dropped or
   kept by name. The hook refuses it as an agent command, and its messages give the row count
-  only (issue #1).
+  only (issue #1). It reads `.tsv`, `.csv`, `.txt` (a TSV of 2 or more columns) and MAF
+  (`.maf`: only a `#version` line with a number is kept, the coded barcode columns keep their
+  headers), each also gzip-compressed (`.tsv.gz`, read up to 1 GiB expanded; the copy is gzip
+  with no name or time, checked by reading it back). The extensions decide the kind and the
+  content must fit them; OUT has the same extensions. No field of the copy, codes, headers and
+  the kept line included, may hold an ID of the run or the key, also in another Unicode form
+  or escaped. bgzip, VCF, JSON and Markdown are refused for now; Parquet is not read (convert
+  it to TSV first).
 - `phiward run` (and `run --remote`) ends with a note that counts the placeholders in the
   lines shown and the lines the sanitizer withheld. From 20 shown lines with no identifier
   placeholder, it says so (issue #5). The broker log gets the same counts. Copies get no note.

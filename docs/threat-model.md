@@ -447,6 +447,12 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   - Quasi-identifiers can re-identify a subject: dates of birth, zip codes, ages over 89, rare
     diagnoses, free text, names that no names file lists. Codes that link several tables (one
     key) add to that, on purpose. The number of subjects shows.
+  - The scan of the copy finds only the IDs of the run and the key. Another subject's ID, a
+    name or an ID glued to other digits (`19990001` for `9990001`) in a kept field goes into
+    the copy, masked only by the rules. A MAF's dropped `#` lines may be provenance you need;
+    its tumor and normal barcodes get unrelated codes; its other values stay as they are.
+  - A gzip input is read up to 1 GiB expanded; the copy is checked by reading it back. bgzip,
+    VCF, JSON and Markdown are refused for now, and Parquet is not read.
   - A code that is also a file name under a root reads `<ENTRY>`, and a later `[sanitize]
     patterns` rule can mask old codes: both hide a code, never leak an ID. Wide tables with IDs
     as headers are refused, not covered.
