@@ -224,6 +224,39 @@ def test_a_compressed_copy_that_does_not_read_back_is_refused(tree, ps, monkeypa
     none_written(tree, "out.tsv.gz")
 
 
+@pytest.mark.parametrize("how", ["other_table", "bgzf_for_plain_gzip"])
+def test_a_gzip_copy_that_is_not_the_table_in_plain_gzip_does_not_read_back(tree, ps,
+                                                                            monkeypatch, how):
+    """The copy of a plain gzip input is checked with `_decompress`: it reads back as the
+    table, and as plain gzip (a BGZF copy reads as the table to `gzip.decompress`)."""
+    def bad(data, *a, **kw):
+        return gz(data.replace(b"lab", b"lbb")) if how == "other_table" else ps._bgzf(data)
+    monkeypatch.setattr(ps.gzip, "compress", bad)
+    p = put(tree, "labs.tsv.gz", GZ)
+    code, text = run(tree, base(tree, inp=p, out=tree / "phi" / "out.tsv.gz"))
+    assert code == 2 and "the compressed copy does not read back as the table" in text, text
+    none_written(tree, "out.tsv.gz")
+
+
+@pytest.mark.parametrize("blocked", [False, True], ids=["gzip", "bgzf"])
+def test_the_output_is_decompressed_once(tree, ps, monkeypatch, blocked):
+    """`_encode` reads the compressed copy back once; the line scan reads the text it was
+    made from, already shown equal."""
+    real = ps._decompress
+    outs = []
+
+    def counted(data):
+        outs.append(data)
+        return real(data)
+    monkeypatch.setattr(ps, "_decompress", counted)
+    monkeypatch.setattr(ps.gzip, "decompress", lambda *a, **kw: pytest.fail("gzip.decompress"))
+    p = put(tree, "labs.tsv.gz", bgzf(TABLE) if blocked else GZ)
+    out = tree / "phi" / "out.tsv.gz"
+    code, text = run(tree, base(tree, inp=p, out=out, more=["--keep-order"]))
+    assert code == 0, text
+    assert outs.count(out.read_bytes()) == 1 and len(outs) == 2, len(outs)
+
+
 # --- 5. every exception gives one fixed refusal (inv. 10) -------------------------------------
 
 ERRORS = [RecursionError("deep"), ValueError("FAKE-PT-0007"), EOFError("x"),
