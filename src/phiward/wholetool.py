@@ -1040,6 +1040,8 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             args += ["--tmpfs", r]
         elif os.path.lexists(r):
             args += ["--ro-bind", "/dev/null", r]
+        else:
+            continue
         over(r)
     # the split folders are read-only, like the host they stand for (each one mount only)
     made = {op[1] for op in ops if op[0] == "tmpfs"} | {"/"}
@@ -1058,7 +1060,8 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
 
 def _write_checks(fd: int, checks: Sequence[Tuple[str, bool, object]]) -> None:
     """What the helper compares inside the session, taken right before bwrap starts: for each
-    bind, the path in the view, the (st_dev, st_ino) it must have there ((-1, -1): it must be
+    bind, the path in the view (its bytes, as hex: the helper may decode names otherwise), the
+    (st_dev, st_ino) it must have there ((-1, -1): it must be
     absent), and whether it may be absent (an entry of the view, left out by `--ro-bind-try`).
     An entry of the view is taken again now, by its name, its folder reached without following
     a link; a bind by descriptor from its descriptor."""
@@ -1071,7 +1074,7 @@ def _write_checks(fd: int, checks: Sequence[Tuple[str, bool, object]]) -> None:
         else:
             st = os.fstat(int(x))  # type: ignore[call-overload]
             dev, ino = st.st_dev, st.st_ino
-        recs.append([dest, dev, ino, view])
+        recs.append([os.fsencode(dest).hex(), dev, ino, view])
     data = json.dumps(recs).encode("ascii")
     os.ftruncate(fd, 0)
     os.lseek(fd, 0, os.SEEK_SET)
@@ -1114,33 +1117,42 @@ HELPER = r"""
 import os, sys, ctypes, struct
 chk = int(sys.argv[1]); n = int(sys.argv[2]); close = sys.argv[3:3 + n]; cmd = sys.argv[3 + n:]
 if chk >= 0:
+    # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
+    # start goes on only when every record was read and compared; anything else stops it
     import json
-    bad = "the list of checks"
+    where, clean = "the list of checks", False
     try:
         os.lseek(chk, 0, 0)
         with os.fdopen(chk, "rb") as fh:
             recs = json.loads(fh.read().decode("ascii"))
-        bad = None
-        for path, dev, ino, may_go in recs:
+        if type(recs) is not list or not recs:
+            raise ValueError("no records")
+        for rec in recs:
+            if type(rec) is not list or len(rec) != 4:
+                raise ValueError("a malformed record")
+            name, dev, ino, may_go = rec
+            if type(name) is not str or type(dev) is not int or type(ino) is not int or \
+                    type(may_go) is not bool:
+                raise ValueError("a malformed record")
+            path = bytes.fromhex(name)
+            where = path.decode("utf-8", "backslashreplace")
+            if not path.startswith(b"/") or b"\0" in path:
+                raise ValueError("a malformed path")
             try:
                 st = os.lstat(path)
             except (FileNotFoundError, NotADirectoryError):
-                if dev < 0 or may_go:
+                if may_go:  # an entry of the view, left out by --ro-bind-try
                     continue
-                bad = path
-                break
-            except OSError:
-                bad = path
-                break
+                raise
             if (st.st_dev, st.st_ino) != (dev, ino):
-                bad = path
-                break
-    except (OSError, ValueError, TypeError):
-        pass
-    if bad is not None:
+                raise ValueError("changed")
+        clean = True
+    except BaseException:
+        clean = False
+    if not clean:
         sys.stderr.write("phiward launch: the session's view is not what was checked before the "
                          "start (%s changed while the session started); nothing runs, start "
-                         "again\n" % bad)
+                         "again\n" % where)
         sys.stderr.flush()
         os._exit(126)
 for c in close:
