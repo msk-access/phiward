@@ -34,7 +34,10 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   only (decision K). The `#CHROM` line keeps its fixed headers and the codes take the sample
   names' places (decision E). Records keep their order and values; the sample columns are
   shuffled, one permutation for every line. The scan reads each tab field whole and split on
-  `; , = | :`. BGZF in gives BGZF out (blocks of 0xff00 bytes, the EOF block), plain gzip
+  `; , = | :`, and the draw avoids each of those parts. The stop list is matched on the
+  NFKC, case-folded name. Two IDs with one NFKC, case-folded form but other text (in the
+  input, or in the input and the key) are refused, in every kind (one rule, in the draw). A
+  BGZF input must end with the EOF block. BGZF in gives BGZF out (blocks of 0xff00 bytes, the EOF block), plain gzip
   gives plain gzip, a mix is refused (decision H); 1 GiB in memory, no streaming path
   (decision I). (Why: a word in the key links unrelated subjects; `tabix` needs sorted
   records and BGZF. Cost: provenance in dropped lines; genotypes stay.)

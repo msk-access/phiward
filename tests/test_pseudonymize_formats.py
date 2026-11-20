@@ -14,7 +14,7 @@ import zlib
 
 import pytest
 
-from test_pseudonymize import base, key_map, mrns, read_table, run, write_table
+from test_pseudonymize import base, key_lines, key_map, mrns, read_table, run, write_table
 
 MAF_IDS = ("P-9990001-T01-IM6", "P-9990001-N01-IM6", "FAKE-AB-0001-01A", "FAKE-AB-0001-10A")
 
@@ -871,3 +871,76 @@ def test_tabix_indexes_the_bgzf_copy(tree, ps):
     r = subprocess.run(["tabix", str(out), "chr2:10000-10010"], capture_output=True, text=True,
                        timeout=60, check=False)
     assert r.returncode == 0 and len(r.stdout.splitlines()) == 2, (r.stdout, r.stderr)
+
+
+# --- step 2, review round 1 -------------------------------------------------------------------
+
+def _cut_last_block(raw):
+    """The BGZF file without its EOF block and its last data block."""
+    blocks = bgzf_blocks(raw)
+    return raw[:len(raw) - len(blocks[-1][0]) - len(blocks[-2][0])]
+
+
+@pytest.mark.parametrize("cut", ["no_eof", "last_block_and_eof", "eof_short"])
+def test_a_truncated_bgzf_is_refused(tree, ps, cut):
+    """A BGZF input must end with the EOF block: one cut at a block boundary reads as a shorter
+    file."""
+    raw = bgzf(big_vcf(), size=40000)
+    data = {"no_eof": raw[:-28], "last_block_and_eof": _cut_last_block(raw),
+            "eof_short": raw[:-1]}[cut]
+    p = put(tree, "calls.vcf.gz", data)
+    code, text = vcf_run(tree, p, out="out.vcf.gz")
+    assert code == 2 and "cannot be read as a gzip-compressed VCF file" in text, (cut, text)
+    none_written(tree, "out.vcf.gz", "vcf")
+
+
+@pytest.mark.parametrize("name", ["\uff53\uff41\uff4d\uff50\uff4c\uff451",  # full-width sample, 1
+                                  "\uff33\uff21\uff2d\uff30\uff2c\uff25\uff11"])
+def test_the_stop_list_is_checked_on_the_normalized_name(tree, ps, name):
+    samples = [SAMPLES[0], name]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples, recs=records(2)).encode())
+    code, text = vcf_run(tree, p, extra=(name,))
+    assert code == 2 and "sample 2" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+TWINS = [("P-9990001-T01-IM6", "p-9990001-t01-im6"),
+         ("P-9990001-T01-IM6", "Ｐ-9990001-T01-IM6"),  # a full-width P
+         ("FAKE-PT-0007", "fake-pt-0007")]
+
+
+@pytest.mark.parametrize("a,b", TWINS)
+def test_two_ids_that_differ_only_in_case_or_form_are_refused_in_one_table(tree, ps, a, b):
+    write_table(tree / "data" / "labs.tsv", ["mrn", "site"], [[a, "lab"], [b, "lab"]])
+    code, text = run(tree, base(tree), extra=(a, b))
+    assert code == 2 and "differ only" in text, text
+    none_written(tree)
+
+
+@pytest.mark.parametrize("a,b", TWINS)
+def test_an_id_that_differs_from_a_key_id_only_in_case_or_form_is_refused(tree, ps, a, b):
+    write_table(tree / "data" / "a.tsv", ["mrn", "site"], [[a, "lab"]])
+    assert run(tree, base(tree, inp=tree / "data" / "a.tsv", out=tree / "phi" / "a.tsv"),
+               extra=(a,))[0] == 0
+    before = key_lines(tree / "home", "labs")
+    write_table(tree / "data" / "b.tsv", ["mrn", "site"], [[b, "lab"]])
+    code, text = run(tree, base(tree, new=False, inp=tree / "data" / "b.tsv"), extra=(a, b))
+    assert code == 2 and "differ only" in text, text
+    assert key_lines(tree / "home", "labs") == before
+    assert not (tree / "phi" / "out.tsv").exists()
+
+
+def test_two_vcf_samples_that_differ_only_in_case_are_refused(tree, ps):
+    samples = [SAMPLES[0], SAMPLES[0].lower()]
+    p = put(tree, "calls.vcf", vcf_text(samples=samples, recs=records(2)).encode())
+    code, text = vcf_run(tree, p, extra=(samples[1],))
+    assert code == 2 and "differ only" in text, text
+    none_written(tree, "out.vcf", "vcf")
+
+
+def test_the_vcf_draw_avoids_a_value_inside_a_field(tree, ps, monkeypatch):
+    """`X=S9999` in INFO: the code S9999 would stand beside an unrelated value."""
+    monkeypatch.setattr(ps.secrets, "randbelow", lambda n: n - 1)
+    p = put(tree, "calls.vcf", vcf_text(recs=_with(1, 7, "DP=31;X=S9999")).encode())
+    assert vcf_run(tree, p)[0] == 0
+    assert "S9999" not in key_map(tree / "home", "vcf").values()

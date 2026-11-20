@@ -183,9 +183,14 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
       the sanitizer would mask is refused.
     - A sample name that is a word (`tumor`, `normal`, `sample`, `sample1`, `control`,
       `germline`, `blood`, `unknown`, `na`, `none`, in any case), has no digit or is under 3
-      characters is refused: it would link unrelated subjects in the key. Rename it first
+      characters is refused (also in another letter case or Unicode form, a full-width
+      `ｓａｍｐｌｅ1`): it would link unrelated subjects in the key. Rename it first
       (`bcftools reheader`), or keep it as it is by number: `--keep-samples 2` keeps the name
-      of the second sample, out of the key. A word with a digit (`TUMOR1`) is coded.
+      of the second sample, out of the key, on your word. The only check of a kept name is
+      that the sanitizer leaves it unchanged; a name it would mask is refused. A word with a
+      digit (`TUMOR1`) is coded.
+    - A short sample name of digits only (`123`) refuses every record that holds that number
+      as a value: rename it first.
     - The records keep their order (`tabix` needs sorted positions) and their values. The
       sample columns are shuffled instead, the same in every record (`--keep-order` keeps
       them). A record or a kept line that holds a sample's ID (an `INFO` value, the `ID`
@@ -194,8 +199,9 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   - Each of them gzip-compressed (`.tsv.gz`, `.maf.gz`, `.vcf.gz`). Every member is read, up to
     1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
     the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
-    BGZF copy, so `tabix -p vcf OUT` indexes it; an index (`.tbi`, `.csi`) is never read or
-    copied. A file that mixes BGZF blocks and plain gzip members is refused.
+    BGZF copy; for a VCF, `tabix -p vcf OUT` indexes it. An index (`.tbi`, `.csi`) is never
+    read or copied. A BGZF file must end with its EOF block (one cut short is refused), and a
+    file that mixes BGZF blocks and plain gzip members is refused.
   - Not covered yet: `.json`, `.md`. Not covered: Parquet; convert it to TSV with your own
     tools first.
   - A file that cannot be read or written as its kind gives one fixed refusal.
@@ -217,7 +223,9 @@ phiward pseudonymize --new-key labs --columns mrn --drop dob ~/raw/labs.tsv ~/da
   character. Not found: a short digit ID
   inside a cell (`12` in `12 mg`), an ID glued to other digits (`19990001`), an ID written
   another way (with spaces or other hyphens, `9 990 001`), an ID with its leading zeros
-  dropped or added (`0001` and `1`). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
+  dropped or added (`0001` and `1`). Check such columns yourself, or drop them. Two IDs
+  that differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width `Ｐ-1`), in
+  the input or in the input and the key, are refused: make them one first. The output is a new file of the same kind inside a protected root of your user
   config, outside every `write_to` folder. It is never replaced. The agent reads it through `phiward run`, masked; the codes pass the masks.
 - The key is `~/.phiward/backups/keys/NAME.tsv`. No session, launch or gateway command can read
   or write it. It is only ever added to. `phiward install claude` makes `~/.phiward/backups`;

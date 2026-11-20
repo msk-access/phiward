@@ -56,7 +56,7 @@ Options:
   --keep H,...     columns that look like identifiers, kept as they are on your word
   --keep-samples N,...
                    with a VCF: keep the names of these samples (1 is the first sample) as they
-                   are, out of the key (TUMOR, NORMAL)
+                   are, out of the key (TUMOR, NORMAL), on your word
   --keep-order     keep the order of the rows, or of a VCF's sample columns (by default they
                    are shuffled, so the order of a sorted file does not give away the order
                    of the IDs)
@@ -80,14 +80,16 @@ The kinds (the extensions decide; the content must fit them):
   command lines, SAMPLE, PEDIGREE) are dropped. A sample name that is a word (tumor,
   normal, sample, sample1, control, germline, blood, unknown, na, none, in any case), has no
   digit or is under 3 characters is refused: rename it first (bcftools reheader), or keep
-  it by number with --keep-samples. The records keep their order (tabix needs it) and their
-  values; the sample columns are shuffled instead. A record that holds a sample's ID is
-  refused: clean it first (bcftools annotate);
+  it by number with --keep-samples, on your word (the only check: the sanitizer must leave
+  the name unchanged; a name it would mask is refused). The records keep their order (tabix
+  needs it) and their values; the sample columns are shuffled instead. A record that holds a
+  sample's ID is refused: clean it first (bcftools annotate). A short sample name of digits
+  only (123) refuses every record that holds that number: rename it first;
 - each of them compressed with gzip (.tsv.gz): every member is read, no more than 1 GiB
   expanded; the copy is gzip again, with no name and no time, and must read back as the
-  coded table. A bgzip (BGZF) input, every block of it, gives a BGZF copy: run
-  `tabix -p vcf` on it to index it (an index is never read or copied). .json and .md are not
-  covered yet; Parquet is not: convert it to TSV with your own tools first.
+  coded table. A bgzip (BGZF) input, every block of it and its EOF block, gives a BGZF
+  copy; for a VCF, run `tabix -p vcf` on it to index it (an index is never read or copied).
+  .json and .md are not covered yet; Parquet is not: convert it to TSV with your own tools first.
 Any failure to read or write the kind gives one fixed refusal.
 
 The rules:
@@ -101,7 +103,9 @@ The rules:
 - Every column whose header looks like an identifier (the built-in list and [sanitize]
   id_columns) is named in --columns, --drop or --keep. A header the sanitizer would mask is
   refused. A cell's ID is the cell without outer spaces; an empty cell stays empty; a cell
-  with an invisible format character is refused. No field of the output (a cell, a header,
+  with an invisible format character is refused. Two IDs that differ only in letter case or
+  Unicode form (P-1, p-1, a full-width P), in IN or in IN and the key, are refused: make
+  them one first. No field of the output (a cell, a header,
   the kept # line, the codes too) may hold an ID of a coded column or of the key, also in
   another letter case, Unicode form or digits, or escaped (%2D, \\u002D, also twice): one
   of 5 or more characters anywhere in a field, or across the fields of a line as written;
@@ -135,6 +139,7 @@ VCF_META_KEPT = ("INFO", "FORMAT", "FILTER", "ALT")  # kept whole; `contig` keep
 VCF_META = re.compile(r"##([A-Za-z0-9_.-]+)=(.*)")
 # a contig ID (VCF 4.3, 1.4.7), and one `key=value` of a structured `##` line
 CONTIG_ID = re.compile(r"[0-9A-Za-z!#$%&+./:;?@^_|~-][0-9A-Za-z!#$%&*+./:;=?@^_|~-]*")
+VCF_SPLIT = re.compile(r"[;,=|:]")  # the parts of an INFO, FORMAT or sample value
 META_ITEM = re.compile(r'([A-Za-z0-9_.-]+)=("(?:[^"\\]|\\.)*"|[^,"<>]*)')
 # sample names that are words, not IDs: coded, they would link unrelated subjects in the key
 SAMPLE_WORDS = {"tumor", "normal", "sample", "sample1", "control", "germline", "blood",
@@ -523,7 +528,7 @@ def _member_start(data: bytes, pos: int) -> Tuple[int, Optional[int]]:
 def _decompress(data: bytes) -> Tuple[bytes, bool]:
     """(the text of a gzip file, whether it is BGZF): every member, each header checked
     (`_member_start`) and each CRC and length, and a BGZF block's BSIZE; every member is BGZF or
-    none is. Zero padding after a member is allowed, other trailing bytes are not. Expanded in
+    none is, and a BGZF file ends with the EOF block. Zero padding after a member is allowed, other trailing bytes are not. Expanded in
     1 MiB steps: no more than LIMIT bytes. No header field of the input (name, comment, time)
     is kept."""
     if data[:2] != GZIP_MAGIC:
@@ -563,6 +568,9 @@ def _decompress(data: bytes) -> Tuple[bytes, bool]:
         if bsize is not None and pos - start != bsize + 1:
             raise ValueError("a BGZF block's BSIZE")
         pos = _ZEROS.match(data, pos).end()  # padding
+    if kinds == {True} and not data.endswith(BGZF_EOF):
+        # cut at a block boundary, a BGZF file reads as a shorter one: its EOF block says it ends
+        raise ValueError("a BGZF file without its EOF block")
     return b"".join(chunks), kinds == {True}
 
 
@@ -764,11 +772,28 @@ def _scan(kept: List[str], table: List[List[str]], cols: List[int], coded: "set[
                               "drop it, or clean it first.")
 
 
+def _fold(text: str) -> str:
+    """NFKC with format characters removed, then a case fold: the form two IDs share when they
+    differ only in letter case or Unicode form (`P-1`, `p-1`, a full-width `Ｐ-1`)."""
+    return inventory.normalize(text).casefold()
+
+
 def _draw(ids: List[str], key: Key, san: Sanitizer, m: _Matcher, values: "set[str]"
           ) -> Tuple[Dict[str, str], List[Tuple[str, str]]]:
-    """(every ID's code, the new key lines): a code for each ID the key does not hold, drawn
+    """(every ID's code, the new key lines). Two IDs of the input, or of the input and the key,
+    with one folded form (`_fold`) but other text are refused: they would get two codes for
+    what may be one subject. A code for each ID the key does not hold, drawn
     from every code not used yet, skipping one the sanitizer would touch, one the scan would
     flag (`m`), or one that is a value of the input (`values`) or the key."""
+    forms: Dict[str, "set[str]"] = {}
+    for v in key.codes:
+        forms.setdefault(_fold(v), set()).add(v)
+    for v in ids:
+        twins = forms.setdefault(_fold(v), set())
+        twins.add(v)
+        if len(twins) > 1:
+            raise Refused("two IDs of the input, or of the input and the key, differ only in "
+                          "letter case or Unicode form: make them one first.")
     used = {c.casefold() for c in key.codes.values()} | {v.casefold() for v in key.codes}
     used |= {v.casefold() for v in values}
     free = [n for n in range(1, 10 ** DIGITS)
@@ -941,7 +966,7 @@ def _write_vcf(meta: List[str], header: List[str], recs: List[List[str]]) -> str
 def _vcf_hit(field: str, m: _Matcher) -> bool:
     """The whole field (an ID with a colon is not cut), then each part of it split on
     `; , = | :` (INFO, FORMAT and sample values; a short ID as a whole part)."""
-    return m.hit(field) or any(m.hit(p) for p in re.split(r"[;,=|:]", field) if p != field)
+    return m.hit(field) or any(m.hit(p) for p in VCF_SPLIT.split(field) if p != field)
 
 
 def _sample_check(samples: List[str], keep: "set[int]", san: Sanitizer) -> None:
@@ -962,7 +987,7 @@ def _sample_check(samples: List[str], keep: "set[int]", san: Sanitizer) -> None:
             if not _clean_both(san, s):
                 raise Refused(f"the kept name of sample {n} (column {n + 9}) holds what the "
                               "sanitizer masks.")
-        elif s.casefold() in SAMPLE_WORDS or not re.search(r"[0-9]", s) or len(s) < 3:
+        elif _fold(s) in SAMPLE_WORDS or not re.search(r"[0-9]", _fold(s)) or len(_fold(s)) < 3:
             raise Refused(f"the name of sample {n} (column {n + 9}) is not an ID: a word of "
                           "the list in --help, a name with no digit, or one under 3 characters. "
                           f"Rename it first, or keep its name with --keep-samples {n}.")
@@ -1006,7 +1031,9 @@ def _code_vcf(opts: Dict[str, object], san: Sanitizer, text: str, key: Key
     _sample_check(samples, keep, san)
     ids = [s for n, s in enumerate(samples, 1) if n not in keep]
     m = _Matcher(set(ids) | set(key.codes))
-    values = set(samples) | {f for r in recs for f in r if len(f) <= len(key.prefix) + DIGITS}
+    # a code is never a value of the input: a whole field or a part the scan splits (`X=S0042`)
+    values = set(samples) | {v for r in recs for f in r for v in [f] + VCF_SPLIT.split(f)
+                             if len(v) <= len(key.prefix) + DIGITS}
     codes, added = _draw(ids, key, san, m, values)
     perm = list(range(len(samples)))
     if not opts["keep_order"]:
