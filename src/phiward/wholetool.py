@@ -1560,7 +1560,7 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     proj_before = carryover.project_state(project)
     try:
         ready()  # last, so the host has the least time to change what was checked
-    except OSError as exc:
+    except Exception as exc:  # any failure (a name fsencode cannot encode): nothing runs
         for fd in fds:
             os.close(fd)
         run.say(f"phiward launch: the session's checks cannot be written ({exc}); nothing runs")
