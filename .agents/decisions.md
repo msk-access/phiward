@@ -131,6 +131,10 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Turned down
 
+- **For the Linux view's entries: a retry, `--ro-bind-fd`, or binding them by descriptor.** bwrap
+  (0.9.0) reads a descriptor's name back and mounts that name, also with `--ro-bind-fd`, and
+  cannot mount a removed entry by descriptor. A retry hides the race. The entries are bound by
+  name with `--ro-bind-try`, and the helper checks the view before the tool runs.
 - **A pseudonymized table outside the protected roots after a check that nothing would be
   masked:** false assurance; the check does not see names in free text, zip codes, ages or rare
   diagnoses.

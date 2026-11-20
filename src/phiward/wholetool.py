@@ -29,6 +29,7 @@ import stat
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
@@ -587,8 +588,9 @@ def _placeholders(project: str) -> List[str]:
 
 
 def _open_no_follow(path: str) -> int:
-    """An O_PATH descriptor of a file or folder reached part by part without following a link:
-    what is checked is what gets mounted."""
+    """An O_PATH descriptor of a file or folder reached part by part without following a link.
+    bwrap reads the name back from it and mounts that name, so the helper checks inside the
+    session that what got mounted is this file (_write_checks)."""
     if os.path.isdir(path) and not os.path.islink(path):
         return confine.open_place(path)
     parent = confine.open_place(os.path.dirname(path))
@@ -597,6 +599,48 @@ def _open_no_follow(path: str) -> int:
                        dir_fd=parent)
     finally:
         os.close(parent)
+
+
+def _identities(paths: Sequence[str]) -> Dict[str, Optional[Tuple[int, int]]]:
+    """(st_dev, st_ino) of each path, its folder reached part by part without following a
+    link and the entry itself not followed; None when it is gone, is a link, or a link is on
+    its way."""
+    out: Dict[str, Optional[Tuple[int, int]]] = {}
+    by_dir: Dict[str, List[str]] = {}
+    for p in paths:
+        by_dir.setdefault(os.path.dirname(p), []).append(p)
+    for d, inside in by_dir.items():
+        try:
+            pfd = confine.open_place(d)
+        except (OSError, confine.ConfineError):
+            pfd = -1
+        try:
+            for p in inside:
+                out[p] = None
+                if pfd < 0 or not os.path.basename(p):
+                    continue
+                # a folder is opened (O_DIRECTORY), which mounts an automount point as bwrap's
+                # bind will (a plain stat would see the trigger, not the folder mounted there)
+                try:
+                    fd = os.open(os.path.basename(p), os.O_PATH | os.O_NOFOLLOW |  # type: ignore[attr-defined]
+                                 os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=pfd)
+                    try:
+                        st = os.fstat(fd)
+                    finally:
+                        os.close(fd)
+                except OSError:
+                    try:
+                        st = os.stat(os.path.basename(p), dir_fd=pfd, follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if stat.S_ISDIR(st.st_mode):
+                        continue  # a folder that could not be opened: not what bwrap would bind
+                if not stat.S_ISLNK(st.st_mode):
+                    out[p] = (st.st_dev, st.st_ino)
+        finally:
+            if pfd >= 0:
+                os.close(pfd)
+    return out
 
 
 # bwrap takes at most 9000 arguments; the snapshot view may use this many, the rest of the command
@@ -643,6 +687,9 @@ def hidden_view(literal: Sequence[str], patterns: Sequence[str], replaced: Seque
     `may_skip`: credential files that need no hiding when they belong to another user and
     cannot be read (a system keytab); never protected paths. `soft_patterns`: patterns that
     are skipped where a folder cannot be listed, instead of refused (the Kerberos cache names).
+
+    An entry the host removes while the session starts is left out of the view; one it replaces
+    then stops the start (bwrap_tool_args, the helper's check).
 
     Operations: ("tmpfs", dir), ("bind", path), ("symlink", target, path), ("mask", path).
     Paths under `replaced` (the session's own /tmp, the hidden tool folder) are left to the
@@ -869,11 +916,22 @@ def _view_ops(split: Dict[str, str], hidden: Dict[str, str], whole: Set[str],
 
 def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                     env: Dict[str, str], folder: str, run: str,
-                    server: bool = False) -> Tuple[List[str], List[int]]:
+                    server: bool = False
+                    ) -> Tuple[List[str], List[int], List[Tuple[str, bool, object]]]:
+    """The bwrap arguments, the descriptors they name, and what the helper checks inside the
+    session before the tool runs: (the path in the view, whether it is an entry of the view
+    (named; it may be left out), its name or its descriptor), for every bind no later mount
+    covers."""
     # a root that does not exist is hidden like the others: its folder is split, so a root made
     # later is not in the view either (a launch inside another sandbox may see no root at all)
     args: List[str] = []
     fds: List[int] = []
+    checks: Dict[str, Tuple[bool, object]] = {}
+
+    def over(dest: str) -> None:  # a later mount covers dest and what is below it
+        checks.pop(dest, None)
+        for k in [k for k in checks if k.startswith(dest.rstrip("/") + "/")]:
+            del checks[k]
     hide = (confine._spellings(list(cfg.all_roots)) + _credentials(env, cfg) + list(IPC_PATHS) +
             [os.path.join(_real_home(env), config.LEGACY_STATE)])
     ops, split, whole = hidden_view(hide, list(cfg.patterns), replaced=["/tmp", folder],
@@ -887,10 +945,11 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                          "session is not hidden\n")
     gits = git_dirs_in(project)
     guards = confine._spellings(config.guard_files(env))
-    # a descriptor for every bind: the view's, then the places, the tool's /tmp, the project's
-    # .claude and .vscode, the git control files, the settings files and the guard files
-    _raise_fd_limit(sum(1 for o in ops if o[0] == "bind") + len(places) + 3 +
-                    len(gits) * (len(GIT_CONTROL) + 1) + len(PROJECT_SETTINGS) + len(guards) + 64)
+    # a descriptor for every bind except the view's (those are named, below): the places, the
+    # tool's /tmp, the project's .claude and .vscode, the git control files, the settings files
+    # and the guard files
+    _raise_fd_limit(len(places) + 3 + len(gits) * (len(GIT_CONTROL) + 1) +
+                    len(PROJECT_SETTINGS) + len(guards) + 64)
 
     def bind(path: str, ro: bool, dest: Optional[str] = None) -> None:
         try:
@@ -903,11 +962,22 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                 raise LaunchError(f"{path} cannot be opened to mount it in the session's view "
                                   f"({why}); nothing runs")
             return  # a link on the way: not mounted (and so not reachable through it)
+        if stat.S_ISLNK(os.fstat(fd).st_mode):  # checked as no link a moment before
+            os.close(fd)
+            raise LaunchError(f"{path} became a link while the session's view was made; "
+                              "nothing runs")
         os.set_inheritable(fd, True)
         fds.append(fd)
         args.extend(["--ro-bind" if ro else "--bind", f"/proc/self/fd/{fd}", dest or path])
+        over(dest or path)
+        checks[dest or path] = (False, fd)
 
-    # the snapshot view first: nothing hidden is in it, and every later mount lands on top
+    # the snapshot view first: nothing hidden is in it, and every later mount lands on top.
+    # Its entries are bound by name: bwrap resolves even a descriptor to a name and mounts that,
+    # and a descriptor of an entry the host removes cannot be mounted at all. An entry that is
+    # gone, or is a link now, is left out (`-try` also leaves out one removed before bwrap
+    # looks); what is bound is checked inside before the tool runs (HELPER)
+    now = _identities([op[1] for op in ops if op[0] == "bind"])
     for op in ops:
         if op[0] == "tmpfs":
             args += ["--tmpfs", op[1]]
@@ -916,21 +986,20 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
         elif op[0] == "mask":
             args += ["--tmpfs", op[1]] if os.path.isdir(op[1]) and not os.path.islink(op[1]) \
                 else ["--ro-bind", "/dev/null", op[1]]
-        else:
-            n = len(args)
-            bind(op[1], True)
-            if len(args) == n:
-                raise LaunchError("an entry of the session's view changed while it was made; "
-                                  "start again")
+        elif now.get(op[1]) is not None:
+            args += ["--ro-bind-try", op[1], op[1]]
+            checks[op[1]] = (True, op[1])
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
              "--die-with-parent"]
     # outside sockets first (before /tmp is replaced), then the tool's own temp folder as /tmp,
     # then the write places on top (a project under /tmp stays visible)
     for sock in _outside_sockets(list(places)):
         args += ["--ro-bind-try", "/dev/null", sock]
+        over(sock)
     # the tool folder is hidden: a session sees only its own run folder, bound back below
     # (sessions cannot read each other)
     args += ["--tmpfs", folder]
+    over(folder)
     bind(os.path.join(run, "tmp"), False, "/tmp")
     for p in places:
         if os.path.isdir(p) and _no_link_on_path(p):
@@ -971,6 +1040,9 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             args += ["--tmpfs", r]
         elif os.path.lexists(r):
             args += ["--ro-bind", "/dev/null", r]
+        else:
+            continue
+        over(r)
     # the split folders are read-only, like the host they stand for (each one mount only)
     made = {op[1] for op in ops if op[0] == "tmpfs"} | {"/"}
     for d in reversed(split):
@@ -983,7 +1055,32 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
         for fd in fds:
             os.close(fd)
         raise LaunchError(_too_long(need))
-    return args, fds
+    return args, fds, [(d, view, x) for d, (view, x) in checks.items()]
+
+
+def _write_checks(fd: int, checks: Sequence[Tuple[str, bool, object]]) -> None:
+    """What the helper compares inside the session, taken right before bwrap starts: for each
+    bind, the path in the view (its bytes, as hex: the helper may decode names otherwise), the
+    (st_dev, st_ino) it must have there ((-1, -1): it must be
+    absent), and whether it may be absent (an entry of the view, left out by `--ro-bind-try`).
+    An entry of the view is taken again now, by its name, its folder reached without following
+    a link; a bind by descriptor from its descriptor."""
+    now = _identities([str(x) for _d, view, x in checks if view])
+    recs = []
+    for dest, view, x in checks:
+        if view:
+            ident = now.get(str(x))
+            dev, ino = ident if ident is not None else (-1, -1)
+        else:
+            st = os.fstat(int(x))  # type: ignore[call-overload]
+            dev, ino = st.st_dev, st.st_ino
+        recs.append([os.fsencode(dest).hex(), dev, ino, view])
+    data = json.dumps(recs).encode("ascii")
+    os.ftruncate(fd, 0)
+    os.lseek(fd, 0, os.SEEK_SET)
+    while data:
+        data = data[os.write(fd, data):]
+    os.lseek(fd, 0, os.SEEK_SET)
 
 
 def _too_long(n: int) -> str:
@@ -1012,11 +1109,52 @@ def _raise_fd_limit(need: int) -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (need, hard))
 
 
-# the helper the tool starts through: it closes the launcher's descriptors, applies the Landlock
-# scope for abstract unix sockets and signals where the kernel has it (ABI 6), and execs the tool
+# the helper the tool starts through: on Linux it first checks that each bind in the session's
+# view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
+# a name in between), then it closes the launcher's descriptors, applies the Landlock scope for
+# abstract unix sockets and signals where the kernel has it (ABI 6), and execs the tool
 HELPER = r"""
 import os, sys, ctypes, struct
-n = int(sys.argv[1]); close = sys.argv[2:2 + n]; cmd = sys.argv[2 + n:]
+chk = int(sys.argv[1]); n = int(sys.argv[2]); close = sys.argv[3:3 + n]; cmd = sys.argv[3 + n:]
+if chk >= 0:
+    # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
+    # start goes on only when every record was read and compared; anything else stops it
+    import json
+    where, clean = "the list of checks", False
+    try:
+        os.lseek(chk, 0, 0)
+        with os.fdopen(chk, "rb") as fh:
+            recs = json.loads(fh.read().decode("ascii"))
+        if type(recs) is not list or not recs:
+            raise ValueError("no records")
+        for rec in recs:
+            if type(rec) is not list or len(rec) != 4:
+                raise ValueError("a malformed record")
+            name, dev, ino, may_go = rec
+            if type(name) is not str or type(dev) is not int or type(ino) is not int or \
+                    type(may_go) is not bool:
+                raise ValueError("a malformed record")
+            path = bytes.fromhex(name)
+            where = path.decode("utf-8", "backslashreplace")
+            if not path.startswith(b"/") or b"\0" in path:
+                raise ValueError("a malformed path")
+            try:
+                st = os.lstat(path)
+            except (FileNotFoundError, NotADirectoryError):
+                if may_go:  # an entry of the view, left out by --ro-bind-try
+                    continue
+                raise
+            if (st.st_dev, st.st_ino) != (dev, ino):
+                raise ValueError("changed")
+        clean = True
+    except BaseException:
+        clean = False
+    if not clean:
+        sys.stderr.write("phiward launch: the session's view is not what was checked before the "
+                         "start (%s changed while the session started); nothing runs, start "
+                         "again\n" % where)
+        sys.stderr.flush()
+        os._exit(126)
 for c in close:
     try:
         os.close(int(c))
@@ -1177,7 +1315,8 @@ def _make_dot_claude(project: str) -> None:
 
 def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
           memory: bool = False, store: Optional[carryover.Store] = None,
-          server: bool = False) -> Tuple[List[str], Dict[str, str], List[int], str]:
+          server: bool = False
+          ) -> Tuple[List[str], Dict[str, str], List[int], str, Callable[[], None]]:
     cfg = config.load(cwd, env=env)
     if cfg.problem:
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
@@ -1265,8 +1404,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                               "one (start the tool from a plain terminal)")
         _make_dot_claude(project)
         prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["0"] + list(argv), child_env, [], \
-            project
+        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "0"] + list(argv), child_env, \
+            [], project, lambda: None
     if backend == "bwrap":
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
@@ -1276,20 +1415,25 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if made:
             sys.stderr.write("phiward launch: made read-only placeholders in the project: "
                              f"{', '.join(made)}\n")
-        args, fds = bwrap_tool_args(cfg, places, project, env, folder, run, server)
+        args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
         r, w = os.pipe()
         os.write(w, tool_seccomp_program())
         os.close(w)
         os.set_inheritable(r, True)
+        # the helper's checks, written by `ready` right before bwrap starts (an unlinked file:
+        # a pipe holds too little for a large view)
+        with tempfile.TemporaryFile() as fh:
+            chk = os.dup(fh.fileno())
+        os.set_inheritable(chk, True)
         held = [str(fd) for fd in fds]
         bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
         try:
-            cmd = _bwrap_command(bwrap, r, args, project, helper, held, argv)
+            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk)], held, argv)
         except LaunchError:
-            for fd in fds + [r]:
+            for fd in fds + [r, chk]:
                 os.close(fd)
             raise
-        return cmd, child_env, fds + [r], project
+        return cmd, child_env, fds + [r, chk], project, lambda: _write_checks(chk, checks)
     raise LaunchError("no confinement backend on this system")
 
 
@@ -1398,8 +1542,8 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     store = carryover.Store(adapter.name, _real_home(env))
     folder = tool_folder(adapter, env)
     try:
-        cmd, child_env, fds, project = build(rest, os.getcwd(), env, adapter, memory, store,
-                                             server)
+        cmd, child_env, fds, project, ready = build(rest, os.getcwd(), env, adapter, memory,
+                                                    store, server)
     except (LaunchError, confine.ConfineError, OSError, RecursionError) as exc:
         run.say(f"phiward launch: {exc}; nothing runs")
         if store.run:  # only a session this launcher built: closed, it never ran
@@ -1414,6 +1558,17 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     import signal
     git_before = _git_snapshot(project) if sys.platform.startswith("linux") else {}
     proj_before = carryover.project_state(project)
+    try:
+        ready()  # last, so the host has the least time to change what was checked
+    except Exception as exc:  # any failure (a name fsencode cannot encode): nothing runs
+        for fd in fds:
+            os.close(fd)
+        run.say(f"phiward launch: the session's checks cannot be written ({exc}); nothing runs")
+        try:
+            store.end(folder)
+        except (carryover.CarryoverError, OSError):
+            pass
+        return 126
     proc = subprocess.Popen(cmd, env=child_env, pass_fds=fds)
     run.ran = True
     for fd in fds:

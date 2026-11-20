@@ -5,6 +5,12 @@ top. Causes: **rule** (a rule or skill said the wrong thing), **trigger** (the r
 apply, or the wrong one did), **design** (the code's mechanism was the cause), **environment** (a
 fault outside this repository: nothing here changes).
 
+- **Linux launches failed about one CI run in three** (`bwrap: Can't find source path
+  /proc/self/fd/N`, `Can't get type of source ...`) when systemd removed a folder in `/var/tmp`.
+  Cause: design (the view bound each entry by descriptor, taking the descriptor to fix the file;
+  bwrap reads the name back from it and mounts that name, and cannot mount a removed one).
+  Fixed in: `src/phiward/wholetool.py` (the view's entries by name with `--ro-bind-try`, and the
+  helper checks inside the session that each bind is what was checked).
 - **The scan's forms of a cell were fixed round after round**: Unicode dashes, escapes after
   NFKC, separators, digits, each in its own place and each found by a later review. Cause: design
   (each form was added to the code that first missed it, not to the one function that lists the
