@@ -1442,29 +1442,53 @@ columns hold codes. Type the command yourself, in your own terminal:</p>
   (default <code>pseudonym</code>, then <code>pseudonym_2</code>, ...). Every other column whose header looks like an
   identifier (the built-in list of <code>phiward run --table</code> and <code>[sanitize] id_columns</code>) must be
   named in <code>--drop</code> (left out) or <code>--keep</code> (kept as it is, on your word).</li>
-<li>The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
-  <code>--keep-order</code> keeps the order.</li>
-<li>The home folder itself is not a project (your <code>~/.claude</code> is Claude Code's own folder), so
-  an input in a folder of your home is taken; one below a project inside it is not.</li>
-<li>The input is one <code>.tsv</code> or <code>.csv</code> file (UTF-8, every row as wide as the header), reached with
+<li>The kinds: the extensions decide, and the content must fit them. OUT has the same
+  extensions as IN (<code>labs.tsv.gz</code> gives a <code>.tsv.gz</code>).</li>
+<li><code>.tsv</code>, <code>.csv</code>; <code>.txt</code> is read as a TSV and needs 2 or more columns (free text is refused).</li>
+<li>
+<p><code>.maf</code>: a TSV after its <code>#</code> lines. Only the first <code>#version</code> line with a number
+    (<code>#version 2.4</code>) is kept; the other <code>#</code> lines (commands, paths) are dropped, and a <code>#</code> line after the header is refused. Name
+    the barcode columns, and keep the columns that look like IDs but are not:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>samples<span class="w"> </span>--columns<span class="w"> </span>Tumor_Sample_Barcode,Matched_Norm_Sample_Barcode<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--keep<span class="w"> </span>Entrez_Gene_Id,Exon_Number<span class="w"> </span>~/raw/cohort.maf<span class="w"> </span>~/data/patients/cohort-coded.maf
+</code></pre></div>
+<p>The command names each column that looks like an ID and is not named (by number): add it
+to <code>--keep</code>, or to <code>--drop</code> (<code>Tumor_Sample_UUID</code>).</p>
+<p>A coded MAF column keeps its header, so MAF tools still read the copy. Tumor and normal
+get unrelated codes. A free-text column (<code>BAM_File</code>) that names a sample is refused: drop it.
+  - Each of them gzip-compressed (<code>.tsv.gz</code>, <code>.maf.gz</code>). Every member is read, up to 1 GiB
+expanded. The copy is plain gzip with no name and no time, and it must read back as the
+coded table before it is written.
+  - Not covered yet: bgzip (BGZF) files, <code>.vcf</code>, <code>.json</code>, <code>.md</code>. Not covered: Parquet; convert
+it to TSV with your own tools first.
+  - A file that cannot be read or written as its kind gives one fixed refusal.
+- The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
+  <code>--keep-order</code> keeps the order.
+- The home folder itself is not a project (your <code>~/.claude</code> is Claude Code's own folder), so
+  an input in a folder of your home is taken; one below a project inside it is not.
+- The input is one table of those kinds (UTF-8, every row as wide as the header), reached with
   no link, outside every place an agent can write: the working folder and its git work tree,
   any project (a folder with <code>.git</code>, <code>.claude</code> or <code>.phiward.toml</code> above the input), the temp
   folders, the sandbox's <code>allowWrite</code> and <code>additionalDirectories</code>,
-  a <code>write_to</code> folder, the spool and <code>~/.phiward</code>. A column that is not coded may not hold an
-  ID of a coded column or of the key (an ID of 5 or more characters anywhere in a cell; one of
-  5 or more digits as a whole run of digits, so <code>see 9990002</code> refuses and <code>19990001</code> does not;
-  a shorter one with a letter as a whole word; a shorter one of digits only as the whole
-  cell), and no cell may hold an invisible format character. Not found: a short digit ID
+  a <code>write_to</code> folder, the spool and <code>~/.phiward</code>. No field of the output (a cell, a header, the
+  kept <code>#version</code> line, the codes too) may hold an ID of a coded column or of the key, also in
+  another letter case, Unicode form or script of digits, or escaped (<code>%2D</code>, <code>\u002D</code>, also
+  escaped twice): an ID of 5 or more characters anywhere in a field, or across the fields of a
+  line as written (<code>Doe, John</code> as the CSV fields <code>Doe</code> and <code>John</code>); one of 5 or more digits as a whole run of digits, so
+  <code>see 9990002</code> refuses and <code>19990001</code> does not; a shorter one with a letter as a whole word;
+  a shorter one of digits only as the whole field. No field may hold an invisible format
+  character. Not found: a short digit ID
   inside a cell (<code>12</code> in <code>12 mg</code>), an ID glued to other digits (<code>19990001</code>), an ID written
   another way (with spaces or other hyphens, <code>9 990 001</code>), an ID with its leading zeros
   dropped or added (<code>0001</code> and <code>1</code>). Check such columns yourself, or drop them. The output is a new file of the same kind inside a protected root of your user
-  config, outside every <code>write_to</code> folder. It is never replaced. The agent reads it through <code>phiward run</code>, masked; the codes pass the masks.</li>
-<li>The key is <code>~/.phiward/backups/keys/NAME.tsv</code>. No session, launch or gateway command can read
+  config, outside every <code>write_to</code> folder. It is never replaced. The agent reads it through <code>phiward run</code>, masked; the codes pass the masks.
+- The key is <code>~/.phiward/backups/keys/NAME.tsv</code>. No session, launch or gateway command can read
   or write it. It is only ever added to. <code>phiward install claude</code> makes <code>~/.phiward/backups</code>;
   until then the command refuses. Keep a backup of the key where no agent can reach it: a lost
-  key cannot be rebuilt, and new runs give new codes.</li>
-<li>The command refuses without a terminal, and the hook refuses it as an agent command. Its
-  messages name no value, header or path, and a run reports only the row count.</li>
+  key cannot be rebuilt, and new runs give new codes.
+- The command refuses without a terminal, and the hook refuses it as an agent command. Its
+  messages name no value, header or path, and a run reports only the row count.</p>
+</li>
 </ul>
 <p>Never run it on a file the agent made or asked for, wherever it is, or with a key name the
 agent chose: the codes it gives would confirm the IDs the agent guessed. A file inside a
