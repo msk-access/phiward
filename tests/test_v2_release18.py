@@ -95,6 +95,30 @@ def test_a_commondir_in_the_projects_git_folder_is_reported(tree):
     assert found and os.path.realpath(str(repo / ".g")) in found[0], found
 
 
+@needs_git
+@pytest.mark.parametrize("text", [".", "./", "./.\n", ".\n\n"])
+def test_a_commondir_that_names_its_own_git_folder_is_not_reported(tree, text):
+    # Claude Code's env scrub (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Linux) writes `.` there at
+    # start: git then takes its config and hooks from that same folder, as with no commondir.
+    # git strips only trailing newlines and takes the rest literally (" ." is a folder name)
+    repo = tree / "repo"
+    _git("init", "-q", cwd=repo)
+    (repo / ".git" / "commondir").write_text(text)
+    assert claude_settings.git_redirects(str(repo), str(tree / "home")) == []
+
+
+@needs_git
+@pytest.mark.parametrize("text", ["", "\n", "../.g", "../sub/.git", " .", ". ", ".\r\n",
+                                  "./g/..", "\n."])
+def test_a_commondir_that_names_anything_else_is_still_reported(tree, text):
+    repo = tree / "repo"
+    _git("init", "-q", cwd=repo)
+    (repo / ".g").mkdir()
+    (repo / "sub" / ".git").mkdir(parents=True)
+    (repo / ".git" / "commondir").write_text(text)
+    assert len(claude_settings.git_redirects(str(repo), str(tree / "home"))) == 1
+
+
 def test_a_git_file_that_leads_into_the_project_is_reported(tree):
     repo = tree / "repo"
     (repo / ".g2").mkdir()
