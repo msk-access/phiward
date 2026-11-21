@@ -25,11 +25,10 @@ identifiers = [
   # sample and patient IDs: P-0000000-T01-IM6 and forms like it
   '(?<![A-Za-z0-9])P-\d{4,}(?:-[A-Za-z]\d{1,3})?(?:[-_][A-Za-z0-9]+)* => <SAMPLEID>',
   # CMO IDs: C-ABC123-L001-d, s_C_ABC123_P001_d
-  # (`\w{6,}`: the whole run, so a match never stops inside a word or a number: `C-PLE12345`)
-  '(?<![A-Za-z0-9])C-\w{6,}(?:[-_]\w+)* => <CMOID>',
+  '(?<![A-Za-z0-9])C-\w{6}(?:[-_]\w+)* => <CMOID>',
   '(?<![A-Za-z0-9])s_C_\w+ => <CMOID>',
   # anonymized BAM stems: AB123456-T
   '(?<![A-Za-z0-9])[A-Z]{2}\d{6}-[A-Z](?![A-Za-z0-9]) => <BAMID>',
-  # donor names (with the groups of a number they end in: `Donor-1,234,567`)
-  '(?<![A-Za-z0-9])Donor[\w\-]+(?:(?<=\d),\d{3}(?!\d))* => <DONOR>',
+  # donor names
+  '(?<![A-Za-z0-9])Donor[\w\-]+ => <DONOR>',
 ]

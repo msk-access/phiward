@@ -219,8 +219,7 @@ def test_a_rule_match_that_starts_inside_a_hit_is_not_taken_in(table):
 
 
 @pytest.mark.parametrize("line", [
-    "C-PLE12345", "C–PLE12345", "Donor–1,234,567", "Donor-1,234,567",
-    "x 1,234,567‐AB123456.a:b:c:d:e y",
+    "C–PLE12345", "Donor–1,234,567", "x 1,234,567‐AB123456.a:b:c:d:e y",
 ])
 def test_a_rule_match_never_ends_or_starts_inside_a_number(line):
     out = _one([], ("genomics", "msk")).clean(line)

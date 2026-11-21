@@ -16,12 +16,12 @@ A line is masked in this order (a placeholder is written in angle brackets):
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
 4. text mode only: the `positions` rules of the packs.
-Then, when the inventory is on and the line may hold a name in another spelling (`_more`):
-every entry hit with every dash as `-`, other decimal digits as ASCII and a long name with its
-separators changed or left out (inventory.py), and each rule's own matches on the line read so,
-each widened to the whole of a number it starts or ends inside, are masked too, in the text the
-steps above left as it was; their placeholders are not changed. So a line is never masked less
-than by the steps alone.
+Then, when the line holds another dash or digit, or (with the inventory on) may hold a name in
+another spelling (`_more`): every entry hit with every dash as `-`, other decimal digits as
+ASCII and a long name with its separators changed or left out (inventory.py), and each rule's
+own matches on the line read so (also with no inventory), each widened to the whole of a
+number it starts or ends inside, are masked too, in the text the steps above left as it was;
+their placeholders are not changed. So a line is never masked less than by the steps alone.
 Table mode skips step 4 (a table's numeric cells are program-made numbers). This command and the
 git hook use it per line. `phiward run --table` reads columns instead (`Columns`): a cell under an
 identifier header is masked whole, and step 4 is skipped only for a plain number in another
@@ -385,12 +385,11 @@ class Sanitizer:
         each rule's own matches on the line read as `inventory.fold` writes it; each widened to
         the whole of a number it starts or ends inside. Only where `out` still shows the line's
         own characters (`_shown`): what the steps masked stays as they wrote it."""
-        if self.entries is None:
-            return out
         folded = inventory.fold(line)
-        if folded == line and not self.entries.other(folded):
+        if folded == line and (self.entries is None or not self.entries.other(folded)):
             return out
-        found = [(s, e, "<ENTRY>", -1) for s, e in self.entries.spans(line)]
+        found = [] if self.entries is None else [(s, e, "<ENTRY>", -1)
+                                                 for s, e in self.entries.spans(line)]
         rules = self.path_rules + self.id_rules + ([] if table else self.pos_rules)
         for k, (rx, repl) in enumerate(rules):
             found += [(m.start(), m.end(), repl, k) for m in rx.finditer(folded)
@@ -402,14 +401,21 @@ class Sanitizer:
         if not found:
             return out
         places = _shown(line, out, self.holes)
+        # spans and pieces are both in line order and do not overlap among themselves: one walk
         cuts: List[Tuple[int, int, str]] = []
+        j = 0
         for s, e, r in _whole_numbers(line, found):
-            for o, a, n in places:
+            while j < len(places) and places[j][1] + places[j][2] <= s:
+                j += 1
+            k = j
+            while k < len(places) and places[k][1] < e:
+                o, a, n = places[k]
                 lo, hi = max(s, a), min(e, a + n)
                 if lo < hi:
                     cuts.append((o + lo - a, o + hi - a, r))
+                k += 1
         parts, pos = [], 0
-        for s, e, r in sorted(cuts):
+        for s, e, r in cuts:
             parts += [out[pos:s], r]
             pos = e
         parts.append(out[pos:])
@@ -717,11 +723,14 @@ def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]]
     wide = sorted(((run_at(s) or (s, s))[0], (run_at(e) or (e, e))[1], r, k)
                   for s, e, r, k in found)
     groups: List[List[Tuple[int, int, str, int]]] = []
+    end = -1  # the furthest end in the last group
     for f in wide:
-        if groups and f[0] < max(g[1] for g in groups[-1]):
+        if groups and f[0] < end:
             groups[-1].append(f)
+            end = max(end, f[1])
         else:
             groups.append([f])
+            end = f[1]
     out: List[Tuple[int, int, str]] = []
     for g in groups:
         s, e = g[0][0], max(f[1] for f in g)
