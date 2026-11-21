@@ -79,10 +79,13 @@ Then push `main`, `develop` and the tag.
    For a write that worked, the report says whether the file reached the host (recorded right
    after each session). On Linux, in either mode, the sandbox may put an empty, writable view
    over a target it hides: a write that reaches nothing on the host is a note, not a failure,
-   when the same session shows the target hidden (the protected file not found, a sentinel in
-   `~/.phiward` missing, the settings empty); without that, it fails. When `phiward run` fails
-   in the session for another reason, the report notes the first lines of what it said, or
-   "withheld" if they may name protected data.
+   when the same session shows the target hidden: for the data folder, the read of the
+   protected file found no such file, or not its content (an empty view); for `~/.phiward`, a
+   sentinel there is missing; for the settings, they read as empty. Without that, it fails.
+   That evidence shows the target hidden; what stops a real write is the record, right after
+   each session, of whether the probe file is on the host (for the settings, their hash before
+   and after). When `phiward run` fails in the session for another reason, the report notes one
+   word for why (for example `no-broker` or `refused`); no text of its output is kept.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only

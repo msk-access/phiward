@@ -3,8 +3,7 @@
 # inside `phiward launch` (Mode B). The targets are in paths.txt (not in this file or the
 # command), so phiward's hook sees no protected path and the sandbox alone must refuse them.
 # Writes one line per probe to results.txt; prints no content. When `phiward run` fails for
-# another reason, gateway-err keeps the first two lines of its output (the judge prints them only
-# if they name no protected data).
+# another reason, gateway-why records one word from a fixed list; no text of its output is kept.
 # A refusal is recorded with its reason class (judge.py decides which classes pass where):
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
@@ -68,6 +67,7 @@ try write-phiward touch "$(p phiward)/sbx-probe-$mode"
 try write-settings sh -c 'printf x >> "$1"' sh "$(p settings)"
 
 # the gateway from inside the session: it must work and mask the protected path
+code=0
 if out=$(phiward run -- wc -l "$prot" 2>&1); then
   case $out in
     *"$prot"*|*"$(p data)"*) r="BAD unmasked" ;;
@@ -75,6 +75,7 @@ if out=$(phiward run -- wc -l "$prot" 2>&1); then
     *) r="BAD other" ;;
   esac
 else
+  code=$?
   case $out in
     *"$prot"*|*"$(p data)"*) r="BAD unmasked" ;;
     *[Ll]andlock*) r="BAD landlock" ;;
@@ -82,11 +83,22 @@ else
   esac
 fi
 echo "gateway-run $r" >> results.txt
-# why it failed, for the report: the first two lines of its output on one line (the judge prints
-# them only if they name no protected data)
+# why it failed, for the report: one word, by the phrases phiward prints (broker.py, run.py)
 if [ "$r" = "BAD other" ]; then
-  printf '%s\n' "$out" | head -n 2 | awk '{ printf "%s%s", (NR > 1 ? " | " : "gateway-err "), $0 }
-    END { if (NR == 0) printf "gateway-err "; printf "\n" }' | tr '\000-\011\013-\037\177' ' ' | cut -c 1-320 >> results.txt
+  case $out in
+    *"no phiward broker is running"*|*"refused: the broker runs with the spool"*|*"to the broker's spool"*|*"the broker's reply in the spool"*|*"the broker is busy"*) why=no-broker ;;
+    *"the broker stopped before the command finished"*) why=stopped ;;
+    *) case $code in 126|127) why=not-found ;; *) why="" ;; esac ;;
+  esac
+  if [ -z "$why" ]; then
+    case $out in
+      *"not on the broker's PATH"*|*": not found"*|*"ommand not found"*) why=not-found ;;
+      *"refused: "*|*" was refused "*) why=refused ;;
+      *" done: exit="*) why=failed ;;
+      *) why=other ;;
+    esac
+  fi
+  echo "gateway-why $why" >> results.txt
 fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
