@@ -143,26 +143,36 @@ rm -f "gh-$mode.txt"
 # the parents up to the claude process (its program, or the claude path in its command line: a
 # Node install, the stand-in), and record only whether its environ can be read. No environment
 # is written anywhere. Readable is a note; not found is INCONCLUSIVE in a real run, except
-# own-pid-ns: the walk reached PID 1, PID 1 is bwrap, and only shells are between, so the shell
-# is in a PID namespace of its own and claude, which started it, is outside (Claude Code's Linux
-# sandbox runs bwrap with --unshare-pid). PROC is /proc (paths.txt may name another, for tests).
+# own-pid-ns (the judge takes it in Mode A only): the walk reached PID 1, PID 1 is bwrap, at
+# least one process between is and all of them are shells, and no process anywhere in /proc is
+# claude. Then the shell is in a PID namespace of its own and claude, which started that bwrap,
+# is outside (Claude Code's Linux sandbox runs bwrap with --unshare-pid). /proc/$$ must be this
+# process (/proc/self), else foreign-proc. PROC is /proc (paths.txt may name another, for tests).
 proc=$(p proc)
 [ -n "$proc" ] || proc=/proc
-if [ -r "$proc/self/status" ]; then
+want=$(p claude-exe)
+link=$(p claude-link)
+is_claude() {
+  args=$(tr '\0' ' ' 2>/dev/null < "$proc/$1/cmdline")
+  case " $args " in *" $want "*|*" $link "*) return 0 ;; esac
+  [ "$(readlink "$proc/$1/exe" 2>/dev/null)" = "$want" ]
+}
+if [ ! -r "$proc/self/status" ]; then
+  echo "parent-environ n/a" >> results.txt
+elif ! [ "$proc/self/status" -ef "$proc/$$/status" ] 2>/dev/null; then
+  echo "parent-environ foreign-proc" >> results.txt
+else
   r=not-found
   pid=$$
-  want=$(p claude-exe)
-  link=$(p claude-link)
   shells=yes
+  between=0
   top=""
   while :; do
     ppid=$(sed -n 's/^PPid:[[:space:]]*//p' "$proc/$pid/status" 2>/dev/null)
     case $ppid in ''|*[!0-9]*) break ;; esac
     if [ "$ppid" -eq 0 ]; then top=$pid; break; fi
     pid=$ppid
-    args=$(tr '\0' ' ' 2>/dev/null < "$proc/$pid/cmdline")
-    case " $args " in *" $want "*|*" $link "*) found=1 ;; *) found="" ;; esac
-    if [ "$(readlink "$proc/$pid/exe" 2>/dev/null)" = "$want" ] || [ -n "$found" ]; then
+    if is_claude "$pid"; then
       if [ "$(head -c 1 "$proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
         r=readable
       else
@@ -171,12 +181,22 @@ if [ -r "$proc/self/status" ]; then
       break
     fi
     comm=$(cat "$proc/$pid/comm" 2>/dev/null)
-    case $pid:$comm in 1:bwrap) ;; 1:*) shells=no ;; *:sh|*:bash|*:dash|*:zsh) ;; *) shells=no ;; esac
+    case $pid:$comm in
+      1:bwrap) ;;
+      1:*) shells=no ;;
+      *:sh|*:bash|*:dash|*:zsh) between=$((between + 1)) ;;
+      *) shells=no ;;
+    esac
   done
-  if [ "$r" = not-found ] && [ "$top" = 1 ] && [ "$shells" = yes ]; then r=own-pid-ns; fi
+  if [ "$r" = not-found ] && [ "$top" = 1 ] && [ "$shells" = yes ] && [ "$between" -gt 0 ]; then
+    seen=""
+    for d in "$proc"/[0-9]*; do
+      [ -d "$d" ] || continue
+      if is_claude "${d##*/}"; then seen=1; break; fi
+    done
+    [ -n "$seen" ] || r=own-pid-ns
+  fi
   echo "parent-environ $r" >> results.txt
-else
-  echo "parent-environ n/a" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder

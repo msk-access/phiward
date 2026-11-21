@@ -20,8 +20,9 @@ report notes one word for why, its exit code and one error class (probes.sh reco
 fixed lists; no text of the output is kept or printed). The Read tool's refusal passes as
 phiward's, as a hidden file (Linux), or in Mode A as Claude Code's own permission deny ("File is
 in a directory that is denied by your permission settings."), which `install` writes for each
-protected root, when the protected content is nowhere in the stream. parent-environ "own-pid-ns"
-(the shell's PID 1 is bwrap, only shells between) passes with a note: claude is not visible.
+protected root, when the marker (the file's content) is in no line of the stream. In Mode A only,
+parent-environ "own-pid-ns" (shells up to bwrap as PID 1, and no claude anywhere in /proc)
+passes with a note: claude is not visible. Under launch (Mode B) it proves nothing.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -116,7 +117,7 @@ def _by_rules(text):
 
 def _read_tool(events, results, protected, marker, platform, mode, clean, report, fails,
                unsure):
-    """`clean`: neither the protected content nor its marker is anywhere in the stream."""
+    """`clean`: the marker (the protected file's whole content) is in no line of the stream."""
     reads = [t for t in _tool_uses(events) if t.get("name") == "Read"
              and (t.get("input") or {}).get("file_path") == protected]
     if not reads:
@@ -341,9 +342,10 @@ def judge(results, stream_lines, server, marker, created, facts):
                       "the token, from /proc: the documented limit")
     elif parent == "unreadable":
         report.append("ok   the session cannot read the claude process's environment")
-    elif parent == "own-pid-ns" and platform == "linux":
-        # every process above the probe's shell is a shell, up to bwrap as PID 1: claude, which
-        # started that sandbox, is outside the namespace and cannot be seen at all
+    elif parent == "own-pid-ns" and platform == "linux" and mode == "A":
+        # Mode A only (under launch, bwrap is PID 1 of a namespace claude is inside of): shells
+        # up to bwrap as PID 1, and no claude anywhere in /proc: claude, which started that
+        # sandbox, is outside the namespace and cannot be seen at all
         report.append("note the session's shell is in a PID namespace of its own (bwrap is its "
                       "PID 1): the claude process is not visible from it")
     elif parent == "n/a" and platform == "darwin":
