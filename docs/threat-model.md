@@ -63,7 +63,7 @@ careless agent: a deliberate commit with `--no-verify` (or a changed `core.hooks
 
 ## Against whom: read this first
 
-**This release (v0.2.0b1) has two modes** ([modes.md](modes.md)), and they protect against different
+**This release has two modes** ([modes.md](modes.md)), and they protect against different
 agents:
 
 - **Mode B (`phiward launch`)** is meant as a boundary against a hijacked agent, for what is on this
@@ -798,24 +798,24 @@ B). Each gap was found by a review. **Confirmed** means a probe on made-up data 
 verified** or **from reading the code** means it was not shown by a probe.
 
 **The agent tool itself**
-1. **File tools are checked by path, then used by path.** A link swapped in between can give a Read
+1. <a id="gap-1"></a>**File tools are checked by path, then used by path.** A link swapped in between can give a Read
    the content of a protected file (confirmed by a simulation, not through Claude Code). Spellings
    the hook does not resolve also pass it: `/.vol/<dev>/<inode>/...` and `/System/Volumes/Data/...`
    on macOS (confirmed), and accented names in the other Unicode form (confirmed).
-2. **The hook's list of files the agent may not write is incomplete.** It refuses file-tool writes
+2. <a id="gap-2"></a>**The hook's list of files the agent may not write is incomplete.** It refuses file-tool writes
    to phiward's own files (compared as the file system compares names, and by device and inode), and
    to Claude Code's `settings*.json`, `.mcp.json` and `~/.claude.json`. It asks before a file tool
    writes what Claude Code runs as code (hooks, skills, plugins: rule 2 above). It cannot know every
    file another tool runs later. In Mode A, Claude Code's own permission rules (`install` writes
    `Edit` deny rules for phiward's files) and its sandbox cover more.
-3. **MCP servers and the tool's hooks run outside the kernel profile.** A local MCP server runs with
+3. <a id="gap-3"></a>**MCP servers and the tool's hooks run outside the kernel profile.** A local MCP server runs with
    your rights unless it is wrapped in `phiward launch --`. The hook sees only what a tool is asked
    to do, never what it returns. So a tool that returns your terminal text or a file can show
    protected data. A published server (`@modelcontextprotocol/server-filesystem` 2.3.0) wrapped this
    way read ordinary files and could neither read nor list a protected folder (Linux; confirmed).
 
 **The agent's confined shell (Claude Code's sandbox)**
-4. **It can write files the operator or a later unconfined tool runs**: shell startup files,
+4. <a id="gap-4"></a>**It can write files the operator or a later unconfined tool runs**: shell startup files,
    `~/.ssh/config`, `~/.gitconfig`, `.git/config` and `.git/hooks`, LaunchAgents, programs in PATH
    folders, `~/.claude.json` (user-scope MCP servers), `~/.claude/hooks`, plugins, `.mcp.json`.
    Under Claude Code's sandbox, writes are limited to its allowed folders (the project, the
@@ -824,48 +824,48 @@ verified** or **from reading the code** means it was not shown by a probe.
    it, shell startup files, `.gitconfig` and `.git/hooks` and `.git/config` in the working folder,
    and most of `~/.claude`. phiward's HPC probe confirmed this for the sandbox engine with explicit
    entries, not for Claude Code's own list.
-5. **Keystroke injection**: from a confined shell, a program can queue keystrokes into the terminal
+5. <a id="gap-5"></a>**Keystroke injection**: from a confined shell, a program can queue keystrokes into the terminal
    that started it (TIOCSTI; confirmed under a profile like phiward's old one, not tested under
    Claude Code's own sandbox).
-6. **Unconfined programs it can reach**, unless the sandbox blocks them: unix sockets (tmux, ssh
+6. <a id="gap-6"></a>**Unconfined programs it can reach**, unless the sandbox blocks them: unix sockets (tmux, ssh
    connection sharing, ssh-agent, systemd, job schedulers), IDE extensions, `open` / LaunchServices,
    Spotlight (`mdfind`), Claude in Chrome (from the reviews; a unix-socket server was confirmed, the
    others **not verified**).
-7. **Pattern forms the kernel does not enforce**: a `?` or `[...]` that must match a non-ASCII
+7. <a id="gap-7"></a>**Pattern forms the kernel does not enforce**: a `?` or `[...]` that must match a non-ASCII
    character, and some class forms (`[!-x]`, ranges across `/`) (confirmed). Use roots, or patterns
    with `*` and ASCII names only.
-8. **A root spelled `/System/Volumes/Data/...`** in the config is not denied by Seatbelt on its
+8. <a id="gap-8"></a>**A root spelled `/System/Volumes/Data/...`** in the config is not denied by Seatbelt on its
    normal path (confirmed). Write roots in their normal form.
-9. **Other names of a protected file**: an existing hard link outside a root is readable (confirmed
+9. <a id="gap-9"></a>**Other names of a protected file**: an existing hard link outside a root is readable (confirmed
    on macOS). On macOS, other mounts of the same data are not detected: list each mount path as a
    root. On Linux, other mounts of the same file system are not covered by the hook alone, and a
    guard file that does not exist yet (for example a user site folder) is not protected (from
    reading the code).
 
 **The trusted side (broker, hook, doctor, install, git hooks)**
-10. **The base Python** that phiward runs on is not a guard folder (with uv, Homebrew, pyenv or
+10. <a id="gap-10"></a>**The base Python** that phiward runs on is not a guard folder (with uv, Homebrew, pyenv or
     conda it is user-writable) (confirmed).
-11. **`doctor`'s self-test runs `true` found on PATH** without a restriction (confirmed).
-12. **`install --project --write`** writes its backup and temporary file through links that may be
+11. <a id="gap-11"></a>**`doctor`'s self-test runs `true` found on PATH** without a restriction (confirmed).
+12. <a id="gap-12"></a>**`install --project --write`** writes its backup and temporary file through links that may be
     planted in the project (confirmed).
-13. **The git hook's fallback** (`python3 -m phiward`) can import a planted package from the
+13. <a id="gap-13"></a>**The git hook's fallback** (`python3 -m phiward`) can import a planted package from the
     repository (confirmed).
-14. **Programs and their settings**: Linux finds `bwrap` on PATH (confirmed); a remote copy's
+14. <a id="gap-14"></a>**Programs and their settings**: Linux finds `bwrap` on PATH (confirmed); a remote copy's
     `rsync` reads `~/.popt` on Linux (confirmed in Docker); an operator `ssh_config` may `Include`
     or `Match exec` files the agent can write, and ssh reads `~/.ssh/known_hosts` and `id_*` (from
     reading the code).
-15. **The start environment** of the broker, `doctor` and `setup` comes from the operator's shell
+15. <a id="gap-15"></a>**The start environment** of the broker, `doctor` and `setup` comes from the operator's shell
     startup files (see gap 4) (from reading the code).
 
 **On a cluster**
-16. **Job submission** (`sbatch`, `srun`) from the agent's shell runs jobs outside any profile, on
+16. <a id="gap-16"></a>**Job submission** (`sbatch`, `srun`) from the agent's shell runs jobs outside any profile, on
     nodes that see the same data (from reading the design; not probed).
-16b. **Protection follows the path** (confirmed on Linux, by design on macOS): a protected folder
+16b. <a id="gap-16b"></a>**Protection follows the path** (confirmed on Linux, by design on macOS): a protected folder
      that the operator moves outside its protected path, into a folder a session can see, is
      readable there, during a session or after it.
 
 **Smaller path and trusted-side gaps**
-17. Each smaller, all real:
+17. <a id="gap-17"></a>Each smaller, all real:
     - grant checks compare paths as raw text, so a case twin of `~/.ssh` or of a root's parent
       passes the `write_to` check (confirmed);
     - a root written in NFD Unicode form is not masked by the sanitizer (confirmed);
@@ -1090,14 +1090,14 @@ run later" or to the macOS process model:
 
 | | Limit | What reduces it |
 |---|---|---|
-| L1 | macOS: other folders that a later plain run reads as settings (for example a nested `.claude`) can be made in the project. `launch` makes `.claude` at start and refuses to make `.vscode`, so these two cannot become links. | The rule above. |
-| L2 | Linux: a missing `.vscode` folder can be made, with files in it. `launch` makes placeholders only in a `.vscode` that exists. | The rule above. |
-| L3 | `.claude/settings.local.json` is read-only, but a plain run outside `launch` still reads whatever was in it before the session. | Read it once before the first `launch`. |
-| L4 | macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also **read** `/private/tmp` (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's `RtmpXXXX`, Python temp files, other Claude Code sessions' scratch). | Do not run tools that load code from TMPDIR; keep protected data out of temp folders. |
-| L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |
-| L6 | Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions: no transcripts, no login, no caches, no history. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain `claude` uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of `.claude.json`, go to quarantine; only what you accept (`phiward carryover accept`) or add yourself (`phiward carryover add PATH`) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild ([launch.md](launch.md)). Login: a fresh folder means a new login each time, unless you set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) or `ANTHROPIC_API_KEY`, which the agent can read. Project memory (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/` in the project) is reported, not put back. | Read the quarantine and the project report before you accept or run anything. |
-| L7 | Names that a gateway command makes while it runs are not in that run's inventory, so they are not masked in its own output. The next call sees them. | Print aggregates, not names (rule 3 of the agent rules in a project's `AGENTS.md`). |
-| L9 | `claude --bare` and an Agent SDK app with `settingSources: []` load none of phiward's wiring (hook, sandbox block, deny rules), and nothing says so. | Do not use `--bare` on protected work; load the user settings in an SDK app or pass `phiward install claude --json` as its settings, or run it under `phiward launch` ([unattended.md](unattended.md)). |
-| L10 | Linux: a folder of thousands of entries above a protected folder makes `launch` show that folder whole, with its protected entries masked (the view must fit in bwrap's 9000 arguments). There, a protected entry made or replaced after the start is not hidden. `launch` says how many folders it shows whole, and refuses when the folder that holds a protected root would have to be shown whole (it would list the root's name). | Protect large data folders as roots, not one entry each among many; keep new protected data in folders that exist before the session. |
-| L8 | Two sessions in one project share its write places: one can plant files that the other runs. Not confirmed in a test. | Several sessions may run side by side; prefer one per project when one of them reads untrusted input. |
+| <a id="l1"></a>L1 | macOS: other folders that a later plain run reads as settings (for example a nested `.claude`) can be made in the project. `launch` makes `.claude` at start and refuses to make `.vscode`, so these two cannot become links. | The rule above. |
+| <a id="l2"></a>L2 | Linux: a missing `.vscode` folder can be made, with files in it. `launch` makes placeholders only in a `.vscode` that exists. | The rule above. |
+| <a id="l3"></a>L3 | `.claude/settings.local.json` is read-only, but a plain run outside `launch` still reads whatever was in it before the session. | Read it once before the first `launch`. |
+| <a id="l4"></a>L4 | macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also **read** `/private/tmp` (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's `RtmpXXXX`, Python temp files, other Claude Code sessions' scratch). | Do not run tools that load code from TMPDIR; keep protected data out of temp folders. |
+| <a id="l5"></a>L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |
+| <a id="l6"></a>L6 | Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions: no transcripts, no login, no caches, no history. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain `claude` uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of `.claude.json`, go to quarantine; only what you accept (`phiward carryover accept`) or add yourself (`phiward carryover add PATH`) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild ([launch.md](launch.md)). Login: a fresh folder means a new login each time, unless you set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) or `ANTHROPIC_API_KEY`, which the agent can read. Project memory (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/` in the project) is reported, not put back. | Read the quarantine and the project report before you accept or run anything. |
+| <a id="l7"></a>L7 | Names that a gateway command makes while it runs are not in that run's inventory, so they are not masked in its own output. The next call sees them. | Print aggregates, not names (rule 3 of the agent rules in a project's `AGENTS.md`). |
+| <a id="l9"></a>L9 | `claude --bare` and an Agent SDK app with `settingSources: []` load none of phiward's wiring (hook, sandbox block, deny rules), and nothing says so. | Do not use `--bare` on protected work; load the user settings in an SDK app or pass `phiward install claude --json` as its settings, or run it under `phiward launch` ([unattended.md](unattended.md)). |
+| <a id="l10"></a>L10 | Linux: a folder of thousands of entries above a protected folder makes `launch` show that folder whole, with its protected entries masked (the view must fit in bwrap's 9000 arguments). There, a protected entry made or replaced after the start is not hidden. `launch` says how many folders it shows whole, and refuses when the folder that holds a protected root would have to be shown whole (it would list the root's name). | Protect large data folders as roots, not one entry each among many; keep new protected data in folders that exist before the session. |
+| <a id="l8"></a>L8 | Two sessions in one project share its write places: one can plant files that the other runs. Not confirmed in a test. | Several sessions may run side by side; prefer one per project when one of them reads untrusted input. |
 
