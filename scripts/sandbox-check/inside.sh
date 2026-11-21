@@ -42,10 +42,11 @@ for m in A B; do
     if grep -qxF -- "$ln" "/tmp/mode-$m.txt"; then echo "== ok    Mode $m: $ln"
     else echo "== MISSING Mode $m: $ln"; status=1; fi
   done
-  # the probe found the stand-in (as it finds claude) and could, or could not, read its environ
-  if grep -qE "^(note the session can read the claude process's environment|ok   the session cannot read the claude process's environment)" "/tmp/mode-$m.txt"; then
-    echo "== ok    Mode $m: the probe found the claude process"
-  else echo "== MISSING Mode $m: the probe found the claude process"; status=1; fi
+  # the environ scan saw the stand-in's made-up token by its variable's name (the stand-in has
+  # no sandbox of its own, so its environ is readable)
+  if grep -qE "^note a process environment readable from the session holds a credential variable's name: [1-9][0-9]* processes, [0-9]+ of them the session's own ancestors \(PID [0-9]" "/tmp/mode-$m.txt"; then
+    echo "== ok    Mode $m: the environ scan found the stand-in's token name"
+  else echo "== MISSING Mode $m: the environ scan found the stand-in's token name"; status=1; fi
 done
 # Mode B: the stub under the real `phiward launch`: the kernel probes are refused, and the wrapped
 # MCP server starts inside the session (its own launch runs it directly), so Mode B passes

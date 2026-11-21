@@ -7,10 +7,12 @@
 # (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
-# The operator runs it, in a terminal: it asks only for a token (set CLAUDE_CODE_OAUTH_TOKEN or
-# ANTHROPIC_API_KEY, or paste the one `claude setup-token` prints). A token from the environment
-# is read once and both variables are unset at the start, so no other program of the check gets
-# it; the token reaches only the claude process (through launch.py's stdin), never a file or a
+# The operator runs it, in a terminal: it asks only for a token. Paste the one `claude
+# setup-token` prints when it asks (on stdin, not shown); do not export it. A token from the
+# environment (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY) is still taken, read once and both
+# variables unset, but the start environment of your shell and of this script keeps it, which
+# the session's environ scan can see: such a run may FAIL for those shells, and the check warns.
+# The token reaches only the claude process (through launch.py's stdin), never a file or a
 # command line, and every kept file is redacted. A run without a terminal is refused, and so is
 # a token from the environment inside a Claude Code session (CLAUDECODE).
 # Nothing of your own setup is read or changed. The home folder and the judge's folder (next to
@@ -60,6 +62,9 @@ if [ -z "$stub" ]; then
   if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then token=$CLAUDE_CODE_OAUTH_TOKEN
   elif [ -n "$ANTHROPIC_API_KEY" ]; then token="ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
   fi
+fi
+if [ -n "$token" ]; then
+  echo "note: the token came from the environment. /proc keeps the start environment of your shell and of this script, so the session's environ scan may FAIL this run for them; paste it when asked instead (do not export it)."
 fi
 unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
 modes=${MODES:-A B}
@@ -210,7 +215,7 @@ printf 'y\ny\n' | tty_run phiward pin > "$H/pin.out" 2>&1 || fail "pin" "$H/pin.
 phiward git-hook install > "$H/githook.out" 2>&1 || fail "git-hook install" "$H/githook.out"
 phiward broker > "$H/broker.log" 2>&1 &
 broker=$!
-cp "$here/srv.py" "$here/probes.sh" "$H/proj/"
+cp "$here/srv.py" "$here/probes.sh" "$here/token-names.txt" "$H/proj/"
 echo "$H/data/FAKE-PT-0001/a.txt" > "$H/proj/srv-target.txt"
 # the MCP server: /usr/bin/python3 on macOS (as before); python:slim has none, so the copied one
 srvpy=/usr/bin/python3
@@ -314,8 +319,6 @@ for m in $modes; do
     echo "phiward $H/.phiward"
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
-    echo "claude-exe $claude"
-    echo "claude-link $H/bin/claude"
     echo "nonce $nonce"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"

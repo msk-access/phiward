@@ -85,7 +85,21 @@ Then push `main`, `develop` and the tag.
    That evidence shows the target hidden; what stops a real write is the record, right after
    each session, of whether the probe file is on the host (for the settings, their hash before
    and after). When `phiward run` fails in the session for another reason, the report notes one
-   word for why (for example `no-broker` or `refused`); no text of its output is kept.
+   word for why (for example `no-broker` or `refused`), its exit code and an error class (for
+   example `permission-denied` or `traceback`); no text of its output is kept. In Mode A, Claude
+   Code's own refusal of the Read ("denied by your permission settings": the deny rules
+   `install` writes) counts as a refusal. The session also reads the environment of every
+   process it can see in `/proc`, and records only counts and PIDs: a credential variable's
+   name in any of them fails the mode, and the report says how many of those processes are the
+   session's own ancestors. The names are the list in `scripts/sandbox-check/token-names.txt`,
+   taken from Claude Code's docs (code.claude.com/docs/en/env-vars and the authentication
+   page). `CLAUDE_CODE_MESSAGING_TOKEN` is not on it: Claude Code gives it to Bash commands on
+   purpose, so the report only notes how many processes hold it. No value passes through the
+   probe's shell or reaches a file, also under `sh -x`: each environment is read once. A list with a CRLF line or a line that is not a name is
+   refused whole (`scan-error`). A scan that read no non-empty environment, whose read failed
+   (`scan-error`), or whose `/proc` is not the session's own (`foreign-proc`) is INCONCLUSIVE.
+   So is a probe line that appears twice in the results, and a session that made anything
+   other than exactly one Bash call, `sh ./probes.sh`.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only
@@ -94,8 +108,10 @@ Then push `main`, `develop` and the tag.
    container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
    hook and a home folder on your machine. (That refusal looks for the container's marks,
    `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
-   A token you set in the environment is read once and unset at the start: only the claude
-   process gets it. The check's home folder and its judge's folder are removed at the end, also
+   Paste the token when the check asks; do not export it. A token exported in your shell is
+   still taken (read once, and unset at the start, so only the claude process gets it), but
+   `/proc` keeps the start environment of your shell and of the check, which the session's scan
+   can see: such a run may FAIL for them, and the check warns. The check's home folder and its judge's folder are removed at the end, also
    after Ctrl-C, SIGTERM or a closed terminal; if one cannot be removed, the check names it and
    exits non-zero. A `kill -9` of `check.sh` or `launch.py` skips that: the session may keep
    running, and the folders stay (remove them yourself). Only the report and, per mode, the
