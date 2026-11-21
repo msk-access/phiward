@@ -89,8 +89,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   cap; before, every run in them was refused and their bounds held trivially.
 - Linux: before a `phiward run` or `phiward copy` command starts, the gateway confirms that each
   folder and file it binds (the write places, a `.claude` folder in one, the ssh config, the
-  shared connection's socket) is the one checked before the start, mounted at its name. Anything
-  it cannot confirm, an error included, stops the request (exit 126; nothing runs).
+  shared connection's socket) is, inside, the same file it found at that name before the start
+  (a link not followed), mounted at that name. Anything it cannot confirm, an error included,
+  stops the request (nothing runs). A hidden path at or above a write place now stops the
+  request too; before, the command ran without writes there.
 
 ### Changed
 

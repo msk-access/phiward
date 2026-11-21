@@ -216,34 +216,34 @@ def open_place(path: str) -> int:
 
 
 def _source_stat(path: str) -> os.stat_result:
-    """The stat of `path` (not a link), its folder reached part by part without following a
-    link: the identity a read-only bind must show inside the view."""
-    import stat as st_
+    """The stat of what is at `path` itself, a link not followed, its folder reached part by
+    part without following a link: the identity a read-only bind must show inside the view. A
+    link here does not match what bwrap mounts through it, so the helper stops the start."""
     try:
         fd = open_place(os.path.dirname(path) or "/")
     except ConfineError:
         raise ConfineError("a file the request binds is reached through a link; nothing runs")
     try:
-        st = os.stat(os.path.basename(path), dir_fd=fd, follow_symlinks=False)
+        return os.stat(os.path.basename(path), dir_fd=fd, follow_symlinks=False)
     except OSError:
         raise ConfineError("a file the request binds is no longer there; nothing runs")
     finally:
         os.close(fd)
-    if st_.S_ISLNK(st.st_mode):
-        raise ConfineError("a file the request binds became a link; nothing runs")
-    return st
 
 
 def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bool,
                        fds: Optional[Dict[str, int]] = None,
                        deny_read: Sequence[str] = (), socket: str = "",
                        allow_read: Sequence[str] = (),
-                       checks: Optional[List[Tuple[str, str, str]]] = None) -> List[str]:
+                       checks: Optional[List[Tuple[str, str, str, str]]] = None,
+                       places: Optional[Sequence[str]] = None) -> List[str]:
     """`fds` maps each place to a descriptor from open_place; each place is bound from its
-    descriptor (/proc/self/fd/N), never by its path. `checks`, when given, gets one
-    (destination, kind, source) for each bind with a host source: `w` a place, `r` read only.
-    The helper checks each one inside before the command runs."""
-    found: List[Tuple[str, str, str]] = [] if checks is None else checks
+    descriptor (/proc/self/fd/N), never by its path. `places`: the places the caller listed
+    (and opened), so they are listed once; else gateway_places. `checks`, when given, gets one
+    (destination, kind, source, place) for each bind with a host source: kind `w` a place, `r`
+    read only; `place` is the place a `.claude` folder is in. The helper checks each one inside
+    before the command runs."""
+    found: List[Tuple[str, str, str, str]] = [] if checks is None else checks
     args = ["--ro-bind", "/", "/"] + _BWRAP_BASE + [
         "--unshare-ipc", "--new-session"]
     if socket:
@@ -259,18 +259,19 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
     # read-only, like all of /; the command's TMPDIR is its private scratch folder.
     # shallowest first: a bind is recursive, so a folder bound after a place inside it would
     # cover that place
-    places = sorted(gateway_places(writable, patterns), key=lambda p: p.count("/"))
+    places = sorted(gateway_places(writable, patterns) if places is None else places,
+                    key=lambda p: p.count("/"))
     for w in places:
         src = f"/proc/self/fd/{fds[w]}" if fds and w in fds else w
         args += ["--bind", src, w]
-        found.append((w, "w", w))
+        found.append((w, "w", w, ""))
     # Claude Code settings inside a write place stay read-only; a new one can
     # still be made in a write place that has none (docs/threat-model.md)
     for w in places:
         c = os.path.join(w, ".claude")
         if os.path.isdir(c) and not os.path.islink(c):
             args += ["--ro-bind", c, c]
-            found.append((c, "r", c))
+            found.append((c, "r", c, w))
     # what the command may not read (credentials, traces): masked last, over every bind, each at
     # its real place (bubblewrap cannot make a mount point through a link: /var/run -> /run)
     masked: List[str] = []
@@ -285,12 +286,12 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
             args += ["--ro-bind", "/dev/null", p]
     hidden = [os.path.realpath(h) for h in deny_read]
     for p in allow_read:
-        # the file itself, also when the name is a link (dotfile managers): bound from its
-        # resolved target, unless that target is hidden
+        # the resolved file, unless it is hidden, bound at the name. A name that is itself a
+        # link cannot be bound: bwrap refuses a link as the destination (the start stops)
         real = os.path.realpath(p)
         if os.path.isfile(real) and not any(real == h or real.startswith(h + "/") for h in hidden):
             args += ["--ro-bind", real, _mount_point(p)]
-            found.append((_mount_point(p), "r", real))
+            found.append((_mount_point(p), "r", real, ""))
     if socket:
         # every other socket that has a path (an SSH agent's, X11's, another shared
         # connection's) is masked: a read-only bind does not stop a connect;
@@ -300,7 +301,7 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
                     s == d or s.startswith(d + "/") for d in ("/tmp", "/var/tmp")):
                 args += ["--ro-bind", "/dev/null", s]
         args += ["--bind", socket, LINUX_SOCKET, "--unshare-net"]
-        found.append((LINUX_SOCKET, "r", socket))
+        found.append((LINUX_SOCKET, "r", socket, ""))
     elif not net:
         args.append("--unshare-net")
     return args
@@ -523,28 +524,31 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
         os.write(w, prog)  # small: it fits in the pipe buffer
         os.close(w)
         fds: Dict[str, int] = {}
+        checks: List[Tuple[str, str, str, str]] = []
         try:
-            for p in gateway_places(writable, patterns):
+            places = gateway_places(writable, patterns)  # once: what is opened is what is bound
+            for p in places:
                 fds[p] = open_place(p)
-        except ConfineError:
-            for fd in list(fds.values()) + [r]:
-                os.close(fd)
-            raise
-        checks: List[Tuple[str, str, str]] = []
-        try:
             bw = bwrap_gateway_args(writable, patterns, net, fds, deny_read, socket, allow_read,
-                                    checks)
+                                    checks, places)
             entries = []
-            for dest, kind, src in checks:
+            for dest, kind, src, place in checks:
+                # each identity from the name bwrap binds, a link not followed
                 if kind == "w":
                     st = os.fstat(fds[src])
+                elif place:
+                    st = os.stat(os.path.basename(src), dir_fd=fds[place],
+                                 follow_symlinks=False)
                 else:
-                    st = _source_stat(os.path.realpath(src))
+                    st = _source_stat(src)
                 entries.append(f"{os.fsencode(dest).hex()}:{st.st_dev}:{st.st_ino}:{kind}")
-        except BaseException:
+        except BaseException as exc:
             for fd in list(fds.values()) + [r]:
                 os.close(fd)
-            raise
+            if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
+                raise
+            raise ConfineError("the request's binds could not be recorded; nothing runs") \
+                from None
         for fd in fds.values():
             os.set_inheritable(fd, True)
         entries += [f"{os.fsencode(d).hex()}:-:-:d" for d in _GATEWAY_DEVICES]
