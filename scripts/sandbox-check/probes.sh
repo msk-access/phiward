@@ -2,7 +2,8 @@
 # The probes, run by the real Claude Code as one Bash command inside its sandbox (Mode A), or
 # inside `phiward launch` (Mode B). The targets are in paths.txt (not in this file or the
 # command), so phiward's hook sees no protected path and the sandbox alone must refuse them.
-# Writes one line per probe to results.txt; prints no content.
+# Writes one line per probe to results.txt; prints no content. When `phiward run` fails for
+# another reason, gateway-why records one word from a fixed list; no text of its output is kept.
 # A refusal is recorded with its reason class (judge.py decides which classes pass where):
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
@@ -41,11 +42,32 @@ if err=$(cat "$prot" 2>&1 >/dev/null); then
 else
   echo "read-protected DENIED $(class "$err")"
 fi >> results.txt
+# is each write's target hidden from the session (an empty view, /dev/null)? Looked at before the
+# writes, which could fill an empty view: ~/.phiward without the sentinel check.sh put there,
+# the settings empty or not there (the protected file's read above covers the data folder)
+if out=$(ls -A "$(p phiward)" 2>&1); then
+  case "
+$out
+" in *"
+sbx-sentinel
+"*) r=present ;; *) r=hidden ;; esac
+else
+  case $(class "$out") in no-such) r=hidden ;; *) r=unreadable ;; esac
+fi
+echo "hidden-phiward $r" >> results.txt
+s=$(p settings)
+if err=$(cat "$s" 2>&1 >/dev/null); then
+  if [ "$(cat "$s" 2>/dev/null | wc -c)" -eq 0 ]; then r=hidden; else r=present; fi
+else
+  case $(class "$err") in no-such) r=hidden ;; *) r=unreadable ;; esac
+fi
+echo "hidden-settings $r" >> results.txt
 try write-data touch "$(p data)/sbx-probe-$mode"
 try write-phiward touch "$(p phiward)/sbx-probe-$mode"
 try write-settings sh -c 'printf x >> "$1"' sh "$(p settings)"
 
 # the gateway from inside the session: it must work and mask the protected path
+code=0
 if out=$(phiward run -- wc -l "$prot" 2>&1); then
   case $out in
     *"$prot"*|*"$(p data)"*) r="BAD unmasked" ;;
@@ -53,6 +75,7 @@ if out=$(phiward run -- wc -l "$prot" 2>&1); then
     *) r="BAD other" ;;
   esac
 else
+  code=$?
   case $out in
     *"$prot"*|*"$(p data)"*) r="BAD unmasked" ;;
     *[Ll]andlock*) r="BAD landlock" ;;
@@ -60,6 +83,23 @@ else
   esac
 fi
 echo "gateway-run $r" >> results.txt
+# why it failed, for the report: one word, by the phrases phiward prints (broker.py, run.py)
+if [ "$r" = "BAD other" ]; then
+  case $out in
+    *"no phiward broker is running"*|*"refused: the broker runs with the spool"*|*"to the broker's spool"*|*"the broker's reply in the spool"*|*"the broker is busy"*) why=no-broker ;;
+    *"the broker stopped before the command finished"*) why=stopped ;;
+    *) case $code in 126|127) why=not-found ;; *) why="" ;; esac ;;
+  esac
+  if [ -z "$why" ]; then
+    case $out in
+      *"not on the broker's PATH"*|*": not found"*|*"ommand not found"*) why=not-found ;;
+      *"refused: "*|*" was refused "*) why=refused ;;
+      *" done: exit="*) why=failed ;;
+      *) why=other ;;
+    esac
+  fi
+  echo "gateway-why $why" >> results.txt
+fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
 # pre-commit hook without being shown

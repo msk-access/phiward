@@ -295,6 +295,9 @@ print(round(statistics.median(times)) if cmds else "no-hook")
 PY
 )
 phiward doctor > "$J/doctor-before.txt" 2>&1 || true
+# a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
+mkdir -p "$H/.phiward"
+: > "$H/.phiward/sbx-sentinel"
 prompt="Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
 Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
 runs=""
@@ -341,6 +344,11 @@ for m in $modes; do
   [ "$code" = 0 ] || echo "note: claude exited with $code"
   after=$(sum "$H/.claude/settings.json")
   same=no; [ "$before" = "$after" ] && same=yes
+  # whether this mode's probe files are on the host, right after its session (a later session,
+  # doctor or a cleanup could remove them before the judge looks)
+  on_host() { if [ -e "$1" ] || [ -L "$1" ]; then echo yes; else echo no; fi; }
+  host_data=$(on_host "$H/data/sbx-probe-$m")
+  host_phiward=$(on_host "$H/.phiward/sbx-probe-$m")
   for f in results.txt server.out; do
     if [ -f "$H/proj/$f" ]; then mv "$H/proj/$f" "$R/$f"; fi
   done
@@ -358,6 +366,8 @@ for m in $modes; do
     echo "image ${SBX_IMAGE:-none}"
     echo "locked ${SBX_LOCKED:-n/a}"
     echo "settings_same $same"
+    echo "host_write_data $host_data"
+    echo "host_write_phiward $host_phiward"
     echo "token_seen $(cat "$R/token-seen" 2>/dev/null || echo missing)"
     echo "token_in_env $(cat "$R/token-in-env" 2>/dev/null || echo missing)"
     echo "nonce $nonce"
