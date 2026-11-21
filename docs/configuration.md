@@ -39,7 +39,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[protected_paths] patterns`](#protected_paths) | list of globs | none | adds | Protected places that are spread out. Prefer roots. |
 | [`[protected_paths] unresolved`](#protected_paths) | one of `"allow"`, `"ask"`, `"deny"` | `"deny"` | only stricter | What the hook's text check does with a variable it cannot see. |
 | [`[protected_paths] snapshot_names`](#protected_paths) | list of folder names | none (the usual names are always found) | adds | More names of snapshot folders, which are protected too. |
-| [`[sanitize] packs`](#sanitize) | list | `["genomics"]` | built-in names only; pack files are ignored | The pattern packs that mask output. |
+| [`[sanitize] packs`](#sanitize) | list | `["genomics"]` | adds built-in names to the user's list or to the default, never replacing it; pack files are ignored | The pattern packs that mask output. |
 | [`[sanitize] names_from`](#sanitize) | list of files | none | ignored | Index files whose path parts are masked as `<NAME>`. Keep them inside a protected root. |
 | [`[sanitize] patterns`](#sanitize) | list | none | ignored | Extra rules, each `REGEX => <PLACEHOLDER>`. |
 | [`[sanitize] subjects`](#sanitize) | text: only `"none"` | not set | ignored | Your record that the data holds no subject or sample IDs beyond the names under the roots. |
@@ -87,7 +87,7 @@ net = false                                   # leave write_to empty unless you 
 
 [network]
 limit = true
-allowed_domains = ["github.com"]
+allowed_domains = []   # each host you add is a way out
 ```
 
 ### `[protected_paths]`
