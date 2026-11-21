@@ -137,7 +137,15 @@ def test_launch_runs_headless_and_passes_the_arguments_through(tree):
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stderr
-    assert "ARGS ['-p', 'summarize the counts'] TTY False" in r.stdout
+    from helpers import landlock_abi
+    if sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 launch adds, last, the --settings that keep Claude Code's
+        # sandbox on (wholetool.INNER_SETTINGS); the operator's arguments come first, unchanged
+        from phiward import wholetool
+        want = ["-p", "summarize the counts", "--settings", json.dumps(wholetool.INNER_SETTINGS)]
+        assert f"ARGS {want!r} TTY False" in r.stdout, r.stdout
+    else:
+        assert "ARGS ['-p', 'summarize the counts'] TTY False" in r.stdout
 
 
 @needs_confine
