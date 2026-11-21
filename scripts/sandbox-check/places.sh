@@ -4,10 +4,10 @@
 
 # the names Claude Code or phiward pick up from a folder above the session's: Claude Code reads
 # CLAUDE.md and CLAUDE.local.md in every parent, .claude/rules in every parent, .claude/skills and
-# the nearest .claude's settings; phiward reads the settings (and .mcp.json) of every .claude or
+# the nearest .claude's settings (AGENTS.md too, should a version read it in place of CLAUDE.md); phiward reads the settings (and .mcp.json) of every .claude or
 # .git above a call, and its repository config (.phiward.toml, the old .agent-guards.toml) above
 # the folder it runs in
-SBX_PICKED_UP="CLAUDE.md CLAUDE.local.md .claude .git .mcp.json .phiward.toml .agent-guards.toml"
+SBX_PICKED_UP="CLAUDE.md CLAUDE.local.md AGENTS.md .claude .git .mcp.json .phiward.toml .agent-guards.toml"
 
 # _at_or_below A B: A is B or inside it, by identity (a folder has more than one spelling: macOS
 # folds letter case, /System/Volumes/Data)
@@ -43,27 +43,41 @@ sbx_base_check() {
 }
 
 # sbx_tools_place TOOLS BASE: TOOLS is an absolute, existing folder, outside BASE (where the
-# check's home and judge's folder are made) and not above it; prints its real path
+# check's home and judge's folder are made) and not above it, that holds socat and nothing else
+# (any other name could shadow a program the sandbox or the check runs: bwrap, git, sh); prints
+# its real path
 sbx_tools_place() {
   case $1 in /*) ;; *) echo "sandbox-check: SBX_TOOLS must be an absolute path" >&2; return 2 ;; esac
   _t=$(cd "$1" 2>/dev/null && pwd -P) || { echo "sandbox-check: SBX_TOOLS is not an existing folder" >&2; return 2; }
   if _at_or_below "$_t" "$2"; then echo "sandbox-check: SBX_TOOLS may not be in SBX_BASE (the check's home is made there)" >&2; return 2; fi
   if _at_or_below "$2" "$_t"; then echo "sandbox-check: SBX_TOOLS may not hold SBX_BASE" >&2; return 2; fi
+  for _e in "$_t"/* "$_t"/.[!.]* "$_t"/..?*; do
+    [ -e "$_e" ] || [ -L "$_e" ] || continue
+    [ "${_e##*/}" = socat ] || { echo "sandbox-check: SBX_TOOLS may hold only socat, not ${_e##*/}" >&2; return 2; }
+  done
+  [ -f "$_t/socat" ] || { echo "sandbox-check: SBX_TOOLS holds no socat" >&2; return 2; }
   printf '%s\n' "$_t"
 }
 
-# sbx_tools_safe PY TOOLS: the installed phiward's own rule for a PATH folder
-# (service.path_entries: selfcheck.safe_path, not a project's, not a temp folder or one the
-# session may write), run by its Python PY with the check's HOME
+# sbx_tools_safe PY SRC HOME TOOLS: phiward's own rule for a PATH folder (service.path_entries:
+# selfcheck.safe_path, not a project's, not a temp folder or one the session may write), and
+# safe_path for its socat (links followed): the source tree's phiward (SRC, its src folder), run
+# before the build by an isolated Python PY with the check's HOME (nothing of yours is read)
 sbx_tools_safe() {
-  "$1" -c '
-import sys
+  env HOME="$3" TMPDIR="$3/tmp" "$1" -I -c '
+import os, sys
+sys.path.insert(0, sys.argv[1])
 from phiward import selfcheck, service
-t = sys.argv[1]
+t = sys.argv[2]
+why = ""
 if service.path_entries(t, service.path_inputs()) != [t]:
     why = selfcheck.safe_path(t) or "a temp folder, a project, or a folder the session may write"
+else:
+    bad = selfcheck.safe_path(os.path.join(t, "socat"))
+    why = "its socat: " + bad if bad else ""
+if why:
     sys.exit("sandbox-check: SBX_TOOLS is not a safe PATH folder (" + why + "): " + t)
-' "$2" || return 2
+' "$2" "$4" || return 2
 }
 
 # session_path H TOOLS SYSPATH: the session's PATH, with TOOLS (when given) before the system

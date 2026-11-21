@@ -29,15 +29,16 @@
 #              folder (TMPDIR), never your home folder itself (a folder below it is fine), and
 #              never where the settings phiward installs let the session write (checked after
 #              the install). Refused when it or a folder above it holds CLAUDE.md,
-#              CLAUDE.local.md, .claude, .git, .mcp.json, .phiward.toml or .agent-guards.toml:
-#              Claude Code or phiward would read it into the test (places.sh). On a cluster: a folder of its
+#              CLAUDE.local.md, AGENTS.md, .claude, .git, .mcp.json, .phiward.toml or
+#              .agent-guards.toml: Claude Code or phiward would read it into the test
+#              (places.sh); looked at again right before each session. On a cluster: a folder of its
 #              own below your home folder (~/phiward-sbx/run), with those moved away from ~.
-#   SBX_TOOLS  a folder of tools the session needs (socat on a cluster), put on its PATH after
-#              its own bin folders, before the system folders. An absolute, existing folder,
-#              outside SBX_BASE, outside what the session may write, and kept by phiward's own
-#              rule for a PATH folder (yours or root's, it and every folder above it, up to your
-#              home folder when it is inside it, writable by no group or other account):
-#              refused otherwise. Unset: the system folders only.
+#   SBX_TOOLS  a folder that holds socat and nothing else (a cluster has none), put on the
+#              session's PATH after its own bin folders, before the system folders. An absolute,
+#              existing folder, outside SBX_BASE, outside what the session may write, and kept
+#              by phiward's own rule for a PATH folder (yours or root's, it, its socat and every
+#              folder above them, up to your home folder when inside it, writable by no group or
+#              other account): refused otherwise, before the build. Unset: the system folders only.
 #   SBX_SRC    a source tree to build instead of `git archive HEAD` (the container has no .git).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
@@ -82,9 +83,9 @@ if [ -n "$stub" ]; then
 else
   claude=${CLAUDE_BIN:-$(command -v claude)} || { echo "sandbox-check: needs claude on PATH" >&2; exit 2; }
 fi
-python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV "$uv" python find --python-preference only-managed 2>/dev/null)}
+python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV UV_NO_CONFIG=1 "$uv" python find --python-preference only-managed 2>/dev/null)}
 [ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
-claude=$("$python" -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
+claude=$("$python" -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
 if [ $os = darwin ]; then
   managed="/Library/Application Support/ClaudeCode
 /Library/Managed Preferences/com.anthropic.claudecode.plist"
@@ -97,14 +98,14 @@ done
 if [ -n "$SBX_SRC" ]; then
   [ -f "$SBX_SRC/pyproject.toml" ] || { echo "sandbox-check: SBX_SRC is not a phiward source tree" >&2; exit 2; }
 else
-  [ -z "$(git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
+  [ -z "$(GIT_CONFIG_GLOBAL=/dev/null git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
 fi
 # where the home folder is made: never a home folder itself, never below a folder that holds a
 # name Claude Code or phiward read from a folder above the session's (places.sh), and never in a
 # shared temp folder
 . "$here/places.sh"
 # the home folder by passwd (what ssh and others use) and by $HOME, both resolved
-homes=$("$python" -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
+homes=$("$python" -I -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
 if [ $os = darwin ]; then
   # not /private/tmp or the per-user temp folder: Claude Code's sandbox lets the session write
   # there, and the judge's folder must not be writable by it
@@ -160,22 +161,26 @@ H=$(mktemp -d "$sbx_base/phiward-sbx-XXXXXX")
 # project, --add-dir); the stream, the facts, doctor's output and the report go there
 J=$(mktemp -d "$sbx_base/phiward-sbx-judge-XXXXXX")
 fail() { echo "sandbox-check: $1 failed:"; tail -20 "$2" 2>/dev/null; exit 2; }
-echo "building in $H ..."
-mkdir -p "$H/src" "$H/dist"
+mkdir -p "$H/src" "$H/dist" "$H/tmp"
 if [ -n "$SBX_SRC" ]; then
   cp -R "$SBX_SRC/." "$H/src"
 else
-  git -C "$repo" archive HEAD | tar -x -C "$H/src"
+  GIT_CONFIG_GLOBAL=/dev/null git -C "$repo" archive HEAD | tar -x -C "$H/src"
 fi
-"$uv" build -q --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
+# SBX_TOOLS, before the build: phiward's own rule, by the source tree's phiward
+if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
+echo "building in $H ..."
+# the build reads no uv config of yours and writes no cache of yours
+env HOME="$H" UV_NO_CONFIG=1 UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never \
+  "$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
 wheel=$(ls "$H"/dist/*.whl)
-pybase=$(cd "$(dirname "$("$python" -c 'import sys; print(sys.executable)')")/.." && pwd -P)
+pybase=$(cd "$(dirname "$("$python" -I -c 'import sys; print(sys.executable)')")/.." && pwd -P)
 cp -R "$pybase" "$H/py"
-pyname=$(basename "$("$python" -c 'import sys, os; print(os.path.realpath(sys.executable))')")
+pyname=$(basename "$("$python" -I -c 'import sys, os; print(os.path.realpath(sys.executable))')")
 py="$H/py/bin/$pyname"
 syspath=/usr/bin:/bin:/usr/sbin:/sbin
 [ $os = linux ] && syspath=/usr/local/bin:$syspath
-# SBX_TOOLS joins the PATH only once the installed phiward has judged it (below)
+# SBX_TOOLS joins the PATH only after the check of what the session may write (below)
 export HOME="$H" PATH="$(session_path "$H" "" "$syspath")" \
   UV_TOOL_DIR="$H/.local/share/uv/tools" UV_TOOL_BIN_DIR="$H/.local/bin" UV_CACHE_DIR="$H/.cache/uv" \
   UV_PYTHON_DOWNLOADS=never TMPDIR="$H/tmp"
@@ -247,10 +252,9 @@ bad = [p for p in sys.argv[3:] if c.inside(p, roots)]
 sys.exit("sandbox-check: the session could write here: " + " ".join(bad) +
          "; set SBX_BASE or SBX_TOOLS elsewhere (docs/releasing.md)" if bad else 0)
 ' "$H/proj" "$H" "$J" "$sbx_base" ${sbx_tools:+"$sbx_tools"} || exit 2
-# SBX_TOOLS (a socat of your own, say) joins the session's PATH before the system folders only
-# when it passes the installed phiward's own rule for a PATH folder (places.sh)
+# SBX_TOOLS (its socat) joins the session's PATH before the system folders: it passed
+# phiward's rule before the build, and the check above (which needs the installed settings)
 if [ -n "$sbx_tools" ]; then
-  sbx_tools_safe "$H/.local/share/uv/tools/phiward/bin/python" "$sbx_tools" || exit 2
   PATH=$(session_path "$H" "$sbx_tools" "$syspath")
   echo "tools: $sbx_tools on the PATH"
 fi
@@ -349,6 +353,8 @@ for m in $modes; do
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
+  # again right before each session: a ~/.claude put back since the first look would be read in
+  sbx_base_check "$sbx_base" "$homes" || exit 2
   echo "$ver; Mode $m: one session (Haiku) ..."
   set -- "$H/bin/claude" -p "$prompt" --model haiku --output-format stream-json --verbose \
     --settings "$launch" --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \

@@ -301,16 +301,21 @@ A home folder on NFS was not part of that probe. The release check with the real
 (`scripts/sandbox-check/check.sh`, [releasing.md](releasing.md)) runs on Linux too; it has not
 been run on the cluster yet. To run it there, as an interactive job:
 
-1. Make a folder for it below your home folder, `~/phiward-sbx/run` (SBX_BASE), and one for its
-   tools, `~/phiward-sbx/tools/bin` (SBX_TOOLS), with socat built into it. Run `chmod go-w ~`
-   and `chmod go-w` on both folders and the folders between: the check refuses a tools folder
-   that another account could write.
-2. Move away, while the check runs, any `CLAUDE.md`, `CLAUDE.local.md`, `.claude`, `.git`,
-   `.mcp.json`, `.phiward.toml` or `.agent-guards.toml` in your home folder or a folder above
-   `~/phiward-sbx/run` (your `~/.claude` too). Claude Code and phiward read them from a folder above the session's,
-   so the check refuses while they are there. Put them back afterwards.
-3. `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
-   SBX_TOOLS=$HOME/phiward-sbx/tools/bin sh scripts/sandbox-check/check.sh`.
+1. Make a folder for it below your home folder, `~/phiward-sbx/run` (SBX_BASE), and one for
+   socat, `~/phiward-sbx/tools/bin` (SBX_TOOLS), with socat built into it and nothing else.
+   Run `chmod go-w ~`, and `chmod go-w` on both folders, the folders between, and socat (and
+   what it links to): the check refuses a tools folder or a socat another account could write.
+2. Get the token first: `claude setup-token`, with your `~/.claude` where it is. Keep the
+   token for step 4.
+3. Move away any `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude`, `.git`, `.mcp.json`,
+   `.phiward.toml` or `.agent-guards.toml` in your home folder or a folder above
+   `~/phiward-sbx/run` (your `~/.claude` too). Claude Code and phiward read them from a folder
+   above the session's, so the check refuses while they are there, also right before each
+   session. Start no `claude` until the check is done: it may make `~/.claude` again.
+4. `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
+   SBX_TOOLS=$HOME/phiward-sbx/tools/bin sh scripts/sandbox-check/check.sh`, and paste the
+   token when it asks.
+5. Put the names back.
 
 ## Rules for the operator
 
