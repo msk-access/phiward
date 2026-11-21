@@ -1927,6 +1927,8 @@ times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code>
 <li>an entry <strong>inside</strong> a protected root is fine: gateway commands write only in <code>write_to</code>
     folders (protected roots are read only for them), and what they write there stays
     protected.</li>
+<li>on Linux, a request whose write place is at or below a path the gateway hides (credentials,
+    traces) stops before its command runs.</li>
 <li><strong><code>net</code></strong> (<code>true</code> or <code>false</code>; default <code>false</code>). With <code>true</code>, <code>phiward run --net</code> gets the
   network. On macOS it may also look up DNS; local unix sockets stay blocked (an SSH agent's or
   a shared connection's socket would log in to HPC as you). On Linux it gets the host network
