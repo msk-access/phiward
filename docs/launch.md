@@ -63,7 +63,7 @@ phiward launch --tool claude
 | | Can | Cannot |
 |---|---|---|
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
-| Settings that run later | | change `.mcp.json`, `.claude/settings*.json`, `.vscode` settings, or git control files (hooks, config) in the project. On Linux a git control file that is missing at the start (`commondir`) can be made; the report at the end names it. A wrapped MCP server (`--entry`) cannot write the project's `.git` folders, `.claude` or `.vscode`; on macOS also `.idea`, `.gitmodules`, `.ripgreprc` or a new `.git` (on Linux a name missing at the start can be made) |
+| Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps |
 | Network | open in this release (see Limits) | reach outside unix sockets (the SSH agent, your shared SSH connection, docker) |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
@@ -166,6 +166,23 @@ when in doubt, reinstall: the step names the command for the tool that installed
   (which may hold an `http.extraheader`), and, on macOS, Keychain items whose access list trusts
   the `security` tool (the session can reach the Keychain service). Keep tokens out of start-up
   files; prefer Mode A's test result for Keychain-backed tokens until Mode B is checked.
+- **Files that other tools run later are read-only.** Skills, agents, commands, hooks and
+  settings in the project's `.claude`, and editor and agent-tool settings (`.vscode`, `.idea`,
+  `.cursor`, `.gemini`, `.codex`), cannot be written inside `launch`: edit them in your own
+  terminal, or bring them in with `phiward carryover add`. Claude Code's `--worktree` and agent worktrees
+  (`isolation: worktree`; both write `.claude/worktrees/`) and `/loop` durable tasks (`.claude/scheduled_tasks.json`) do not work
+  inside `launch`. A folder that a link in them leads to (`.claude/skills -> ../.agents/skills`)
+  is read-only too; `launch` refuses to start when such a link leads to a folder that holds the
+  project, to one that does not exist (Linux), or when one of these folders has more entries than
+  it walks for links (50,000 in one tree; it names the folder). Trees of installed code
+  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are not
+  walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
+  the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
+  `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work inside it (they write
+  `renv/library`, which stays writable).
+- **A `git pull`, `checkout` or `switch` that changes a tracked file in a `.claude`, `.vscode` or
+  `.idea` folder** (at any depth) fails partway inside `launch`, since those folders are
+  read-only. Run them in your own terminal.
 - **Git control files are read-only** for the repositories found at the start, so `git remote
   add`, `git config`, `git submodule update --init`, `git worktree add` and `git push -u` fail
   inside `launch` (and `git switch` to a remote branch, `git branch -u`, `-m` and `-d` cannot

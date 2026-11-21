@@ -132,10 +132,11 @@ def test_b2_git_working_files_stay_writable(tree):
     assert "DONE" in out, out
 
 
-def test_b2_claude_commands_stay_writable(tree):
+def test_b2_claude_commands_are_read_only(tree):
+    # a command runs as code later, outside launch: .claude is read-only as a whole
     (tree / "repo" / ".claude" / "commands").mkdir(parents=True)
     _, out = launch(tree, tries(str(tree / "repo" / ".claude" / "commands" / "x.md")))
-    assert "DONE" in out, out
+    assert "REFUSED" in out and "DONE" not in out, out
 
 
 @macos

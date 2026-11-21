@@ -70,13 +70,17 @@ def test_project_wiring_never_writes_the_network_limit(tree):
     assert "network" not in w["sandbox"]
 
 
-def test_merge_turns_the_limit_on_and_keeps_the_users_own_domains(tree):
+def test_merge_turns_the_limit_on_and_replaces_the_users_own_domains(tree):
+    # the user's own hosts are not kept: with them, "no domains" would silently allow them
     _add('[network]\nlimit = true\nallowed_domains = ["github.com"]\n')
     w = install.wiring(config.load(str(tree / "repo")))
     have = {"sandbox": {"network": {"strictAllowlist": False, "allowedDomains": ["mine.example"]}}}
     m = install.merge(have, w)
     assert m["sandbox"]["network"]["strictAllowlist"] is True
-    assert m["sandbox"]["network"]["allowedDomains"] == ["mine.example", "github.com"]
+    assert m["sandbox"]["network"]["allowedDomains"] == ["github.com"]
+    assert install._network_notes(have, m) == [
+        "[network] removed mine.example from sandbox.network.allowedDomains (not in [network] "
+        "allowed_domains)"]
     assert install.merge(m, w) == m
 
 

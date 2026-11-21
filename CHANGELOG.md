@@ -120,6 +120,26 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
+  server alike: the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders as
+  a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at any depth on
+  macOS and, on Linux, those that exist at the start (it makes `.claude`, `.vscode` and `.idea`
+  if there are none). What a link inside them leads to is read-only too; `launch` refuses to
+  start where it cannot tell. So skills, hooks and editor settings are edited outside `launch`,
+  `--worktree`, agent worktrees (`isolation: worktree`) and `/loop` durable tasks do not work
+  inside it, a `git pull`, `checkout` or `switch` that changes a tracked file in those folders
+  fails partway there (run it in your own terminal), and `renv::init()` runs once
+  outside it. A wrapped server on Linux can no longer write `.idea`, `.gitmodules` or
+  `.ripgreprc` (they were read-only only on macOS). The hook also asks before a file tool writes
+  `.cursor`, `.gemini`, `.codex`, `.Rprofile` or `.Renviron` anywhere in a project (in the modes
+  that do not prompt, it refuses), and the exit report lists them, and `.tool-versions`, at any
+  depth. Files in `.cursor/rules/` are now listed as settings, not as instructions for models.
+  Trees of installed code (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are left writable, and `.claude/worktrees` is not walked for links; where the walk
+  stops at its bound, `launch` says so at the start and in the exit report.
+- `[network] limit`: `install` replaces `sandbox.network.allowedDomains` in your user settings
+  with exactly `allowed_domains` and prints each host it removes (it used to keep the hosts
+  already there). `doctor` warns about each level (managed, user, project) whose
+  `WebFetch(domain:...)` allow rules add hosts, and about listed hosts the config does not have.
 - `phiward run --table` is stricter: output without a header line (or with a line before the
   header, a warning on stderr too) is now masked as text, with a note that says so; before, every
   number in it was kept.

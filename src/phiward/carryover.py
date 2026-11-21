@@ -1344,9 +1344,8 @@ RUNS_LATER_NAMES = {"Makefile", "makefile", "GNUmakefile", "package.json", "pypr
                     ".Rprofile", ".Renviron", "activate.R", ".pdbrc", "ipython_config.py",
                     "jupyter_notebook_config.py", "jupyter_server_config.py",
                     "jupyter_lab_config.py", "pytest.ini", "mise.toml", ".mise.toml",
-                    "Taskfile.yml", "Taskfile.yaml"}
+                    "Taskfile.yml", "Taskfile.yaml", ".tool-versions"}
 RUNS_LATER_SUFFIXES = (".sh", ".bash", ".pth")
-SETTINGS_PREFIXES = (".vscode/", ".idea/", ".mcp.json", ".claude/settings")
 TRUNCATED = "\0truncated"
 
 
@@ -1431,7 +1430,7 @@ def _rank(rel: str, entry: Optional[tuple] = None, project: str = "") -> int:
         if os.path.isdir(os.path.join(repo, "objects")) and (
                 os.path.isfile(os.path.join(repo, "HEAD")) or os.path.isdir(os.path.join(repo, "refs"))):
             return 1  # a folder laid out as a git repository (a bare one, or a gitdir target)
-    if rel.startswith(SETTINGS_PREFIXES) or "/.vscode/" in rel:
+    if _settings_place(rel):
         return 2
     if name in INSTRUCTION_NAMES or rel.startswith((".claude/", ".cursor/rules/", ".github/instructions/")) \
             or "/.claude/" in rel:
@@ -1443,6 +1442,19 @@ def _rank(rel: str, entry: Optional[tuple] = None, project: str = "") -> int:
     if entry is not None and entry[0] == "f" and entry[5] & 0o111:
         return 1  # an executable file: a program on a PATH, a script run by name
     return 3
+
+
+def _settings_place(rel: str) -> bool:
+    """Whether `rel` is in the one list of what other tools run later (claude_settings), at any
+    depth: inside an editor's or another agent tool's folder, `.mcp.json`, `.ripgreprc`, or a
+    `.claude` folder's settings file. The list's other files (`.gitmodules`, `.Rprofile`) are
+    files that run later (RUNS_LATER_NAMES); the rest of a `.claude` is instructions."""
+    parts = rel.split("/")
+    if any(p in claude_settings.WORKSPACE_CODE_DIRS for p in parts[:-1]):
+        return True
+    if parts[-1] in claude_settings.RUNS_LATER_FILES and parts[-1] not in RUNS_LATER_NAMES:
+        return True
+    return len(parts) >= 2 and parts[-2] == ".claude" and parts[-1] in claude_settings.SETTINGS_NAMES
 
 
 # the kinds of changed project files, by `_rank`: the first three are for a person to read
