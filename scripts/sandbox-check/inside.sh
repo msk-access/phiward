@@ -114,9 +114,7 @@ done
 # Mode B: the stub under the real `phiward launch`: the kernel probes are refused, and the wrapped
 # MCP server starts inside the session (its own launch runs it directly), so Mode B passes
 expect "== Mode B (linux)"
-# the newer guards' probes ran in both modes: Mode A notes each, Mode B judges each. The stand-in
-# has no sandbox of its own, so under launch what it shows is phiward's alone: a kit without a
-# guard (the network proxy, the unix-socket guard) FAILs Mode B on that guard's lines only
+# the newer guards' probes ran in both modes: Mode A notes each, Mode B judges each
 for p in loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api runs-later-settings \
          runs-later-skill runs-later-vscode runs-later-sub-vscode runs-later-rprofile \
          runs-later-node-modules unix-renamed unix-late; do
@@ -125,20 +123,14 @@ for p in loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api run
   if grep -qE "^(ok   |FAIL |note )$p: " /tmp/mode-B.txt; then echo "== ok    Mode B: $p judged"
   else echo "== MISSING Mode B: $p judged"; status=1; fi
 done
-lacks=$(grep -E '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' /tmp/mode-B.txt || true)
-others=$(grep '^FAIL ' /tmp/mode-B.txt | grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): |^FAIL Mode B$' || true)
-if [ -n "$others" ]; then
-  printf '%s\n' "$others" | sed 's/^/== FAIL  Mode B: /'; status=1
-fi
-if grep -q '^???? ' /tmp/mode-B.txt; then
-  grep '^???? ' /tmp/mode-B.txt | sed 's/^/== UNSURE Mode B: /'; status=1
-fi
-if [ -z "$lacks" ]; then
-  expect "PASS Mode B"
-else
-  printf '%s\n' "$lacks" | sed 's/^/== note  this kit lacks a guard: /'
-  expect "FAIL Mode B"
-fi
+# Mode A's unconfined stand-in wrote .Rprofile: check.sh saw the marker on the host
+if grep -qE "^note files that run later were on the host after the session: .*\.Rprofile" /tmp/mode-A.txt; then
+  echo "== ok    Mode A: the .Rprofile write was seen on the host"
+else echo "== MISSING Mode A: the .Rprofile write was seen on the host"; status=1; fi
+# Mode B: what the kit and this host say must be refused (stub-expect.sh); every other line passes
+. "$(dirname "$check")/stub-expect.sh"
+abi=$(sed -n 's/^landlock //p' /out/facts-B.txt)
+sbx_newer_expect /tmp/mode-B.txt /repo "$abi" || status=1
 for m in A B; do
   if grep -qxF "ok   the wrapped MCP server started and could not read the protected file" "/tmp/mode-$m.txt"; then
     echo "== ok    Mode $m: the wrapped MCP server started"

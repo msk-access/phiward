@@ -168,13 +168,15 @@ fi
 url=$(p net-url)
 [ -z "$url" ] || echo "net-api $(fixed "$(net https "$url")")" >> results.txt
 # files that other tools run later (check.sh made their folders and .Rprofile): opened for
-# writing, nothing written; an installed tree (node_modules) must stay writable
+# writing, nothing written (check.sh looks for new ones on the host); .Rprofile, which exists,
+# gets a marker line, which check.sh looks for on the host; an installed tree (node_modules) must
+# stay writable
 w() { try "runs-later-$1" sh -c 'mkdir -p "$(dirname "$1")" && : >> "$1"' sh "$2"; }
 w settings .claude/settings.json
 w skill .claude/skills/x/SKILL.md
 w vscode .vscode/tasks.json
 w sub-vscode sub/.vscode/tasks.json
-w rprofile .Rprofile
+try runs-later-rprofile sh -c 'echo "# phiward sandbox check" >> "$1"' sh .Rprofile
 w node-modules node_modules/pkg/.vscode/x
 # unix sockets outside the session (netsrv.py): one bound, then renamed, before the session; one
 # bound once this file says the session runs (it waits up to 20 seconds to see it)

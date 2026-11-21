@@ -149,14 +149,27 @@ Then push `main`, `develop` and the tag.
      the mode is INCONCLUSIVE.
    - **Unix sockets.** The check binds a made-up socket outside the session under a temporary
      name and renames it (as ssh's ControlMaster does), and binds another once the session
-     runs (`unix-renamed`, `unix-late`). A connect to either fails the mode; a refusal counts
-     only when the socket answered from outside.
-   No byte the servers send passes through the probe's shell (`net.py` prints fixed words
-   only). The servers are stopped and their sockets removed by the cleanup, also on failure,
-   and they end when the check does. On Linux, Bash runs inside Claude Code's own sandbox under
-   `launch` too, so a refusal there may be that sandbox's; `linux.sh --stub`, whose stand-in
-   has no sandbox of its own, shows phiward's alone (a kit without a guard fails Mode B on that
-   guard's lines, and the stub names them).
+     runs (`unix-renamed`, `unix-late`). A connect to either fails the mode. A refusal counts
+     only when the socket answered from outside; "no such file" there is hidden, not refused,
+     and INCONCLUSIVE.
+   The servers and sockets are asked again from outside right after the session: one that no
+   longer answers makes its line INCONCLUSIVE. `.Rprofile` gets a marker line from the probe,
+   and the check looks for it on the host after the session. No byte the servers send passes
+   through the probe's shell (`net.py` prints fixed words only). The servers are stopped and
+   their sockets removed by the cleanup, also on failure, and they end when the check does.
+
+   Which layer each line proves. The error a refusal gives cannot tell the layers apart.
+   - **macOS:** `launch` turns Claude Code's sandbox off, so Mode B shows phiward alone.
+   - **Linux:** Bash runs inside Claude Code's own sandbox under `launch` too. The loopback
+     and files-that-run-later lines show phiward plus that sandbox; `linux.sh --stub`, whose
+     stand-in has no sandbox of its own, is what proves phiward's part alone. The unix-socket
+     lines prove phiward's guard only on a host with Landlock ABI 9 or newer; below that they
+     show Claude Code's sandbox only.
+   - **The stub** expects each line from facts about the kit and the host: the loopback lines
+     refused when the kit has `src/phiward/netproxy.py` (else labelled "kit has no proxy"), the
+     unix-socket lines refused when the kit's code has Landlock's `RESOLVE_UNIX` and the host's
+     ABI is 9 or more (else labelled "relies on Claude Code's sandbox"). Any other failure fails
+     the stub.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only

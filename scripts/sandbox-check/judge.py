@@ -81,9 +81,11 @@ CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
          "protected_file", "host_write_data", "host_write_phiward", "loopback_127",
          "loopback_localhost", "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
-         "runs_later_made")
-# whether each made-up server answered outside the session (check.sh: before it; the late socket
-# after it). A loopback spelling this machine does not answer at all (no IPv6) is only noted
+         "runs_later_made", "loopback_127_after", "loopback_localhost_after",
+         "loopback_v6_after", "loopback_mapped_after", "unix_renamed_after")
+# whether each made-up server answered outside the session (check.sh: right before it, and again
+# right after it, KEY_after; the late socket after it only). A loopback spelling this machine
+# does not answer at all (no IPv6) is only noted
 SPELLING_OPTIONAL = ("loopback-v6", "loopback-mapped")
 # whether each write's probe file was on the host right after the session (check.sh)
 HOST = {"write-data": "host_write_data", "write-phiward": "host_write_phiward"}
@@ -237,7 +239,10 @@ def _newer(lines, facts, platform, mode, report, fails, unsure):
     if mode != "B":
         return
     for name in LOOPBACK + UNIX:
-        got, up = lines.get(name), facts.get(name.replace("-", "_"))
+        key = name.replace("-", "_")
+        got, up = lines.get(name), facts.get(key)
+        # the late socket is bound during the session: its one check is after it
+        after = up if name == "unix-late" else facts.get(key + "_after")
         if got is None:
             continue
         cls = got[len("REFUSED "):] if got.startswith("REFUSED ") else None
@@ -246,11 +251,17 @@ def _newer(lines, facts, platform, mode, report, fails, unsure):
             fails.append(f"{name}: {got}: the session reached {where}")
         elif cls not in NET_REFUSED:
             unsure.append(f"{name}: {got} (not a known refusal)")
-        elif up == "yes":
+        elif name in UNIX and cls == "no-such" and up == "yes":
+            unsure.append(f"{name}: {got}: the socket is there outside, so it was hidden, not "
+                          "refused")
+        elif up == "yes" and after == "yes":
             report.append(f"ok   {name}: refused ({cls})")
         elif up == "no" and name in SPELLING_OPTIONAL:
             report.append(f"note {name}: not tested: it does not answer outside the session "
                           "either (no IPv6 loopback here)")
+        elif up == "yes":
+            unsure.append(f"{name}: refused, but the made-up server did not answer outside "
+                          f"after the session ({after or 'no record'}): it proves nothing")
         else:
             unsure.append(f"{name}: refused, but the made-up server did not answer outside the "
                           f"session ({up or 'no record'}): it proves nothing")

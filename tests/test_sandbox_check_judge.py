@@ -2166,6 +2166,8 @@ def _stub_expect(tmp_path, report, proxy=False, unix=False, abi="6"):
     """stub-expect.sh's check of Mode B's report, for a made-up kit (`proxy`: it has
     netproxy.py; `unix`: its code has Landlock's RESOLVE_UNIX) on a host of Landlock `abi`."""
     import subprocess
+    import tempfile
+    tmp_path = Path(tempfile.mkdtemp(dir=tmp_path))  # one folder per call
     kit = tmp_path / "kit"
     (kit / "src" / "phiward").mkdir(parents=True)
     (kit / "src" / "phiward" / "wholetool.py").write_text(

@@ -468,6 +468,7 @@ for m in $modes; do
   lb_mapped=$(answers "RESPONSE 222" tcp ::ffff:127.0.0.1 "$nport")
   u_renamed=$(answers CONNECTED unix "$nrenamed")
   rl_before=$(present)
+  rprofile_before=$(sum "$H/proj/.Rprofile")
   # again right before each session: a ~/.claude put back since the first look would be read in
   sbx_base_check "$sbx_base" "$homes" || exit 2
   echo "$ver; Mode $m: one session (Haiku) ..."
@@ -484,6 +485,13 @@ for m in $modes; do
   lpid=""
   [ "$code" = 0 ] || echo "note: claude exited with $code"
   after=$(sum "$H/.claude/settings.json")
+  # the made-up servers answer from outside right after the session too (else one that died
+  # during it would make a refusal look like the guard's)
+  lb_127_after=$(answers "RESPONSE 222" tcp 127.0.0.1 "$nport")
+  lb_localhost_after=$(answers "RESPONSE 222" tcp localhost "$nport")
+  lb_v6_after=$(answers "RESPONSE 222" tcp ::1 "$nport")
+  lb_mapped_after=$(answers "RESPONSE 222" tcp ::ffff:127.0.0.1 "$nport")
+  u_renamed_after=$(answers CONNECTED unix "$nrenamed")
   # the late socket: bound once the session ran (netsrv says so) and answering from outside
   u_late=no
   if grep -qxF "late-$m $S/late-$m.sock" "$J/netsrv.state"; then
@@ -496,7 +504,14 @@ for m in $modes; do
     case " $rl_before " in *" $f "*) ;; *) made="$made $f" ;; esac
   done
   made=${made# }
+  # .Rprofile exists: the probe's marker line in it on the host is a write that got through
+  rprofile_made=no
+  [ "$(sum "$H/proj/.Rprofile")" = "$rprofile_before" ] || rprofile_made=yes
   (cd "$H/proj" && rm -rf $made node_modules/pkg/.vscode/x "unix-ready-$m")
+  if [ "$rprofile_made" = yes ]; then
+    made="${made:+$made }.Rprofile"
+    echo "# made up" > "$H/proj/.Rprofile"
+  fi
   same=no; [ "$before" = "$after" ] && same=yes
   # whether this mode's probe files are on the host, right after its session (a later session,
   # doctor or a cleanup could remove them before the judge looks)
@@ -532,6 +547,11 @@ for m in $modes; do
     echo "loopback_v6 $lb_v6"
     echo "loopback_mapped $lb_mapped"
     echo "unix_renamed $u_renamed"
+    echo "loopback_127_after $lb_127_after"
+    echo "loopback_localhost_after $lb_localhost_after"
+    echo "loopback_v6_after $lb_v6_after"
+    echo "loopback_mapped_after $lb_mapped_after"
+    echo "unix_renamed_after $u_renamed_after"
     echo "unix_late $u_late"
     echo "runs_later_made ${made:-none}"
     if [ -n "$REMOTE" ]; then echo "remote yes"; echo "pulled_ok $pulled"; else echo "remote no"; fi
