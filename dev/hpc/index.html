@@ -1509,7 +1509,10 @@ its login nodes.</p>
 <li><strong>socat on the PATH.</strong> Without admin rights, make a conda environment for it in your own
   space, for example <code>mamba create -p /scratch/$USER/claude-env -c conda-forge socat</code>, and put its
   <code>bin</code> folder first on the PATH before you start Claude Code. (<code>sandbox.socatPath</code> would name
-  it too, but Claude Code reads it only from managed settings.)</li>
+  it too, but Claude Code reads it only from managed settings.) For the release check below,
+  the folder must pass phiward's rule for a PATH folder (no other account can write it or a
+  folder above it), so build socat below your home folder instead, for example in
+  <code>~/phiward-sbx/tools/bin</code>.</li>
 <li><strong>Claude Code 2.1.295 or newer</strong>, as everywhere. It tells the hook which MCP server each tool
   belongs to. <code>bash tools/check-claude-mcp-source.sh</code> (from a phiward
   checkout) shows what yours sends.</li>
@@ -1538,7 +1541,34 @@ login node (kernel 4.18, bubblewrap 0.4.0) passed all 21 tests:</p>
 </ul>
 <p>A home folder on NFS was not part of that probe. The release check with the real Claude Code
 (<code>scripts/sandbox-check/check.sh</code>, <a href="../releasing/">releasing.md</a>) runs on Linux too; it has not
-been run on the cluster yet.</p>
+been run on the cluster yet. To run it there, as an interactive job:</p>
+<ol>
+<li>Make a folder for it below your home folder, <code>~/phiward-sbx/run</code> (SBX_BASE), and one for
+   socat, <code>~/phiward-sbx/tools/bin</code> (SBX_TOOLS), with socat built into it and nothing else.
+   Run <code>chmod go-w ~</code>, and <code>chmod go-w</code> on both folders, the folders between, and socat (and
+   what it links to): the check refuses a tools folder or a socat another account could write.</li>
+<li>Get the token first: <code>claude setup-token</code>, with your <code>~/.claude</code> where it is. Keep the
+   token for step 4.</li>
+<li>Move away any <code>CLAUDE.md</code>, <code>CLAUDE.local.md</code>, <code>AGENTS.md</code>, <code>.claude</code>, <code>.git</code>, <code>.mcp.json</code>,
+   <code>.phiward.toml</code> or <code>.agent-guards.toml</code> in your home folder or a folder above
+   <code>~/phiward-sbx/run</code> (your <code>~/.claude</code> too). Claude Code and phiward read them from a folder
+   above the session's, so the check refuses while they are there, also right before each
+   session. Start no <code>claude</code> until the check is done: it may make <code>~/.claude</code> again.</li>
+<li>Build the wheel on your laptop, from a clean checkout of the commit to test:
+   <code>uv build --wheel --out-dir dist .</code>, then <code>shasum -a 256 dist/phiward-*.whl</code> (or
+   <code>sha256sum</code>). Copy the wheel to <code>~/phiward-sbx/wheel/</code> on the cluster (<code>chmod go-w</code> on it and
+   its folder) and keep the sha256. Then run
+   <code>srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
+   SBX_TOOLS=$HOME/phiward-sbx/tools/bin SBX_WHEEL=$HOME/phiward-sbx/wheel/phiward-VERSION-py3-none-any.whl
+   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh</code>, with <code>sh</code>, not <code>bash</code>, and
+   paste the token when it asks. It takes none from the environment. With the wheel, the node
+   needs no package index, only <code>api.anthropic.com</code>. The check starts itself again under an
+   empty environment, which drops proxy and CA variables on purpose (<code>HTTPS_PROXY</code>, <code>NO_PROXY</code>,
+   <code>SSL_CERT_FILE</code>, <code>REQUESTS_CA_BUNDLE</code> and the like), so run it on a node that reaches
+   <code>api.anthropic.com</code> directly. There is no SBX_ variable for a proxy yet. Without SBX_WHEEL
+   the check builds the wheel itself and needs a package index too.</li>
+<li>Put the names back.</li>
+</ol>
 <h2 id="rules-for-the-operator">Rules for the operator<a class="headerlink" href="#rules-for-the-operator" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Start the shared connection yourself; phiward never logs in.</li>
