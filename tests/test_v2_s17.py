@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from phiward import carryover
-from helpers import needs_confine, ready_line
+from helpers import landlock_abi, needs_confine, ready_line
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -352,19 +352,28 @@ def test_r19_2_the_session_can_resolve_and_enter_its_own_folders(tree):
 
 
 @needs_confine
-def test_r19_3_a_session_cannot_reach_another_sessions_socket(tree):
+@pytest.mark.parametrize("tool", ["claude", "generic"])
+def test_r19_3_a_session_cannot_reach_another_sessions_socket(tree, tool):
     # bound by a short relative name: the full path is longer than macOS's 104-byte socket limit;
     # the server waits (on its stdin) until the other session has tried to connect
-    srv = ("import os, socket, sys\nos.chdir(os.environ['TMPDIR'])\n"
-           "s = socket.socket(socket.AF_UNIX)\ns.bind('s')\ns.listen(1)\n"
+    srv = ("import os, socket, sys\nos.chdir(os.environ['TMPDIR'])\ntry:\n"
+           "    s = socket.socket(socket.AF_UNIX)\nexcept OSError as e:\n"
+           "    print('READY NO-SOCKET', e.errno, flush=True); sys.exit()\n"
+           "s.bind('s')\ns.listen(1)\n"
            "print('READY', os.path.join(os.environ['TMPDIR'], 's'), flush=True)\nsys.stdin.read()\n")
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c", srv],
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", tool, "--", PY, "-c", srv],
                              cwd=str(tree / "repo"), env=env(), stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     path = ready_line(first).split(" ", 1)[1].strip()
-    code, out, err = launch(tree, f"import os, socket\ns = socket.socket(socket.AF_UNIX)\ntry:\n"
+    if tool == "generic" and sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 the generic tool cannot make a unix socket at all
+        first.communicate(timeout=60)
+        assert path == "NO-SOCKET 1", path
+        return
+    code, out, err = launch(tree, f"import os, socket\ntry:\n    s = socket.socket(socket.AF_UNIX)\n"
                                   f"    os.chdir({os.path.dirname(path)!r})\n    s.connect('s')\n"
-                                  "    print('CONNECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n")
+                                  "    print('CONNECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n",
+                            tool=tool)
     alive = first.poll() is None  # the server still listened while the other session tried
     first.communicate(timeout=60)
     assert alive and "REFUSED" in out and "CONNECTED" not in out, out + err

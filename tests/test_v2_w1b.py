@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import CONFINE_WHY
+from helpers import CONFINE_WHY, landlock_abi
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -191,8 +191,6 @@ def test_c1_an_abstract_socket_outside_is_not_reachable(tree):
         _, out = launch(tree, _connect(name))
     finally:
         srv.close()
-    if "Landlock scope" in out:
-        pytest.skip("this kernel has no Landlock scopes")
     assert "GOT" not in out, out
 
 
@@ -247,11 +245,20 @@ def test_o1_writing_to_stdout_and_stderr_works(tree, dev):
 def test_o2_the_tool_can_use_its_own_sockets(tree):
     code = ("import socket, os, tempfile, threading\n"
             "os.chdir(tempfile.mkdtemp()); p = 's'  # relative: unix socket paths are short\n"
-            "srv = socket.socket(socket.AF_UNIX); srv.bind(p); srv.listen(1)\n"
+            "try:\n"
+            "    srv = socket.socket(socket.AF_UNIX)\n"
+            "except OSError as e:\n"
+            "    print('NO UNIX SOCKETS', e.errno); raise SystemExit\n"
+            "srv.bind(p); srv.listen(1)\n"
             "threading.Thread(target=lambda: srv.accept()[0].sendall(b'OWN'), daemon=True).start()\n"
             "c = socket.socket(socket.AF_UNIX); c.connect(p); print('GOT', c.recv(3))\n")
     _, out = launch(tree, code)
-    assert "GOT b'OWN'" in out, out
+    if sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 the tool's filter denies every unix socket (`--tool generic`):
+        # only Landlock can tell the session's own sockets from those outside
+        assert "NO UNIX SOCKETS 1" in out and "GOT" not in out, out
+    else:
+        assert "GOT b'OWN'" in out, out
 
 
 @macos

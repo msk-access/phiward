@@ -142,6 +142,10 @@ def tree(tmp_path, monkeypatch):
     monkeypatch.setenv("PHIWARD_CONFIG", str(cfg))
     monkeypatch.setenv("PHIWARD_DEV", "1")  # tests run from the source checkout
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    if sys.platform.startswith("linux"):
+        # below Landlock ABI 9, `launch --tool claude` needs Claude Code's seccomp filter:
+        # a made-up one, where sandbox-runtime looks in a user-local npm folder
+        helpers.fake_filter(helpers.filter_in_home(home))
     yield t
     if sys.platform.startswith("linux"):
         # on Linux `launch` binds every entry next to a protected root into the session's view

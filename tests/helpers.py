@@ -161,3 +161,61 @@ def ready_line(proc, word="READY", seconds=60):
             proc.kill()
             raise AssertionError(f"no {word} line within {seconds} s: {data!r}")
         data += chunk
+
+
+def landlock_abi() -> int:
+    """Linux: the kernel's Landlock ABI version (0 without Landlock, and on other systems)."""
+    import ctypes
+    import sys
+    if not sys.platform.startswith("linux"):
+        return 0
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
+
+
+# A made-up stand-in for sandbox-runtime's `apply-seccomp` (usage: apply-seccomp CMD [ARG]...):
+# it denies socket(AF_UNIX) with EPERM and io_uring with ENOSYS, then runs CMD. With
+# works=False it runs CMD with no filter, as a broken or replaced filter would.
+_FAKE_FILTER = r'''
+import ctypes, os, platform, struct, sys
+if WORKS:
+    m = platform.machine()
+    arch = {"x86_64": 0xC000003E, "aarch64": 0xC00000B7}[m]
+    sock = 41 if m == "x86_64" else 198
+    ld, jeq, ret = 0x20, 0x15, 0x06
+    p = [(ld, 0, 0, 4), (jeq, 1, 0, arch), (ret, 0, 0, 0x80000000), (ld, 0, 0, 0)]
+    for n in (425, 426, 427):
+        p += [(jeq, 0, 1, n), (ret, 0, 0, 0x50026)]
+    p += [(jeq, 0, 3, sock), (ld, 0, 0, 16), (jeq, 0, 1, 1), (ret, 0, 0, 0x50001),
+          (ret, 0, 0, 0x7FFF0000)]
+    b = b"".join(struct.pack("<HBBI", *i) for i in p)
+    buf = ctypes.create_string_buffer(b, len(b))
+    class F(ctypes.Structure):
+        _fields_ = [("len", ctypes.c_ushort), ("f", ctypes.c_void_p)]
+    fp = F(len(p), ctypes.cast(buf, ctypes.c_void_p))
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(38, 1, 0, 0, 0) != 0 or libc.prctl(22, 2, ctypes.byref(fp), 0, 0) != 0:
+        sys.exit("apply-seccomp (made up): the filter could not be set")
+os.execvp(sys.argv[1], sys.argv[1:])
+'''
+
+
+def fake_filter(path, works=True):
+    """Write the made-up `apply-seccomp` at `path` (its folders made), executable."""
+    import sys
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"#!{sys.executable} -IS\nWORKS = {bool(works)}\n" + _FAKE_FILTER)
+    os.chmod(p, 0o755)
+    return p
+
+
+def filter_in_home(home) -> Path:
+    """Where sandbox-runtime looks for `apply-seccomp` in a user-local npm folder:
+    `~/.npm-global/lib/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/<arch>`."""
+    import platform
+    m = platform.machine().lower()
+    arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(m, m)
+    return Path(home) / ".npm-global" / "lib" / "node_modules" / "@anthropic-ai" / \
+        "sandbox-runtime" / "vendor" / "seccomp" / arch / "apply-seccomp"
