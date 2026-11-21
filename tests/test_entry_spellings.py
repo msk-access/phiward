@@ -199,21 +199,61 @@ def test_another_spelling_is_masked_through_the_gateway(tree, broker):
     assert "got <ENTRY> and <ENTRY>" in r.stdout, (r.stdout, r.stderr)
 
 
+# --- a rule match, a hit and a number: none cuts another ------------------------------------------
+
+def _one(names, packs, patterns=()):
+    return _pair(names, packs, patterns)[0]
+
+
+@pytest.mark.parametrize("table", [False, True])
+def test_a_rule_match_that_starts_inside_a_hit_is_not_taken_in(table):
+    s = _one(["Roe Ann.bam"], ("genomics",))
+    assert s.clean("MRN77_Roe Ann.bam.1.vcf", table) == "<BAMFILE>"
+
+
+@pytest.mark.parametrize("line", [
+    "C-PLE12345", "C–PLE12345", "Donor–1,234,567", "Donor-1,234,567",
+    "1,234,567-AB123456.a:b:c:d:e", "x 1,234,567‐AB123456.a:b:c:d:e y",
+])
+def test_a_rule_match_never_ends_or_starts_inside_a_number(line):
+    out = _one([], ("genomics", "msk")).clean(line)
+    assert not re.search(r"[0-9]", out), out
+
+
+def test_a_hit_never_cuts_a_number():
+    s = _one(["ABCDE12", "T_xyz9"], ("genomics",))
+    assert s.clean("ABCDE 12345") == "<ENTRY>"
+    assert not re.search(r"[0-9]", s.clean("PT‐xyz90002")), s.clean("PT‐xyz90002")
+
+
 # --- R9: never less masked than before ------------------------------------------------------------
-# The masking as it was before this change, kept here as the reference: every name string in one
-# literal trie, and an entry hit covered only by a rule match that holds it whole. Both read the
-# line in the one form (`inventory.normalize`): a dash or digit spelling now reads as its ASCII
-# spelling did, and the rules match it as they matched that spelling (`C–PLE12345` reads
-# as `C-PLE12345` did before, `<CMOID>45`, where the line as written read `C–PLE<NUM>`).
+# The masking as it was before this change, kept here as the reference: lines in NFKC only (no fold
+# of dashes or digits), every name string in one literal trie, an entry hit covered only by a rule
+# match that holds it whole, and each rule applied as a plain substitution. The line as written
+# goes to both; the text each keeps is compared after the fold. Where the reference withheld a
+# line (its masked line was not a fixed point), its first masked line is the reference.
+
+def _nfkc_only(text):
+    """The form lines were read in before this change: NFKC, with no fold of dashes or digits."""
+    text = inventory._ESCAPES.sub("", text)
+    text = text.replace("\\ ", " ")
+    text = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
 class _Before(Sanitizer):
-    form = staticmethod(inventory.normalize)
-
     def __init__(self, *a, strings=(), **k):
         super().__init__(*a, **k)
         words = sorted(set(strings))
         self.old = re.compile(inventory._trie_regex(words), re.IGNORECASE) if words else None
+
+    def _apply(self, rules, line):
+        for rx, repl in rules:
+            if repl == KEEP_PLACEHOLDER and self.keep_files:
+                line = rx.sub(lambda m, r=repl: m.group(0) if self._kept(m.group(0)) else r, line)
+            else:
+                line = rx.sub(lambda _m, r=repl: r, line)
+        return line
 
     def _entries(self, line, *_rest):
         rx = self.old
@@ -248,32 +288,23 @@ class _Before(Sanitizer):
         out.append(line[pos:])
         return "".join(out)
 
+    def first(self, line, table=False):
+        """The reference's first masked line (before the check that withholds a line)."""
+        return self._mask(_nfkc_only(line), table)
+
     def clean(self, line, table=False):
         try:
-            line = self.form(line)
+            line = _nfkc_only(line)
             out = self._mask(line, table)
             if self._mask(out, table) != out:
                 return WITHHELD
             if "\\" in out or "%" in out:
-                plain = self.form(unescape(out))
+                plain = _nfkc_only(unescape(out))
                 if plain != out and self._mask(plain, table) != plain:
                     return WITHHELD
             return out
         except Exception:  # noqa: BLE001
             return WITHHELD
-
-
-def _nfkc_only(text):
-    """The form lines were read in before this change: NFKC, with no fold of dashes or digits
-    (for the cost of R10)."""
-    text = inventory._ESCAPES.sub("", text)
-    text = text.replace("\\ ", " ")
-    text = unicodedata.normalize("NFKC", text)
-    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
-
-
-class _BeforeTimed(_Before):
-    form = staticmethod(_nfkc_only)
 
 
 def _rules(packs, patterns=()):
@@ -297,51 +328,67 @@ _HOLE = re.compile(r"<[A-Z][A-Z0-9_]*>")
 
 
 def _kept(out):
-    return [inventory.normalize(k) for k in _HOLE.split(out) if k]
+    return [inventory.normalize(k).casefold() for k in _HOLE.split(out) if k]
 
 
-def _never_less(new, old, line, table):
-    n, o = new.clean(line, table), old.clean(line, table)
-    if o == WITHHELD:
-        assert n == WITHHELD, (line, n)
-        return
+def _less(new, old, line, table):
+    """None, or why the new masking keeps text the reference masked."""
+    n = new.clean(line, table)
     if n == WITHHELD:
-        return
-    # each run of text the new masking keeps lies inside a run the old masking kept
+        return None
+    o = old.clean(line, table)
+    if o == WITHHELD:
+        o = old.first(line, table)
     olds = _kept(o)
     for k in _kept(n):
-        assert any(k in x for x in olds), (line, n, o)
+        if not any(k in x for x in olds):
+            return (line, n, o)
+    return None
 
 
 R9_NAMES = ["FAKE-PT-0001.bam", "Doe_Jane_FAKE", "FAKEPT0002", "T_xyz9", "AB123456-T_sorted",
-            "P-9990001-T01-IM6", "xxabc", "abcdefg", "_lead_fake", "trail_fake_", "Roe Ann.bam",
-            "fake.dots.name", "ab12", "20240115", "SAM_PLE", "EN-TRY", "C-ABC123-L001-d"]
+            "P-9990001-T01-IM6", "xxabc", "abcdefg", "Roe Ann.bam", "fake.dots.name", "ab12",
+            "20240115", "SAM_PLE", "EN-TRY", "C-ABC123-L001-d", "PLE12", "Donor_FAKE7",
+            "s_C_FAKE01", "chr1_12345_A", "12345678", "XY123456-N", "run2024_01", "_lead_fake",
+            "trail_fake_", "ABCDE12"]
 R9_PIECES = ["FAKE", "PT", "0001", "0002", "Doe", "Jane", "T", "xyz9", "AB123456", "sorted", "P",
-             "9990001", "T01", "IM6", "xx", "abc", "defg", "lead", "trail", "Roe", "Ann", "bam",
-             "dots", "name", "ab", "12", "2024", "0115", "SAM", "PLE", "EN", "TRY", "C", "ABC123",
-             "L001", "d", "chr1", "12345", "x", "file", "q"]
-R9_SEPS = ["-", "_", ".", " ", "", "", "‐", "–", " ", "/", "\t", ":", ","]
+             "9990001", "T01", "IM6", "xx", "abc", "defg", "Roe", "Ann", "bam", "C", "ABC123", "PLE",
+             "12345", "PLE12345", "L001", "d", "chr1", "s", "Donor", "FAKE7", "2024", "01", "15",
+             "0115", "N", "XY123456", "1,234,567", "a:b:c:d:e", "out", "x.vcf", ".vcf", ".1.vcf",
+             "٠١", "١٢٣٤٥", "Q123", "fakept", "SAMPLE", "ENTRY",
+             "jan", "3", "12:00", "MRN77", "lead", "trail", "ABCDE"]
+R9_SEPS = ["-", "_", ".", " ", "", "", "", "‐", "–", "−", " ", "/", "\t", ":",
+           ",", "'"]
+R9_PACKS = [(("genomics",), ()), (("genomics", "msk"), ()), (("genomics", "msk", "dates"), ()),
+            (("genomics",), (r"\bQ\d{3,}\b => <QID>", r"(?i)\bfake[_-]?pt\b => <FAKEPT>"))]
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("packs,patterns", [
-    (("genomics",), ()), (("genomics", "msk"), ()),
-    (("genomics",), (r"\bQ\d{3,}\b => <QID>", r"(?i)\bfake[_-]?pt\b => <FAKEPT>")),
-])
-@pytest.mark.parametrize("table", [False, True])
-def test_never_less_masked_than_before(packs, patterns, table):
-    new, old = _pair(R9_NAMES, packs, patterns)
-    rnd = random.Random(20261121)
-    for case in ("AB123456-T xyz9", "AB123456-T_xyz9", "xx-abcdefg", "_lead_fake x",
-                 "x trail_fake_ y"):
-        _never_less(new, old, case, table)
-    for _ in range(4000):
+def _r9_lines(seed, n):
+    rnd = random.Random(seed)
+    for _ in range(n):
         parts = []
         for _ in range(rnd.randint(1, 8)):
             parts += [rnd.choice(R9_PIECES), rnd.choice(R9_SEPS)]
-        if rnd.random() < 0.3:
-            parts.insert(rnd.randrange(len(parts) + 1), rnd.choice(R9_NAMES))
-        _never_less(new, old, "".join(parts), table)
+        if rnd.random() < 0.4:
+            name = rnd.choice(R9_NAMES)
+            if rnd.random() < 0.5:
+                name = name.replace("-", rnd.choice(["‐", "–", "_", " ", ""]))
+            parts.insert(rnd.randrange(len(parts) + 1), name)
+        yield "".join(parts)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("packs,patterns", R9_PACKS)
+@pytest.mark.parametrize("table", [False, True])
+def test_never_less_masked_than_before(packs, patterns, table):
+    new, old = _pair(R9_NAMES, packs, patterns)
+    for case in ("AB123456-T xyz9", "AB123456-T_xyz9", "xx-abcdefg", "_lead_fake x",
+                 "x trail_fake_ y", "MRN77_Roe Ann.bam.1.vcf", "PT‐xyz90002",
+                 "C–PLE12345", "Donor–1,234,567", "ABCDE 12345"):
+        assert _less(new, old, case, table) is None, _less(new, old, case, table)
+    bad = [f for seed in range(1, 6) for f in (_less(new, old, x, table)
+                                                for x in _r9_lines(seed, 1500)) if f]
+    assert not bad, (len(bad), bad[:5])
 
 
 # --- R10: speed ----------------------------------------------------------------------------------
@@ -375,7 +422,7 @@ def test_speed_within_the_targets():
     t_new = time.perf_counter() - t
     re.purge()
     t = time.perf_counter()
-    old = _BeforeTimed(strings=strings)
+    old = _Before(strings=strings)
     t_old = time.perf_counter() - t
     lines = _made_up_lines(400000)
     size = sum(len(x) + 1 for x in lines)
