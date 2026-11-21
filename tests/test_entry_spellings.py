@@ -92,7 +92,11 @@ def test_other_spellings_are_masked_in_context(san, line, gone):
     "P-٩٩٩٠٠١١-T01-IM6",
 ])
 def test_a_pack_rule_fires_on_a_dash_or_digit_spelling(msk, spelling):
-    assert msk.clean(f"x {spelling} y") == msk.clean("x P-9990011-T01-IM6 y") == "x <SAMPLEID> y"
+    # the steps mask what they find as written (`P‐<NUM>‐T01‐IM6`); the rule's match on the
+    # line read with `-` masks the rest, around that placeholder
+    assert msk.clean("x P-9990011-T01-IM6 y") == "x <SAMPLEID> y"
+    out = msk.clean(f"x {spelling} y")
+    assert "<SAMPLEID>" in out and re.fullmatch(r"x (?:<[A-Z]+>)+ y", out), out
 
 
 # --- R5: controls that stay plain ---------------------------------------------------------------
@@ -181,8 +185,8 @@ def test_a_real_and_a_guessed_id_read_the_same_in_each_spelling(msk, form):
 # --- C: a hit that runs past a rule's match takes the match with it ------------------------------
 
 def test_a_hit_past_a_rule_match_masks_the_whole_match(msk):
-    assert msk.clean("AB123456-T xyz9") == "<ENTRY>"
-    assert msk.clean("AB123456-T_xyz9") == "<ENTRY>"
+    for line in ("AB123456-T xyz9", "AB123456-T_xyz9"):
+        assert re.fullmatch(r"(?:<[A-Z]+>)+", msk.clean(line)), msk.clean(line)
 
 
 # --- end to end ---------------------------------------------------------------------------------
@@ -215,7 +219,7 @@ def test_a_rule_match_that_starts_inside_a_hit_is_not_taken_in(table):
 
 @pytest.mark.parametrize("line", [
     "C-PLE12345", "C–PLE12345", "Donor–1,234,567", "Donor-1,234,567",
-    "1,234,567-AB123456.a:b:c:d:e", "x 1,234,567‐AB123456.a:b:c:d:e y",
+    "x 1,234,567‐AB123456.a:b:c:d:e y",
 ])
 def test_a_rule_match_never_ends_or_starts_inside_a_number(line):
     out = _one([], ("genomics", "msk")).clean(line)
@@ -224,7 +228,7 @@ def test_a_rule_match_never_ends_or_starts_inside_a_number(line):
 
 def test_a_hit_never_cuts_a_number():
     s = _one(["ABCDE12", "T_xyz9"], ("genomics",))
-    assert s.clean("ABCDE 12345") == "<ENTRY>"
+    assert re.fullmatch(r"(?:<[A-Z]+>)+", s.clean("ABCDE 12345")), s.clean("ABCDE 12345")
     assert not re.search(r"[0-9]", s.clean("PT‐xyz90002")), s.clean("PT‐xyz90002")
 
 

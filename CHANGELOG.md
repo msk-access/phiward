@@ -121,21 +121,22 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   exist would; nothing is masked less than before. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
   hook refuses them as identifiers.
 - Entry names now match across dashes, digits and separators. The sanitizer reads every dash
-  (U+2010, U+2013, U+2212, ...) as `-`, in lines and names alike, and prints the masked line in
-  that form; pack rules written with `-` match those spellings too. Other decimal digits
-  (Arabic-Indic `٠١`, ...) are matched as ASCII digits, by entry names and by pack rules, and
-  printed as written (Python 3.9 knows fewer of them than later versions). A name of 5 or more
+  (U+2010, U+2013, U+2212, ...) as `-`, in lines and names alike, to find names in other
+  spellings; pack rules written with `-` match those spellings too. Other decimal digits
+  (Arabic-Indic `٠١`, ...) are matched as ASCII digits, by entry names and by pack rules (Python
+  3.9 knows fewer of them than later versions). The masked line is printed as written. A name
+  of 5 or more
   letters and digits, with a letter, is also masked with its separators (`-`, `_`, `.`, a
   space) changed or left out: `FAKE-PT-0001` masks `FAKE_PT_0001`, `FAKE PT 0001` and
   `FAKEPT0001`. Shorter names, digits-only names and names with a separator at either end are
   matched as written only; a name whose stem is matched that way (`FAKE-PT-0001.bam`) is
-  matched whole as written only, so its extension stays for the file rules. The masks the
-  sanitizer made before are all kept; the hits in other spellings, and each rule's own matches
-  on the line, are added to them, so a line is never masked less than before. Overlapping masks
-  become one placeholder: a mask made as before that covers them all keeps its placeholder,
-  else a rule's match that covers them all, else `<PROTECTED>`, then `<ENTRY>`, then the
-  placeholder of the first. Every mask takes the whole of a number it starts or ends inside
-  (`C-PLE12345`, `Donor-1,234,567`, `SAM_PLE12:00`). The `msk` CMO rule takes
+  matched whole as written only, so its extension stays for the file rules. The sanitizer
+  masks a line as before, then masks the names in other spellings, and each rule's matches on
+  the line read that way, in the text it left; its placeholders stay as they are, so a line is
+  never masked less than before. Such a mask takes the whole of a number it starts or ends
+  inside (`SAM_PLE12:00`), and overlapping ones become one placeholder: a rule's match that
+  covers them all, else `<ENTRY>` when a name is in it, else that of the first. The `msk` donor
+  rule takes the groups of a number it ends in (`Donor-1,234,567`). The `msk` CMO rule takes
   the whole run (`C-\w{6,}`), and the `genomics` read-name rule takes a first field with dots
   anywhere and no longer swallows the start of the next read name. A root whose name holds
   another dash also matches a path written with `-`, so the hook and the git hooks refuse that

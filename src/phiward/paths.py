@@ -371,7 +371,7 @@ class _TextFinder:
     def __init__(self, roots: Sequence[str], patterns: Sequence[str]):
         literals = list(roots)
         self.patterns: List[_TextPattern] = []
-        # each pattern also in the form the sanitizer puts lines in (`inventory.normalize`):
+        # each pattern also with every dash as `-` (`inventory.normalize`), as a line may write it:
         # its literal part, resolved, may hold another dash or other digits
         for p in dict.fromkeys(f for q in patterns for f in (q, inventory.normalize(q))):
             comps = pathmatch.parts(p)
@@ -384,8 +384,8 @@ class _TextFinder:
                 _fold_full("/" + "".join(c + "/" for c in comps[:first])),
                 [_fold_full(c).split("*") for c in later],
                 [{s: c.count(s) for s in _SEPARATORS} for c in later]))
-        # every root also in the form the sanitizer puts lines in (`inventory.normalize`: NFKC,
-        # every dash as `-`, ASCII digits), in NFKC, NFC and NFD: a root written in another form
+        # every root also with every dash as `-` (`inventory.normalize`: NFKC, as a line may
+        # write it), in NFKC, NFC and NFD: a root written in another form
         # is found all the same; longer first, so a root inside another one is matched whole
         # (folded as names are, `ß` as `ss`, and found in the folded text)
         forms: List[str] = []

@@ -22,7 +22,7 @@ import bisect
 import os
 import re
 import unicodedata
-from typing import Callable, Dict, Iterable, List, Optional, Pattern, Sequence, Set, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Pattern, Sequence, Set, Tuple
 
 from phiward import pathmatch
 
@@ -64,11 +64,21 @@ def normalize(text: str) -> str:
     form (full-width and other look-alike letters become plain ones, a decomposed accent is
     composed), format characters (zero-width spaces, direction marks) removed, every dash as
     `-` (`DASHES`: U+2010, U+2013, U+2212...). Lines and entry names both go through it, so
-    they meet in the same form; the masked line is printed in it too. Other decimal digits stay
-    as they are (the rules' `\\d` matches them, and a rule's `[A-Za-z0-9]` does not): the entry
-    matcher reads them as ASCII (`Matcher`), one character for one, so places do not move."""
+    they meet in the same form (the sanitizer reads and prints a line `unfolded`, and reads it
+    with `fold` for other spellings). Other decimal digits stay as they are here."""
     text = unfolded(text)
     return text if text.isascii() else text.translate(DASHES)
+
+
+def fold(text: str) -> str:
+    """`text` with every dash as `-` and other decimal digits as ASCII digits, one character
+    for one (places do not move): how other spellings of a name are read."""
+    if text.isascii():
+        return text
+    return ascii_digits(_DASH.sub("-", text))
+
+
+_DASH = re.compile("[" + "".join(re.escape(chr(c)) for c in sorted(DASHES) if c != 0x2D) + "]")
 
 
 def unfolded(text: str) -> str:
@@ -88,7 +98,7 @@ def _strings_of(name: str, stop: Set[str]) -> List[str]:
         # a name that is not valid UTF-8 (Linux): output is decoded with "replace", so mask it
         # in that form too
         name = name.encode("utf-8", "surrogateescape").decode("utf-8", "replace")
-    name = normalize(name)
+    name = unfolded(name)
     pieces = [p for p in re.split(r"[\x00-\x1f\x7f]", name) if p]
     if len(pieces) > 1:
         # a name with a line break or a tab: tools print it split, escaped (`\n`) or with `?`,
@@ -197,6 +207,13 @@ def _trie_regex(words: Iterable[str]) -> str:
 _SEP_RUN = re.compile("[-_." + "".join(chr(c) for c in _ZS) + "]+")
 
 
+def _glue(line: str) -> str:
+    """`line` with its separators left out (`_SEP_RUN`)."""
+    if line.isascii():  # the separators an ASCII line can hold: `-`, `_`, `.` and a space
+        return line.replace(" ", "").replace("-", "").replace("_", "").replace(".", "")
+    return _SEP_RUN.sub("", line)
+
+
 def _glued(s: str) -> Optional[str]:
     """`s` with its separators left out, when it is matched that way: 5 or more letters and
     digits with a letter, and no separator at either end (such a string is matched as written,
@@ -241,54 +258,46 @@ def _line_places(line: str) -> Callable[[int], int]:
 
 
 class Matcher:
-    """The entry names of one inventory as two tries: every string as written (the trie the
-    masking used before other spellings were matched: `before` reads a line with it), and the
-    long strings (`_glued`) by their separator-free keys, searched in the line with its
-    separators left out (a hit maps back to the line from its first to its last character,
-    separators inside included)."""
+    """The entry names of one inventory: every string as written (`finditer`: the masking's own
+    steps read a line with it), and for other spellings (`spans`) the strings as `fold` writes
+    them that differ, and the long strings (`_glued`) by their separator-free keys, searched in
+    the line with its separators left out (a hit maps back to the line from its first to its
+    last character, separators inside included)."""
 
-    def __init__(self, literal: Optional[Pattern[str]], glued: Optional[Pattern[str]]):
+    def __init__(self, literal: Pattern[str], folded: Optional[Pattern[str]],
+                 glued: Optional[Pattern[str]]):
         self.literal = literal
+        self.folded = folded
         self.glued = glued
 
-    def spans(self, line: str) -> List[Tuple[int, int]]:
-        """Every hit in `line`, as (start, end) in `line`, in order of start, overlapping ones
-        too. The line's decimal digits are read as ASCII (one character for one: places do not
-        move)."""
-        return self.found(line)[0]
+    def finditer(self, line: str) -> Iterator["re.Match[str]"]:
+        return self.literal.finditer(line)
 
-    def found(self, line: str, before: Optional[str] = None
-              ) -> Tuple[List[Tuple[int, int]], Optional[List[Tuple[int, int]]]]:
-        """`spans(line)`, and `before(before)` when `before` is given (from the same search
-        when `before` reads as `line` does)."""
-        folded = ascii_digits(line)
-        starts = _all_starts(self.literal, folded) if self.literal is not None else []
-        out = starts
+    def other(self, line: str) -> bool:
+        """Whether `line` (with no dash or digit that `fold` changes) may hold a name in another
+        spelling than as written: a separator-free key whose text in the line is not a string
+        as written, or a folded string (one search of the line with its separators left out)."""
         if self.glued is not None:
-            hits = _all_starts(self.glued, _SEP_RUN.sub("", folded))
+            hits = _all_starts(self.glued, _glue(line))
             if hits:
-                at = _line_places(folded)
-                out = sorted(starts + [(at(a), at(b - 1) + 1) for a, b in hits])
-        old: Optional[List[Tuple[int, int]]] = None
-        if before is not None:
-            if before == folded:
-                # what `finditer` finds: from the left, the longest match at each place one
-                # starts, after the end of the one before
-                old, end = [], 0
-                for a, b in starts:
-                    if a >= end:
-                        old.append((a, b))
-                        end = b
-            else:
-                old = self.before(before)
-        return out, old
+                at = _line_places(line)
+                if any(not self.literal.fullmatch(line, at(a), at(b - 1) + 1) for a, b in hits):
+                    return True
+        return self.folded is not None and self.folded.search(line) is not None
 
-    def before(self, line: str) -> List[Tuple[int, int]]:
-        """The hits the masking found before other spellings were matched: the strings as
-        written, from the left, one after another (no hit inside another)."""
-        if self.literal is None:
-            return []
-        return [m.span() for m in self.literal.finditer(line) if m.end() > m.start()]
+    def spans(self, line: str) -> List[Tuple[int, int]]:
+        """Every hit in `line` read as `fold` writes it, as (start, end) in `line` (one
+        character for one), in order of start, overlapping ones too."""
+        line = fold(line)
+        out = _all_starts(self.literal, line)
+        if self.folded is not None:
+            out += _all_starts(self.folded, line)
+        if self.glued is not None:
+            hits = _all_starts(self.glued, _glue(line))
+            if hits:
+                at = _line_places(line)
+                out += [(at(a), at(b - 1) + 1) for a, b in hits]
+        return sorted(out)
 
     def search(self, text: str) -> bool:
         return bool(self.spans(text))
@@ -325,10 +334,8 @@ def matcher(strings: Iterable[str], stop: Iterable[str] = (),
             keys[w] = None if k is None or k.casefold() in pieces else k
         return keys[w]
 
-    folded = [w if w.isascii() else ascii_digits(w) for w in words]  # as `spans` reads a line
+    folded = [fold(w) for w in words]  # as `spans` reads a line
     present = set(folded)
-    # every string as written (also with its digits as ASCII), in one trie
-    literal = sorted(set(words) | present)
     glued: Set[str] = set()
     for w in folded:
         k = key_of(w)
@@ -340,7 +347,9 @@ def matcher(strings: Iterable[str], stop: Iterable[str] = (),
             glued.add(k)
     # A trie regex prefers the longest match at each place, because every optional part is
     # greedy; masking the longest name first keeps a stem from leaving the rest of a name.
-    got = Matcher(re.compile(_trie_regex(literal), re.IGNORECASE) if literal else None,
+    other = sorted(present - set(words))
+    got = Matcher(re.compile(_trie_regex(words), re.IGNORECASE),
+                  re.compile(_trie_regex(other), re.IGNORECASE) if other else None,
                   re.compile(_trie_regex(sorted(glued)), re.IGNORECASE) if glued else None)
     _MATCHER.clear()  # keep only the latest set: memory stays one matcher's worth
     _MATCHER[key] = got

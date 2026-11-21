@@ -664,8 +664,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
   Jane 1970`) is masked whole, after a root, under a pattern (`phi_*` matches `phi_Doe Jane`) and in
   escaped output (`Doe\ Jane`, from `ls -b`); the masked output shows an escaped space as a plain
-  space. Every dash is read as `-`, and the masked output shows it so; other decimal digits are
-  matched as ASCII digits and shown as written (Python 3.9, with Unicode 13, knows fewer of them
+  space. Every dash is read as `-`, and other decimal digits as ASCII digits, to match names and
+  rules; the masked output shows both as written (Python 3.9, with Unicode 13, knows fewer digits
   than later versions). A name of 5 or more letters and digits, with a letter, is also masked
   with its separators (`-`, `_`, `.`, a space) changed or left out; such a name may then mask
   ordinary text too (`sample_01` masks `sample 01`). A shorter or digits-only name, a name with

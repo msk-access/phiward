@@ -30,6 +30,6 @@ identifiers = [
   '(?<![A-Za-z0-9])s_C_\w+ => <CMOID>',
   # anonymized BAM stems: AB123456-T
   '(?<![A-Za-z0-9])[A-Z]{2}\d{6}-[A-Z](?![A-Za-z0-9]) => <BAMID>',
-  # donor names
-  '(?<![A-Za-z0-9])Donor[\w\-]+ => <DONOR>',
+  # donor names (with the groups of a number they end in: `Donor-1,234,567`)
+  '(?<![A-Za-z0-9])Donor[\w\-]+(?:(?<=\d),\d{3}(?!\d))* => <DONOR>',
 ]
