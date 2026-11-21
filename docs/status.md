@@ -10,8 +10,8 @@ tested yet. It lists only results that passed. Each line names its source; the t
 - **No run of the real Claude Code on a Linux machine has passed yet.** On Linux, only the test
   suite and a wrapped MCP server have run ([threat model](threat-model.md#for-reviewers-the-summary)).
 - **On RHEL 8 (kernel 4.18) the gateway cannot run.** That kernel has no Landlock, and
-  `phiward run` refuses to run without it. There the hook and Claude Code's sandbox work, and the
-  gateway does not ([hpc.md](hpc.md)).
+  `phiward run` refuses to run without it. The hook and Claude Code's sandbox are meant to work
+  there, but no run on RHEL 8 has passed yet ([hpc.md](hpc.md)).
 
 ## What passed
 
