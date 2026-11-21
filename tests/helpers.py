@@ -211,6 +211,24 @@ def fake_filter(path, works=True):
     return p
 
 
+def fake_native_claude(path, works=True, runs=True):
+    """A made-up stand-in for Claude Code's native build at `path`: started with
+    ARGV0=apply-seccomp it is the filter (it denies socket(AF_UNIX), unless not `works`, and runs
+    CMD; with runs=False it exits 0 without running CMD), as the real binary carries
+    apply-seccomp; otherwise it prints ARGV and its arguments as JSON."""
+    import sys
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"#!{sys.executable} -IS\nimport json, os, sys\n"
+                 "if os.environ.get('ARGV0') == 'apply-seccomp':\n"
+                 f"    if not {bool(runs)}:\n        sys.exit(0)\n"
+                 f"    WORKS = {bool(works)}\n" +
+                 "".join("    " + ln + "\n" for ln in _FAKE_FILTER.strip().splitlines()) +
+                 "print('ARGV', json.dumps(sys.argv[1:]))\n")
+    os.chmod(p, 0o755)
+    return p
+
+
 def filter_in_home(home) -> Path:
     """Where sandbox-runtime looks for `apply-seccomp` in a user-local npm folder:
     `~/.npm-global/lib/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/<arch>`."""

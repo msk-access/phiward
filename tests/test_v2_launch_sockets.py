@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from helpers import CONFINE_WHY, fake_filter, filter_in_home, landlock_abi, ready_line
+from helpers import (CONFINE_WHY, fake_filter, fake_native_claude, filter_in_home, landlock_abi,
+                     ready_line)
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -261,22 +262,76 @@ def test_claude_does_not_start_when_settings_open_its_sandbox(tree, sandbox):
     assert code == 126 and "RAN" not in out, out
 
 
+INNER = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                     "allowUnsandboxedCommands": False}}
+
+
+def argv_of(out):
+    import json
+    line = [ln for ln in out.splitlines() if ln.startswith("ARGV ")]
+    assert line, out
+    return json.loads(line[0][5:])
+
+
+def native(tree, **kw):
+    """A made-up native Claude Code on PATH (tree/bin/claude), with no sandbox-runtime anywhere."""
+    filter_in_home(tree / "home").unlink()
+    return fake_native_claude(tree / "bin" / "claude", **kw)
+
+
+def on_path(tree):
+    return {"PATH": f"{tree / 'bin'}:{os.environ['PATH']}"}
+
+
 @below9
 def test_claude_gets_settings_that_keep_its_sandbox_on(tree):
     import json
-    b = tree / "bin"
-    b.mkdir(exist_ok=True)
-    stub = b / "claude"
-    stub.write_text(f"#!{PY}\nimport json, sys\nprint('ARGV', json.dumps(sys.argv[1:]))\n")
-    stub.chmod(0o755)
-    code, out = launch(tree, "", "claude", extra_env={"PATH": f"{b}:{os.environ['PATH']}"},
-                       program=[])
-    line = [ln for ln in out.splitlines() if ln.startswith("ARGV ")]
-    assert line, out
-    argv = json.loads(line[0][5:])
-    assert argv[0] == "--settings", argv
-    assert json.loads(argv[1]) == {"sandbox": {"enabled": True, "failIfUnavailable": True,
-                                               "allowUnsandboxedCommands": False}}, argv
+    native(tree)
+    code, out = launch(tree, "", "claude", extra_env=on_path(tree), program=[])
+    argv = argv_of(out)
+    assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
+
+
+@below9
+def test_a_native_claude_with_its_own_filter_starts_without_sandbox_runtime(tree):
+    native(tree)
+    code, out = launch(tree, "print('RAN')", "claude", extra_env=on_path(tree))
+    assert "RAN" in out, out
+
+
+@below9
+@pytest.mark.parametrize("kw", [{"works": False}, {"runs": False}])
+def test_a_native_claude_whose_filter_does_not_block_unix_sockets_is_refused(tree, kw):
+    fake_native_claude(tree / "bin" / "claude", **kw)  # sandbox-runtime's filter is there too
+    code, out = launch(tree, "print('RAN')", "claude", extra_env=on_path(tree))
+    assert code == 126 and "RAN" not in out, out
+
+
+@below9
+@pytest.mark.parametrize("how", ["versioned", "wrapper"])
+def test_claude_gets_the_settings_whatever_its_path(tree, how):
+    import json
+    real = fake_native_claude(tree / "home" / ".local" / "share" / "claude" / "versions" /
+                              "2.1.330")
+    if how == "versioned":
+        prog = real
+    else:
+        prog = tree / "bin" / "my-claude"
+        prog.parent.mkdir(exist_ok=True)
+        prog.write_text(f'#!/bin/sh\nexec "{real}" "$@"\n')
+        prog.chmod(0o755)
+    code, out = launch(tree, "", "claude", program=["--", str(prog), "-p", "hello"])
+    argv = argv_of(out)
+    assert argv[:2] == ["-p", "hello"], argv
+    assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
+
+
+@below9
+def test_claude_does_not_start_when_the_settings_cannot_be_passed(tree):
+    # after `--`, Claude Code reads every word as an argument, --settings too
+    real = fake_native_claude(tree / "bin" / "claude")
+    code, out = launch(tree, "", "claude", program=["--", str(real), "--", "-p"])
+    assert code == 126 and "ARGV" not in out, out
 
 
 def test_claude_does_not_start_on_an_architecture_without_the_filter(tree):
