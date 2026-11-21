@@ -18,6 +18,7 @@ export SBX_BASE=/work SBX_SRC=/repo SBX_OUT=/out SBX_LOCKED
 if [ -n "$stub" ]; then
   SBX_BASE=$HOME/sbx/run SBX_TOOLS=$HOME/sbx/tools/bin
   mkdir -p -m 755 "$SBX_BASE" "$SBX_TOOLS"
+  ln -s /usr/bin/socat "$SBX_TOOLS/socat"  # root's: the one name SBX_TOOLS may hold
   export SBX_TOOLS
 fi
 { sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
@@ -88,5 +89,50 @@ else echo "== ok    the check's home is removed"; fi
 # the base below the home folder was taken, and the tools folder put on the session's PATH
 if grep -qxF "tools: $SBX_TOOLS on the PATH" /out/console.txt; then echo "== ok    SBX_TOOLS on the PATH"
 else echo "== MISSING SBX_TOOLS on the PATH"; status=1; fi
+# refusals in the cluster's shape (Linux keeps letter case and group bits as a cluster does): a
+# tools folder another account could write, or its parent, or its socat, is refused before the
+# build; a CLAUDE.md that appears above SBX_BASE after the first check (the operator put ~/.claude
+# back during the token prompt) is refused before the first session
+refused() {  # NAME TEXT: check.sh exited 2, said TEXT, and never started a session
+  o=$HOME/out-$1
+  if [ "$(cat "$o/rc")" = 2 ] && grep -qF -- "$2" "$o/console.txt" \
+      && ! grep -q "one session" "$o/console.txt"; then echo "== ok    refused: $1"
+  else echo "== NOT REFUSED: $1"; sed 's/^/   | /' "$o/console.txt" | tail -5; status=1; fi
+}
+refusal_run() {  # NAME BASE TOOLS: one check.sh --stub, its output in ~/out-NAME
+  o=$HOME/out-$1
+  mkdir -p -m 755 "$o"
+  SBX_BASE=$2 SBX_TOOLS=$3 SBX_OUT=$o sh /repo/scripts/sandbox-check/check.sh --stub > "$o/console.txt" 2>&1
+  echo $? > "$o/rc"
+}
+tools_case() {  # NAME: a base and a tools folder with a socat, both private
+  mkdir -p -m 755 "$HOME/sbx-$1/run" "$HOME/sbx-$1/tools/bin"
+  printf '#!/bin/sh\nexit 1\n' > "$HOME/sbx-$1/tools/bin/socat"
+  chmod 755 "$HOME/sbx-$1/tools/bin/socat"
+}
+tools_case gw; chmod 775 "$HOME/sbx-gw/tools/bin"
+refusal_run gw "$HOME/sbx-gw/run" "$HOME/sbx-gw/tools/bin"
+refused gw "SBX_TOOLS is not a safe PATH folder"
+tools_case gp; chmod 775 "$HOME/sbx-gp/tools"
+refusal_run gp "$HOME/sbx-gp/run" "$HOME/sbx-gp/tools/bin"
+refused gp "SBX_TOOLS is not a safe PATH folder"
+tools_case gs; chmod 666 "$HOME/sbx-gs/tools/bin/socat"
+refusal_run gs "$HOME/sbx-gs/run" "$HOME/sbx-gs/tools/bin"
+refused gs "SBX_TOOLS is not a safe PATH folder"
+for n in gw gp gs; do
+  if grep -q "^building in" "$HOME/out-$n/console.txt"; then echo "== LATE  refused $n after the build began"; status=1
+  else echo "== ok    refused $n before the build"; fi
+done
+tools_case late
+# the name appears once the check is past its first look (the wrapped server is set up)
+( for _i in $(seq 1200); do
+    if ls "$HOME"/sbx-late/run/phiward-sbx-*/wrap.out >/dev/null 2>&1; then
+      echo made up > "$HOME/sbx-late/CLAUDE.md"; exit 0
+    fi
+    sleep 0.1
+  done ) &
+refusal_run late "$HOME/sbx-late/run" "$HOME/sbx-late/tools/bin"
+wait
+refused late "$HOME/sbx-late/CLAUDE.md is above SBX_BASE"
 [ "$status" = 0 ] && echo "PASS stub plumbing" || echo "FAIL stub plumbing"
 exit $status

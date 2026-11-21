@@ -1099,8 +1099,8 @@ def test_the_home_folder_itself_is_refused_as_the_base(tmp_path):
     assert "SBX_BASE may not be your home folder" in r.stderr
 
 
-@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude", ".git", ".mcp.json",
-                                  ".phiward.toml", ".agent-guards.toml"])
+@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".claude", ".git",
+                                  ".mcp.json", ".phiward.toml", ".agent-guards.toml"])
 @pytest.mark.parametrize("where", ["home", "between", "base"])
 def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_path, name, where):
     """Claude Code reads CLAUDE.md, CLAUDE.local.md and .claude/rules from every folder above the
@@ -1159,13 +1159,44 @@ def test_sbx_tools_in_or_above_the_base_is_refused(tmp_path, rel):
     assert "SBX_TOOLS" in r.stderr
 
 
+def _socat(folder):
+    """A made-up socat (it is never run)."""
+    f = folder / "socat"
+    f.write_text("#!/bin/sh\nexit 1\n")
+    f.chmod(0o755)
+    return f
+
+
 def test_sbx_tools_next_to_the_base_is_placed(tmp_path):
     home, base = _made_up_home(tmp_path)
     t = home / "phiward-sbx" / "tools" / "bin"
     t.mkdir(parents=True)
+    _socat(t)
     r = _places(tmp_path, "sbx_tools_place", t, base)
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == str(t)
+
+
+@pytest.mark.parametrize("extra", ["bwrap", "git", "sh", ".hidden", "socat.d"])
+def test_sbx_tools_holds_only_socat(tmp_path, extra):
+    """Any other name could shadow a program the sandbox or the check runs (bwrap, git, sh)."""
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    _socat(t)
+    (t / extra).write_text("made up\n")
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS may hold only socat" in r.stderr
+
+
+def test_sbx_tools_without_socat_is_refused(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS holds no socat" in r.stderr
 
 
 def _phiward_env(tmp_path):
@@ -1176,9 +1207,12 @@ def _phiward_env(tmp_path):
 
 
 def _tools_safe(tmp_path, tools):
+    """The check runs it before the build: the source tree's phiward, by an isolated Python
+    (-I, so no PYTHONPATH), with the check's home."""
     import sys
     home, env = _phiward_env(tmp_path)
-    return _places(tmp_path, "sbx_tools_safe", sys.executable, tools, env=env)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_tools_safe", sys.executable, SRC, home, tools, env=env)
 
 
 @pytest.fixture
@@ -1209,6 +1243,7 @@ def test_sbx_tools_writable_by_group_is_refused(tmp_path, outside_temp, bad):
     t.mkdir(parents=True)
     t.parent.chmod(0o755)
     t.chmod(0o755)
+    _socat(t)
     (t if bad == "tools" else t.parent).chmod(0o775)
     r = _tools_safe(tmp_path, t)
     assert r.returncode == 2
@@ -1220,6 +1255,7 @@ def test_sbx_tools_in_a_temp_folder_is_refused(tmp_path):
     home, _env = _phiward_env(tmp_path)
     t = home / "tmp" / "tools"
     t.mkdir(parents=True)
+    _socat(t)
     r = _tools_safe(tmp_path, t.resolve())
     assert r.returncode == 2
     assert "SBX_TOOLS is not a safe PATH folder (a temp folder" in r.stderr
@@ -1230,8 +1266,37 @@ def test_a_safe_sbx_tools_passes(tmp_path, outside_temp):
     t.mkdir(parents=True)
     t.parent.chmod(0o755)
     t.chmod(0o755)
+    _socat(t)
     r = _tools_safe(tmp_path, t)
     assert r.returncode == 0, r.stderr
+
+
+def test_a_socat_others_can_write_is_refused(tmp_path, outside_temp):
+    """The folder is safe, the file in it is not (umask 002 on a cluster): another account could
+    replace what Claude Code's sandbox runs."""
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t).chmod(0o666)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
+
+
+def test_a_socat_linked_into_a_folder_others_can_write_is_refused(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    shared = outside_temp / "shared"
+    shared.mkdir()
+    real = _socat(shared)
+    shared.chmod(0o777)
+    (t / "socat").symlink_to(real)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
 
 
 @pytest.mark.parametrize("tools, want", [
