@@ -151,7 +151,7 @@ def test_a_link_walk_past_its_bound_refuses_the_start(tree):
     code, out = _launch(tree, "print('RAN')",
                         pre="from phiward import claude_settings\nclaude_settings.TREE_WALK = 5")
     assert "RAN" not in out and code != 0, out
-    assert "nothing runs" in out, out
+    assert "nothing runs" in out and str(repo / "shared" / "skills") in out, out
 
 
 @needs_confine
@@ -193,6 +193,54 @@ def test_nested_ones_made_in_the_session(tree):
             assert os.path.relpath(t, repo) in report, (t, out)
         else:
             assert _refused(out, t), (t, out)
+
+
+# trees of installed code, which runs anyway: protecting a `.vscode` in them adds nothing
+SKIPPED = ("node_modules/pkg/.vscode/settings.json",
+           ".venv/lib/python3.12/site-packages/x/.idea/a.xml",
+           "renv/library/R-4.4/x86_64/pkg/.Rprofile", "target/debug/.vscode/x.json")
+
+
+@needs_confine
+@pytest.mark.parametrize("who", ["tool", "server"])
+def test_installed_trees_stay_writable_and_project_ones_do_not(tree, who):
+    repo = tree / "repo"
+    for rel in SKIPPED + ("sub/.vscode/tasks.json",):  # there at the start: a reinstall
+        (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+        (repo / rel).write_text("{}\n")
+    targets = [repo / rel for rel in SKIPPED]
+    real = repo / "sub" / ".vscode" / "tasks.json"
+    _, out = _launch(tree, _tries([str(t) for t in targets] + [str(real)]),
+                     ENTRY if who == "server" else ())
+    for t in targets:
+        assert f"DONE {t}" in out, (t, out)
+    assert _refused(out, real), out
+
+
+@needs_confine
+@pytest.mark.slow
+def test_big_claude_worktrees_do_not_stop_the_start(tree):
+    nm = tree / "repo" / ".claude" / "worktrees" / "w" / "node_modules"
+    for i in range(60):
+        d = nm / f"p{i}"
+        d.mkdir(parents=True)
+        for j in range(1000):
+            (d / f"f{j}.js").write_text("")
+    code, out = _launch(tree, "print('RAN')")
+    assert "RAN" in out, out
+
+
+@needs_confine
+def test_a_walk_that_stops_says_where(tree):
+    repo = tree / "repo"
+    for i in range(10):
+        (repo / f"d{i}" / "e").mkdir(parents=True)
+    code, out = _launch(tree, "print('RAN')",
+                        pre="from phiward import wholetool\nwholetool.RUNS_LATER_WALK = 5")
+    assert "RAN" in out, out
+    start, report = out.split("RAN", 1)
+    for part in (start, report):
+        assert "stopped" in part and str(repo) in part, out
 
 
 # --- 4. the wrapped server on Linux: the editor folders and files too -----------------------------
@@ -253,7 +301,7 @@ def test_the_hook_asks_before_a_file_tool_writes_the_new_editor_folders(tree):
     assert _write(tree, repo / ".claude" / "worktrees" / "w" / "f.py", "default")[0] == "allow"
 
 
-# --- Mode A: nested .vscode and .idea on macOS ----------------------------------------------------
+# --- Mode A: nested .vscode and .idea are left to the hook ---------------------------------------
 
 NESTED_GLOBS = ("~/**/.vscode", "~/**/.vscode/**", "~/**/.idea", "~/**/.idea/**",
                 "~/**/.claude/skills/**", "~/**/.claude/agents/**", "~/**/.claude/hooks/**",
@@ -261,20 +309,13 @@ NESTED_GLOBS = ("~/**/.vscode", "~/**/.vscode/**", "~/**/.idea", "~/**/.idea/**"
                 "~/**/.claude/settings.local.json")
 
 
-@macos
-def test_mode_a_denies_nested_editor_folders_on_macos(tree):
-    from phiward import claude_settings, config, install
-    w = install.wiring(config.load(str(tree / "repo")), version=claude_settings.VERSION_PATTERNS)
-    deny = w["sandbox"]["filesystem"]["denyWrite"]
-    for g in NESTED_GLOBS:
-        assert g in deny, (g, deny)
-
-
-def test_mode_a_has_no_nested_globs_where_they_do_not_hold(tree, monkeypatch):
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_mode_a_has_no_nested_globs(tree, monkeypatch, platform):
+    # they would deny `npm install` and `git pull` in every project under the home folder
     from phiward import claude_settings, config, install
     cfg = config.load(str(tree / "repo"))
     cases = [install.wiring(cfg, version=(2, 0, 0))]
-    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(sys, "platform", platform)
     cases.append(install.wiring(cfg, version=claude_settings.VERSION_PATTERNS))
     for w in cases:
         deny = w["sandbox"]["filesystem"]["denyWrite"]
@@ -287,6 +328,7 @@ def test_mode_a_docs_say_what_claude_code_denies_itself():
     tm = (root / "docs" / "threat-model.md").read_text()
     assert "Claude Code's sandbox denies them to the shell" not in src
     assert "the working folder's own `.vscode` and `.idea`" in tm, "threat model"
+    assert "install` adds it" not in tm and "`.vscode` and `.idea` folder under your home" not in tm
 
 
 # --- the network limit ----------------------------------------------------------------------------
