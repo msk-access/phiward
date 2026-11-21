@@ -1628,8 +1628,12 @@ it likes in its own shell, write any file it can write, and choose what it asks 
 phiward's own profile, for the whole tool. An agent shell command cannot read or write anything in a
 protected root (or, on macOS, a pattern match), the hidden list, or the phiward config, code or
 status file. Claude Code's sandbox also keeps its own settings files, <code>.mcp.json</code>, the project's
-<code>.git/config</code> and hooks, and the shell startup files from being written. Git's other control files
-are a known limit (see "Git's control files" below). Links, letter case, nested shells and child
+<code>.git/config</code> and hooks, the working folder's own <code>.vscode</code> and <code>.idea</code>, and the shell startup
+files from being written. A nested <code>.vscode</code> or <code>.idea</code> (<code>sub/.vscode/tasks.json</code>) is not in
+that list: VS Code and JetBrains read one only when you open that subfolder as a workspace or
+project, and a rule for every depth would deny <code>npm install</code> and <code>git pull</code> in every project.
+The hook asks before a file tool writes one; a shell command can. Git's other control files are
+a known limit (see "Git's control files" below). Links, letter case, nested shells and child
 processes are covered for ASCII paths, because the kernel does the check. Exceptions (gaps 8, 9):
 other hard links to a protected file, other mounts of the same file system, and a root spelled
 <code>/System/Volumes/Data/...</code>. phiward does not confine the shell itself in Mode A. It checks that
@@ -1819,7 +1823,8 @@ a subagent's own tool calls reach the hook. For a write, in this order:
 2. Asked or refused: what Claude Code runs as code, and what an editor or a tool runs. Claude Code's
    code is skills, subagents, commands, hooks, workflows, plugins, routines, <code>launch.json</code> and
    <code>scheduled_tasks.json</code>, under any <code>.claude</code> folder but its <code>worktrees</code>, and under the user config
-   folder. An editor's or a tool's is any <code>.vscode</code> or <code>.idea</code> folder, <code>.gitmodules</code>, <code>.ripgreprc</code>.
+   folder. An editor's or a tool's is any <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> or <code>.codex</code>
+   folder, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code>, <code>.Renviron</code>.
    The hook asks you in the modes known to prompt (<code>default</code>, <code>acceptEdits</code>, <code>plan</code>). It refuses in
    every other (<code>bypassPermissions</code>, <code>dontAsk</code>, <code>auto</code>, a missing mode). A skill or subagent may
    hold hooks that run with your rights: allow it only after reading it.
@@ -2067,10 +2072,9 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     home folder (pre-commit, git dependencies of cargo, uv or npm). Claude Code's own worktrees are
     made outside it. Not covered by these rules: a <code>.git</code> folder renamed, changed and renamed back
     (a rule on <code>.git</code> itself would deny every write inside it).</li>
-<li>A wrapped MCP server's profile keeps the project's <code>.claude</code>, <code>.vscode</code> and <code>.git</code> folders
-    read-only. On macOS also <code>.idea</code>, <code>.gitmodules</code>, <code>.ripgreprc</code> and any <code>.git</code> made while it runs.
-    On Linux only the <code>.claude</code>, <code>.vscode</code> and <code>.git</code> folders that exist when it starts; <code>.idea</code>,
-    <code>.gitmodules</code>, <code>.ripgreprc</code> and a new <code>.git</code> are not covered there.</li>
+<li>A wrapped MCP server's profile is the session's (Mode B, "Files that run later"), and keeps
+    every <code>.git</code> folder of the project read-only as a whole too: on macOS also one made while it
+    runs; on Linux those that exist when it starts.</li>
 <li><code>doctor</code> names a <code>commondir</code> in the project's <code>.git</code>, and a <code>.git</code> file that leads to a folder
     the agent can write. It does not name a <code>commondir</code> that holds only <code>.</code> (git then uses that
     <code>.git</code> folder itself). Claude Code writes one at start on Linux when
@@ -2563,9 +2567,13 @@ for them. What changes for the operator:</p>
 <p><strong>Files that run later.</strong> A coding agent must write in the project, and you later run what is there:
 tests, builds, scripts, git with its hooks and config, editor tasks, git hook managers (<code>.husky/</code>,
 lefthook). No sandbox can tell a planted hook from a real change. <code>launch</code> makes the common places
-read-only (git control files of every repository it finds at start, <code>.claude</code> and <code>.vscode</code>
-settings, <code>.mcp.json</code>) and, on Linux, reports git control files a session changed, but the class
-cannot be closed by a list. <strong>The rule:</strong> treat everything in the project as written by the agent.
+read-only: git control files of every repository it finds at start, and, for the tool and a
+wrapped server alike, the <code>.claude</code>, <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> and <code>.codex</code>
+folders as a whole, <code>.mcp.json</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> and <code>.Renviron</code>, at
+any depth (on Linux, those that exist at start; it makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if
+there are none), and what a link inside them leads to (it refuses to start where it cannot
+tell). So R's <code>renv::init()</code>, which writes <code>.Rprofile</code>, runs once outside <code>launch</code>. On Linux it
+also reports git control files a session changed. But the class cannot be closed by a list. <strong>The rule:</strong> treat everything in the project as written by the agent.
 Run project commands inside <code>launch</code> (<code>phiward launch -- git status</code>, <code>phiward launch -- make
 test</code>), or read the change before you run it outside.</p>
 <p><strong>Known open items in this phase:</strong>
@@ -2584,14 +2592,14 @@ test</code>), or read the change before you run it outside.</p>
   writable (the compiler uses it);
 - <a id="open-git-control-files"></a>both systems: git control files are covered for the repositories found when <code>launch</code> starts (top,
   nested, submodules; up to 50,000 entries, skipping <code>node_modules</code>, <code>.venv</code> and similar).
-  Repositories created during a session, nested <code>.claude</code>, <code>.vscode</code>, <code>.mcp.json</code> files and git hook
-  managers (<code>.husky/</code>) are not: see the rule above. <code>.claude/settings.local.json</code> is read-only (it
-  can hold hooks), so Claude Code's "don't ask again" answers do not stay in the project under
+  Repositories created during a session and git hook managers (<code>.husky/</code>) are not: see the rule
+  above. <code>.claude</code> is read-only as a whole (its settings can hold hooks), so Claude Code's "don't
+  ask again" answers, <code>--worktree</code> and <code>/loop</code> durable tasks do not stay in the project under
   <code>launch</code>;
 - <a id="open-unix-sockets"></a>Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
-  Unix sockets made after <code>launch</code> starts, or with relative paths, are not covered. Missing settings
-  files are made as read-only <code>{}</code> placeholders in the project. After a session, <code>launch</code> reports
-  git control files that changed;
+  Unix sockets made after <code>launch</code> starts, or with relative paths, are not covered. <code>launch</code> makes
+  <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if they are missing, and <code>.mcp.json</code> as a read-only <code>{}</code>
+  placeholder. After a session, <code>launch</code> reports git control files that changed;
 - <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
   Kerberos ticket caches (the one <code>KRB5CCNAME</code> names, <code>krb5cc*</code> files in the shared temp folders,
   <code>/run/user/&lt;uid&gt;</code> on Linux), <code>~/.ssh</code>, the SSH agent, or the shared SSH connection's socket. So
@@ -2621,12 +2629,12 @@ run later" or to the macOS process model:</p>
 <tbody>
 <tr>
 <td><a id="l1"></a>L1</td>
-<td>macOS: other folders that a later plain run reads as settings (for example a nested <code>.claude</code>) can be made in the project. <code>launch</code> makes <code>.claude</code> at start and refuses to make <code>.vscode</code>, so these two cannot become links.</td>
+<td>Files that run later and are not in launch's list (<code>.husky/</code>, <code>.envrc</code>, <code>.devcontainer/</code>, <code>.tool-versions</code>, a <code>Makefile</code>) can be made or changed in the project; the exit report lists them.</td>
 <td>The rule above.</td>
 </tr>
 <tr>
 <td><a id="l2"></a>L2</td>
-<td>Linux: a missing <code>.vscode</code> folder can be made, with files in it. <code>launch</code> makes placeholders only in a <code>.vscode</code> that exists.</td>
+<td>Linux: a name of the list that is missing at the start can be made and written in the session: <code>.cursor</code>, <code>.gemini</code>, <code>.codex</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code> at the top, and any of them, <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are not walked, and the names of the list inside them stay writable; the links in <code>.claude/worktrees</code> are not followed. A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or <code>.idea</code> folder fails partway inside <code>launch</code>: run it in your own terminal.</td>
 <td>The rule above.</td>
 </tr>
 <tr>

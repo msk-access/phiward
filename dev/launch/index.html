@@ -1334,9 +1334,9 @@ were refused, and the gateway returned masked output. Mode B is for the terminal
 <td>read protected roots, patterns or derived folders (<code>.git</code>, snapshots, and on Linux other mounts of the same data); read credentials (<code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.claude</code>, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's <code>write_to</code> folders; write anywhere else</td>
 </tr>
 <tr>
-<td>Settings that run later</td>
+<td>Files that run later</td>
 <td></td>
-<td>change <code>.mcp.json</code>, <code>.claude/settings*.json</code>, <code>.vscode</code> settings, or git control files (hooks, config) in the project. On Linux a git control file that is missing at the start (<code>commondir</code>) can be made; the report at the end names it. A wrapped MCP server (<code>--entry</code>) cannot write the project's <code>.git</code> folders, <code>.claude</code> or <code>.vscode</code>; on macOS also <code>.idea</code>, <code>.gitmodules</code>, <code>.ripgreprc</code> or a new <code>.git</code> (on Linux a name missing at the start can be made)</td>
+<td>write, at any depth in the project, the <code>.claude</code>, <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> and <code>.codex</code> folders (each as a whole), <code>.mcp.json</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code>, or what a link inside them leads to; or git control files (hooks, config). On Linux <code>launch</code> makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if there are none and <code>.mcp.json</code> as a <code>{}</code> placeholder; the others, a git control file missing at the start (<code>commondir</code>), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (<code>--entry</code>) has the same profile, and cannot write the project's <code>.git</code> folders at all (on macOS also a new <code>.git</code>)</td>
 </tr>
 <tr>
 <td>Processes</td>
@@ -1441,6 +1441,23 @@ when in doubt, reinstall: the step names the command for the tool that installed
   (which may hold an <code>http.extraheader</code>), and, on macOS, Keychain items whose access list trusts
   the <code>security</code> tool (the session can reach the Keychain service). Keep tokens out of start-up
   files; prefer Mode A's test result for Keychain-backed tokens until Mode B is checked.</li>
+<li><strong>Files that other tools run later are read-only.</strong> Skills, agents, commands, hooks and
+  settings in the project's <code>.claude</code>, and editor and agent-tool settings (<code>.vscode</code>, <code>.idea</code>,
+  <code>.cursor</code>, <code>.gemini</code>, <code>.codex</code>), cannot be written inside <code>launch</code>: edit them in your own
+  terminal, or bring them in with <code>phiward carryover add</code>. Claude Code's <code>--worktree</code> and agent worktrees
+  (<code>isolation: worktree</code>; both write <code>.claude/worktrees/</code>) and <code>/loop</code> durable tasks (<code>.claude/scheduled_tasks.json</code>) do not work
+  inside <code>launch</code>. A folder that a link in them leads to (<code>.claude/skills -&gt; ../.agents/skills</code>)
+  is read-only too; <code>launch</code> refuses to start when such a link leads to a folder that holds the
+  project, to one that does not exist (Linux), or when one of these folders has more entries than
+  it walks for links (50,000 in one tree; it names the folder). Trees of installed code
+  (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are not
+  walked, and a <code>.vscode</code> or <code>.idea</code> inside them stays writable, so <code>npm install</code> works; nor are
+  the links in <code>.claude/worktrees</code> followed. R: <code>.Rprofile</code> and <code>.Renviron</code> are read-only, so run <code>renv::init()</code> (it writes
+  <code>.Rprofile</code>) once outside <code>launch</code>; <code>renv::restore()</code> and plain R work inside it (they write
+  <code>renv/library</code>, which stays writable).</li>
+<li><strong>A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or
+  <code>.idea</code> folder</strong> (at any depth) fails partway inside <code>launch</code>, since those folders are
+  read-only. Run them in your own terminal.</li>
 <li><strong>Git control files are read-only</strong> for the repositories found at the start, so <code>git remote
   add</code>, <code>git config</code>, <code>git submodule update --init</code>, <code>git worktree add</code> and <code>git push -u</code> fail
   inside <code>launch</code> (and <code>git switch</code> to a remote branch, <code>git branch -u</code>, <code>-m</code> and <code>-d</code> cannot

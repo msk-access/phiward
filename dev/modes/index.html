@@ -1418,7 +1418,8 @@ written beside the config file. <code>phiward mcp unwrap NAME</code> undoes it.<
 <p>Know that:
 - phiward must be installed with an install record (<code>uv tool install</code>), or the server needs
   <code>PHIWARD_DEV=1</code>;
-- <code>launch</code> makes a <code>.claude</code> folder in the project if there is none;
+- <code>launch</code> makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if there are none (on macOS only <code>.claude</code>),
+  and keeps the files that other tools run later read-only for the server, as for the tool;
 - the <code>env</code> keys of the MCP config reach the server only if <code>[launch] pass_env</code> lists them, and
   that setting passes them to every <code>launch</code> session, the agent's included;
 - on macOS, when Claude Code stops the server, only the launcher gets the signal: a server that

@@ -2083,13 +2083,18 @@ wildcard forms. List only the hosts you need, and as narrowly as you can.</p>
   wildcard over a top-level or two-part public suffix (<code>*.com</code>, <code>*.co.uk</code>) or over, or below, a
   common shared hosting name where anyone can have a site (<code>*.github.io</code>, <code>*.amazonaws.com</code>,
   <code>*.s3.amazonaws.com</code>, <code>*.vercel.app</code>, ...). This is a short list, not the whole public suffix list: check a
-  wildcard yourself. Empty: no host at all. Hosts of <code>WebFetch(domain:...)</code> allow rules in your user settings count too.</li>
+  wildcard yourself. Empty: no host at all (Claude Code 2.1.219 and newer read an empty
+  <code>allowedDomains</code> under <code>strictAllowlist</code> as no host). Hosts of <code>WebFetch(domain:...)</code> allow
+  rules count too, at every level (managed, user and project settings): <code>phiward doctor</code> warns
+  for each level that has one.</li>
 </ul>
 <p>What it does not limit: Claude Code's own connection to the model provider, the WebFetch and
-WebSearch tools, MCP servers, hooks, and Mode B (<code>phiward launch</code>). <code>install</code> only adds: to
-remove a host, or to open the network again, edit <code>sandbox.network</code> in
-<code>~/.claude/settings.json</code> yourself. <code>phiward doctor</code> shows how many hosts are open and names
-hosts in the settings that the config no longer lists.</p>
+WebSearch tools, MCP servers, hooks, and Mode B (<code>phiward launch</code>). With <code>limit = true</code>,
+<code>install</code> replaces <code>sandbox.network.allowedDomains</code> in your user settings with exactly
+<code>allowed_domains</code>, and prints each host it removes. To open the network again, set
+<code>limit = false</code> and edit <code>sandbox.network</code> in <code>~/.claude/settings.json</code> yourself. <code>phiward
+doctor</code> shows how many hosts are open, and warns about hosts in the settings that the config
+does not list.</p>
 <h3 id="git"><code>[git]</code><a class="headerlink" href="#git" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>protected_branches</code></strong> (list). The pre-push hook refuses a push that changes or deletes one.</li>
