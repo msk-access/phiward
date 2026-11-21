@@ -176,7 +176,7 @@ def test_a_stream_that_is_not_json_is_inconclusive_not_a_crash():
 
 # --- issue #6: Linux, Mode B, the new probes, the facts file ---
 
-CLEAN = "parent-environ readable=2 refused=1 token-names=0 pids=-"
+CLEAN = "parent-environ readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 pids=-"
 LINUX = GOOD.replace("DENIED not-permitted", "DENIED read-only").replace(
     "read-protected DENIED read-only", "read-protected DENIED empty-view").replace(
     "parent-environ n/a", CLEAN)
@@ -399,6 +399,7 @@ def test_gateway_class_is_not_printed_when_the_gateway_masked():
 
 
 PROBES = JUDGE.parent / "probes.sh"
+NAMES = JUDGE.parent / "token-names.txt"
 NO_BROKER = ("run refused: no phiward broker is running. The operator starts one with "
              "`phiward broker` in a terminal outside the agent.")
 # a made-up phiward per class: what it prints (the real phrases of src/phiward), and its exit
@@ -412,10 +413,12 @@ FAKES = {
 }
 
 
-def _probes(tmp_path, fake, proc=None, foreign=False):
+def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=False):
     """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
     `proc` as its /proc (a made-up one: {pid: environment dict, or None for an environ it cannot
-    read}; the probe's own process is "self"; `foreign`: /proc/$$ is another process).
+    read}; the probe's own process is "self", a child of 1; `foreign`: /proc/$$ is another
+    process; `names`: copy token-names.txt beside it; `grep_fails`: a grep that exits 2 on the
+    token-name pattern). Its stderr is in tmp_path/"stderr.txt".
     Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
     import subprocess
@@ -431,6 +434,12 @@ def _probes(tmp_path, fake, proc=None, foreign=False):
     (tmp_path / "settings.json").write_text("{}\n")
     (free / "b.txt").write_text("FREE-MARK-1\n")
     shutil.copy(PROBES, proj / "probes.sh")
+    if names:
+        shutil.copy(NAMES, proj / "token-names.txt")
+    if grep_fails:
+        (fbin / "grep").write_text('#!/bin/sh\ncase "$*" in *CLAUDE_CODE_OAUTH_TOKEN*) exit 2 ;; '
+                                   'esac\nexec /usr/bin/grep "$@"\n')
+        (fbin / "grep").chmod(0o755)
     if fake is not None:
         text, code = fake
         (fbin / "phiward").write_text(f"#!/bin/sh\ncat >&2 <<'EOF'\n{text}\nEOF\nexit {code}\n")
@@ -445,7 +454,8 @@ def _probes(tmp_path, fake, proc=None, foreign=False):
         root = tmp_path / "proc"
         for pid, env in {"self": {"PATH": "/x"}, **proc}.items():
             (root / str(pid)).mkdir(parents=True)
-            (root / str(pid) / "status").write_text("Name:\tx\nPPid:\t1\n")
+            ppid = 0 if str(pid) == "1" else 1
+            (root / str(pid) / "status").write_text(f"Name:\tx\nPPid:\t{ppid}\n")
             if env is not None:
                 (root / str(pid) / "environ").write_text(
                     "".join(f"{k}={v}\0" for k, v in env.items()))
@@ -459,6 +469,7 @@ def _probes(tmp_path, fake, proc=None, foreign=False):
            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
     r = subprocess.run(cmd, cwd=proj, env=env, capture_output=True, text=True, timeout=60)
+    (tmp_path / "stderr.txt").write_text(r.stderr)
     assert "probes-done" in r.stdout, r.stderr
     text = (proj / "results.txt").read_text()
     return dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln), text
@@ -824,12 +835,21 @@ def pe(value, base=None):
     return (LINUX if base is None else base).replace(CLEAN, f"parent-environ {value}")
 
 
+def scan(readable=2, refused=1, named=0, ancestors=0, error=0, pids="-"):
+    return (f"readable={readable} refused={refused} token-names={named} ancestors={ancestors} "
+            f"scan-error={error} pids={pids}")
+
+
 @pytest.mark.parametrize("mode", ["A", "B"])
 def test_a_token_name_in_a_readable_environ_is_fail(mode):
-    verdict, report = run(results=pe("readable=3 refused=0 token-names=1 pids=1"),
-                          platform="linux", mode=mode)
+    verdict, report = run(results=pe(scan(3, 0, 2, 1, 0, "1,9")), platform="linux", mode=mode)
     assert verdict == judge.FAIL, report
-    assert any("token" in ln and "PID 1" in ln for ln in report if ln.startswith("FAIL")), report
+    assert any(ln.startswith("FAIL") and "2 processes" in ln and "1 of them" in ln
+               and "ancestor" in ln and "PID 1" in ln and "PID 9" in ln for ln in report), report
+
+
+def test_a_token_name_is_fail_even_with_a_scan_error():
+    assert run(results=pe(scan(3, 0, 1, 0, 1, "9")), platform="linux")[0] == judge.FAIL
 
 
 def test_no_token_name_in_any_readable_environ_passes():
@@ -838,19 +858,20 @@ def test_no_token_name_in_any_readable_environ_passes():
     assert any(ln.startswith("ok") and "2 readable, 1 refused" in ln for ln in report), report
 
 
-@pytest.mark.parametrize("value", ["readable=0 refused=0 token-names=0 pids=-", "foreign-proc",
-                                   "n/a", "readable", "unreadable", "not-found", "own-pid-ns",
-                                   "readable=1 refused=0 token-names=0 pids=x",
-                                   "readable=1 refused=0 token-names=0", ""])
-def test_a_scan_that_saw_nothing_or_cannot_be_read_is_inconclusive(value):
+@pytest.mark.parametrize("value", [
+    scan(0, 0), scan(0, 5),                 # nothing readable: the reader may be broken
+    scan(2, 1, error=1),                    # a step of the read failed
+    "foreign-proc", "n/a", "readable", "unreadable", "not-found", "own-pid-ns",
+    scan(pids="x"), "readable=1 refused=0 token-names=0 pids=-",  # the old form
+    "readable=1 refused=0 token-names=0", ""])
+def test_a_scan_that_read_nothing_failed_or_cannot_be_read_is_inconclusive(value):
     verdict, report = run(results=pe(value), platform="linux")
     assert verdict == judge.INCONCLUSIVE, report
 
 
 def test_the_stand_in_holds_the_made_up_token_a_note():
     """The stub runs with no sandbox of its own: its token is visible, a note."""
-    verdict, report = run(results=pe("readable=3 refused=0 token-names=1 pids=5"),
-                          platform="linux", stub="yes")
+    verdict, report = run(results=pe(scan(3, 0, 1, 1, 0, "5")), platform="linux", stub="yes")
     assert verdict == judge.PASS, report
     assert any(ln.startswith("note") and "stand-in" in ln for ln in report), report
 
@@ -860,36 +881,74 @@ TOKEN_ENV = {"PATH": "/x", "CLAUDE_CODE_OAUTH_TOKEN": "FAKE-TOKEN-1"}
 
 def test_probe_the_reviewers_shape_bwrap_as_pid_1_holds_the_token(tmp_path):
     """bwrap as PID 1 of the sandbox's namespace, which started with the variable and then
-    unset it in its own process: its environ still holds it."""
+    unset it in its own process: its environ still holds it. PID 1 is the probe's ancestor."""
     proc = {1: TOKEN_ENV, 3: {"PATH": "/x", "TERM": "dumb"}}
     lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
-    assert lines["parent-environ"] == "readable=2 refused=0 token-names=1 pids=1", lines
+    assert lines["parent-environ"] == scan(2, 0, 1, 1, 0, "1"), lines
     verdict, _ = run(results=pe(lines["parent-environ"]), platform="linux")
     assert verdict == judge.FAIL
 
 
-@pytest.mark.parametrize("name", ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
-                                  "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_SESSION_ACCESS_TOKEN"])
-def test_probe_any_process_with_a_token_name_counts_however_it_is_named(tmp_path, name):
+def _names():
+    return [ln.strip() for ln in NAMES.read_text().splitlines()
+            if ln.strip() and not ln.startswith("#")]
+
+
+def test_the_name_list_holds_claude_codes_documented_credentials():
+    """One list (token-names.txt), from code.claude.com/docs/en/env-vars and authentication."""
+    names = _names()
+    for n in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+              "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "AWS_BEARER_TOKEN_BEDROCK",
+              "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "ANTHROPIC_AWS_API_KEY",
+              "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
+              "CLAUDE_CODE_MESSAGING_TOKEN"):
+        assert n in names, n
+    assert "CLAUDE_CODE_SESSION_ACCESS_TOKEN" not in names
+    assert len(names) == len(set(names)) and all(n.isupper() or "_" in n for n in names)
+    probes = PROBES.read_text()
+    assert not any(n in probes for n in names), "the probe holds a list of its own"
+
+
+@pytest.mark.parametrize("name", [
+    "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "AWS_SESSION_TOKEN", "MCP_CLIENT_SECRET",
+    "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "ANTHROPIC_FOUNDRY_AUTH_TOKEN"])
+def test_probe_any_process_with_a_listed_name_counts_however_it_is_named(tmp_path, name):
     """No test of which process is claude: a process with a renamed title, or seen by its
     command line only, counts by its environ."""
     proc = {1: {"PATH": "/x"}, 9: {"PATH": "/x", name: "FAKE-VALUE-1"}}
     lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
-    assert lines["parent-environ"] == "readable=2 refused=0 token-names=1 pids=9", lines
+    assert lines["parent-environ"] == scan(2, 0, 1, 0, 0, "9"), lines
     assert "FAKE-VALUE-1" not in text and name not in text, text
 
 
 def test_probe_nothing_readable_holds_a_name(tmp_path):
     proc = {1: {"PATH": "/x"}, 4: None, 7: {"PATH": "/x", "MY_TOKENISH": "FAKE-VALUE-2"}}
     lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
-    assert lines["parent-environ"] == "readable=2 refused=1 token-names=0 pids=-", lines
+    assert lines["parent-environ"] == scan(2, 1, 0, 0, 0, "-"), lines
     assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.PASS
     assert "FAKE-VALUE-2" not in text and "MY_TOKENISH" not in text
 
 
+def test_probe_a_refused_read_prints_nothing(tmp_path):
+    _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}, 4: None})
+    assert "environ" not in (tmp_path / "stderr.txt").read_text()
+
+
+def test_probe_a_grep_error_is_a_scan_error_not_no_name(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}}, grep_fails=True)
+    assert lines["parent-environ"] == scan(1, 0, 0, 0, 1, "-"), lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
+
+
+def test_probe_without_the_name_list_is_a_scan_error(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: TOKEN_ENV}, names=False)
+    assert "scan-error=1" in lines["parent-environ"], lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] != judge.PASS
+
+
 def test_probe_an_empty_proc_is_inconclusive(tmp_path):
     lines, _ = _probes(tmp_path, FAKES["refused"], proc={})
-    assert lines["parent-environ"] == "readable=0 refused=0 token-names=0 pids=-", lines
+    assert lines["parent-environ"] == scan(0, 0, 0, 0, 0, "-"), lines
     assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
 
 
