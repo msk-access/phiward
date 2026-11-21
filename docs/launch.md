@@ -207,10 +207,12 @@ when in doubt, reinstall: the step names the command for the tool that installed
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
     --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,
     ...), also after options (`claude --debug mcp list`), is not a session: some ignore
-    `--settings` and run. `launch` refuses it: run it outside `launch`. The commands, and which
-    options take a value, are read from the help of the program that runs (`claude --help`,
-    once more at each start, inside the session); a help that lists no commands stops the
-    start. Only Claude Code's native build is accepted (npm
+    `--settings` and run, and some are hidden from the help. `launch` refuses it: run it outside
+    `launch`. To tell a command from a prompt, `launch` asks the program that runs, inside
+    the session: `claude WORD --help` for the first word that is not an option (which options
+    take a value comes from `claude --help`). A Usage line other than the root's means a
+    command. A help that hangs, fails or has no Usage line stops the start. Cost: one help run
+    at each start, and one more when there is such a word. Only Claude Code's native build is accepted (npm
     and the installer give it from 2.1.250; for an older JavaScript build, run `claude
     install`). Before the tool starts, `launch` runs the filter of the program that will run
     (found on the session's `PATH`, then run by its real path) as Claude Code does (the native

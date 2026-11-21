@@ -132,8 +132,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   filter judged is that of the program that runs, and only Claude Code's native build is
   accepted (a JavaScript program, `env`, `npx`, `node` or a wrapper that adds arguments is
   refused). Your own `--settings` is refused unless it says just what launch passes, and so is
-  a Claude Code command (`claude mcp`, `doctor`, `logs`), also after options: the commands
-  are read from the help of the program that runs, and a help without them stops the start. Below
+  a Claude Code command (`claude mcp`, `daemon`, `rc`), also after options and hidden ones:
+  `launch` asks the program that runs (`claude WORD --help` has a Usage line of its own), and a
+  help that cannot be read stops the start. Below
   ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all (also their
   own; socketpairs and pipes work). The warnings about Landlock scopes are gone.
 - `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP

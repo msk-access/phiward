@@ -1414,61 +1414,65 @@ if unix == "inner":
         stop("Claude Code's seccomp filter (%s, as apply-seccomp) does not block unix sockets "
              "here; run the Claude Code binary directly: a wrapper that adds arguments, or "
              "another program (env, npx, node), is not its filter" % found)
-    # a Claude Code command (`claude mcp list`, `claude logs`) is no session: some take no
-    # --settings, some ignore it and run. Its commands and the options' values are those its own
-    # help lists (commander's layout), read here from the program that runs; a help that cannot
-    # be read stops the start. The root takes positional options: the first word that is not
-    # an option, or an option's value, is the command or the prompt
+    # a Claude Code command (`claude mcp list`, `claude daemon run`) is no session: some take
+    # no --settings, some ignore it and run, and some are hidden from the help. So the binary
+    # itself is asked: `claude WORD --help` prints a Usage line of its own for a command (any
+    # alias, hidden or not), the root's for a prompt. The root takes positional options: the
+    # first word that is neither an option nor an option's value (the arity from the root's
+    # help) is WORD; a word that may be an optional value is asked too. Any help that cannot be
+    # read stops the start. Cost: the root help, and one more for each word asked
     import re
     del env["ARGV0"]
-    try:
-        r = subprocess.run([found, "--help"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL, timeout=30, env=env)
-        text = r.stdout.decode("utf-8", "replace") if r.returncode == 0 else ""
-    except (OSError, subprocess.SubprocessError):
-        text = ""
-    commands, arity, part = set(), {}, None
+
+    def helped(words):
+        try:
+            r = subprocess.run([found] + words + ["--help"], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
+                               env=env)
+        except (OSError, subprocess.SubprocessError):
+            r = None
+        text = r.stdout.decode("utf-8", "replace") if r is not None and r.returncode == 0 else ""
+        usage = next((ln.strip() for ln in text.splitlines() if ln.startswith("Usage:")), None)
+        if usage is None:
+            stop("`%s %s--help` cannot be read; launch cannot tell a Claude Code command from a "
+                 "prompt" % (found, "".join(w + " " for w in words)))
+        return usage, text
+
+    root, text = helped([])
+    arity, part = {}, None
     for ln in text.splitlines():
         if ln and not ln[0].isspace():
             part = ln.strip()
             continue
-        m = re.match(r"  (\S.*?)(?:  |$)", ln)
-        if not m:
-            continue
-        if part == "Commands:":
-            commands.update(m.group(1).split()[0].split("|"))
-        elif part == "Options:" and m.group(1).startswith("-"):
+        m = re.match(r"  (-\S.*?)(?:  |$)", ln)
+        if part == "Options:" and m:
             spec = m.group(1)
             kind = ("many" if re.search(r"\.\.\.[>\]]", spec) else "one" if "<" in spec else
                     "maybe" if "[" in spec else "none")
             for flag in re.findall(r"(?:^|, )(-[-\w]+)", spec):
                 arity[flag] = kind
-    if not commands:
-        stop("the help of %s (--help) lists no commands; launch cannot tell a command from a "
-             "prompt" % found)
+
+    def command(word):
+        if helped([word])[0] != root:
+            stop("`claude %s` is a Claude Code command, not a session, and does not take "
+                 "--settings: run it outside launch" % word)
+
     args, i = cmd[1:-2], 0  # less the --settings launch adds last
     while i < len(args):
         a = args[i]
         i += 1
-        if a.startswith("-") and a != "-":
-            kind = "none" if "=" in a else arity.get(a, "maybe")
-            if kind == "one":
+        if not a.startswith("-") or a == "-":
+            command(a)
+            break
+        kind = "none" if "=" in a else arity.get(a, "maybe")
+        if kind == "one":
+            i += 1
+        elif kind == "many":
+            while i < len(args) and not args[i].startswith("-"):
                 i += 1
-            elif kind == "many":
-                while i < len(args) and not args[i].startswith("-"):
-                    i += 1
-            elif kind == "maybe" and i < len(args) and not args[i].startswith("-"):
-                if args[i] in commands:  # a value, or the command: refused either way
-                    a = args[i]
-                    break
-                i += 1
-            continue
-        break
-    else:
-        a = ""
-    if a in commands:
-        stop("`claude %s` is a Claude Code command, not a session, and does not take "
-             "--settings: run it outside launch" % a)
+        elif kind == "maybe" and i < len(args) and not args[i].startswith("-"):
+            command(args[i])  # a value, or the command
+            i += 1
 try:
     os.execvp(run, cmd)
 except OSError as e:
