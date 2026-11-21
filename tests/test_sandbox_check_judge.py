@@ -176,9 +176,10 @@ def test_a_stream_that_is_not_json_is_inconclusive_not_a_crash():
 
 # --- issue #6: Linux, Mode B, the new probes, the facts file ---
 
+CLEAN = "parent-environ readable=2 refused=1 token-names=0 pids=-"
 LINUX = GOOD.replace("DENIED not-permitted", "DENIED read-only").replace(
     "read-protected DENIED read-only", "read-protected DENIED empty-view").replace(
-    "parent-environ n/a", "parent-environ unreadable")
+    "parent-environ n/a", CLEAN)
 
 
 def test_linux_full_run_is_pass():
@@ -189,7 +190,7 @@ def test_linux_full_run_is_pass():
 
 def test_read_only_passes_on_linux_but_not_on_macos():
     results = GOOD.replace("write-data DENIED not-permitted", "write-data DENIED read-only")
-    linux = results.replace("parent-environ n/a", "parent-environ unreadable")
+    linux = results.replace("parent-environ n/a", CLEAN)
     assert run(results=linux, platform="linux")[0] == judge.PASS
     assert run(results=results, platform="darwin")[0] == judge.INCONCLUSIVE
 
@@ -413,8 +414,8 @@ FAKES = {
 
 def _probes(tmp_path, fake, proc=None, foreign=False):
     """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
-    `proc` as its /proc (a made-up one: {pid: (ppid, comm[, cmdline])}; the probe's own shell
-    is "self"; `foreign`: /proc/$$ is another process than /proc/self).
+    `proc` as its /proc (a made-up one: {pid: environment dict, or None for an environ it cannot
+    read}; the probe's own process is "self"; `foreign`: /proc/$$ is another process).
     Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
     import subprocess
@@ -438,17 +439,16 @@ def _probes(tmp_path, fake, proc=None, foreign=False):
         ("mode", "A"), ("free", free), ("free-marker", "FREE-MARK-1"), ("protected-file", prot),
         ("protected-hash", "0"), ("data", data), ("phiward", tmp_path / ".phiward"),
         ("settings", tmp_path / "settings.json"), ("fake-id", "P-9990001-T01-IM6"),
-        ("claude-exe", "/nonexistent/claude"), ("claude-link", "/nonexistent/claude"),
         ("nonce", "n0"), ("remote", "no"))))
     cmd = ["sh", "./probes.sh"]
     if proc is not None:
         root = tmp_path / "proc"
-        for pid, (ppid, comm, *cmdline) in proc.items():
+        for pid, env in {"self": {"PATH": "/x"}, **proc}.items():
             (root / str(pid)).mkdir(parents=True)
-            (root / str(pid) / "status").write_text(f"Name:\t{comm}\nPPid:\t{ppid}\n")
-            (root / str(pid) / "comm").write_text(comm + "\n")
-            (root / str(pid) / "cmdline").write_text(
-                "\0".join((cmdline[0] if cmdline else comm).split()) + "\0")
+            (root / str(pid) / "status").write_text("Name:\tx\nPPid:\t1\n")
+            if env is not None:
+                (root / str(pid) / "environ").write_text(
+                    "".join(f"{k}={v}\0" for k, v in env.items()))
         with open(proj / "paths.txt", "a") as fh:
             fh.write(f"proc {root}\n")
         # the probe's own PID is the "self" entry, as in a real /proc (exec keeps the PID); a
@@ -817,93 +817,86 @@ def test_pulled_file_not_right_is_inconclusive(pulled):
     assert verdict == judge.INCONCLUSIVE
 
 
-# the token in the parent's environment: the documented limit, a note only
+# the token in another process's environment: the probe scans every /proc entry and records only
+# counts and PIDs; a token variable's name in a readable environ is FAIL
 
-def test_claude_environ_readable_is_a_note_and_still_pass():
-    results = LINUX.replace("parent-environ unreadable", "parent-environ readable")
-    verdict, report = run(results=results, platform="linux")
-    assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and "/proc" in ln and "documented limit" in ln
-               for ln in report)
-
-
-def test_claude_environ_unreadable_passes():
-    verdict, report = run(results=LINUX, platform="linux")
-    assert verdict == judge.PASS, report
-
-
-@pytest.mark.parametrize("value", ["not-found", "n/a", "made-up"])
-def test_claude_environ_not_found_in_a_real_linux_run_is_inconclusive(value):
-    """Fail closed: the probe did not find the claude process (another install, a hidden PID)."""
-    results = LINUX.replace("parent-environ unreadable", f"parent-environ {value}")
-    assert run(results=results, platform="linux")[0] == judge.INCONCLUSIVE
-    verdict, report = run(results=results, platform="linux", stub="yes")
-    assert verdict == judge.PASS, report
-
-
-def test_own_pid_namespace_passes_with_a_note():
-    results = LINUX.replace("parent-environ unreadable", "parent-environ own-pid-ns")
-    verdict, report = run(results=results, platform="linux")
-    assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and "PID namespace of its own" in ln for ln in report)
-
-
-def test_own_pid_namespace_counts_in_mode_a_only():
-    """Under `phiward launch` (Mode B) bwrap is PID 1 of a namespace claude is inside of
-    (wholetool.py runs bwrap with --unshare-pid, without --as-pid-1): own-pid-ns proves nothing
-    there."""
-    results = LINUX.replace("parent-environ unreadable", "parent-environ own-pid-ns")
-    verdict, report = run(results=results, platform="linux", mode="B")
-    assert verdict == judge.INCONCLUSIVE, report
-    assert not any("PID namespace of its own" in ln for ln in report), report
-
-
-# the reviewer's case: an orphaned probe shell under bwrap as PID 1, claude in the same namespace
-ORPHAN = {"self": (1, "sh"), 1: (0, "bwrap"), 9: (1, "claude", "/nonexistent/claude -p x")}
+def pe(value, base=None):
+    return (LINUX if base is None else base).replace(CLEAN, f"parent-environ {value}")
 
 
 @pytest.mark.parametrize("mode", ["A", "B"])
-def test_an_orphaned_shell_beside_a_visible_claude_is_not_own_pid_ns(tmp_path, mode):
-    lines, text = _probes(tmp_path, FAKES["refused"], proc=ORPHAN)
-    assert lines["parent-environ"] == "not-found", lines
-    verdict, _ = run(results=LINUX.replace("parent-environ unreadable",
-                                           f"parent-environ {lines['parent-environ']}"),
-                     platform="linux", mode=mode)
-    assert verdict == judge.INCONCLUSIVE
+def test_a_token_name_in_a_readable_environ_is_fail(mode):
+    verdict, report = run(results=pe("readable=3 refused=0 token-names=1 pids=1"),
+                          platform="linux", mode=mode)
+    assert verdict == judge.FAIL, report
+    assert any("token" in ln and "PID 1" in ln for ln in report if ln.startswith("FAIL")), report
 
 
-# the sandbox's shell: sh (the probe) <- bash <- bwrap as PID 1 of its own namespace
-OWN_NS = {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "bwrap")}
+def test_no_token_name_in_any_readable_environ_passes():
+    verdict, report = run(results=LINUX, platform="linux")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("ok") and "2 readable, 1 refused" in ln for ln in report), report
 
 
-def test_probe_records_own_pid_ns_when_only_shells_and_bwrap_are_above_it(tmp_path):
-    lines, _ = _probes(tmp_path, FAKES["refused"], proc=OWN_NS)
-    assert lines["parent-environ"] == "own-pid-ns", lines
+@pytest.mark.parametrize("value", ["readable=0 refused=0 token-names=0 pids=-", "foreign-proc",
+                                   "n/a", "readable", "unreadable", "not-found", "own-pid-ns",
+                                   "readable=1 refused=0 token-names=0 pids=x",
+                                   "readable=1 refused=0 token-names=0", ""])
+def test_a_scan_that_saw_nothing_or_cannot_be_read_is_inconclusive(value):
+    verdict, report = run(results=pe(value), platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
 
 
-@pytest.mark.parametrize("proc", [
-    {"self": (7, "sh"), 7: (5, "node"), 5: (1, "bash"), 1: (0, "bwrap")},  # another program above
-    {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "tini")},                   # PID 1 is not bwrap
-    {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "sh")},                     # a container's sh init
-    {"self": (7, "sh"), 7: (0, "bash")},                                    # the walk never reached 1
-    {"self": (7, "sh"), 7: (1, "bash")},                                    # PID 1 cannot be read
-    {"self": (1, "sh"), 1: (0, "bwrap")},                                   # no shell between
-    {**OWN_NS, 9: (1, "claude", "/nonexistent/claude -p x")},       # claude seen elsewhere
-    {**OWN_NS, 9: (1, "node", "node /nonexistent/claude")},         # by its command line
-])
-def test_probe_keeps_not_found_without_proof_of_its_own_namespace(tmp_path, proc):
-    """A search that merely failed never becomes own-pid-ns."""
-    lines, _ = _probes(tmp_path, FAKES["refused"], proc=proc)
-    assert lines["parent-environ"] == "not-found", lines
+def test_the_stand_in_holds_the_made_up_token_a_note():
+    """The stub runs with no sandbox of its own: its token is visible, a note."""
+    verdict, report = run(results=pe("readable=3 refused=0 token-names=1 pids=5"),
+                          platform="linux", stub="yes")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("note") and "stand-in" in ln for ln in report), report
+
+
+TOKEN_ENV = {"PATH": "/x", "CLAUDE_CODE_OAUTH_TOKEN": "FAKE-TOKEN-1"}
+
+
+def test_probe_the_reviewers_shape_bwrap_as_pid_1_holds_the_token(tmp_path):
+    """bwrap as PID 1 of the sandbox's namespace, which started with the variable and then
+    unset it in its own process: its environ still holds it."""
+    proc = {1: TOKEN_ENV, 3: {"PATH": "/x", "TERM": "dumb"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == "readable=2 refused=0 token-names=1 pids=1", lines
+    verdict, _ = run(results=pe(lines["parent-environ"]), platform="linux")
+    assert verdict == judge.FAIL
+
+
+@pytest.mark.parametrize("name", ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
+                                  "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_SESSION_ACCESS_TOKEN"])
+def test_probe_any_process_with_a_token_name_counts_however_it_is_named(tmp_path, name):
+    """No test of which process is claude: a process with a renamed title, or seen by its
+    command line only, counts by its environ."""
+    proc = {1: {"PATH": "/x"}, 9: {"PATH": "/x", name: "FAKE-VALUE-1"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == "readable=2 refused=0 token-names=1 pids=9", lines
+    assert "FAKE-VALUE-1" not in text and name not in text, text
+
+
+def test_probe_nothing_readable_holds_a_name(tmp_path):
+    proc = {1: {"PATH": "/x"}, 4: None, 7: {"PATH": "/x", "MY_TOKENISH": "FAKE-VALUE-2"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == "readable=2 refused=1 token-names=0 pids=-", lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.PASS
+    assert "FAKE-VALUE-2" not in text and "MY_TOKENISH" not in text
+
+
+def test_probe_an_empty_proc_is_inconclusive(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={})
+    assert lines["parent-environ"] == "readable=0 refused=0 token-names=0 pids=-", lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
 
 
 def test_probe_records_nothing_from_a_proc_that_is_not_its_own(tmp_path):
-    """/proc/$$ must be this process (/proc/self): else the walk would read another one."""
-    lines, _ = _probes(tmp_path, FAKES["refused"], proc=OWN_NS, foreign=True)
+    """/proc/$$ must be this process (/proc/self): else the scan reads another view."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: TOKEN_ENV}, foreign=True)
     assert lines["parent-environ"] == "foreign-proc", lines
-    verdict, _ = run(results=LINUX.replace("parent-environ unreadable",
-                                           "parent-environ foreign-proc"), platform="linux")
-    assert verdict == judge.INCONCLUSIVE
 
 
 def test_claude_environ_n_a_on_macos_passes():
