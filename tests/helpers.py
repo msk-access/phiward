@@ -227,8 +227,11 @@ Commands:
   help [command]              display help for command
 """
 # its commands: each answers `claude WORD --help` with a Usage line of its own
-CLAUDE_COMMANDS = ("doctor", "logs", "mcp", "ultrareview", "update", "upgrade", "help")
-CLAUDE_HIDDEN = ("daemon", "rc", "remote-control", "sandbox", "self-hosted-runner")
+# (`help` is not one: the real binary reads it as a prompt), and Remote Control's names print a
+# help of their own form (USAGE, not Usage:)
+CLAUDE_COMMANDS = ("doctor", "logs", "mcp", "ultrareview", "update", "upgrade")
+CLAUDE_HIDDEN = ("daemon", "sandbox", "self-hosted-runner")
+CLAUDE_REMOTE = ("rc", "remote-control", "remote", "sync", "bridge")
 
 
 def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HELP, bad=None):
@@ -250,6 +253,8 @@ def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HE
                  "    if bad.get(w) == 'fail':\n        sys.exit(1)\n"
                  f"    if w in {CLAUDE_COMMANDS + CLAUDE_HIDDEN!r}:\n"
                  "        print('Usage: claude %s [options]\\n\\nA command' % w)\n"
+                 f"    elif w in {CLAUDE_REMOTE!r}:\n"
+                 "        print('USAGE\\n  claude remote-control [flags]')\n"
                  f"    else:\n        print({help!r}, end='')\n"
                  "    sys.exit(0)\n"
                  "if os.environ.get('ARGV0') == 'apply-seccomp':\n"

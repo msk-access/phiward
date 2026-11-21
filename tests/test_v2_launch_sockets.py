@@ -343,6 +343,7 @@ def test_the_users_own_settings_flag_is_refused(tree, given):
                                       (["sandbox"], "sandbox"), (["logs"], "logs"),
                                       (["upgrade"], "upgrade"), (["daemon", "status"], "daemon"),
                                       (["rc"], "rc"), (["remote-control"], "remote-control"),
+                                      (["bridge"], "bridge"), (["sync"], "sync"),
                                       (["--debug", "mcp", "list"], "mcp"),
                                       (["--model", "opus", "doctor"], "doctor")])
 def test_a_claude_subcommand_is_refused(tree, sub, word):
@@ -404,7 +405,7 @@ def test_settings_that_say_what_launch_passes_are_passed_once(tree, form):
 
 @below9
 @pytest.mark.parametrize("args", [["init"], ["--model", "mcp", "explain"], ["-p", "fix", "mcp"],
-                                  ["tag"], ["update the readme"]])
+                                  ["tag"], ["update the readme"], ["help"]])
 def test_words_that_are_not_commands_of_this_claude_start_as_a_prompt(tree, args):
     # the commands are those the binary's own help lists: `init` and `tag` are not, and `mcp`
     # after --model is the model's name, after a prompt a word of it

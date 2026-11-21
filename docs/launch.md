@@ -210,8 +210,11 @@ when in doubt, reinstall: the step names the command for the tool that installed
     `--settings` and run, and some are hidden from the help. `launch` refuses it: run it outside
     `launch`. To tell a command from a prompt, `launch` asks the program that runs, inside
     the session: `claude WORD --help` for the first word that is not an option (which options
-    take a value comes from `claude --help`). A Usage line other than the root's means a
-    command. A help that hangs, fails or has no Usage line stops the start. Cost: one help run
+    take a value comes from `claude --help`). A help other than the root's means a command; so
+    `claude -p mcp` is refused too. A help that hangs, fails or is empty stops the start.
+    Some options run something other than a session (`--chrome-native-host`, `--preload`,
+    `--eval-mock-server`, `--daemon-worker`). `launch` does not refuse them; they run inside
+    the session's confinement, so the guards still hold. Cost: one help run
     at each start, and one more when there is such a word. Only Claude Code's native build is accepted (npm
     and the installer give it from 2.1.250; for an older JavaScript build, run `claude
     install`). Before the tool starts, `launch` runs the filter of the program that will run

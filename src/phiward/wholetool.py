@@ -1416,8 +1416,9 @@ if unix == "inner":
              "another program (env, npx, node), is not its filter" % found)
     # a Claude Code command (`claude mcp list`, `claude daemon run`) is no session: some take
     # no --settings, some ignore it and run, and some are hidden from the help. So the binary
-    # itself is asked: `claude WORD --help` prints a Usage line of its own for a command (any
-    # alias, hidden or not), the root's for a prompt. The root takes positional options: the
+    # itself is asked: `claude WORD --help` prints a help of its own for a command (any
+    # alias, hidden or not), the root's for a prompt. After -p too: launch does not rely on how
+    # Claude Code reads a word there. The root takes positional options: the
     # first word that is neither an option nor an option's value (the arity from the root's
     # help) is WORD; a word that may be an optional value is asked too. Any help that cannot be
     # read stops the start. Cost: the root help, and one more for each word asked
@@ -1432,13 +1433,15 @@ if unix == "inner":
         except (OSError, subprocess.SubprocessError):
             r = None
         text = r.stdout.decode("utf-8", "replace") if r is not None and r.returncode == 0 else ""
-        usage = next((ln.strip() for ln in text.splitlines() if ln.startswith("Usage:")), None)
-        if usage is None:
+        if not text.strip():
             stop("`%s %s--help` cannot be read; launch cannot tell a Claude Code command from a "
                  "prompt" % (found, "".join(w + " " for w in words)))
-        return usage, text
+        return text
 
-    root, text = helped([])
+    text = helped([])
+    if not any(ln.startswith("Usage:") for ln in text.splitlines()):
+        stop("`%s --help` has no Usage line; launch cannot tell a Claude Code command from a "
+             "prompt" % found)
     arity, part = {}, None
     for ln in text.splitlines():
         if ln and not ln[0].isspace():
@@ -1452,8 +1455,8 @@ if unix == "inner":
             for flag in re.findall(r"(?:^|, )(-[-\w]+)", spec):
                 arity[flag] = kind
 
-    def command(word):
-        if helped([word])[0] != root:
+    def command(word):  # a help other than the root's, in any way, is a command's
+        if helped([word]) != text:
             stop("`claude %s` is a Claude Code command, not a session, and does not take "
                  "--settings: run it outside launch" % word)
 
