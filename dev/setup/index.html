@@ -1752,6 +1752,9 @@ exists (<a href="#the-guided-first-run">below</a>).</p>
 <li>bubblewrap (<code>bwrap</code>) on the <code>PATH</code>;</li>
 <li>Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
     gateway uses it as a second layer for its writes and refuses to run without it;</li>
+<li>for <code>phiward launch --tool claude</code> before Linux 7.1: <code>socat</code>, and Claude Code's native
+    build, which carries its seccomp filter; <code>launch</code> refuses to start without a filter that
+    works (<a href="../launch/#limits-in-this-release">launch.md</a>);</li>
 <li>on Ubuntu 24.04, AppArmor can block unprivileged user namespaces
     (<code>kernel.apparmor_restrict_unprivileged_userns</code>). Then bubblewrap cannot start. Change the
     setting, or add an AppArmor profile for <code>bwrap</code>. <code>doctor</code> says when this is the cause.</li>

@@ -1688,7 +1688,9 @@ not know a project's own settings. So a project whose settings open a <code>PATH
 writes (allowWrite <code>~/bin</code>) lets the agent put a program there, and a gateway call may run it (still
 confined, with its output sanitized). Keep tools out of folders a project opens.</p>
 <p>"Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
-processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.</p>
+processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.
+For the agent tool under <code>launch</code> on Linux, unix sockets are limited as
+<a href="#open-unix-sockets">below</a> says.</p>
 <p>The sanitizer masks protected paths, entry names under the roots, and identifiers from the packs.
 Out of the box, only file names, read names and loci are masked inside file contents; <code>phiward
 doctor</code> warns until a pack or rule for subject identifiers is on, or <code>subjects = "none"</code> is
@@ -2596,8 +2598,24 @@ test</code>), or read the change before you run it outside.</p>
   above. <code>.claude</code> is read-only as a whole (its settings can hold hooks), so Claude Code's "don't
   ask again" answers, <code>--worktree</code> and <code>/loop</code> durable tasks do not stay in the project under
   <code>launch</code>;
-- <a id="open-unix-sockets"></a>Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
-  Unix sockets made after <code>launch</code> starts, or with relative paths, are not covered. <code>launch</code> makes
+- <a id="open-unix-sockets"></a>Linux: unix sockets are limited by the kernel, not by their names.
+  From Landlock ABI 9 (Linux 7.1) the whole tool reaches only the sockets made in the session
+  and the name-service folders (sssd, nscd, userdb); a helper that cannot apply this stops the
+  start. Below ABI 9, <code>--tool generic</code> and a wrapped MCP server cannot make unix sockets at all
+  (seccomp; io_uring too). Below ABI 9, <code>--tool claude</code> relies on Claude Code's own sandbox,
+  whose seccomp filter blocks unix sockets for Bash: <code>launch</code> gives it <code>--settings</code> that keep
+  it on and forbid unsandboxed retries, and refuses to start when the filter is missing, does
+  not work in the session's view, could be replaced by the session, or when settings open the
+  sandbox. What runs outside that sandbox can still reach unix sockets outside the session:
+  Claude Code itself, command hooks, MCP servers, LSP servers, the status line,
+  <code>apiKeyHelper</code> and <code>!</code> commands you type. You configure these; the session cannot change
+  the project's <code>.claude</code>. <code>launch</code> accepts only Claude Code's native build (a JavaScript
+  program is refused) and runs the filter of the program that will run as Claude Code does,
+  the binary itself with <code>ARGV0=apply-seccomp</code>; then it runs that same file. If a Claude Code
+  release runs its filter otherwise, <code>launch</code> may prove a filter Claude Code does not use. The tests use a made-up
+  filter; that the real binary's filter works inside launch's bubblewrap is shown only by
+  the sandbox check. <code>launch</code> passes <code>--settings</code> last and refuses another one, unless it
+  says the same, since Claude Code keeps only the last. <code>launch</code> makes
   <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if they are missing, and <code>.mcp.json</code> as a read-only <code>{}</code>
   placeholder. After a session, <code>launch</code> reports git control files that changed;
 - <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
