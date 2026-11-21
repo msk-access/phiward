@@ -214,9 +214,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
 - **Linux: Claude Code's own sandbox runs inside launch.** phiward turns it off only on macOS.
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
-  runs unconfined). Bash reaches the network through Claude Code's own proxy, which then goes
-  through phiward's; that a given Claude Code version does this is for the real-tool check to
-  confirm.
+  runs unconfined). The session's settings set `sandbox.allowUnsandboxedCommands: false`, so a
+  Bash command is not retried outside it. Bash reaches the network through Claude Code's own
+  proxy, which then goes through phiward's; that a given Claude Code version does this is for
+  the real-tool check to confirm.
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
   keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;

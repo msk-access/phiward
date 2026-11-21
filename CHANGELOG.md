@@ -118,6 +118,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   profile no longer allows the `nsurlsessiond` and `networkd` services. On Linux the Landlock
   scope for abstract unix sockets is gone: the session's network namespace already keeps them
   apart, on every kernel.
+- On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
+  false`: a Bash command is not retried outside Claude Code's own sandbox.
 - `phiward run --table` is stricter: output without a header line (or with a line before the
   header, a warning on stderr too) is now masked as text, with a note that says so; before, every
   number in it was kept.

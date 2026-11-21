@@ -115,15 +115,19 @@ class Adapter:
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
         """The tool's settings in its own folder: its sandbox off on macOS (sandboxes do not
-        nest; this profile replaces it) and the fast hook as a first layer."""
+        nest; this profile replaces it), on Linux no retry of a Bash command outside it, and the
+        fast hook as a first layer."""
         if self.name != "claude":
             return
         data = _read_json_at(folder_fd, "settings.json")
         before = json.dumps(data, sort_keys=True)
+        sb = data.setdefault("sandbox", {})
+        if not isinstance(sb, dict):
+            sb = data["sandbox"] = {}
         if sys.platform == "darwin":
-            sb = data.setdefault("sandbox", {})
-            if isinstance(sb, dict):
-                sb["enabled"] = False
+            sb["enabled"] = False
+        else:
+            sb["allowUnsandboxedCommands"] = False
         import shlex
         pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         code = f"import sys; sys.path.insert(0, {pkg!r}); from phiward.cli import main; sys.exit(main())"
