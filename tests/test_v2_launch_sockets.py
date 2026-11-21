@@ -186,7 +186,7 @@ def test_a_name_service_socket_stays_reachable(tree):
 
 def helper(mode, text=None):
     from phiward import wholetool
-    return subprocess.run([PY, "-I", "-S", "-c", text or wholetool.HELPER, "-1", mode, "-", "0",
+    return subprocess.run([PY, "-I", "-S", "-c", text or wholetool.HELPER, "-1", mode, "0",
                            PY, "-c", "print('RAN')"], capture_output=True, text=True, timeout=60,
                           stdin=subprocess.DEVNULL)
 
@@ -389,3 +389,17 @@ def test_claude_does_not_start_on_an_architecture_without_the_filter(tree):
     assert why and "riscv64" in why, why
     assert wholetool.inner_sandbox_reason(str(tree / "repo"), {"HOME": str(tree / "home")},
                                           machine="x86_64") is None
+
+
+@below9
+@pytest.mark.parametrize("form", ["file", "inline"])
+def test_settings_that_say_what_launch_passes_are_passed_once(tree, form):
+    import json
+    claude = native(tree)
+    f = tree / "home" / "launch-settings.json"
+    f.write_text(json.dumps(INNER))
+    given = ["--settings", str(f)] if form == "file" else [f"--settings={json.dumps(INNER)}"]
+    code, out = launch(tree, "", "claude", program=["--", str(claude), "-p", "x", *given])
+    argv = argv_of(out)
+    assert argv[:2] == ["-p", "x"] and argv.count("--settings") == 1, argv
+    assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv

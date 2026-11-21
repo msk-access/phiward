@@ -146,6 +146,8 @@ def tree(tmp_path, monkeypatch):
         # below Landlock ABI 9, `launch --tool claude` needs Claude Code's seccomp filter:
         # a made-up one, where sandbox-runtime looks in a user-local npm folder
         helpers.fake_filter(helpers.filter_in_home(home))
+    # what `launch --tool claude` runs in tests that need Python (helpers.tool_py)
+    helpers.fake_js_claude(t / "claude-py" / "claude")
     yield t
     if sys.platform.startswith("linux"):
         # on Linux `launch` binds every entry next to a protected root into the session's view

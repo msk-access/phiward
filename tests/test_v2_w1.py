@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import needs_confine
+from helpers import needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -25,7 +25,8 @@ pytestmark = needs_confine
 
 def launch(tree, code, cwd="repo", extra=()):
     env = dict(os.environ, PYTHONPATH=SRC)
-    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--",
+                        tool_py(tree, "generic" if "generic" in extra else "claude"), "-c", code],
                        cwd=str(tree / cwd), capture_output=True, text=True, env=env, timeout=60)
     return r.returncode, r.stdout + r.stderr
 
@@ -162,7 +163,7 @@ def test_w1_keystroke_injection_is_refused_in_the_profile(tree):
     env = dict(os.environ, PYTHONPATH=SRC)
     code = ("import fcntl, termios, sys\ntry:\n    fcntl.ioctl(0, termios.TIOCSTI, b'#')\n"
             "    print('INJECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n")
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--", tool_py(tree), "-c", code],
                        cwd=str(tree / "repo"), stdin=slave, capture_output=True, text=True,
                        env=env, timeout=60)
     os.close(master)

@@ -93,9 +93,11 @@ What the session can do:
 - Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
   (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
   --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
-  turns it on (--settings, always passed last) and refuses to start unless its seccomp filter
-  blocks unix sockets in the session (the native build carries it); hooks, MCP servers and
-  Claude Code itself are outside that sandbox. Any other tool cannot make unix sockets at all.
+  turns it on (--settings, always passed last; another --settings or a Claude Code command
+  such as `claude mcp` is refused) and refuses to start unless the seccomp filter of the
+  program that runs blocks unix sockets in the session (run the Claude Code binary itself:
+  the native build carries it); hooks, MCP servers and Claude Code itself are outside that
+  sandbox. Any other tool cannot make unix sockets at all.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -483,6 +485,45 @@ INNER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
                               "allowUnsandboxedCommands": False}}
 # sandbox-runtime ships apply-seccomp for these only
 INNER_ARCH = ("x86_64", "aarch64")
+# Claude Code's commands (its CLI reference); one not listed here fails in Claude Code itself with
+# an unknown option (--settings) and runs nothing
+CLAUDE_COMMANDS = frozenset((
+    "agents", "attach", "auth", "auto-mode", "config", "doctor", "gateway", "install", "mcp",
+    "migrate-installer", "plugin", "plugins", "rc", "remote-control", "self-hosted-runner",
+    "setup-token", "update", "upgrade"))
+
+
+def _without_launch_settings(argv: List[str]) -> List[str]:
+    """argv less a --settings that says just what launch passes (INNER_SETTINGS, as in the file
+    `install` writes for `claude --settings`). Claude Code keeps one --settings, the last, so any
+    other would be dropped without a word: it stops the start."""
+    out, i = [argv[0]], 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--settings" or a.startswith("--settings="):
+            if a == "--settings":
+                if i + 1 >= len(argv):
+                    raise LaunchError("--settings has no value")
+                val, i = argv[i + 1], i + 2
+            else:
+                val, i = a.split("=", 1)[1], i + 1
+            try:
+                if val.lstrip().startswith("{"):
+                    data = json.loads(val)
+                else:
+                    with open(val, encoding="utf-8") as fh:
+                        data = json.loads(fh.read(1 << 20))
+            except (OSError, ValueError):
+                data = None
+            if data != INNER_SETTINGS:
+                raise LaunchError(
+                    "launch passes its own --settings to Claude Code, which keeps only one, so "
+                    f"these ({val}) would be dropped: put them in your user settings "
+                    "(~/.claude/settings.json) or in managed settings")
+            continue
+        out.append(a)
+        i += 1
+    return out
 
 
 def landlock_abi() -> int:
@@ -1229,20 +1270,20 @@ def _raise_fd_limit(need: int) -> None:
 # view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
 # a name in between), then it closes the launcher's descriptors and limits unix sockets as the
 # launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
-# argv: CHK UNIX CLAUDE N FD... CMD [ARG]...; CLAUDE is Claude Code's path (`-`: none)
+# argv: CHK UNIX N FD... CMD [ARG]...
 # - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
 #   session are refused, the session's own are not), the name-service folders allowed, REFER
 #   granted on / (cross-folder renames), abstract sockets and signals scoped. Any failure: 126.
 # - inner (Claude Code below ABI 9): Claude Code's sandbox blocks unix sockets for Bash with
-#   apply-seccomp: the native binary itself (ARGV0=apply-seccomp), or for a JavaScript build
-#   sandbox-runtime's file, looked for as sandbox-runtime does, here in the view (npm runs
-#   confined). One the session could replace, or one that does not make socket(AF_UNIX) fail
+#   apply-seccomp, judged for CMD (found on the view's PATH, as it is then run): the native
+#   binary itself (ARGV0=apply-seccomp), or for a JavaScript build sandbox-runtime's file,
+#   looked for as sandbox-runtime does, here in the view (npm runs confined). One the session could replace, or one that does not make socket(AF_UNIX) fail
 #   with EPERM when run as Claude Code runs it, stops the start (126).
 # - deny and inner: the ABI 6 scope for abstract sockets and signals where the kernel has it.
 HELPER = r"""
 import os, sys, ctypes, struct
-chk = int(sys.argv[1]); unix = sys.argv[2]; claude = sys.argv[3]
-n = int(sys.argv[4]); close = sys.argv[5:5 + n]; cmd = sys.argv[5 + n:]
+chk = int(sys.argv[1]); unix = sys.argv[2]
+n = int(sys.argv[3]); close = sys.argv[4:4 + n]; cmd = sys.argv[4 + n:]; run = cmd[0]
 if chk >= 0:
     # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
     # start goes on only when every record was read and compared; anything else stops it
@@ -1335,33 +1376,35 @@ elif unix in ("inner", "deny"):
                 libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0))
             os.close(rs)
 if unix == "inner":
-    import subprocess
+    import shutil, subprocess
     arch = {"x86_64": "x64", "aarch64": "arm64"}.get(os.uname().machine)
     if arch is None:
         stop("Claude Code's sandbox has no seccomp filter for %s" % os.uname().machine)
-    # the native build (one binary: no JavaScript file, no node line) carries apply-seccomp and
-    # runs it as itself with ARGV0=apply-seccomp; sandbox-runtime looks for no file then. A
-    # JavaScript build uses sandbox-runtime's file, found in its order (getApplySeccompBinaryPath):
-    # next to Claude Code's own files, then the npm global root, then fixed folders
-    native, env = False, dict(os.environ)
-    if claude != "-":
-        real = os.path.realpath(claude)
-        try:
-            with open(real, "rb") as fh:
-                head = fh.read(256).split(b"\n")[0]
-        except OSError as e:
-            stop("Claude Code (%s) cannot be read (%s)" % (real, e.strerror))
-        native = not (real.endswith((".js", ".mjs", ".cjs")) or
-                      (head.startswith(b"#!") and b"node" in head))
+    # judged is the program that runs: CMD, found on PATH here as execvp would, then run by
+    # that path. The native build (one binary: no JavaScript file, no node line) carries
+    # apply-seccomp and runs it as itself with ARGV0=apply-seccomp; sandbox-runtime looks for no
+    # file then. A JavaScript build uses sandbox-runtime's file, found in its order
+    # (getApplySeccompBinaryPath): next to Claude Code's own files, then the npm global root,
+    # then fixed folders
+    env = dict(os.environ)
+    run = cmd[0] if "/" in cmd[0] else shutil.which(cmd[0])
+    if not run:
+        stop("%s is not on the session's PATH" % cmd[0])
+    real = os.path.realpath(run)
+    try:
+        with open(real, "rb") as fh:
+            head = fh.read(256).split(b"\n")[0]
+    except OSError as e:
+        stop("Claude Code (%s) cannot be read (%s)" % (real, e.strerror))
+    native = not (real.endswith((".js", ".mjs", ".cjs")) or
+                  (head.startswith(b"#!") and b"node" in head))
     if native:
         found, env["ARGV0"] = real, "apply-seccomp"
     else:
         rel = os.path.join("vendor", "seccomp", arch, "apply-seccomp")
-        places = []
-        if claude != "-":
-            base = os.path.dirname(real)
-            places += [os.path.join(base, rel), os.path.join(base, "..", "..", rel),
-                       os.path.join(base, "..", rel)]
+        base = os.path.dirname(real)
+        places = [os.path.join(base, rel), os.path.join(base, "..", "..", rel),
+                  os.path.join(base, "..", rel)]
         pkg = os.path.join("@anthropic-ai", "sandbox-runtime")
         try:
             root = subprocess.run(["npm", "root", "-g"], stdin=subprocess.DEVNULL,
@@ -1378,10 +1421,9 @@ if unix == "inner":
             places.append(os.path.join(b, rel))
         found = next((p for p in places if os.path.exists(p)), None)
         if found is None:
-            stop("Claude Code's sandbox cannot block unix sockets: %s no seccomp filter "
-                 "(apply-seccomp); install Claude Code's native build" % (
-                     "this JavaScript build of Claude Code has" if claude != "-" else
-                     "claude is not on the session's PATH, and there is"))
+            stop("Claude Code's sandbox cannot block unix sockets: this JavaScript build of "
+                 "Claude Code has no seccomp filter (apply-seccomp); install Claude Code's "
+                 "native build")
     p = os.path.realpath(found)
     while True:  # neither the filter nor a folder above it may be writable in the session
         if os.access(p, os.W_OK):
@@ -1403,10 +1445,12 @@ if unix == "inner":
     except (OSError, subprocess.SubprocessError):
         ok = False
     if not ok:
-        stop("Claude Code's seccomp filter (%s%s) does not block unix sockets here" % (
-            found, ", as apply-seccomp" if native else ""))
+        stop("Claude Code's seccomp filter (%s%s) does not block unix sockets here%s" % (
+            found, ", as apply-seccomp" if native else "",
+            "; run the Claude Code binary directly: a wrapper that adds arguments, or another "
+            "program (env, npx, node), is not its filter" if native else ""))
 try:
-    os.execvp(cmd[0], cmd)
+    os.execvp(run, cmd)
 except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
@@ -1638,7 +1682,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                               "one (start the tool from a plain terminal)")
         _make_folders(project, [".claude"])
         prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "none", "-", "0"] + list(argv), \
+        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "none", "0"] + list(argv), \
             child_env, \
             [], project, lambda: None
     if backend == "bwrap":
@@ -1656,7 +1700,6 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         # unix sockets: Landlock where the kernel can tell the session's own from those
         # outside (ABI 9); below it, Claude Code's own sandbox blocks them for Bash, and a tool
         # without one cannot make any
-        claude = "-"
         if landlock_abi() >= UNIX_ABI:
             unix = "landlock"
         elif adapter.name == "claude" and not server:
@@ -1664,12 +1707,15 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             why = inner_sandbox_reason(project, child_env)
             if why:
                 raise LaunchError(why)
-            claude = shutil.which("claude", path=child_env.get("PATH", "")) or "-"
-            # whatever runs (claude, a versioned binary, a wrapper, npx), the flag goes last;
-            # after a `--` it would be read as an argument, so the start is refused
+            # whatever runs (claude, a versioned binary, a wrapper), the flag goes last; after a
+            # `--` it would be read as an argument, so the start is refused
             if "--" in argv[1:]:
                 raise LaunchError("launch passes --settings to Claude Code as the last "
                                   "arguments, so `--` cannot be among them")
+            argv = _without_launch_settings(argv)
+            if len(argv) > 1 and argv[1] in CLAUDE_COMMANDS:
+                raise LaunchError(f"`claude {argv[1]}` is a Claude Code command, not a session, "
+                                  "and does not take --settings: run it outside launch")
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
             unix = "deny"
@@ -1686,7 +1732,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         held = [str(fd) for fd in fds]
         bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
         try:
-            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix, claude], held,
+            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
                                  argv)
         except LaunchError:
             for fd in fds + [r, chk]:

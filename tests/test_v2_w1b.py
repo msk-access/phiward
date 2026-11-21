@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import CONFINE_WHY, landlock_abi
+from helpers import CONFINE_WHY, landlock_abi, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -21,7 +21,8 @@ linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux")
 def launch(tree, code, cwd="repo", extra=(), env_extra=None, stdin=subprocess.DEVNULL):
     env = dict(os.environ, PYTHONPATH=SRC)
     env.update(env_extra or {})
-    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--",
+                        tool_py(tree, "generic" if "generic" in extra else "claude"), "-c", code],
                        cwd=str(tree / cwd), capture_output=True, text=True, env=env, timeout=60,
                        stdin=stdin)
     return r.returncode, r.stdout + r.stderr

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from phiward import carryover
-from helpers import landlock_abi, needs_confine, ready_line
+from helpers import landlock_abi, needs_confine, ready_line, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -39,7 +39,8 @@ def launch(tree, code, tool="claude", recursion_limit=None):
     if recursion_limit:
         start = ["-c", f"import runpy, sys; sys.setrecursionlimit({recursion_limit}); "
                        "runpy.run_module('phiward', run_name='__main__', alter_sys=True)"]
-    r = subprocess.run([PY, *start, "launch", "--tool", tool, "--", PY, "-c", code],
+    r = subprocess.run([PY, *start, "launch", "--tool", tool, "--", tool_py(tree, tool),
+                        "-c", code],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     return r.returncode, r.stdout, r.stderr
@@ -312,7 +313,8 @@ def test_D_the_carry_over_folder_deleted_while_a_session_runs(tree):
     import shutil
     accept_note(tree)
     # the first session waits (on its stdin) until the folder is gone and a second one ran
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                              tool_py(tree), "-c",
                               "import os, sys\nprint('READY', flush=True)\nsys.stdin.read()\n"
                               "print('FIRST', os.path.isdir(os.environ['CLAUDE_CONFIG_DIR']))"],
                              cwd=str(tree / "repo"), env=env(), stdin=subprocess.PIPE,
@@ -361,7 +363,8 @@ def test_r19_3_a_session_cannot_reach_another_sessions_socket(tree, tool):
            "    print('READY NO-SOCKET', e.errno, flush=True); sys.exit()\n"
            "s.bind('s')\ns.listen(1)\n"
            "print('READY', os.path.join(os.environ['TMPDIR'], 's'), flush=True)\nsys.stdin.read()\n")
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", tool, "--", PY, "-c", srv],
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", tool, "--",
+                              tool_py(tree, tool), "-c", srv],
                              cwd=str(tree / "repo"), env=env(), stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     path = ready_line(first).split(" ", 1)[1].strip()
@@ -411,7 +414,8 @@ def test_k_a_kerberos_ticket_file_cannot_be_read(tree, where):
         extra_env = {"KRB5CCNAME": f"FILE:{f}"}
     f.write_text("FAKE-TICKET\n")
     try:
-        r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+        r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                              tool_py(tree), "-c",
                             f"try:\n    print('READ', open({str(f)!r}).read())\nexcept OSError as e:\n"
                             "    print('REFUSED', e.errno)\n"], cwd=str(tree / "repo"),
                            capture_output=True, text=True, env=dict(env(), **extra_env), timeout=120)

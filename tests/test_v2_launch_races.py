@@ -225,7 +225,7 @@ def helper_with(records_text, prelude=""):
         fd = os.dup(fh.fileno())
     try:
         r = subprocess.run([sys.executable, "-I", "-S", "-c", prelude + wholetool.HELPER, str(fd),
-                            "none", "-", "0", sys.executable, "-c", "print('RAN')"], pass_fds=[fd],
+                            "none", "0", sys.executable, "-c", "print('RAN')"], pass_fds=[fd],
                            capture_output=True, text=True, timeout=60, stdin=subprocess.DEVNULL)
     finally:
         os.close(fd)

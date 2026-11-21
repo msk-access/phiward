@@ -232,17 +232,25 @@ def fake_native_claude(path, works=True, runs=True):
 def fake_js_claude(path):
     """A made-up stand-in for a JavaScript build of Claude Code: `path` links to a `cli.js`
     beside it (so launch looks for sandbox-runtime's filter, as for npm's install). It runs as
-    Python with its arguments, less the --settings pair launch adds last."""
+    Python with its arguments (python -c CODE ignores what follows, the --settings launch adds
+    last too)."""
     import sys
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     js = p.parent / "cli.js"
-    js.write_text(f"#!{sys.executable} -IS\nimport os, sys\na = sys.argv[1:]\n"
-                  "if a[-2:-1] == ['--settings']:\n    a = a[:-2]\n"
-                  "os.execv(sys.executable, [sys.executable] + a)\n")
+    js.write_text(f"#!{sys.executable} -IS\nimport os, sys\n"
+                  "os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n")
     os.chmod(js, 0o755)
     p.symlink_to(js.name)
     return p
+
+
+def tool_py(tree, tool="claude") -> str:
+    """The Python a test runs under `launch --tool TOOL`: for claude, the made-up JavaScript
+    build the tree fixture plants (below Landlock ABI 9 launch judges the seccomp filter of the
+    program that runs, and Python itself is not Claude Code); else Python itself."""
+    import sys
+    return str(Path(tree) / "claude-py" / "claude") if tool == "claude" else sys.executable
 
 
 def filter_in_home(home) -> Path:

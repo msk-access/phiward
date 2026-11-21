@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from phiward import carryover
-from helpers import needs_confine, ready_line
+from helpers import needs_confine, ready_line, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -35,7 +35,8 @@ def env():
 
 
 def launch(tree, code, extra=(), tool="claude"):
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", tool, *extra, "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", tool, *extra, "--", tool_py(tree, tool),
+                        "-c", code],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     return r.returncode, r.stdout, r.stderr
@@ -193,7 +194,8 @@ def test_c8_an_unfinished_session_is_finished_at_the_next_start(tree):
 @needs_confine
 def test_c9_two_sessions_run_side_by_side(tree):
     # the first session waits (on its stdin) until the second one has started and ended
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                              tool_py(tree), "-c",
                               f"import os, sys\nopen(os.path.join({CFG}, 'CLAUDE.md'), 'w').write('one')\n"
                               "print('READY', flush=True)\nsys.stdin.read()\n"
                               "print('FIRST', os.path.exists(os.environ['CLAUDE_CONFIG_DIR']))"],

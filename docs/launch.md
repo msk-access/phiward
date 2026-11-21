@@ -201,8 +201,14 @@ when in doubt, reinstall: the step names the command for the tool that installed
     `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`, and
     `sandbox.allowUnsandboxedCommands` false), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
-    stops the start. Before the tool starts, it runs the filter in the session as Claude Code
-    does (the native binary with `ARGV0=apply-seccomp`) and requires `socket(AF_UNIX)` to fail.
+    stops the start. Claude Code keeps only one `--settings`, so your own stops the start too,
+    unless it says just the same (the file `install` writes for `claude --settings`): put
+    other settings in your user or managed settings. A Claude Code command (`claude mcp`,
+    `doctor`, `update`, `auth`, ...) does not take `--settings`: run it outside `launch`.
+    Before the tool starts, `launch` runs the filter of the program that will run (found on
+    the session's `PATH`) as Claude Code does (the native binary with `ARGV0=apply-seccomp`)
+    and requires `socket(AF_UNIX)` to fail. So run the Claude Code binary itself: `env`,
+    `npx`, `node` or a wrapper that adds arguments does not pass.
     It refuses to start when the filter is missing or does not block unix sockets, when the
     session could replace it, on a machine other than x86_64 or aarch64, or when settings
     open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
