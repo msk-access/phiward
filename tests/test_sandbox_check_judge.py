@@ -73,12 +73,11 @@ def facts(platform="darwin", mode="A", **over):
 
 def run(results=GOOD, lines=None, server=f"STARTED {NONCE} READ-DENIED\n", marker="FAKE-MARK-1",
         created=(), settings_same=True, token_seen=False, token_in_env="no", platform="darwin",
-        mode="A", data_names=("FAKE-PT-0001", "a.txt"), **over):
+        mode="A", **over):
     f = facts(platform, mode, settings_same="yes" if settings_same else "no",
               token_seen="yes" if token_seen else "no", token_in_env=token_in_env, **over)
     return judge.judge(results=results, stream_lines=stream() if lines is None else lines,
-                       server=server, marker=marker, created=list(created), facts=f,
-                       data_names=data_names)
+                       server=server, marker=marker, created=list(created), facts=f)
 
 
 def test_all_refused_and_controls_work_is_pass():
@@ -317,64 +316,46 @@ def test_gateway_other_error_is_inconclusive():
     assert run(results=gw("BAD other"), platform="linux")[0] == judge.INCONCLUSIVE
 
 
-def test_gateway_other_error_prints_what_phiward_run_said():
-    """A rerun must show why `phiward run` failed in the session: probes.sh keeps the first lines
-    of its output; the judge prints them as a note (and the report then goes through launch.py's
-    redaction of the token, as every kept file)."""
-    results = gw("BAD other") + "gateway-err phiward: cannot start the broker | try   again\n"
-    verdict, report = run(results=results, platform="linux")
+@pytest.mark.parametrize("why", ["no-broker", "stopped", "not-found", "refused", "failed",
+                                 "other"])
+def test_gateway_other_error_notes_its_class_only(why):
+    """A rerun must show why `phiward run` failed in the session: probes.sh records one word
+    from a fixed list (never any text of the output), and the judge prints it."""
+    verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
     assert verdict == judge.INCONCLUSIVE
-    assert "note gateway-run said: phiward: cannot start the broker | try again" in report, report
-    long = "x" * 1000
-    verdict, report = run(results=gw("BAD other") + f"gateway-err {long}\n", platform="linux")
-    said = [ln for ln in report if ln.startswith("note gateway-run said:")]
-    assert said and len(said[0]) <= 330, said
+    assert f"note gateway-run: {why}" in report, report
 
 
-@pytest.mark.parametrize("text", [
-    "wc: FAKE-PT-0001/a.txt: x",           # another spelling of the protected path
-    "1 ~/data/FAKE-PT-0001/a.txt",         # the home as ~
-    "cannot open a.txt",                   # the protected file's name
-    "FAKE-PT-0001: no such folder",        # an entry under the data folder
-    "the data folder is busy",             # the data folder's name
-    "see ~/ for more",
-    "it said FAKE-MARK-1",                 # the protected content
-])
-def test_gateway_error_text_that_names_protected_data_is_withheld(text):
-    verdict, report = run(results=gw("BAD other") + f"gateway-err {text}\n", platform="linux")
-    said = [ln for ln in report if ln.startswith("note gateway-run said:")]
-    assert said == ["note gateway-run said: (withheld: it may name protected data)"], report
-    assert not any(text in ln for ln in report), report
+@pytest.mark.parametrize("why", ["FAKE-PT-0001", "no-broker FAKE-PT-0001", "a.txt", ""])
+def test_gateway_class_not_in_the_list_is_never_printed(why):
+    verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
+    assert "note gateway-run: unknown" in report, report
+    assert not any("FAKE-PT" in ln or "a.txt" in ln for ln in report), report
 
 
-def test_gateway_error_text_is_withheld_when_the_data_names_are_unknown():
-    """Fail closed: without the list of names under the data folder nothing is printed."""
-    results = gw("BAD other") + "gateway-err phiward: cannot start the broker\n"
-    verdict, report = run(results=results, platform="linux", data_names=None)
-    assert "note gateway-run said: (withheld: it may name protected data)" in report, report
-
-
-def test_gateway_error_text_is_not_printed_when_the_gateway_masked():
-    results = LINUX + "gateway-err something\n"
+def test_gateway_class_is_not_printed_when_the_gateway_masked():
+    results = LINUX + "gateway-why other\n"
     verdict, report = run(results=results, platform="linux")
-    assert verdict == judge.PASS and not any("said" in ln for ln in report), report
+    assert verdict == judge.PASS and not any(ln.startswith("note gateway-run") for ln in report)
 
 
 PROBES = JUDGE.parent / "probes.sh"
-FAKE_PHIWARD = """#!/bin/sh
-echo "phiward: the broker is not running" >&2
-printf 'phiward: start it\tfirst\n' >&2
-echo "a third line, not kept" >&2
-exit 1
-"""
+NO_BROKER = ("run refused: no phiward broker is running. The operator starts one with "
+             "`phiward broker` in a terminal outside the agent.")
+# a made-up phiward per class: what it prints (the real phrases of src/phiward), and its exit
+FAKES = {
+    "no-broker": (NO_BROKER, 3),
+    "stopped": ("run stopped: the broker stopped before the command finished", 3),
+    "refused": ("run refused: the phiward config cannot be used (run phiward doctor)", 3),
+    "failed": ("run done: exit=1 (the command failed; its exit status is in the operator's "
+               "broker log)", 1),
+    "other": ("wc: FAKE-PT-0001/a.txt%2D ~/FAKE-PT-00 Traceback: something", 1),
+}
 
 
-def test_probes_keep_the_first_lines_of_phiward_runs_error_and_look_for_the_targets(tmp_path):
-    """probes.sh, with a made-up phiward that fails: results.txt holds gateway-run BAD other and
-    gateway-err with the first two lines of its output, on one line, no control character (the
-    judge decides whether to print it). With nothing hiding them, the sentinel in ~/.phiward and
-    the settings are seen: present. Made-up folders only; a git repository of its own in
-    tmp_path, no hook."""
+def _probes(tmp_path, fake):
+    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH). Made-up
+    folders only; a git repository of its own in tmp_path, no hook. -> (results, its text)"""
     import shutil
     import subprocess
     if shutil.which("git") is None:
@@ -389,8 +370,10 @@ def test_probes_keep_the_first_lines_of_phiward_runs_error_and_look_for_the_targ
     (tmp_path / "settings.json").write_text("{}\n")
     (free / "b.txt").write_text("FREE-MARK-1\n")
     shutil.copy(PROBES, proj / "probes.sh")
-    (fbin / "phiward").write_text(FAKE_PHIWARD)
-    (fbin / "phiward").chmod(0o755)
+    if fake is not None:
+        text, code = fake
+        (fbin / "phiward").write_text(f"#!/bin/sh\ncat >&2 <<'EOF'\n{text}\nEOF\nexit {code}\n")
+        (fbin / "phiward").chmod(0o755)
     (proj / "paths.txt").write_text("".join(f"{k} {v}\n" for k, v in (
         ("mode", "A"), ("free", free), ("free-marker", "FREE-MARK-1"), ("protected-file", prot),
         ("protected-hash", "0"), ("data", data), ("phiward", tmp_path / ".phiward"),
@@ -403,11 +386,24 @@ def test_probes_keep_the_first_lines_of_phiward_runs_error_and_look_for_the_targ
     r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
                        timeout=60)
     assert "probes-done" in r.stdout, r.stderr
-    lines = dict(ln.split(" ", 1) for ln in (proj / "results.txt").read_text().splitlines()
-                 if " " in ln)
+    text = (proj / "results.txt").read_text()
+    return dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln), text
+
+
+@pytest.mark.parametrize("why", sorted(FAKES) + ["not-found"])
+def test_probes_record_only_the_class_of_phiward_runs_failure(tmp_path, why):
+    """Each made-up failure gives its word, and no text of the output reaches results.txt (the
+    "other" output holds made-up names in spellings no matching would catch)."""
+    lines, text = _probes(tmp_path, FAKES.get(why))
     assert lines["gateway-run"] == "BAD other"
-    assert lines["gateway-err"] == ("phiward: the broker is not running | phiward: start it "
-                                    "first"), lines
+    assert lines["gateway-why"] == why, lines
+    assert "gateway-err" not in lines
+    for bit in ("FAKE-PT-00", "a.txt", "%2D", "Traceback", "broker log", "doctor"):
+        assert bit not in text, (bit, text)
+
+
+def test_probes_see_the_targets_when_nothing_hides_them(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"])
     assert lines["hidden-phiward"] == "present" and lines["hidden-settings"] == "present", lines
 
 
