@@ -49,16 +49,25 @@ if [ -n "$stub" ]; then
     printf '[project]\nname = "made-up"\nversion = "0"\n[tool.uv]\nindex-url = "http://127.0.0.1:9/simple"\n' > "$d/pyproject.toml"
   done
   echo 'raise SystemExit("the made-up PYTHONPATH was read")' > "$fake/py/sitecustomize.py"
-  export UV_PYTHON_INSTALL_DIR="$(uv python dir)"  # where uv keeps its Pythons, named
+  echo 'echo POISON-BASH-ENV-READ' > "$fake/bashenv"
+  # uv's Python, given by path: the made-up home has none
+  sbx_py=$(uv python find --python-preference only-managed)
   chmod -R a-w "$fake"
   fake_before=$(cd "$fake" && find . -exec ls -ld {} + | sort; find . -type f -exec cat {} +)
   run_home=$fake
 fi
 if [ -n "$stub" ]; then
+  # and the shell's own: options (bash takes SHELLOPTS and BASHOPTS from the environment), the
+  # check's variable names, a made-up token, functions named after programs the check runs, a
+  # preloaded library, BASH_ENV
   { (cd "$fake/work" && env HOME="$fake" GIT_CONFIG_GLOBAL="$fake/.gitconfig" \
       GIT_CONFIG_SYSTEM="$fake/.gitconfig" GIT_DIR="$fake/no-git" \
       UV_INDEX_URL=http://127.0.0.1:9/simple UV_CONFIG_FILE="$fake/uv.toml" \
-      PIP_INDEX_URL=http://127.0.0.1:9/simple PYTHONPATH="$fake/py" sh "$check" --stub) 2>&1
+      PIP_INDEX_URL=http://127.0.0.1:9/simple PYTHONPATH="$fake/py" \
+      SHELLOPTS=xtrace BASHOPTS=extglob here=/ repo=/ token=FAKE-TOKEN-0001 \
+      'BASH_FUNC_dirname%%=() { echo /; }' 'BASH_FUNC_uname%%=() { echo Plan9; }' \
+      LD_PRELOAD=/nonexistent/FAKE-lib.so BASH_ENV="$fake/bashenv" \
+      sh "$check" --stub "$sbx_py") 2>&1
     echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)
 else
   { HOME=$run_home sh "$check" 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
@@ -130,6 +139,8 @@ if [ "$kept" = "facts-A.txt facts-B.txt report.txt stream-A.jsonl stream-B.jsonl
 else echo "== WRONG kept files: $kept"; status=1; fi
 if grep -rqs "FAKE-TOKEN-" /out; then echo "== FOUND the made-up token in /out"; status=1
 else echo "== ok    the made-up token is in no kept file"; fi
+if grep -rqs "POISON-" /out; then echo "== FOUND a made-up BASH_ENV ran"; status=1
+else echo "== ok    no made-up BASH_ENV ran"; fi
 if ls -d "$SBX_BASE"/phiward-sbx-* >/dev/null 2>&1; then echo "== LEFT the check's home in $SBX_BASE"; status=1
 else echo "== ok    the check's home is removed"; fi
 # the base below the home folder was taken, and the tools folder put on the session's PATH
