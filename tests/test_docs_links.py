@@ -1,7 +1,15 @@
 """Every relative link in the docs leads somewhere: the file exists, and an `#anchor` names a
-heading in it (as GitHub makes heading anchors) or an `<a id="...">`. Web links are not fetched.
-Every docs page, anchor and title that the code and the user files name exists."""
+heading in it (as GitHub makes heading anchors) or an `<a id="...">` outside code. Web links are
+not fetched.
 
+Every docs page and anchor that the code and the user files name exists, in the same case: as
+`docs/X.md`, as a bare `X.md`, or as a URL of the site (`msk-access.github.io/phiward/X/`). Not
+covered: a relative site path (`docs/X/`), because other sites use such paths too (Claude Code's
+`docs/en/sandboxing`). A link to a release tag (`blob/vX/docs/...`) is checked against today's
+docs. A quoted title (`docs/X.md, "Title"`) must be a heading or a bold lead-in of its page.
+References by words, not by a name or a title, are checked only through the BY_WORDS list."""
+
+import functools
 import re
 from pathlib import Path
 
@@ -19,6 +27,7 @@ DOCS = sorted(p for p in [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "CHANGE
 _LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _FENCE = re.compile(r"^(```|~~~)")
 _HTML_ID = re.compile(r"<a\s+id=\"([^\"]+)\"")  # an anchor of its own, as a limit's ID
+_ANY_FENCE = re.compile(r"^\s*(```|~~~)")  # also a block indented in a list
 
 
 def _slug(heading: str) -> str:
@@ -31,21 +40,25 @@ def _slug(heading: str) -> str:
     return text.replace(" ", "-")
 
 
-def _anchors(path: Path) -> set:
-    out, seen, fenced = set(), {}, False
+@functools.lru_cache(maxsize=None)
+def _anchors(path: Path) -> frozenset:
+    """The anchors of a page: its headings, and each `<a id>` outside code (inline or a block)."""
+    out, seen, fenced, in_code = set(), {}, False, False
     for line in path.read_text(encoding="utf-8").splitlines():
+        if _ANY_FENCE.match(line):
+            in_code = not in_code
+        elif not in_code:
+            out.update(_HTML_ID.findall(re.sub(r"`[^`]*`", "", line)))
         if _FENCE.match(line):
             fenced = not fenced
             continue
-        if not fenced:
-            out.update(_HTML_ID.findall(line))
         m = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
         if m and not fenced:
             s = _slug(m.group(1))
             n = seen.get(s, 0)
             out.add(s if n == 0 else f"{s}-{n}")
             seen[s] = n + 1
-    return out
+    return frozenset(out)
 
 
 def test_an_html_anchor_counts_as_an_anchor(tmp_path):
@@ -93,10 +106,19 @@ def test_the_test_index_names_every_test_file():
 
 # --- the docs that the code and the user files name ---------------------------------------------
 
-# where phiward's messages, comments and user-facing files name a page of docs/
+# where phiward's messages, comments and user-facing files name a page of docs/: as docs/X.md, as
+# a bare X.md, or as a URL of the site; a name or an anchor is matched in any case, then must exist
+# exactly
 NAMERS = ("src", "plugin", "skills", "scripts", "tools", ".github")
-_DOC_NAME = re.compile(r"docs/([a-z0-9-]+(?:/[a-z0-9.-]+)*\.md)(?:#([a-z0-9-]+))?")
-_QUOTED = re.compile(r"docs/([a-z0-9-]+\.md),?\s+\"([^\"]+)\"")
+_DOC_NAME = re.compile(r"docs/([\w-]+(?:/[\w.-]+)*\.md)(?:#([\w-]+))?")
+_BARE = re.compile(r"(?<![\w/.-])([\w-][\w.-]*\.md)(?:#([\w-]+))?")
+_SITE = re.compile(r"msk-access\.github\.io/phiward/(?:(?:dev|stable|\d[\w.]*)/)?"
+                   r"(?:([\w-]+(?:/[\w.-]+)*)/)?(?:#([\w-]+))?")
+_QUOTED = re.compile(r"docs/([\w-]+\.md),?\s+\"([^\"]+)\"")
+DOC_PAGES = frozenset(p.relative_to(ROOT / "docs").as_posix() for p in (ROOT / "docs").rglob("*.md"))
+# bare names in those trees that are other files, not docs pages (an unknown one fails)
+NOT_DOCS = {"AGENTS.md", "CHANGELOG.md", "CLAUDE.md", "CLAUDE.local.md", "GEMINI.md", "README.md",
+            "SECURITY.md", "agents-section.md", "copilot-instructions.md"}
 # references to a part of a page by words, not by a quoted title: (the file that says it, its
 # words, the page, the text that page must hold)
 BY_WORDS = [
@@ -120,25 +142,57 @@ def _flat(text: str) -> str:
     return " ".join(re.sub(r"(?m)^\s*#\s?", "", text).split())
 
 
+def _page_problem(page: str, anchor) -> list:
+    if page not in DOC_PAGES:
+        return [f"docs/{page}: no such page"]
+    if anchor and anchor not in _anchors(ROOT / "docs" / page):
+        return [f"docs/{page}#{anchor}: no such anchor"]
+    return []
+
+
 def _name_problems(text: str) -> list:
     """What is wrong with the docs pages and anchors that `text` names."""
     bad = []
     for m in _DOC_NAME.finditer(text):
-        page, anchor = ROOT / "docs" / m.group(1), m.group(2)
-        if not page.is_file():
-            bad.append(f"docs/{m.group(1)}: no such file")
-        elif anchor and anchor not in _anchors(page):
-            bad.append(f"docs/{m.group(1)}#{anchor}: no such anchor")
+        bad += _page_problem(m.group(1), m.group(2))
+    for m in _BARE.finditer(text):
+        if m.group(1) in DOC_PAGES:
+            bad += _page_problem(m.group(1), m.group(2))
+        elif m.group(1) not in NOT_DOCS:
+            bad.append(f"{m.group(1)}: no docs page, and not a file named in NOT_DOCS")
+    for m in _SITE.finditer(text):
+        bad += _page_problem((m.group(1) or "index") + ".md", m.group(2))
     return bad
 
 
+@functools.lru_cache(maxsize=None)
+def _titles(page: str) -> tuple:
+    """The titles of a page: its headings, and the bold lead-ins of its paragraphs and items."""
+    out, fenced = [], False
+    for line in (ROOT / "docs" / page).read_text(encoding="utf-8").splitlines():
+        if _ANY_FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
+        m = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line) or \
+            re.match(r"^\s*(?:[-*]\s+|\d+[a-z]?\.\s+)?\*\*(.+?)\*\*", line)
+        if m:
+            out.append(m.group(1).replace("`", ""))
+    return tuple(out)
+
+
 def _title_problems(text: str) -> list:
-    """What is wrong with the titles that `text` quotes (`docs/X.md, "Title"`)."""
+    """What is wrong with the titles that `text` quotes (`docs/X.md, "Title"`): each must be a
+    heading or a bold lead-in of its page, or the start of one, in the same case."""
     bad = []
     for m in _QUOTED.finditer(_flat(text)):
-        page = _flat((ROOT / "docs" / m.group(1)).read_text(encoding="utf-8")).replace("**", "")
-        if m.group(2).lower() not in page.lower():
-            bad.append(f"docs/{m.group(1)} has no \"{m.group(2)}\"")
+        page, title = m.group(1), m.group(2)
+        if page not in DOC_PAGES:
+            bad.append(f"docs/{page}: no such page")
+        elif not any(h == title or (h.startswith(title) and not h[len(title)].isalnum())
+                     for h in _titles(page)):
+            bad.append(f"docs/{page} has no title \"{title}\"")
     return bad
 
 
