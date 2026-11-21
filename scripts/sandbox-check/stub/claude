@@ -15,9 +15,15 @@ fi
 case ${1:-} in
   --version) echo "2.1.327 (Claude Code stand-in)"; exit 0 ;;
   --help)
-    echo "Usage: claude [options] (stand-in)"
+    echo "Usage: claude [options] [command] [prompt] (stand-in)"
+    echo
+    echo "Options:"
     for f in -p --model --output-format --verbose --settings --add-dir --allowedTools \
       --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
+    # phiward launch reads the commands from here (below Landlock ABI 9)
+    echo
+    echo "Commands:"
+    echo "  doctor                      Check the installation"
     exit 0 ;;
 esac
 exec python3 - "$@" <<'PY'

@@ -205,20 +205,28 @@ when in doubt, reinstall: the step names the command for the tool that installed
     unless it says just the same (the file `install` writes for `claude --settings`).
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
-    --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`,
-    `update`, `auth`, ...), also after options (`claude --debug mcp list`), does not take
-    `--settings`: run it outside `launch`. Only Claude Code's native build is accepted (npm
+    --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,
+    ...), also after options (`claude --debug mcp list`), is not a session: some ignore
+    `--settings` and run. `launch` refuses it: run it outside `launch`. The commands, and which
+    options take a value, are read from the help of the program that runs (`claude --help`,
+    once more at each start, inside the session); a help that lists no commands stops the
+    start. Only Claude Code's native build is accepted (npm
     and the installer give it from 2.1.250; for an older JavaScript build, run `claude
     install`). Before the tool starts, `launch` runs the filter of the program that will run
     (found on the session's `PATH`, then run by its real path) as Claude Code does (the native
     binary with `ARGV0=apply-seccomp`) and requires `socket(AF_UNIX)` to fail. So run the
     Claude Code binary itself: `env`, `npx`, `node`, a JavaScript program or a wrapper that
     adds arguments does not pass.
-    It refuses to start when the filter does not block unix sockets, when the session could
-    replace the program, on a machine other than x86_64 or aarch64, or when settings
+    It refuses to start when the filter does not block unix sockets, when the session can
+    write the program's real file or a folder above it, on a machine other than x86_64 or
+    aarch64, or when settings
     open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
-    `enableWeakerNestedSandbox`). The tests use a made-up filter: that the real binary's
-    filter works inside launch's bubblewrap is shown only by the sandbox check. Claude Code
+    `enableWeakerNestedSandbox`). A read-only wrapper of your own, inside the project, that
+    runs a native binary the session can write is not caught: only the wrapper is checked.
+    The tests use a made-up native build. Only the sandbox check shows that the real
+    binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
+    starts in the background (`--bg`, its background service) get the same sandbox
+    settings. Claude Code
     also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
     Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
     itself run outside that sandbox: they can reach sockets outside. You configure them; the

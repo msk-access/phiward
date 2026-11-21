@@ -485,34 +485,6 @@ INNER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
                               "allowUnsandboxedCommands": False}}
 # Claude Code's sandbox has a seccomp filter for these only
 INNER_ARCH = ("x86_64", "aarch64")
-# Claude Code's commands (the CLI reference and `claude --help` of 2.1.327; add those of a new
-# release from its help). This list only gives the clear message: a command not listed fails in
-# Claude Code itself on the unknown option --settings and runs nothing
-CLAUDE_COMMANDS = frozenset((
-    "agents", "attach", "auth", "auto-mode", "config", "doctor", "eval", "gateway", "import",
-    "init", "install", "mcp", "migrate-installer", "plugin", "plugins", "rc", "remote-control",
-    "sandbox", "self-hosted-runner", "setup-token", "tag", "test", "ultrareview", "update",
-    "upgrade"))
-
-
-def _claude_command(args: Sequence[str]) -> Optional[str]:
-    """The Claude Code command in `args`, if any: the root takes positional options, so the
-    first word that is not an option is the command. A word right after an option may be that
-    option's value, so the next word is looked at too; a word that is neither ends the look
-    (it is the prompt)."""
-    after_option = False
-    for a in args:
-        if a.startswith("-"):
-            after_option = "=" not in a
-            continue
-        if a in CLAUDE_COMMANDS:
-            return a
-        if not after_option:
-            return None
-        after_option = False
-    return None
-
-
 def _without_launch_settings(argv: List[str]) -> List[str]:
     """argv less a --settings that says just what launch passes (INNER_SETTINGS, as in the file
     `install` writes for `claude --settings`). Claude Code keeps one --settings, the last, so any
@@ -1418,8 +1390,8 @@ if unix == "inner":
         stop("%s is a JavaScript program, not Claude Code's native build; update Claude Code "
              "to the native build: `claude install`, or `npm install -g "
              "@anthropic-ai/claude-code@latest`" % run)
-    p = os.path.realpath(found)
-    while True:  # neither the filter nor a folder above it may be writable in the session
+    p = found
+    while True:  # neither the program nor a folder above it may be writable in the session
         if os.access(p, os.W_OK):
             stop("Claude Code (%s) can be changed by the session; install "
                  "Claude Code outside the project and the session's folders" % found)
@@ -1442,6 +1414,61 @@ if unix == "inner":
         stop("Claude Code's seccomp filter (%s, as apply-seccomp) does not block unix sockets "
              "here; run the Claude Code binary directly: a wrapper that adds arguments, or "
              "another program (env, npx, node), is not its filter" % found)
+    # a Claude Code command (`claude mcp list`, `claude logs`) is no session: some take no
+    # --settings, some ignore it and run. Its commands and the options' values are those its own
+    # help lists (commander's layout), read here from the program that runs; a help that cannot
+    # be read stops the start. The root takes positional options: the first word that is not
+    # an option, or an option's value, is the command or the prompt
+    import re
+    del env["ARGV0"]
+    try:
+        r = subprocess.run([found, "--help"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, timeout=30, env=env)
+        text = r.stdout.decode("utf-8", "replace") if r.returncode == 0 else ""
+    except (OSError, subprocess.SubprocessError):
+        text = ""
+    commands, arity, part = set(), {}, None
+    for ln in text.splitlines():
+        if ln and not ln[0].isspace():
+            part = ln.strip()
+            continue
+        m = re.match(r"  (\S.*?)(?:  |$)", ln)
+        if not m:
+            continue
+        if part == "Commands:":
+            commands.update(m.group(1).split()[0].split("|"))
+        elif part == "Options:" and m.group(1).startswith("-"):
+            spec = m.group(1)
+            kind = ("many" if re.search(r"\.\.\.[>\]]", spec) else "one" if "<" in spec else
+                    "maybe" if "[" in spec else "none")
+            for flag in re.findall(r"(?:^|, )(-[-\w]+)", spec):
+                arity[flag] = kind
+    if not commands:
+        stop("the help of %s (--help) lists no commands; launch cannot tell a command from a "
+             "prompt" % found)
+    args, i = cmd[1:-2], 0  # less the --settings launch adds last
+    while i < len(args):
+        a = args[i]
+        i += 1
+        if a.startswith("-") and a != "-":
+            kind = "none" if "=" in a else arity.get(a, "maybe")
+            if kind == "one":
+                i += 1
+            elif kind == "many":
+                while i < len(args) and not args[i].startswith("-"):
+                    i += 1
+            elif kind == "maybe" and i < len(args) and not args[i].startswith("-"):
+                if args[i] in commands:  # a value, or the command: refused either way
+                    a = args[i]
+                    break
+                i += 1
+            continue
+        break
+    else:
+        a = ""
+    if a in commands:
+        stop("`claude %s` is a Claude Code command, not a session, and does not take "
+             "--settings: run it outside launch" % a)
 try:
     os.execvp(run, cmd)
 except OSError as e:
@@ -1706,10 +1733,6 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                 raise LaunchError("launch passes --settings to Claude Code as the last "
                                   "arguments, so `--` cannot be among them")
             argv = _without_launch_settings(argv)
-            command = _claude_command(argv[1:])
-            if command:
-                raise LaunchError(f"`claude {command}` is a Claude Code command, not a session, "
-                                  "and does not take --settings: run it outside launch")
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
             unix = "deny"
