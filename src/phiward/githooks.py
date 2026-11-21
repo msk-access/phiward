@@ -240,7 +240,7 @@ def main(argv: List[str]) -> int:
             data = sys.stdin.buffer.read().decode("utf-8", "replace")
             return pre_push(cwd, data)
         if cmd == "install":
-            if rest[:1] in (["-h"], ["--help"]):
+            if "-h" in rest or "--help" in rest:  # the operator's; never pre-commit or pre-push
                 print(HELP, end="")
                 return 0
             if any(a != "--force" for a in rest):
