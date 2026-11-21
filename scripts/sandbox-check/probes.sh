@@ -139,64 +139,39 @@ echo "git-hook $r" >> results.txt
 git reset -q -- "gh-$mode.txt" 2>/dev/null
 rm -f "gh-$mode.txt"
 
-# the claude process's environment holds the token: can the session read it from /proc? Walk
-# the parents up to the claude process (its program, or the claude path in its command line: a
-# Node install, the stand-in), and record only whether its environ can be read. No environment
-# is written anywhere. Readable is a note; not found is INCONCLUSIVE in a real run, except
-# own-pid-ns (the judge takes it in Mode A only): the walk reached PID 1, PID 1 is bwrap, at
-# least one process between is and all of them are shells, and no process anywhere in /proc is
-# claude. Then the shell is in a PID namespace of its own and claude, which started that bwrap,
-# is outside (Claude Code's Linux sandbox runs bwrap with --unshare-pid). /proc/$$ must be this
-# process (/proc/self), else foreign-proc. PROC is /proc (paths.txt may name another, for tests).
+# a token in another process's environment: read the environ of every process in /proc other
+# than this one, and record only how many could be read or were refused, how many hold a token
+# variable's name (the names check.sh and launch.py pass the token in, and Claude Code's own), and
+# their PIDs. No name or value is written. /proc/$$ must be this process (/proc/self), else
+# foreign-proc. PROC is /proc (paths.txt may name another, for tests).
 proc=$(p proc)
 [ -n "$proc" ] || proc=/proc
-want=$(p claude-exe)
-link=$(p claude-link)
-is_claude() {
-  args=$(tr '\0' ' ' 2>/dev/null < "$proc/$1/cmdline")
-  case " $args " in *" $want "*|*" $link "*) return 0 ;; esac
-  [ "$(readlink "$proc/$1/exe" 2>/dev/null)" = "$want" ]
-}
+tokens='^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_SESSION_ACCESS_TOKEN)='
 if [ ! -r "$proc/self/status" ]; then
   echo "parent-environ n/a" >> results.txt
 elif ! [ "$proc/self/status" -ef "$proc/$$/status" ] 2>/dev/null; then
   echo "parent-environ foreign-proc" >> results.txt
 else
-  r=not-found
-  pid=$$
-  shells=yes
-  between=0
-  top=""
-  while :; do
-    ppid=$(sed -n 's/^PPid:[[:space:]]*//p' "$proc/$pid/status" 2>/dev/null)
-    case $ppid in ''|*[!0-9]*) break ;; esac
-    if [ "$ppid" -eq 0 ]; then top=$pid; break; fi
-    pid=$ppid
-    if is_claude "$pid"; then
-      if [ "$(head -c 1 "$proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
-        r=readable
-      else
-        r=unreadable
+  readable=0
+  refused=0
+  named=0
+  pids=""
+  for d in "$proc"/[0-9]*; do
+    pid=${d##*/}
+    case $pid in ''|*[!0-9]*) continue ;; esac
+    [ "$pid" = "$$" ] && continue
+    if tr '\0' '\n' < "$d/environ" > /dev/null 2>&1; then
+      readable=$((readable + 1))
+      if tr '\0' '\n' < "$d/environ" 2>/dev/null | grep -qE "$tokens"; then
+        named=$((named + 1))
+        pids="$pids,$pid"
       fi
-      break
+    else
+      refused=$((refused + 1))
     fi
-    comm=$(cat "$proc/$pid/comm" 2>/dev/null)
-    case $pid:$comm in
-      1:bwrap) ;;
-      1:*) shells=no ;;
-      *:sh|*:bash|*:dash|*:zsh) between=$((between + 1)) ;;
-      *) shells=no ;;
-    esac
   done
-  if [ "$r" = not-found ] && [ "$top" = 1 ] && [ "$shells" = yes ] && [ "$between" -gt 0 ]; then
-    seen=""
-    for d in "$proc"/[0-9]*; do
-      [ -d "$d" ] || continue
-      if is_claude "${d##*/}"; then seen=1; break; fi
-    done
-    [ -n "$seen" ] || r=own-pid-ns
-  fi
-  echo "parent-environ $r" >> results.txt
+  pids=${pids#,}
+  echo "parent-environ readable=$readable refused=$refused token-names=$named pids=${pids:--}" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder

@@ -20,9 +20,11 @@ report notes one word for why, its exit code and one error class (probes.sh reco
 fixed lists; no text of the output is kept or printed). The Read tool's refusal passes as
 phiward's, as a hidden file (Linux), or in Mode A as Claude Code's own permission deny ("File is
 in a directory that is denied by your permission settings."), which `install` writes for each
-protected root, when the marker (the file's content) is in no line of the stream. In Mode A only,
-parent-environ "own-pid-ns" (shells up to bwrap as PID 1, and no claude anywhere in /proc)
-passes with a note: claude is not visible. Under launch (Mode B) it proves nothing.
+protected root, when the marker (the file's content) is in no line of the stream.
+parent-environ: the probe reads the environ of every process in /proc but its own, and records
+how many it could read or was refused, and how many hold a token variable's name. Any such name
+is FAIL, in both modes; none, with at least one process listed, passes; no process listed, or a
+/proc that is not the session's own, is INCONCLUSIVE.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -46,6 +48,9 @@ GATEWAY_WHY = ("no-broker", "stopped", "not-found", "refused", "failed", "other"
 GATEWAY_ERROR = ("landlock", "bwrap", "gateway", "permission-denied", "read-only",
                  "not-permitted", "no-such", "python-fatal", "traceback", "none")
 EXIT = re.compile(r"[0-9]{1,3}")
+# the environ scan (probes.sh): counts and PIDs only
+PARENT = re.compile(r"readable=(?P<readable>[0-9]+) refused=(?P<refused>[0-9]+) "
+                    r"token-names=(?P<named>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
 CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
          "protected_file", "host_write_data", "host_write_phiward")
@@ -334,27 +339,26 @@ def judge(results, stream_lines, server, marker, created, facts):
     if env is not None and env != "COUNT 0":
         names = env.split(" ", 2)[-1]
         report.append(f"note names like a key in the commands' environment: {names}")
-    # whether the session could read the claude process's environment (which holds the token)
-    # from /proc; the probe writes no environment anywhere
+    # a token variable's name in any process environment the session can read from /proc (the
+    # probe writes counts and PIDs only, never a name or a value)
     parent = lines.get("parent-environ")
-    if parent == "readable":
-        report.append("note the session can read the claude process's environment, and so "
-                      "the token, from /proc: the documented limit")
-    elif parent == "unreadable":
-        report.append("ok   the session cannot read the claude process's environment")
-    elif parent == "own-pid-ns" and platform == "linux" and mode == "A":
-        # Mode A only (under launch, bwrap is PID 1 of a namespace claude is inside of): shells
-        # up to bwrap as PID 1, and no claude anywhere in /proc: claude, which started that
-        # sandbox, is outside the namespace and cannot be seen at all
-        report.append("note the session's shell is in a PID namespace of its own (bwrap is its "
-                      "PID 1): the claude process is not visible from it")
-    elif parent == "n/a" and platform == "darwin":
-        report.append("note no /proc: the claude process's environment was not probed")
-    elif parent is not None and facts.get("stub") == "yes":
-        report.append(f"note the claude process's environment: {parent} (the stand-in)")
+    scan = PARENT.fullmatch(parent or "")
+    if parent == "n/a" and platform == "darwin":
+        report.append("note no /proc: no process environment was probed")
+    elif scan and int(scan["named"]) > 0:
+        which = ", ".join("PID " + p for p in scan["pids"].split(",") if p != "-")
+        line = (f"a process environment readable from the session holds a token variable's "
+                f"name ({which})")
+        if facts.get("stub") == "yes":
+            report.append(f"note {line} (the stand-in, with no sandbox of its own)")
+        else:
+            fails.append(line)
+    elif scan and int(scan["readable"]) + int(scan["refused"]) > 0:
+        report.append(f"ok   no process environment readable from the session holds a token "
+                      f"variable's name ({scan['readable']} readable, {scan['refused']} refused)")
     elif parent is not None:
-        # fail closed: the probe did not find the claude process (another install, a hidden PID)
-        unsure.append(f"parent-environ: {parent} (the probe did not find the claude process)")
+        unsure.append(f"parent-environ: {parent or 'empty'} (the scan saw no process, or "
+                      "/proc is not the session's own)")
     if facts.get("locked") == "no":
         report.append(f"note Claude Code {facts.get('claude', '?')} is not the locked version "
                       "(CLAUDE_VERSION): the run is unlocked")

@@ -88,10 +88,11 @@ Then push `main`, `develop` and the tag.
    word for why (for example `no-broker` or `refused`), its exit code and an error class (for
    example `permission-denied` or `traceback`); no text of its output is kept. In Mode A, Claude
    Code's own refusal of the Read ("denied by your permission settings": the deny rules
-   `install` writes) counts as a refusal. In Mode A only, when the session's shell is in a PID
-   namespace of its own (shells up to bwrap as its PID 1, and no claude process anywhere in its
-   `/proc`), the claude process cannot be seen from it: a note, not INCONCLUSIVE. Under
-   `launch` (Mode B) claude is inside launch's namespace, so this proves nothing there.
+   `install` writes) counts as a refusal. The session also reads the environment of every
+   process it can see in `/proc`, and records only counts: a token variable's name in any of
+   them (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`,
+   `CLAUDE_CODE_SESSION_ACCESS_TOKEN`) fails the mode; a scan that saw no process is
+   INCONCLUSIVE.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only

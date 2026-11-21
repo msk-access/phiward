@@ -314,8 +314,6 @@ for m in $modes; do
     echo "phiward $H/.phiward"
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
-    echo "claude-exe $claude"
-    echo "claude-link $H/bin/claude"
     echo "nonce $nonce"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
