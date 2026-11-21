@@ -176,7 +176,8 @@ def test_a_stream_that_is_not_json_is_inconclusive_not_a_crash():
 
 # --- issue #6: Linux, Mode B, the new probes, the facts file ---
 
-CLEAN = "parent-environ readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 pids=-"
+CLEAN = ("parent-environ readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 "
+         "messaging=0 pids=-")
 LINUX = GOOD.replace("DENIED not-permitted", "DENIED read-only").replace(
     "read-protected DENIED read-only", "read-protected DENIED empty-view").replace(
     "parent-environ n/a", CLEAN)
@@ -835,9 +836,9 @@ def pe(value, base=None):
     return (LINUX if base is None else base).replace(CLEAN, f"parent-environ {value}")
 
 
-def scan(readable=2, refused=1, named=0, ancestors=0, error=0, pids="-"):
+def scan(readable=2, refused=1, named=0, ancestors=0, error=0, pids="-", messaging=0):
     return (f"readable={readable} refused={refused} token-names={named} ancestors={ancestors} "
-            f"scan-error={error} pids={pids}")
+            f"scan-error={error} messaging={messaging} pids={pids}")
 
 
 @pytest.mark.parametrize("mode", ["A", "B"])
@@ -862,7 +863,8 @@ def test_no_token_name_in_any_readable_environ_passes():
     scan(0, 0), scan(0, 5),                 # nothing readable: the reader may be broken
     scan(2, 1, error=1),                    # a step of the read failed
     "foreign-proc", "n/a", "readable", "unreadable", "not-found", "own-pid-ns",
-    scan(pids="x"), "readable=1 refused=0 token-names=0 pids=-",  # the old form
+    scan(pids="x"), "readable=1 refused=0 token-names=0 pids=-",  # older forms
+    "readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 pids=-",
     "readable=1 refused=0 token-names=0", ""])
 def test_a_scan_that_read_nothing_failed_or_cannot_be_read_is_inconclusive(value):
     verdict, report = run(results=pe(value), platform="linux")
@@ -900,10 +902,12 @@ def test_the_name_list_holds_claude_codes_documented_credentials():
     for n in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
               "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "AWS_BEARER_TOKEN_BEDROCK",
               "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "ANTHROPIC_AWS_API_KEY",
-              "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN",
-              "CLAUDE_CODE_MESSAGING_TOKEN"):
+              "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN"):
         assert n in names, n
     assert "CLAUDE_CODE_SESSION_ACCESS_TOKEN" not in names
+    # Claude Code gives it to Bash commands on purpose: counted apart, never a FAIL
+    assert "CLAUDE_CODE_MESSAGING_TOKEN" not in names
+    assert "CLAUDE_CODE_MESSAGING_TOKEN" in NAMES.read_text()
     assert len(names) == len(set(names)) and all(n.isupper() or "_" in n for n in names)
     probes = PROBES.read_text()
     assert not any(n in probes for n in names), "the probe holds a list of its own"
@@ -927,6 +931,24 @@ def test_probe_nothing_readable_holds_a_name(tmp_path):
     assert lines["parent-environ"] == scan(2, 1, 0, 0, 0, "-"), lines
     assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.PASS
     assert "FAKE-VALUE-2" not in text and "MY_TOKENISH" not in text
+
+
+def test_probe_counts_the_messaging_token_apart(tmp_path):
+    """Claude Code exports CLAUDE_CODE_MESSAGING_TOKEN to Bash commands on purpose (env-vars
+    docs): its presence is a count of its own, and the run still passes, with a note."""
+    proc = {1: {"PATH": "/x"}, 9: {"PATH": "/x", "CLAUDE_CODE_MESSAGING_TOKEN": "FAKE-MSG-1"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == scan(2, 0, 0, 0, 0, "-", messaging=1), lines
+    assert "FAKE-MSG-1" not in text
+    verdict, report = run(results=pe(lines["parent-environ"]), platform="linux")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("note") and "CLAUDE_CODE_MESSAGING_TOKEN" in ln and "1 process" in ln
+               for ln in report), report
+
+
+def test_no_messaging_note_when_none_holds_it():
+    verdict, report = run(results=LINUX, platform="linux")
+    assert not any("MESSAGING" in ln for ln in report), report
 
 
 def test_probe_a_refused_read_prints_nothing(tmp_path):
