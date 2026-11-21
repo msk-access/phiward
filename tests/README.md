@@ -45,7 +45,7 @@ says what it holds. By feature:
 | `doctor`, `setup`, `init`, onboarding | test_v2_doctor_first, test_v2_onboard, test_copy_and_adapter, test_v2_note_service, test_v2_review_final |
 | Unattended agents (headless, the SDK) | test_v2_unattended |
 | Git hooks | test_githooks |
-| The docs' links | test_docs_links |
+| The docs' links and anchors, and the docs the code names | test_docs_links |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
 | The judge of the real Claude Code check (scripts/sandbox-check: per platform and mode, the facts, the token redaction) | test_sandbox_check_judge |
 | Fixes from the first CI runs on GitHub (bubblewrap mounts, two launches at once, deep scratch folders) | test_v2_github_ci |
