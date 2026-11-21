@@ -1085,10 +1085,10 @@ test`), or read the change before you run it outside.
   sandbox. What runs outside that sandbox can still reach unix sockets outside the session:
   Claude Code itself, command hooks, MCP servers, LSP servers, the status line,
   `apiKeyHelper` and `!` commands you type. You configure these; the session cannot change
-  the project's `.claude`. `launch` runs the filter of the program that will run, as Claude
-  Code does: the native binary (a program that is not a JavaScript file) with `ARGV0=apply-seccomp`, or for a JavaScript
-  build sandbox-runtime's `apply-seccomp`, found in its order. If a Claude Code release runs
-  it otherwise, `launch` may prove a filter Claude Code does not use. The tests use a made-up
+  the project's `.claude`. `launch` accepts only Claude Code's native build (a JavaScript
+  program is refused) and runs the filter of the program that will run as Claude Code does,
+  the binary itself with `ARGV0=apply-seccomp`; then it runs that same file. If a Claude Code
+  release runs its filter otherwise, `launch` may prove a filter Claude Code does not use. The tests use a made-up
   filter; that the real binary's filter works inside launch's bubblewrap is shown only by
   the sandbox check. `launch` passes `--settings` last and refuses another one, unless it
   says the same, since Claude Code keeps only the last. `launch` makes

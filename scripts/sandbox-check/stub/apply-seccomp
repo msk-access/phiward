@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# A made-up stand-in for sandbox-runtime's apply-seccomp, for `check.sh --stub` (Linux): it
+# A made-up stand-in for the apply-seccomp Claude Code's native build carries, for
+# `check.sh --stub` (Linux; stub/claude runs it when started with ARGV0=apply-seccomp): it
 # denies socket(AF_UNIX) with EPERM and io_uring with ENOSYS, then runs the command, so
 # `phiward launch --tool claude` finds a filter that works. Usage: apply-seccomp CMD [ARG]...
 import ctypes

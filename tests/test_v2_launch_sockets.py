@@ -2,8 +2,9 @@
 name. Landlock ABI 9 and later: `RESOLVE_UNIX` for the whole tool (sockets made in the session
 stay reachable). Below ABI 9: `--tool generic` and a wrapped server cannot make unix sockets at
 all (the tool's seccomp filter); `--tool claude` relies on Claude Code's own sandbox, whose
-seccomp filter blocks them for Bash, and does not start unless that filter is found and works.
-Made-up sockets and a made-up filter only (helpers.fake_filter)."""
+seccomp filter blocks them for Bash, and does not start unless the program that runs is the
+native build and its filter works. Made-up sockets and a made-up native build only
+(helpers.fake_native_claude)."""
 
 import os
 import socket
@@ -14,8 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import (CONFINE_WHY, fake_native_claude, filter_in_home, landlock_abi, ready_line,
-                     tool_py)
+from helpers import CONFINE_WHY, fake_native_claude, landlock_abi, ready_line, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -272,8 +272,7 @@ def argv_of(out):
 
 
 def native(tree, **kw):
-    """A made-up native Claude Code on PATH (tree/bin/claude), with no sandbox-runtime anywhere."""
-    filter_in_home(tree / "home").unlink()
+    """A made-up native Claude Code on PATH (tree/bin/claude)."""
     return fake_native_claude(tree / "bin" / "claude", **kw)
 
 
@@ -300,7 +299,7 @@ def test_a_native_claude_with_its_own_filter_starts_without_sandbox_runtime(tree
 @below9
 @pytest.mark.parametrize("kw", [{"works": False}, {"runs": False}])
 def test_a_native_claude_whose_filter_does_not_block_unix_sockets_is_refused(tree, kw):
-    fake_native_claude(tree / "bin" / "claude", **kw)  # sandbox-runtime's filter is there too
+    fake_native_claude(tree / "bin" / "claude", **kw)
     code, out = launch(tree, "", "claude", extra_env=on_path(tree), program=[])
     assert code == 126 and "ARGV" not in out, out
 
@@ -319,7 +318,6 @@ def test_the_program_that_runs_is_the_one_whose_filter_is_proved(tree, which):
 
 @below9
 def test_a_wrapper_that_adds_arguments_is_refused_with_a_hint(tree):
-    filter_in_home(tree / "home").unlink()
     real = fake_native_claude(tree / "opt" / "claude")
     w = tree / "bin" / "my-claude"
     w.parent.mkdir(exist_ok=True)
@@ -356,7 +354,6 @@ def test_a_claude_subcommand_is_refused(tree, sub, word):
 @pytest.mark.parametrize("how", ["versioned", "wrapper"])
 def test_claude_gets_the_settings_whatever_its_path(tree, how):
     import json
-    filter_in_home(tree / "home").unlink()  # only the program that runs can pass
     real = fake_native_claude(tree / "home" / ".local" / "share" / "claude" / "versions" /
                               "2.1.330")
     if how == "versioned":

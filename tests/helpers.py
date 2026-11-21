@@ -174,7 +174,7 @@ def landlock_abi() -> int:
     return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
 
 
-# A made-up stand-in for sandbox-runtime's `apply-seccomp` (usage: apply-seccomp CMD [ARG]...):
+# A made-up stand-in for Claude Code's `apply-seccomp` (usage: apply-seccomp CMD [ARG]...):
 # it denies socket(AF_UNIX) with EPERM and io_uring with ENOSYS, then runs CMD. With
 # works=False it runs CMD with no filter, as a broken or replaced filter would.
 _FAKE_FILTER = r'''
@@ -201,21 +201,12 @@ os.execvp(sys.argv[1], sys.argv[1:])
 '''
 
 
-def fake_filter(path, works=True):
-    """Write the made-up `apply-seccomp` at `path` (its folders made), executable."""
-    import sys
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(f"#!{sys.executable} -IS\nWORKS = {bool(works)}\n" + _FAKE_FILTER)
-    os.chmod(p, 0o755)
-    return p
-
-
-def fake_native_claude(path, works=True, runs=True):
+def fake_native_claude(path, works=True, runs=True, python=False):
     """A made-up stand-in for Claude Code's native build at `path`: started with
     ARGV0=apply-seccomp it is the filter (it denies socket(AF_UNIX), unless not `works`, and runs
     CMD; with runs=False it exits 0 without running CMD), as the real binary carries
-    apply-seccomp; otherwise it prints ARGV and its arguments as JSON."""
+    apply-seccomp; otherwise it prints ARGV and its arguments as JSON, or with `python` runs as
+    Python with its arguments (python -c CODE ignores the --settings launch adds last)."""
     import sys
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -224,40 +215,16 @@ def fake_native_claude(path, works=True, runs=True):
                  f"    if not {bool(runs)}:\n        sys.exit(0)\n"
                  f"    WORKS = {bool(works)}\n" +
                  "".join("    " + ln + "\n" for ln in _FAKE_FILTER.strip().splitlines()) +
-                 "print('ARGV', json.dumps(sys.argv[1:]))\n")
+                 ("os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n" if python else
+                  "print('ARGV', json.dumps(sys.argv[1:]))\n"))
     os.chmod(p, 0o755)
     return p
 
 
-def fake_js_claude(path):
-    """A made-up stand-in for a JavaScript build of Claude Code: `path` links to a `cli.js`
-    beside it (so launch looks for sandbox-runtime's filter, as for npm's install). It runs as
-    Python with its arguments (python -c CODE ignores what follows, the --settings launch adds
-    last too)."""
-    import sys
-    p = Path(path)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    js = p.parent / "cli.js"
-    js.write_text(f"#!{sys.executable} -IS\nimport os, sys\n"
-                  "os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n")
-    os.chmod(js, 0o755)
-    p.symlink_to(js.name)
-    return p
-
-
 def tool_py(tree, tool="claude") -> str:
-    """The Python a test runs under `launch --tool TOOL`: for claude, the made-up JavaScript
-    build the tree fixture plants (below Landlock ABI 9 launch judges the seccomp filter of the
-    program that runs, and Python itself is not Claude Code); else Python itself."""
+    """The Python a test runs under `launch --tool TOOL`: for claude, the made-up native build
+    that runs as Python, which the tree fixture plants (below Landlock ABI 9 launch judges the
+    seccomp filter of the program that runs, and Python itself is not Claude Code); else Python
+    itself."""
     import sys
     return str(Path(tree) / "claude-py" / "claude") if tool == "claude" else sys.executable
-
-
-def filter_in_home(home) -> Path:
-    """Where sandbox-runtime looks for `apply-seccomp` in a user-local npm folder:
-    `~/.npm-global/lib/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/<arch>`."""
-    import platform
-    m = platform.machine().lower()
-    arch = {"x86_64": "x64", "amd64": "x64", "aarch64": "arm64", "arm64": "arm64"}.get(m, m)
-    return Path(home) / ".npm-global" / "lib" / "node_modules" / "@anthropic-ai" / \
-        "sandbox-runtime" / "vendor" / "seccomp" / arch / "apply-seccomp"

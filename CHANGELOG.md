@@ -129,9 +129,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   cannot apply its filter (the native binary's, run as Claude Code runs it, does not block
   unix sockets in the session; the session could replace it; another architecture than
   x86_64 or aarch64), when settings open it, or when a `--` is among the arguments. The
-  filter judged is that of the program that runs (`env`, `npx`, `node` or a wrapper that adds
-  arguments is refused). Your own `--settings` is refused unless it says just what launch
-  passes, and so is a Claude Code command (`claude mcp`, `doctor`, `update`). Below
+  filter judged is that of the program that runs, and only Claude Code's native build is
+  accepted (a JavaScript program, `env`, `npx`, `node` or a wrapper that adds arguments is
+  refused). Your own `--settings` is refused unless it says just what launch passes, and so is
+  a Claude Code command (`claude mcp`, `doctor`, `update`), also after options. Below
   ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all (also their
   own; socketpairs and pipes work). The warnings about Landlock scopes are gone.
 - `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
