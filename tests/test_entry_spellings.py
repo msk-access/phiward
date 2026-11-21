@@ -15,8 +15,10 @@ import pytest
 from helpers import check_shell, needs_confine, protect
 from phiward import config, inventory, paths
 from phiward.core import DENY
-from phiward.sanitize import (STOP_WORDS, WITHHELD, Sanitizer, _AFTER_MARK, _GOES_ON, _MARK,
-                              KEEP_PLACEHOLDER, _tail, load_pack, parse_rule, unescape)
+from phiward.run import remote_root_regex
+from phiward.sanitize import (STOP_WORDS, WITHHELD, Columns, Sanitizer, _AFTER_MARK, _GOES_ON,
+                              _KEEP_AFTER, _MARK, _NAME_CHAR, KEEP_PLACEHOLDER, _key, _line_end,
+                              _tail, load_pack, parse_rule, unescape)
 
 NAMES = ["Doe_Jane_FAKE", "FAKEPT0005", "T_xyz9", "ab12", "20240115", "SAM_PLE", "EN-TRY"]
 
@@ -309,10 +311,26 @@ class _Before(Sanitizer):
         return "".join(out)
 
     def _marked(self, line):
+        marks = []
+        for start, end, open_ in self.protected.text_spans(line):
+            for size in self.known_lengths:
+                stop = start + size
+                if stop <= len(line) and _key(line[start:stop]) in self.known and \
+                        (stop == len(line) or not _NAME_CHAR.match(line[stop])):
+                    end = stop if _KEEP_AFTER.match(line, stop) else _line_end(line, stop)
+                    break
+            else:
+                if open_ and _key(line[start:end]) not in self.root_keys:
+                    end = _line_end(line, end)
+            end = max(end, start + 1)
+            if marks and start <= marks[-1][1]:
+                marks[-1] = (marks[-1][0], max(marks[-1][1], end))
+            else:
+                marks.append((start, end))
         out, pos = [], 0
-        for s, e, _m in self._marks(line):
-            out += [line[pos:s], _MARK]
-            pos = e
+        for start, end in marks:
+            out += [line[pos:start], _MARK]
+            pos = end
         out.append(line[pos:])
         return "".join(out)
 
@@ -369,11 +387,16 @@ def _rules(packs, patterns=()):
             "keep_files": [k for p in loaded for k in p.keep_files]}
 
 
-def _pair(names, packs, patterns=()):
+def _pair(names, packs, patterns=(), roots=(), remote=()):
     stop = {w.casefold() for w in STOP_WORDS}
     strings = sorted({s for n in names for s in inventory._strings_of(n, stop)})
     rules = _rules(packs, patterns)
-    return Sanitizer(entries=strings, **rules), _Before(strings=strings, **rules)
+    if roots:
+        rules.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
+    pair = Sanitizer(entries=strings, **rules), _Before(strings=strings, **rules)
+    for s in pair:
+        s.first_rules += [(remote_root_regex(r), "<PROTECTED>") for r in remote]
+    return pair
 
 
 _HOLE = re.compile(r"<[A-Z][A-Z0-9_]*>")
@@ -462,6 +485,90 @@ def test_never_less_masked_than_before(packs, patterns, table):
 def test_never_less_masked_than_before_over_many_lines(packs, patterns, table):
     """60 seeds: 90,000 lines for each pack set and mode, 720,000 in all."""
     _r9(packs, patterns, table, range(1, 61))
+
+
+# Protected roots, a remote root, paths written another way, and user rules that read a dash as
+# written (ASCII and U+2010)
+R9_ROOTS, R9_REMOTE = ("/T/phi",), ("/R/rem",)
+R9_DASH_RULES = (r"(?<![\w-])MRN\d{6}\b => <MRN>", r"(?<![\w‐])MRN‐\d{6}\b => <MRNU>",
+                 r"\bRUN-\d{4}\b => <RUNID>")
+R9_PATH_PIECES = ["/T/phi", "/T//phi/x", "/T/./phi/a", "\\/T\\/phi\\/y", "/T/phi–", "/T/phi-",
+                  "/R/rem/z", "/R//rem", "/R/./rem/q", "MRN123456", "MRN‐123456", "MRN-123456",
+                  "run–", "run-", "RUN-2024", "RUN‐2024", " ok ", "a ", "\t"]
+R9_PATH_CASES = ("a run–MRN123456\t/T//phi/x", "/T/phi– ok /T//phi/x", "x /R//rem/FAKE PT y",
+                 "MRN‐123456 /T/./phi/a", "RUN‐2024 and RUN-2024", "\\/T\\/phi\\/FAKE_PT_0001")
+
+
+def _r9_path_lines(seed, n):
+    rnd = random.Random(seed)
+    for x in _r9_lines(seed, n):
+        cut = rnd.randrange(len(x) + 1)
+        yield x[:cut] + "".join(rnd.choice(R9_PATH_PIECES) for _ in range(rnd.randint(1, 4))) + \
+            x[cut:]
+
+
+def _r9_paths(table, seeds):
+    new, old = _pair(R9_NAMES, ("genomics", "msk"), R9_DASH_RULES, R9_ROOTS, R9_REMOTE)
+    for case in R9_PATH_CASES:
+        assert _less(new, old, case, table) is None, _less(new, old, case, table)
+    bad = [f for seed in seeds for f in (_less(new, old, x, table)
+                                         for x in _r9_path_lines(seed, 1500)) if f]
+    assert not bad, (len(bad), bad[:5])
+
+
+@pytest.mark.parametrize("table", [False, True])
+def test_never_less_masked_than_before_with_paths_and_dash_rules(table):
+    _r9_paths(table, range(1, 6))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("table", [False, True])
+def test_never_less_masked_than_before_with_paths_and_dash_rules_over_many_lines(table):
+    _r9_paths(table, range(1, 61))
+
+
+def _r9_rows(seeds, fixed=()):
+    """Rows under a header with an ID column, through `Columns` (the row masked whole as in
+    table mode, then by column)."""
+    new, old = _pair(R9_NAMES, ("genomics", "msk"), R9_DASH_RULES, R9_ROOTS, R9_REMOTE)
+    bad = []
+    for seed in [0] + list(seeds):
+        rnd = random.Random(seed)
+        cn, co = Columns(new), Columns(old)
+        for c in (cn, co):
+            c.line("sample_id\tvalue\tnote")
+        rows = list(fixed) if seed == 0 else (
+            "\t".join([x.replace("\t", " "), str(rnd.randrange(10**6)),
+                       rnd.choice(R9_PIECES + R9_PATH_PIECES).replace("\t", " ")])
+            for x in _r9_path_lines(seed, 300))
+        for row in rows:
+            if cn.state != "table" or co.state != "table":
+                cn, co = Columns(new), Columns(old)
+                for c in (cn, co):
+                    c.line("sample_id\tvalue\tnote")
+            n, o = cn.line(row), co.line(row)
+            if n == WITHHELD:
+                continue
+            if o == WITHHELD:
+                if old._mask(_nfkc_only(n), True) != n:
+                    bad.append((row, n, o))
+                continue
+            olds = _kept(o)
+            if any(not any(k in y for y in olds) for k in _kept(n)):
+                bad.append((row, n, o))
+    return bad
+
+
+def test_never_less_masked_than_before_by_column():
+    bad = _r9_rows(range(1, 6), ["a run–MRN123456\t7\t/T//phi/x",
+                                 "FAKE‐PT‐0001.bam\t12\tMRN‐123456", "x\t3\tRUN‐2024"])
+    assert not bad, (len(bad), bad[:5])
+
+
+@pytest.mark.slow
+def test_never_less_masked_than_before_by_column_over_many_lines():
+    bad = _r9_rows(range(1, 61))
+    assert not bad, (len(bad), bad[:5])
 
 
 # --- R10: speed ----------------------------------------------------------------------------------
