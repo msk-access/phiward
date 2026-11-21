@@ -15,8 +15,8 @@ import pytest
 from helpers import check_shell, needs_confine, protect
 from phiward import config, inventory, paths
 from phiward.core import DENY
-from phiward.sanitize import (STOP_WORDS, WITHHELD, Sanitizer, _MARK, KEEP_PLACEHOLDER,
-                              load_pack, parse_rule, unescape)
+from phiward.sanitize import (STOP_WORDS, WITHHELD, Sanitizer, _AFTER_MARK, _GOES_ON, _MARK,
+                              KEEP_PLACEHOLDER, _tail, load_pack, parse_rule, unescape)
 
 NAMES = ["Doe_Jane_FAKE", "FAKEPT0005", "T_xyz9", "ab12", "20240115", "SAM_PLE", "EN-TRY"]
 
@@ -288,6 +288,38 @@ class _Before(Sanitizer):
         out.append(line[pos:])
         return "".join(out)
 
+    def _marked(self, line):
+        out, pos = [], 0
+        for s, e, _m in self._marks(line):
+            out += [line[pos:s], _MARK]
+            pos = e
+        out.append(line[pos:])
+        return "".join(out)
+
+    def _mask(self, line, table, *_rest):
+        """The steps one after another, each on the text the step before it left."""
+        line = self._apply(self.first_rules, line)
+        if self.protected is not None:
+            plain = paths.plain_spelling(line)
+            spans = self.protected.text_spans(plain) if plain != line else []
+            if spans:
+                plain, pos = paths.plain_spelling_map(line)
+                cut = spans[0][0]
+                line = line[:pos[cut]] + plain[cut:]
+            line = self._marked(line)
+        line = self._entries(line)
+        if self.protected is not None:
+            line = _AFTER_MARK.sub(
+                lambda m: "<PROTECTED>" + (_GOES_ON if len(m.group(0)) > 1 else ""), line)
+            line = _tail(line)
+        line = self._apply(self.path_rules, line)
+        line = self._apply(self.id_rules, line)
+        if self.re_names is not None:
+            line = self.re_names.sub("<NAME>", line)
+        if not table:
+            line = self._apply(self.pos_rules, line)
+        return line
+
     def first(self, line, table=False):
         """The reference's first masked line (before the check that withholds a line)."""
         return self._mask(_nfkc_only(line), table)
@@ -338,13 +370,15 @@ def _less(new, old, line, table):
         return None
     o = old.clean(line, table)
     if o == WITHHELD:
+        # the reference withheld the line; the new one shows it: the shown line must hold
+        # nothing the reference masks (no entry name, no rule's match), and keep no more than
+        # the reference's first masked line
+        if old._mask(_nfkc_only(n), table) != n:
+            return (line, n, o)
         o = old.first(line, table)
     olds = _kept(o)
     for k in _kept(n):
-        # text with no letter or digit names no one, nor does punctuation at a kept run's edge
-        # (a `,` a rule used to take with a number)
-        k = re.sub(r"^\W+|\W+$", "", k)
-        if k and not any(k in x for x in olds):
+        if not any(k in x for x in olds):
             return (line, n, o)
     return None
 
@@ -380,18 +414,34 @@ def _r9_lines(seed, n):
         yield "".join(parts)
 
 
-@pytest.mark.slow
+R9_CASES = ("AB123456-T xyz9", "AB123456-T_xyz9", "xx-abcdefg", "_lead_fake x", "x trail_fake_ y",
+            "MRN77_Roe Ann.bam.1.vcf", "PT‐xyz90002", "C–PLE12345", "Donor–1,234,567",
+            "ABCDE 12345", "SAM_PLE12:00‐C3", "lead/15–abc‐FAKE‐PT‐0001.bamFAKE x",
+            "3\t9990001_2024‐a:b:c:d:e ", "PLE ١٢٣٤٥.1,234,567",
+            "fakept\tFAKE‐PT‐0001.bam9990001-ABC123−")
+
+
+def _r9(packs, patterns, table, seeds):
+    new, old = _pair(R9_NAMES, packs, patterns)
+    for case in R9_CASES:
+        assert _less(new, old, case, table) is None, _less(new, old, case, table)
+    bad = [f for seed in seeds for f in (_less(new, old, x, table)
+                                         for x in _r9_lines(seed, 1500)) if f]
+    assert not bad, (len(bad), bad[:5])
+
+
 @pytest.mark.parametrize("packs,patterns", R9_PACKS)
 @pytest.mark.parametrize("table", [False, True])
 def test_never_less_masked_than_before(packs, patterns, table):
-    new, old = _pair(R9_NAMES, packs, patterns)
-    for case in ("AB123456-T xyz9", "AB123456-T_xyz9", "xx-abcdefg", "_lead_fake x",
-                 "x trail_fake_ y", "MRN77_Roe Ann.bam.1.vcf", "PT‐xyz90002",
-                 "C–PLE12345", "Donor–1,234,567", "ABCDE 12345"):
-        assert _less(new, old, case, table) is None, _less(new, old, case, table)
-    bad = [f for seed in range(1, 6) for f in (_less(new, old, x, table)
-                                                for x in _r9_lines(seed, 1500)) if f]
-    assert not bad, (len(bad), bad[:5])
+    _r9(packs, patterns, table, range(1, 6))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("packs,patterns", R9_PACKS)
+@pytest.mark.parametrize("table", [False, True])
+def test_never_less_masked_than_before_over_many_lines(packs, patterns, table):
+    """60 seeds: 90,000 lines for each pack set and mode, 720,000 in all."""
+    _r9(packs, patterns, table, range(1, 61))
 
 
 # --- R10: speed ----------------------------------------------------------------------------------
