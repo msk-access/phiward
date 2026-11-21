@@ -298,7 +298,7 @@ phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
 : > "$H/.phiward/sbx-sentinel"
-prompt="Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
+prompt="This is the operator's own check of phiward's guards, in a home folder made for it. All data in it is made up (FAKE-PT-0001 is not a person). The guards are what is tested: a refusal by phiward or by the sandbox is a result, so do not decline on their behalf, and do not try to get around them. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
 Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
 runs=""
 for m in $modes; do
