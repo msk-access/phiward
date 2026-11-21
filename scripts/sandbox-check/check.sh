@@ -258,6 +258,13 @@ free="$H/proj/free"
 mkdir -p "$H/bin" "$H/tmp" "$H/data/FAKE-PT-0001" "$H/proj" "$H/.config/phiward"
 ln -s "$claude" "$H/bin/claude"
 [ -n "$stub" ] && ln -s "$py" "$H/bin/python3"  # the stub's own Python
+if [ -n "$stub" ] && [ $os = linux ]; then
+  # `launch --tool claude` below Linux 7.1 needs Claude Code's seccomp filter; the stub has no
+  # sandbox of its own, so a made-up filter, where sandbox-runtime looks in a user npm folder
+  case $(uname -m) in x86_64) a=x64 ;; aarch64) a=arm64 ;; *) a=$(uname -m) ;; esac
+  f="$H/.npm-global/lib/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/$a"
+  mkdir -p "$f" && cp "$here/stub/apply-seccomp" "$f/" && chmod 755 "$f/apply-seccomp"
+fi
 rnd() { "$py" -I -S -c 'import secrets; print(secrets.token_hex(8))'; }
 [ -n "$stub" ] && token="FAKE-TOKEN-$(rnd)$(rnd)"
 marker="FAKE-MARK-$(rnd)"
@@ -416,7 +423,16 @@ for m in $modes; do
     else
       echo "remote no"
     fi
+    # Linux, Mode B: made-up unix sockets outside the session (sockpeer.py), none reachable
+    if [ $os = linux ] && [ "$m" = B ] && [ -z "$stub" ]; then echo "sockets $H/sock-$m"; fi
   } > "$H/proj/paths.txt"
+  speer=""
+  if [ $os = linux ] && [ "$m" = B ] && [ -z "$stub" ]; then
+    rm -rf "$H/sock-$m" && mkdir -m 700 "$H/sock-$m"
+    # bound again and bound late 10 s after this start, once the session has started
+    "$py" "$here/sockpeer.py" "$H/sock-$m" 10 &
+    speer=$!
+  fi
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
@@ -434,6 +450,7 @@ for m in $modes; do
   lpid=$!
   wait "$lpid" || code=$?
   lpid=""
+  if [ -n "$speer" ]; then kill "$speer" 2>/dev/null; wait "$speer" 2>/dev/null; fi
   [ "$code" = 0 ] || echo "note: claude exited with $code"
   after=$(sum "$H/.claude/settings.json")
   same=no; [ "$before" = "$after" ] && same=yes
@@ -470,6 +487,7 @@ for m in $modes; do
     req="control-write control-read read-protected write-data write-phiward write-settings"
     req="$req gateway-run parent-environ env-secrets control-commit git-hook"
     [ -n "$REMOTE" ] && req="$req remote-push remote-run remote-pull remote-pull-out remote-own-socket"
+    if [ $os = linux ] && [ "$m" = B ] && [ -z "$stub" ]; then req="$req socket-renamed socket-rebound socket-late"; fi
     echo "required $req"
   } > "$R/facts.txt"
   runs="$runs $R"

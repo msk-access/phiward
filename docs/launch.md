@@ -65,7 +65,7 @@ phiward launch --tool claude
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
 | Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps |
-| Network | open in this release (see Limits) | reach outside unix sockets (the SSH agent, your shared SSH connection, docker) |
+| Network | open in this release (see Limits) | reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
 
 ## When a session ends
@@ -193,6 +193,22 @@ when in doubt, reinstall: the step names the command for the tool that installed
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
   runs unconfined).
+- **Linux: unix sockets.** `launch` does not mask sockets by name; the kernel limits them.
+  - From Linux 7.1 (Landlock ABI 9): the session reaches only the unix sockets it made itself,
+    and the system's name-service sockets (sssd, nscd).
+  - Before 7.1, with `--tool claude`: Claude Code's own sandbox blocks unix sockets for Bash
+    (its seccomp filter). `launch` turns that sandbox on with `--settings`
+    (`sandbox.enabled`, `sandbox.failIfUnavailable`, and `sandbox.allowUnsandboxedCommands`
+    false). It refuses to start when the filter is not installed (`npm install -g
+    @anthropic-ai/sandbox-runtime`), when it does not work in the session, on a machine other
+    than x86_64 or aarch64, or when settings open the sandbox (`excludedCommands`,
+    `allowAllUnixSockets`, `allowUnixSockets`, `enableWeakerNestedSandbox`). Claude Code
+    also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
+    Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
+    itself run outside that sandbox: they can reach sockets outside. You configure them; the
+    session cannot, because the project's `.claude` is read-only.
+  - Before 7.1, with any other tool (`--tool generic`, a wrapped MCP server): the tool cannot
+    make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
   keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;

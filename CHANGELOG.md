@@ -120,6 +120,16 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- Linux: `launch` no longer masks host unix sockets by name; the kernel limits them. From
+  Landlock ABI 9 (Linux 7.1) the session reaches only the unix sockets it made itself (and the
+  name-service ones), and a helper that cannot apply this stops the start. Below ABI 9,
+  `--tool claude` relies on Claude Code's sandbox to block unix sockets for Bash: `launch`
+  passes `--settings` that turn it on (`enabled`, `failIfUnavailable`, no unsandboxed
+  retries) and refuses to start when that sandbox cannot apply its filter (not installed:
+  `npm install -g @anthropic-ai/sandbox-runtime`; not working in the session; replaceable by
+  the session; another architecture than x86_64 or aarch64) or when settings open it. Below
+  ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all (also their
+  own; socketpairs and pipes work). The warnings about Landlock scopes are gone.
 - `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
   server alike: the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders as
   a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at any depth on

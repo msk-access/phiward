@@ -72,6 +72,22 @@ def test_the_tool_filter_answers_the_probe_with_the_fingerprint(machine):
 
 
 @pytest.mark.parametrize("machine", ["x86_64", "aarch64"])
+def test_the_tool_filter_denies_unix_sockets_only_when_asked(machine):
+    arch = confine._AUDIT_ARCH[machine]
+    col = 0 if machine == "x86_64" else 1
+    sock, uring = confine._SOCKET[col], confine._DENY["io_uring_setup"][col]
+    deny = wholetool.tool_seccomp_program(machine, deny_unix=True)
+    assert _run_bpf(deny, arch, sock, (1, 1, 0, 0, 0, 0)) == 0x00050001  # AF_UNIX: EPERM
+    assert _run_bpf(deny, arch, sock, (2, 1, 0, 0, 0, 0)) == 0x7FFF0000  # AF_INET
+    assert _run_bpf(deny, arch, uring) == 0x00050026  # ENOSYS
+    assert _run_bpf(deny, arch, PROBE_NR) == 0x00050000 | PROBE_ERRNO
+    assert _run_bpf(deny, arch, (16, 29)[col], (0, 0x5412, 0, 0, 0, 0)) == 0x00050001  # TIOCSTI
+    plain = wholetool.tool_seccomp_program(machine)
+    assert _run_bpf(plain, arch, sock, (1, 1, 0, 0, 0, 0)) == 0x7FFF0000
+    assert _run_bpf(plain, arch, uring) == 0x7FFF0000
+
+
+@pytest.mark.parametrize("machine", ["x86_64", "aarch64"])
 def test_the_gateway_filter_has_no_fingerprint(machine):
     prog = confine.seccomp_program(machine)
     assert _run_bpf(prog, confine._AUDIT_ARCH[machine], PROBE_NR) == 0x7FFF0000

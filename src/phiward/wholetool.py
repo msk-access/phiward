@@ -90,6 +90,12 @@ What the session can do:
   Kerberos tickets, and similar). Credential variables such as SSH_AUTH_SOCK are removed.
 - Other processes: no keystroke injection, no signals to processes outside, no scripting of
   other apps. The network is open in this release.
+- Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
+  (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
+  --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
+  turns it on and refuses to start unless its seccomp filter is installed (npm install -g
+  @anthropic-ai/sandbox-runtime) and works; hooks, MCP servers and Claude Code itself are
+  outside that sandbox. Any other tool cannot make unix sockets at all.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -468,11 +474,47 @@ def _sandbox_check_self() -> bool:
 FINGERPRINT_SYSCALL = 360
 FINGERPRINT_ERRNO = 3917
 
+# Landlock ABI 9 (Linux 7.1) limits connect() to pathname unix sockets made outside the session
+UNIX_ABI = 9
+# what launch gives Claude Code below ABI 9, by --settings (above the project's and the user's
+# files; with the unsandboxed retry off there, Claude Code ignores a repository's settings that
+# loosen its sandbox)
+INNER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                              "allowUnsandboxedCommands": False}}
+# sandbox-runtime ships apply-seccomp for these only
+INNER_ARCH = ("x86_64", "aarch64")
 
-def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
+
+def landlock_abi() -> int:
+    """The kernel's Landlock ABI version (0 without Landlock)."""
+    import ctypes
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return 0
+    libc.syscall.restype = ctypes.c_long
+    return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
+
+
+def inner_sandbox_reason(project: str, env: Dict[str, str],
+                         machine: Optional[str] = None) -> Optional[str]:
+    """Why Claude Code's sandbox would not block unix sockets for Bash below ABI 9, or None:
+    an architecture with no filter, or settings (merged under INNER_SETTINGS, as Claude Code
+    merges them; `env` is the session's) that open the sandbox. Whether the filter is installed
+    and works is checked in the session's view (HELPER)."""
+    machine = machine or confine._machine()
+    if machine not in INNER_ARCH:
+        return (f"Claude Code's sandbox has no seccomp filter for the {machine} architecture, "
+                "so it cannot block unix sockets below Linux 7.1")
+    return claude_settings.launch_sandbox_reason(project, _real_home(env), env, INNER_SETTINGS)
+
+
+def tool_seccomp_program(machine: Optional[str] = None, deny_unix: bool = False) -> bytes:
     """No keystroke injection (ioctl TIOCSTI, TIOCLINUX: compared on the low 32 bits) and no
     kernel keyrings (keyctl, add_key, request_key: Kerberos KEYRING tickets); the x32 ABI is
-    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO."""
+    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO. With `deny_unix`
+    (below Landlock ABI 9, a tool with no inner sandbox): socket(AF_UNIX) fails with EPERM and
+    io_uring with ENOSYS (it could make sockets past the filter); socketpair stays."""
     machine = machine or confine._machine()
     if machine not in confine._AUDIT_ARCH:
         raise confine.ConfineError(f"no seccomp filter for the {machine} architecture")
@@ -488,33 +530,14 @@ def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
     prog += [(jeq, 0, 1, FINGERPRINT_SYSCALL), (ret, 0, 0, 0x00050000 | FINGERPRINT_ERRNO)]
     for k in keys:
         prog += [(jeq, 0, 1, k), (ret, 0, 0, eperm)]
+    if deny_unix:
+        for k in ("io_uring_setup", "io_uring_enter", "io_uring_register"):
+            prog += [(jeq, 0, 1, confine._DENY[k][col]), (ret, 0, 0, 0x00050026)]
+        prog += [(jeq, 0, 4, confine._SOCKET[col]), (ld, 0, 0, 16), (jeq, 0, 1, 1),
+                 (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     prog += [(jeq, 0, 4, ioctl), (ld, 0, 0, 24), (jeq, 1, 0, 0x5412), (jeq, 0, 1, 0x541C),
              (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     return b"".join(struct.pack("<HBBI", *i) for i in prog)
-
-
-# system name-service sockets stay reachable (user and group lookups on clusters: sssd, nscd)
-_NSS_SOCKETS = ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb")
-
-
-def _outside_sockets(places: Sequence[str]) -> List[str]:
-    """Path unix sockets bound outside the tool's places (from /proc/net/unix; the path is the
-    rest of the line after seven fields, so it may hold spaces)."""
-    out: List[str] = []
-    try:
-        with open("/proc/net/unix", encoding="utf-8", errors="replace") as fh:
-            next(fh, None)
-            for line in fh:
-                parts = line.rstrip("\n").split(None, 7)
-                if len(parts) == 8 and parts[7].startswith("/") and \
-                        not any(_inside(parts[7], n) for n in _NSS_SOCKETS):
-                    p = parts[7]
-                    if not any(_inside(p, pl) for pl in places) and os.path.lexists(p) and \
-                            p not in out:
-                        out.append(p)
-    except OSError:
-        pass
-    return out
 
 
 def git_dirs_in(project: str, limit: int = 50000) -> List[Tuple[str, str]]:
@@ -1085,11 +1108,9 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             checks[op[1]] = (True, op[1])
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
              "--die-with-parent"]
-    # outside sockets first (before /tmp is replaced), then the tool's own temp folder as /tmp,
-    # then the write places on top (a project under /tmp stays visible)
-    for sock in _outside_sockets(list(places)):
-        args += ["--ro-bind-try", "/dev/null", sock]
-        over(sock)
+    # the tool's own temp folder as /tmp, then the write places on top (a project under /tmp
+    # stays visible). Unix sockets are not masked by name (a name in /proc/net/unix is the one
+    # a socket was bound with): the kernel limits them (HELPER, tool_seccomp_program)
     # the tool folder is hidden: a session sees only its own run folder, bound back below
     # (sessions cannot read each other)
     args += ["--tmpfs", folder]
@@ -1206,11 +1227,21 @@ def _raise_fd_limit(need: int) -> None:
 
 # the helper the tool starts through: on Linux it first checks that each bind in the session's
 # view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
-# a name in between), then it closes the launcher's descriptors, applies the Landlock scope for
-# abstract unix sockets and signals where the kernel has it (ABI 6), and execs the tool
+# a name in between), then it closes the launcher's descriptors and limits unix sockets as the
+# launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
+# argv: CHK UNIX CLAUDE N FD... CMD [ARG]...; CLAUDE is Claude Code's path (`-`: none)
+# - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
+#   session are refused, the session's own are not), the name-service folders allowed, REFER
+#   granted on / (cross-folder renames), abstract sockets and signals scoped. Any failure: 126.
+# - inner (Claude Code below ABI 9): Claude Code's sandbox blocks unix sockets for Bash with
+#   sandbox-runtime's apply-seccomp. It is looked for as sandbox-runtime does, here in the view
+#   (npm runs confined); one the session could replace, or one that does not make socket(AF_UNIX)
+#   fail with EPERM, stops the start (126).
+# - deny and inner: the ABI 6 scope for abstract sockets and signals where the kernel has it.
 HELPER = r"""
 import os, sys, ctypes, struct
-chk = int(sys.argv[1]); n = int(sys.argv[2]); close = sys.argv[3:3 + n]; cmd = sys.argv[3 + n:]
+chk = int(sys.argv[1]); unix = sys.argv[2]; claude = sys.argv[3]
+n = int(sys.argv[4]); close = sys.argv[5:5 + n]; cmd = sys.argv[5 + n:]
 if chk >= 0:
     # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
     # start goes on only when every record was read and compared; anything else stops it
@@ -1255,21 +1286,104 @@ for c in close:
         os.close(int(c))
     except OSError:
         pass
-if sys.platform.startswith("linux"):
+def stop(why):
+    sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
+    sys.stderr.flush()
+    os._exit(126)
+if unix == "landlock":
+    RESOLVE_UNIX, REFER = 1 << 16, 1 << 13
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+        attr = struct.pack("<QQQ", RESOLVE_UNIX | REFER, 0, 3)  # scope: abstract unix, signals
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+        if rs < 0:
+            raise OSError(ctypes.get_errno(), "landlock_create_ruleset")
+        def allow(fd, access):
+            rule = struct.pack("<Qi", access, fd)  # struct landlock_path_beneath_attr (packed)
+            if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1),
+                            ctypes.create_string_buffer(rule, len(rule)), ctypes.c_uint32(0)) != 0:
+                raise OSError(ctypes.get_errno(), "landlock_add_rule")
+        fds = [os.open("/", os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)]
+        allow(fds[0], REFER)
+        # the system's name-service sockets (sssd, nscd, userdb): user and group lookups
+        for d in ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb"):
+            try:
+                fds.append(os.open(d, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC))
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            allow(fds[-1], RESOLVE_UNIX | REFER)
+        if libc.prctl(38, 1, 0, 0, 0) != 0:
+            raise OSError(ctypes.get_errno(), "prctl(PR_SET_NO_NEW_PRIVS)")
+        if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) != 0:
+            raise OSError(ctypes.get_errno(), "landlock_restrict_self")
+        for fd in fds + [rs]:
+            os.close(fd)
+    except Exception as e:
+        stop("Landlock could not limit unix sockets (%s)" % e)
+elif unix in ("inner", "deny"):
     libc = ctypes.CDLL(None, use_errno=True)
     libc.syscall.restype = ctypes.c_long
-    abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
-    if abi >= 6:
+    if libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)) >= 6:
         attr = struct.pack("<QQQ", 0, 0, 3)  # no file rights handled; scope: abstract unix, signals
-        buf = ctypes.create_string_buffer(attr, len(attr))
-        rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
-        ok = rs >= 0 and libc.prctl(38, 1, 0, 0, 0) == 0 and libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) == 0
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
         if rs >= 0:
+            if libc.prctl(38, 1, 0, 0, 0) == 0:
+                libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0))
             os.close(rs)
-        if not ok:
-            sys.stderr.write("phiward launch: WARNING: the Landlock scope could not be applied: abstract unix sockets outside stay reachable\n")
-    else:
-        sys.stderr.write("phiward launch: no Landlock scope on this kernel: abstract unix sockets outside stay reachable\n")
+if unix == "inner":
+    import subprocess
+    INSTALL = "install it with `npm install -g @anthropic-ai/sandbox-runtime`"
+    arch = {"x86_64": "x64", "aarch64": "arm64"}.get(os.uname().machine)
+    if arch is None:
+        stop("Claude Code's sandbox has no seccomp filter for %s" % os.uname().machine)
+    rel = os.path.join("vendor", "seccomp", arch, "apply-seccomp")
+    # sandbox-runtime's order (getApplySeccompBinaryPath): next to Claude Code's own files, then
+    # the npm global root, then fixed folders
+    places = []
+    if claude != "-":
+        base = os.path.dirname(os.path.realpath(claude))
+        places += [os.path.join(base, rel), os.path.join(base, "..", "..", rel),
+                   os.path.join(base, "..", rel)]
+    pkg = os.path.join("@anthropic-ai", "sandbox-runtime")
+    try:
+        root = subprocess.run(["npm", "root", "-g"], stdin=subprocess.DEVNULL,
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
+                              universal_newlines=True).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        root = ""
+    home = os.path.expanduser("~")
+    for b in ([os.path.join(root, pkg)] if root else []) + [
+            os.path.join("/usr/lib/node_modules", pkg), os.path.join("/usr/local/lib/node_modules", pkg),
+            os.path.join("/opt/homebrew/lib/node_modules", pkg),
+            os.path.join(home, ".npm", "lib", "node_modules", pkg),
+            os.path.join(home, ".npm-global", "lib", "node_modules", pkg)]:
+        places.append(os.path.join(b, rel))
+    found = next((p for p in places if os.path.exists(p)), None)
+    if found is None:
+        stop("Claude Code's sandbox cannot block unix sockets: its seccomp filter "
+             "(apply-seccomp) is not installed; " + INSTALL)
+    p = os.path.realpath(found)
+    while True:  # neither the filter nor a folder above it may be writable in the session
+        if os.access(p, os.W_OK):
+            stop("Claude Code's seccomp filter %s can be changed by the session; %s outside "
+                 "the project" % (found, INSTALL))
+        if p == "/":
+            break
+        p = os.path.dirname(p)
+    probe = ("import errno, socket, sys\ntry:\n    socket.socket(socket.AF_UNIX)\n"
+             "except OSError as e:\n    sys.exit(0 if e.errno == errno.EPERM else 3)\nsys.exit(4)\n")
+    try:
+        code = subprocess.run([found, sys.executable, "-I", "-S", "-c", probe],
+                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL, timeout=60).returncode
+    except (OSError, subprocess.SubprocessError):
+        code = -1
+    if code != 0:
+        stop("Claude Code's seccomp filter %s does not block unix sockets here; %s" % (
+            found, INSTALL))
 try:
     os.execvp(cmd[0], cmd)
 except OSError as e:
@@ -1503,7 +1617,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                               "one (start the tool from a plain terminal)")
         _make_folders(project, [".claude"])
         prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "0"] + list(argv), child_env, \
+        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "none", "-", "0"] + list(argv), \
+            child_env, \
             [], project, lambda: None
     if backend == "bwrap":
         if not os.path.isfile(config.user_config_path(env)):
@@ -1517,9 +1632,25 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if made:
             sys.stderr.write("phiward launch: made read-only placeholders in the project: "
                              f"{', '.join(made)}\n")
+        # unix sockets: Landlock where the kernel can tell the session's own from those
+        # outside (ABI 9); below it, Claude Code's own sandbox blocks them for Bash, and a tool
+        # without one cannot make any
+        claude = "-"
+        if landlock_abi() >= UNIX_ABI:
+            unix = "landlock"
+        elif adapter.name == "claude" and not server:
+            unix = "inner"
+            why = inner_sandbox_reason(project, child_env)
+            if why:
+                raise LaunchError(why)
+            claude = shutil.which("claude", path=child_env.get("PATH", "")) or "-"
+            if os.path.basename(argv[0]) == "claude":
+                argv = [argv[0], "--settings", json.dumps(INNER_SETTINGS)] + list(argv[1:])
+        else:
+            unix = "deny"
         args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
         r, w = os.pipe()
-        os.write(w, tool_seccomp_program())
+        os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
         os.close(w)
         os.set_inheritable(r, True)
         # the helper's checks, written by `ready` right before bwrap starts (an unlinked file:
@@ -1530,7 +1661,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         held = [str(fd) for fd in fds]
         bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
         try:
-            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk)], held, argv)
+            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix, claude], held,
+                                 argv)
         except LaunchError:
             for fd in fds + [r, chk]:
                 os.close(fd)

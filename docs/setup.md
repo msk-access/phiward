@@ -29,6 +29,9 @@ Later: [change the setup](#change-the-setup),
   - bubblewrap (`bwrap`) on the `PATH`;
   - Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
     gateway uses it as a second layer for its writes and refuses to run without it;
+  - for `phiward launch --tool claude` before Linux 7.1: Claude Code's seccomp filter
+    (`npm install -g @anthropic-ai/sandbox-runtime`), and `socat`; `launch` refuses to start
+    without a filter that works ([launch.md](launch.md#limits-in-this-release));
   - on Ubuntu 24.04, AppArmor can block unprivileged user namespaces
     (`kernel.apparmor_restrict_unprivileged_userns`). Then bubblewrap cannot start. Change the
     setting, or add an AppArmor profile for `bwrap`. `doctor` says when this is the cause.
