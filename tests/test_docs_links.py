@@ -1,5 +1,6 @@
 """Every relative link in the docs leads somewhere: the file exists, and an `#anchor` names a
-heading in it (as GitHub makes heading anchors). Web links are not fetched."""
+heading in it (as GitHub makes heading anchors) or an `<a id="...">`. Web links are not fetched.
+Every docs page, anchor and title that the code and the user files name exists."""
 
 import re
 from pathlib import Path
@@ -17,6 +18,7 @@ DOCS = sorted(p for p in [ROOT / "README.md", ROOT / "AGENTS.md", ROOT / "CHANGE
               if p.is_file())
 _LINK = re.compile(r"(?<!!)\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
 _FENCE = re.compile(r"^(```|~~~)")
+_HTML_ID = re.compile(r"<a\s+id=\"([^\"]+)\"")  # an anchor of its own, as a limit's ID
 
 
 def _slug(heading: str) -> str:
@@ -35,6 +37,8 @@ def _anchors(path: Path) -> set:
         if _FENCE.match(line):
             fenced = not fenced
             continue
+        if not fenced:
+            out.update(_HTML_ID.findall(line))
         m = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
         if m and not fenced:
             s = _slug(m.group(1))
