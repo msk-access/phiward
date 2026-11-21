@@ -81,6 +81,41 @@ if why:
 ' "$2" "$4" || return 2
 }
 
+# the variables the check reads or passes on; every other one you exported is unset at the
+# start, so none of yours applies to its programs (git, uv, pip, Python, the linker)
+SBX_KEEP_ENV="PATH HOME TMPDIR LANG LC_ALL LC_CTYPE TERM USER LOGNAME SHELL MODES KEEP REMOTE
+REMOTE_DIR REMOTE_HOSTNAME REMOTE_USER CLAUDE_BIN UV_PYTHON_INSTALL_DIR"
+
+# sbx_keep_env: unset every exported variable but SBX_KEEP_ENV and SBX_*; refuse a name the shell
+# cannot unset (bash's exported functions), which would reach the session's bash
+sbx_keep_env() {
+  _keep=" $(echo $SBX_KEEP_ENV) "
+  for _v in $(env | sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'); do
+    case $_keep in *" $_v "*) continue ;; esac
+    case $_v in SBX_*) continue ;; esac
+    unset "$_v" 2>/dev/null || true
+  done
+  _left=$(env | sed -n 's/^\(BASH_FUNC_[^=]*\)=.*/\1/p')
+  [ -z "$_left" ] || { echo "sandbox-check: unset these first, the check cannot: $(echo $_left)" >&2; return 2; }
+}
+
+# sbx_passwd_home: your home folder as the account database names it (what ssh and others use),
+# for any account name; refused when it names none
+sbx_passwd_home() {
+  _ph=""
+  if command -v getent >/dev/null 2>&1; then
+    # name:password:uid:gid:gecos:home:shell
+    _ph=$(getent passwd "$(id -u)" 2>/dev/null | { IFS=: read -r _ _ _ _ _ _d _; printf '%s' "$_d"; }) || _ph=""
+  fi
+  if [ -z "$_ph" ] && command -v dscl >/dev/null 2>&1; then
+    _ph=$(dscl . -read "/Users/$(id -un)" NFSHomeDirectory 2>/dev/null | sed -n 's/^NFSHomeDirectory: //p') || _ph=""
+  fi
+  case $_ph in
+    /*) printf '%s\n' "$_ph" ;;
+    *) echo "sandbox-check: the account database names no home folder for you, so the check cannot tell where yours is" >&2; return 2 ;;
+  esac
+}
+
 # session_path H TOOLS SYSPATH: the session's PATH, with TOOLS (when given) before the system
 session_path() {
   printf '%s\n' "$1/bin:$1/.local/bin${2:+:$2}:$3"

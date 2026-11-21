@@ -13,7 +13,11 @@
 # it; the token reaches only the claude process (through launch.py's stdin), never a file or a
 # command line, and every kept file is redacted. A run without a terminal is refused, and so is
 # a token from the environment inside a Claude Code session (CLAUDECODE).
-# Nothing of your own setup is read or changed. The home folder and the judge's folder (next to
+# Nothing of your own setup is read or changed: its programs run with the check's own home as
+# HOME, in its own folder, and with only the variables it names (places.sh; an exported bash
+# function is refused). Your home's path and uv's Python folder are looked at once, at the start;
+# the home folder of the account database comes from getent or dscl (none: refused).
+# The home folder and the judge's folder (next to
 # it, outside the folders the session is given: the stream, the facts, doctor's output, the
 # report) are removed at the end; if one cannot be, the check says so, names it, and exits
 # non-zero. A `kill -9` of check.sh or launch.py skips that: the session may keep running, and
@@ -46,6 +50,7 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
+. "$here/places.sh"
 # your home folder: one look here, before any program runs, and never again. Its path (for the
 # SBX_BASE check, with the passwd home) and where uv keeps its Pythons are kept; then HOME names
 # a folder that does not exist, and from the moment it is made the check's own home, so no
@@ -81,6 +86,9 @@ if [ -z "$stub" ]; then
   fi
 fi
 unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
+# none of the variables you exported applies to the check's programs: only those it names
+# (places.sh) stay
+sbx_keep_env || exit 2
 modes=${MODES:-A B}
 for m in $modes; do
   case $m in A|B) ;; *) echo "sandbox-check: MODES holds A and B only" >&2; exit 2 ;; esac
@@ -91,6 +99,11 @@ if [ -n "$stub" ]; then
 else
   claude=${CLAUDE_BIN:-$(command -v claude)} || { echo "sandbox-check: needs claude on PATH" >&2; exit 2; }
 fi
+# the check works in its own folder once it is made: a path you gave relative to where you
+# started is made absolute now
+case $claude in /*) ;; *) claude=$PWD/$claude ;; esac
+case ${1:-} in ""|/*) ;; *) set -- "$PWD/$1" ;; esac
+case ${SBX_OUT:-} in ""|/*) ;; *) SBX_OUT=$PWD/$SBX_OUT ;; esac
 if [ $os = darwin ]; then
   managed="/Library/Application Support/ClaudeCode
 /Library/Managed Preferences/com.anthropic.claudecode.plist"
@@ -102,17 +115,13 @@ echo "$managed" | while IFS= read -r m; do
 done
 if [ -n "$SBX_SRC" ]; then
   [ -f "$SBX_SRC/pyproject.toml" ] || { echo "sandbox-check: SBX_SRC is not a phiward source tree" >&2; exit 2; }
+  SBX_SRC=$(cd "$SBX_SRC" && pwd -P)
 fi
 # where the home folder is made: never a home folder itself, never below a folder that holds a
 # name Claude Code or phiward read from a folder above the session's (places.sh), and never in a
-# shared temp folder
-. "$here/places.sh"
-# the home folder by passwd (what ssh and others use; the shell's ~NAME) and by $HOME, as kept
-# above; sbx_base_check compares them by identity
-_u=$(id -un)
-pw_home=""
-case $_u in ""|*[!A-Za-z0-9._-]*) ;; *) eval "pw_home=~$_u" ;; esac
-case $pw_home in "~"*) pw_home="" ;; esac
+# shared temp folder. The home folder by the account database (what ssh and others use) and by
+# $HOME, as kept above; sbx_base_check compares them by identity
+pw_home=$(sbx_passwd_home) || exit 2
 homes="$pw_home
 $real_home"
 if [ $os = darwin ]; then
@@ -160,6 +169,8 @@ J=$(mktemp -d "$sbx_base/phiward-sbx-judge-XXXXXX")
 fail() { echo "sandbox-check: $1 failed:"; tail -20 "$2" 2>/dev/null; exit 2; }
 # the check's own home from here on, before uv, git or Python run
 mkdir -p "$H/src" "$H/dist" "$H/tmp"
+# and its own folder: uv and git look for their config in the folder they start in and above it
+cd "$H"
 export HOME="$H" TMPDIR="$H/tmp" UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never
 python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV "$uv" python find --python-preference only-managed 2>/dev/null || true)}
 [ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
