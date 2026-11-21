@@ -59,5 +59,5 @@ def _limit_items():
 def test_every_limit_has_an_anchor():
     items = _limit_items()
     assert len(items) >= 60, len(items)  # the sections are found (69 limits today)
-    bare = [x[:70] for x in items if not ANCHORED.search(x[:40])]
+    bare = [x[:70] for x in items if not re.match(r'^(- |\d+b?\. |\| )<a id="[a-z0-9-]+"></a>', x)]
     assert not bare, bare

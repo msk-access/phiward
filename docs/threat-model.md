@@ -433,14 +433,14 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 
 ## Known limits
 
-- **A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
+- <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
   removes its scratch folder. A process that leaves the group (`setsid`, a daemon) keeps running on
   macOS until it exits, in the gateway profile: it can read protected data, but has no network, no
   write place (its scratch is removed) and no way to send output back. On Linux the PID namespace
   ends it with the request.
 
-- **Pseudonymized tables (`phiward pseudonymize`).** The codes replace only the columns you name;
+- <a id="known-pseudonymized-tables"></a>**Pseudonymized tables (`phiward pseudonymize`).** The codes replace only the columns you name;
   what they do not hide:
   - You choose the identifier columns. An ID column under a header no glob matches (`kit`,
     `tube`) goes into the copy as it is, masked only by the rules.
@@ -507,7 +507,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     with its leading zeros dropped or added. Unicode dashes read as `-`, and an ID with a letter
     is also matched with its separators removed (`FAKE PT 0001`).
 
-- **Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
+- <a id="known-git-control-files"></a>**Git's control files.** Claude Code runs git outside its sandbox: about a hundred times in a
   short session (a check in the real app, 2026-11), at the start, for its status and diff views, and
   to make worktrees. Most of these calls turn hooks and `core.fsmonitor` off, but not all (`git diff
   --name-only HEAD` does not), and a fetch reads `credential.helper` and `core.sshCommand` from the
@@ -540,7 +540,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   Do not run git yourself in a project the agent changed without looking at what `git status` lists,
   and read `phiward doctor`'s warnings.
 
-- **Claude Code's own PATH.** Claude Code starts an MCP server whose entry names its program without
+- <a id="known-claude-code-path"></a>**Claude Code's own PATH.** Claude Code starts an MCP server whose entry names its program without
   a path (`npx`, `uvx`) by looking it up on its PATH, outside every sandbox. The agent chooses what
   runs with your rights when a folder of that PATH that it can write comes ahead of the real
   program. Such a folder is the project's `.venv/bin` of an activated environment, a relative entry,
@@ -548,18 +548,18 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   cannot change the PATH Claude Code starts with; `doctor` names each such entry. Start Claude Code
   with those folders off PATH, or give the entry the program's full path. A wrapped entry names the
   launcher by its full path, so this does not reach it.
-- **Only the output is masked.** A gateway command's arguments, environment and open files are
+- <a id="known-only-output-masked"></a>**Only the output is masked.** A gateway command's arguments, environment and open files are
   visible to other processes of the same user: `ps`, `lsof`, `/proc`. Under `launch` (Mode B) the
   session cannot see other processes. In Mode A it depends on whether Claude Code's sandbox hides
   process information, which phiward does not check; in a plugin-only session, nothing hides them.
   Keep names and records out of command arguments: let the command read them from the protected
   files.
-- **A repo config's roots are listed by the broker.** A repo config may add protected roots and
+- <a id="known-repo-roots-listed"></a>**A repo config's roots are listed by the broker.** A repo config may add protected roots and
   patterns anywhere (it can only add protection), and the agent can edit it. The broker lists what
   they name to mask it, outside every sandbox. So an agent can learn whether a name exists in a
   folder it cannot read (a root over `~/.ssh` masks the names there). A wide pattern makes each
   request walk many folders before it starts.
-- **Masking can confirm a guess.** A name under a protected root that the agent prints itself comes
+- <a id="known-masking-confirms-guess"></a>**Masking can confirm a guess.** A name under a protected root that the agent prints itself comes
   back masked, so an agent can test whether a name it guessed or saw elsewhere exists there, for
   many names in one request. Where a file or identifier rule (a pack, `[sanitize] patterns`)
   matches the text around a name, the name reads as that rule's placeholder, as a name that does
@@ -567,7 +567,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   written where the rule does not match (inside a longer word, or joined to a plain name), and
   `names_from` names can be
   tested. Masking hides names; it does not keep a name the agent already holds a secret.
-- **Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
+- <a id="known-encoded-output"></a>**Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,
   which can read a record and print it in a form masking does not catch (base64, digits spelled
   out). With `[broker] commands` set to your own programs, the agent can only run those on protected
@@ -578,14 +578,14 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   helpers in its listed folder. A listed program that runs other code it is given (an interpreter, a
   shell, `git`, `find`, `make` and the like) undoes the list; `doctor` warns about them. The list
   does not limit what a listed program prints.
-- **A listed program can select or count records by a value the agent gives.** Many data tools
+- <a id="known-listed-program-selects"></a>**A listed program can select or count records by a value the agent gives.** Many data tools
   pick records by a value or a pattern on their command line or in a file the agent wrote
   (`samtools view -d`, `-D`, `-r` or `-e`, `seqkit grep`). A count, or whether anything is
   printed, is not masked. So the agent can test whether a value it guessed, or a prefix of one,
   occurs in a protected file, for many values in one request. Masking hides identifiers in what
   a program prints; it does not hide whether a program found them. If that matters for your
   data, leave such programs out of `[broker] commands`.
-- **`phiward run --table` reads columns for honest programs.** It is off unless the operator sets
+- <a id="known-run-table"></a>**`phiward run --table` reads columns for honest programs.** It is off unless the operator sets
   `[sanitize] table = true`. A cell under an identifier header is masked whole; a plain number in
   any other column passes. The agent can print a header of its choice (with `[broker] commands`
   unset, or with a listed program that prints what it is told, such as `cut` or `printf`) and get
@@ -599,17 +599,17 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   with a number field, a headerless second file of the same width). Rules that mask positions
   across cells in text mode (`chr1` tab `1234567`) do not match cell by cell, so both cells are
   shown.
-- **Exit status.** The agent sees only success or failure (`exit=0` or `exit=1`; 130 when
+- <a id="known-exit-status"></a>**Exit status.** The agent sees only success or failure (`exit=0` or `exit=1`; 130 when
   cancelled); the real status goes to the broker's log, which no session can read. One output note
   carries a count (`[N more identical line(s)]`), which the command chooses. A failure is still one
   bit per call. The placeholder note at the end is counted from the lines shown, so it tells the
   agent nothing those lines do not: it counts placeholders shown (a program can print one), not
   substitutions, nothing past the cap, and only kinds, so an identifier partly masked by a number
   rule (`P-<NUM>-T01-IM6`) is flagged only when no identifier placeholder appears in the output.
-- **Without kernel confinement**, the hook checks command text only and can miss a spelling. A line
+- <a id="known-without-kernel-confinement"></a>**Without kernel confinement**, the hook checks command text only and can miss a spelling. A line
   that changes how bash finds commands or folders (`PATH`, `CDPATH`, `HOME`, `BASH_ENV`, `hash`,
   `shopt`, `alias`, set by any means) is unresolved there (deny by default).
-- **Patterns** in Claude Code's sandbox: on macOS (Claude Code 2.1.236 or newer, after `install
+- <a id="known-patterns"></a>**Patterns** in Claude Code's sandbox: on macOS (Claude Code 2.1.236 or newer, after `install
   claude --user --write`) a pattern is in denyRead and denyWrite, and the shell can count as
   confined. The hook cannot run `claude --version`: its step says to run install in a terminal where
   it prints 2.1.236 or newer (install reads the version there); `doctor` knows the version and gives
@@ -621,14 +621,14 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   Linux, a match made after the start is not in the session's view, except inside a folder that can
   be entered but not listed (docs/launch.md). The session's view is checked against what was
   checked before the tool starts: an entry the host replaces while the session starts stops it.
-- **Claude Code's sandbox on Linux** (bubblewrap): a denied path is hidden at its real place, so a
+- <a id="known-sandbox-on-linux"></a>**Claude Code's sandbox on Linux** (bubblewrap): a denied path is hidden at its real place, so a
   link to it (`~/work -> /data/...`) is covered too. A path that does not exist when a command
   starts is not hidden in that command, only from the next one on. phiward's probe of the sandbox
   engine (`@anthropic-ai/sandbox-runtime` 0.0.81) passed on a RHEL 8 HPC login node with bubblewrap
   0.4.0, for one user without admin rights. It showed: a root under `/scratch` hidden by its real
   path, through a home link and by a wildcard; settings files and startup files not writable; no
   direct network. Claude Code needs `bwrap` and `socat` there (`doctor` checks them).
-- **A shell that no kernel confines** (Claude Code's sandbox off or not there): the hook refuses its
+- <a id="known-unconfined-shell"></a>**A shell that no kernel confines** (Claude Code's sandbox off or not there): the hook refuses its
   commands, except a phiward command written whole (the gateway, `doctor`, `check`). This covers
   GitHub Copilot, which runs the hook without a sandbox. With `[shell] best_effort` (user config
   only), the hook checks the text instead, which is best effort (below): a spelling it misses is a
@@ -648,37 +648,37 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     they source in turn (a plugin framework's folder), which changes the next session's snapshot.
   - **Before the first setup** (no protected path yet) the refusal does not apply: the hidden list
     is then guarded by the text check only, which is best effort.
-- **Hooks fail open** in most tools by default. Claude Code (`onFailure: "block"`) and Cursor
+- <a id="known-hooks-fail-open"></a>**Hooks fail open** in most tools by default. Claude Code (`onFailure: "block"`) and Cursor
   (`failClosed`) have a switch. No tool documents whether a hook deny still applies in its bypass or
   auto-approve mode.
-- **Managed settings** are the only hook settings a repository cannot change.
-- **Long-lived shells** that started outside the confinement stay outside it.
-- **Linux** needs Landlock ABI 2 or newer for the gateway, and bubblewrap must be able to start
+- <a id="known-managed-settings"></a>**Managed settings** are the only hook settings a repository cannot change.
+- <a id="known-long-lived-shells"></a>**Long-lived shells** that started outside the confinement stay outside it.
+- <a id="known-linux-landlock"></a>**Linux** needs Landlock ABI 2 or newer for the gateway, and bubblewrap must be able to start
   (AppArmor on Ubuntu 24.04 can block it).
   Before a gateway command starts, a helper inside checks that each folder and file bound into
   it is the same file found at that name before the start (a link not followed), mounted at its
   name; anything it cannot confirm stops the request. So a write place must not be at or below
   a hidden path (credentials, traces): such a request stops.
-- **The sanitizer** does not mask entry names shorter than 4 characters (6 when only digits) or
+- <a id="known-sanitizer-short-names"></a>**The sanitizer** does not mask entry names shorter than 4 characters (6 when only digits) or
   names that are common words of its stop list (`patient`, `normal`, `bam`, ...), and it stops
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
   Jane 1970`) is masked whole, after a root, under a pattern (`phi_*` matches `phi_Doe Jane`) and in
   escaped output (`Doe\ Jane`, from `ls -b`); the masked output shows an escaped space as a plain
   space.
-- **`names_from` files** are themselves protected data. Keep them inside a protected root.
-- **A git work tree that holds a root** is closed to the agent's git.
-- **Claude Code settings in a write place.** The gateway may not write a `.claude` folder: on macOS
+- <a id="known-names-from-files"></a>**`names_from` files** are themselves protected data. Keep them inside a protected root.
+- <a id="known-git-work-tree-root"></a>**A git work tree that holds a root** is closed to the agent's git.
+- <a id="known-claude-settings-in-write-place"></a>**Claude Code settings in a write place.** The gateway may not write a `.claude` folder: on macOS
   by its profile, anywhere. On Linux only a `.claude` folder directly in a write place is read-only;
   one deeper down is writable, and gateway code can make a new one. Use write places that are not
   project folders. A `write_to` entry that holds a `.claude` folder is skipped (at every load;
   `doctor` counts it).
-- **Remote copies** run the system `ssh` through your shared connection (pushes and pulls are tar
+- <a id="known-remote-copies"></a>**Remote copies** run the system `ssh` through your shared connection (pushes and pulls are tar
   streams; [hpc.md](hpc.md)); local copies run the system `rsync` or `cp`. The remote host itself is
   trusted with what is copied there.
-- **The Python that runs phiward** is guarded: the agent may not write its prefix, the `phiward`
+- <a id="known-phiward-python"></a>**The Python that runs phiward** is guarded: the agent may not write its prefix, the `phiward`
   launcher found on `PATH` (the link itself and the file it points to) or the user site folder.
   Install phiward in a folder of its own (`uv tool`, `pipx`).
-- **Another account in your group** is not the agent, and the goals do not cover it, but phiward
+- <a id="known-group-account"></a>**Another account in your group** is not the agent, and the goals do not cover it, but phiward
   makes its own Python safe from it and says when it is not. One rule decides "another account can
   change it": a file and each folder above it are yours or root's and no group or other account can
   write them. Inside your home folder the folders are judged up to the home folder; outside it up to
@@ -762,17 +762,17 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     that is why `install` makes the files safe and `doctor` checks them all.
   - Not checked: ACLs (mode bits do not show them, on macOS or NFSv4), and dynamic libraries loaded
     from elsewhere (for example Homebrew's OpenSSL).
-- **What Claude Code protects by itself:** its sandbox keeps commands from writing "most of"
+- <a id="known-what-claude-code-protects"></a>**What Claude Code protects by itself:** its sandbox keeps commands from writing "most of"
   `~/.claude` (or `$CLAUDE_CONFIG_DIR`), `~/.claude.json` and the credentials file, even under an
   `allowWrite` that covers them. The docs give no exact list and no version for it. phiward refuses
   the settings that the docs say remove this protection (`filesystem.disabled`,
   `allowNestedUserNamespaces`), and adds nothing of its own there. On Linux a `denyWrite` path that
   does not exist yet becomes a read-only placeholder file, which could block a plugin install.
-- **Scripts that Claude Code settings name** (a hook's command, `statusLine`, `apiKeyHelper`) run
+- <a id="known-scripts-settings-name"></a>**Scripts that Claude Code settings name** (a hook's command, `statusLine`, `apiKeyHelper`) run
   with your full rights. Keep them under a `hooks/` folder of `~/.claude` or of the project's
   `.claude` (the hook asks before a file tool writes there, and Claude Code's sandbox denies its
   shell), or in a folder no session writes; never elsewhere in a project.
-- **Not tested by phiward's own checks:** Claude Code's real sandbox. The test suite never runs
+- <a id="known-real-sandbox-not-tested"></a>**Not tested by phiward's own checks:** Claude Code's real sandbox. The test suite never runs
   the real `claude`. The release check (`scripts/sandbox-check`, [releasing.md](releasing.md))
   does, on macOS and Linux, run by the operator: one session per mode, judged from its files.
   Its probe lines are written inside the session, so a model could forge them; the checks made
@@ -782,13 +782,13 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
   `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
   check after your own install is yours.
-- **The spool folder** is writable by the agent: it can fill it or move it, which stops the gateway
+- <a id="known-spool-folder"></a>**The spool folder** is writable by the agent: it can fill it or move it, which stops the gateway
   (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
   run a command through a shell.
-- **The broker's status file** only adds protection to the agent's side. On Linux, if it does not
+- <a id="known-broker-status-file"></a>**The broker's status file** only adds protection to the agent's side. On Linux, if it does not
   exist when an agent shell starts, that shell can create it in its way; the agent's own config
   still applies, and `doctor` reports a mismatch.
-- **The gateway is not a container.** It sees the whole file system read-only, the roots included;
+- <a id="known-gateway-not-container"></a>**The gateway is not a container.** It sees the whole file system read-only, the roots included;
   it writes only to the places listed above.
 
 ## Gaps of the hook alone
@@ -1045,43 +1045,43 @@ Run project commands inside `launch` (`phiward launch -- git status`, `phiward l
 test`), or read the change before you run it outside.
 
 **Known open items in this phase:**
-- the network is open under `launch` (a proxy for listed hosts is planned; `[network] limit` covers
+- <a id="open-network"></a>the network is open under `launch` (a proxy for listed hosts is planned; `[network] limit` covers
   Mode A's shell commands only). The agent cannot read protected data under `launch`, so this
   matters for credentials and for gateway output;
-- the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
+- <a id="open-environment"></a>the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
   `ANTHROPIC_`/`CLAUDE_` ones); add more with `[launch] pass_env` in the user config, knowing that
   whatever you pass is readable by the agent;
-- macOS: the Keychain stays reachable (Claude Code keeps its own login there); items whose access
+- <a id="open-keychain"></a>macOS: the Keychain stays reachable (Claude Code keeps its own login there); items whose access
   list trusts `security` or `git credential-osxkeychain` can be read; other apps' preferences are
   readable;
-- macOS: only the session's own terminal can be read or written. Tools that open new terminals
+- <a id="open-terminals"></a>macOS: only the session's own terminal can be read or written. Tools that open new terminals
   (`script`, `tmux`, `expect`) do not work yet. When xcrun's cache is stale, the `/usr/bin` tools
   print a cache warning (the cache is never written under `launch`). The per-user temp folder is
   writable (the compiler uses it);
-- both systems: git control files are covered for the repositories found when `launch` starts (top,
+- <a id="open-git-control-files"></a>both systems: git control files are covered for the repositories found when `launch` starts (top,
   nested, submodules; up to 50,000 entries, skipping `node_modules`, `.venv` and similar).
   Repositories created during a session, nested `.claude`, `.vscode`, `.mcp.json` files and git hook
   managers (`.husky/`) are not: see the rule above. `.claude/settings.local.json` is read-only (it
   can hold hooks), so Claude Code's "don't ask again" answers do not stay in the project under
   `launch`;
-- Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
+- <a id="open-unix-sockets"></a>Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
   Unix sockets made after `launch` starts, or with relative paths, are not covered. Missing settings
   files are made as read-only `{}` placeholders in the project. After a session, `launch` reports
   git control files that changed;
-- HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
+- <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
   Kerberos ticket caches (the one `KRB5CCNAME` names, `krb5cc*` files in the shared temp folders,
   `/run/user/<uid>` on Linux), `~/.ssh`, the SSH agent, or the shared SSH connection's socket. So
   the agent cannot log in to HPC itself and read data there unmasked. HPC work goes through the
   gateway, which the operator's broker runs over the operator's shared SSH connection
   ([hpc.md](hpc.md)): `phiward run --remote` and `phiward copy` (tested against a real cluster).
   Protected data on HPC storage mounted on the Mac needs its mount path in the protected roots.
-- carry-over: each session gets a fresh config folder, built from a trusted copy and thrown away at
+- <a id="open-carry-over"></a>carry-over: each session gets a fresh config folder, built from a trusted copy and thrown away at
   exit. Nothing is shared between sessions. Instruction changes go to quarantine (`phiward carryover
   show | accept ID`, `add PATH`). Every file the session changed in the project is listed,
   instructions for models first. Auto memory is off unless `--memory`. Nothing is ever killed: on
   macOS a process a session leaves behind keeps running, but what it writes does not reach a later
   session (tests/test_v2_s17.py, test_18);
-- a fresh config folder for the tool: your normal Claude Code memory, skills, plugins and MCP
+- <a id="open-fresh-config"></a>a fresh config folder for the tool: your normal Claude Code memory, skills, plugins and MCP
   servers are not there until you add them (`phiward carryover add`), and a login token is needed
   ([launch.md](launch.md)).
 
