@@ -183,7 +183,7 @@ when in doubt, reinstall: the step names the command for the tool that installed
   nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
   profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
 
-Read [threat-model.md](threat-model.md) (Mode B, limits L1–L8). In short:
+Read [threat-model.md](threat-model.md) (Mode B, [limits L1–L10](threat-model.md#l1)). In short:
 - **The network is open.** A session cannot read protected data, so it cannot send it. But it
   can carry out what it can read: gateway output (masked), the login token, the project.
 - **macOS:** a process that leaves the tool's process tree keeps running after the session

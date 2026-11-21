@@ -77,6 +77,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `SBX_WHEEL_SHA256` installs a wheel built beforehand, checked by its sha256, so the node needs
   no package index. `linux.sh` with
   `SBX_SH=bash` runs the stub with bash as `/bin/sh`.
+  The parents' environment probe scans every process the session can see in `/proc` and
+  records only counts and PIDs, never a name or a value; a credential variable's name from
+  `token-names.txt` in any of them fails the mode. `CLAUDE_CODE_MESSAGING_TOKEN`, which Claude
+  Code gives to Bash commands on purpose, is only counted and noted. An exported token is
+  not used, but it is in the start environment of your shell and of the check's first start,
+  so the check warns: paste the token when `check.sh` asks for it.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 

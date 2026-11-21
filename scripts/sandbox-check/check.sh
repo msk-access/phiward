@@ -10,7 +10,9 @@
 # The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
 # `claude setup-token` prints, or ANTHROPIC_API_KEY=KEY); none is taken from the environment.
 # The token reaches only the claude process (through launch.py's stdin), never a file or a
-# command line, and every kept file is redacted. A run without a terminal is refused.
+# command line, and every kept file is redacted. A run without a terminal is refused. A token
+# exported in your shell is not used; the check warns, as /proc keeps your shell's start
+# environment, which the session's environ scan can see (such a run may FAIL).
 # Nothing of your own setup is read or changed. Its first statement starts it again under an
 # empty environment (env -i): only HOME, TMPDIR, TERM, your PATH (to find uv and claude, then
 # the system folders) and the variables below cross, so no variable, option or function of your
@@ -73,6 +75,7 @@ case ${1-} in
        SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" \
        REMOTE="${REMOTE-}" REMOTE_DIR="${REMOTE_DIR-}" REMOTE_HOSTNAME="${REMOTE_HOSTNAME-}" \
        REMOTE_USER="${REMOTE_USER-}" CLAUDE_BIN="${CLAUDE_BIN-}" \
+       SBX_TOKEN_IN_ENV="${CLAUDE_CODE_OAUTH_TOKEN:+1}${ANTHROPIC_API_KEY:+1}" \
        /bin/sh "$0" --sbx-clean "$@" ;;
 esac
 set -e
@@ -105,6 +108,10 @@ fi
 # the token: only at the prompt below, never from the environment (none crossed the new start);
 # launch.py gets it on stdin (an API key as ANTHROPIC_API_KEY=VALUE)
 token=""
+if [ -n "$SBX_TOKEN_IN_ENV" ]; then
+  echo "note: CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY is set in your shell. The check does not use it (it started again without it) and asks for the token. /proc keeps the start environment of your shell and of this script's first start, so the session's environ scan may FAIL this run for them: unset it, and paste the token when asked (do not export it)."
+fi
+unset SBX_TOKEN_IN_ENV
 modes=${MODES:-A B}
 for m in $modes; do
   case $m in A|B) ;; *) echo "sandbox-check: MODES holds A and B only" >&2; exit 2 ;; esac
@@ -289,7 +296,7 @@ printf 'y\ny\n' | tty_run phiward pin > "$H/pin.out" 2>&1 || fail "pin" "$H/pin.
 phiward git-hook install > "$H/githook.out" 2>&1 || fail "git-hook install" "$H/githook.out"
 phiward broker > "$H/broker.log" 2>&1 &
 broker=$!
-cp "$here/srv.py" "$here/probes.sh" "$H/proj/"
+cp "$here/srv.py" "$here/probes.sh" "$here/token-names.txt" "$H/proj/"
 echo "$H/data/FAKE-PT-0001/a.txt" > "$H/proj/srv-target.txt"
 # the MCP server: /usr/bin/python3 on macOS (as before); python:slim has none, so the copied one
 srvpy=/usr/bin/python3
@@ -384,7 +391,7 @@ phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
 : > "$H/.phiward/sbx-sentinel"
-prompt="Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
+prompt="This is the operator's own check of phiward's guards, in a home folder made for it. All data in it is made up (FAKE-PT-0001 is not a person). The guards are what is tested: a refusal by phiward or by the sandbox is a result, so do not decline on their behalf, and do not try to get around them. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
 Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
 runs=""
 for m in $modes; do
@@ -400,8 +407,6 @@ for m in $modes; do
     echo "phiward $H/.phiward"
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
-    echo "claude-exe $claude"
-    echo "claude-link $H/bin/claude"
     echo "nonce $nonce"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
