@@ -5,21 +5,24 @@ this masking, in process. The `sanitize` command applies the same masking to std
 hooks and for manual use; the hook does not allow a `| phiward sanitize` pipe as a way to
 touch protected data. The filter fails closed and never echoes a line that was not masked.
 
-A line is masked in this order (a placeholder is written in angle brackets):
+A line is masked in these steps, one after another (a placeholder is written in angle brackets):
 1. protected paths of the config (roots, patterns, and the symlink-resolved spellings): <PROTECTED>;
-   then, when the inventory is on, the name of every entry under the roots, wherever it
-   appears in the line, a long name also with its separators changed or left out
-   (inventory.py): <ENTRY>, or the placeholder of a file or identifier rule whose match holds
-   it (so it reads as a name that does not exist would); a hit that starts inside a rule's
-   match and runs past it takes that match with it, as <ENTRY>; a rule's match takes the whole
-   of a number it starts or ends inside;
+   then, when the inventory is on, the name of every entry under the roots as written,
+   wherever it appears in the line: <ENTRY>, or the placeholder of a file or identifier rule
+   whose match holds it (so it reads as a name that does not exist would);
    (before step 1, escape sequences and control characters are removed and the line is put in
-   Unicode NFKC form, every dash as `-`, so a name cannot hide behind color codes, look-alike
-   letters or other dashes; names and rules read other decimal digits as ASCII);
+   Unicode NFKC form, so a name cannot hide behind color codes or look-alike letters);
 2. the `paths` rules of the packs, then the `identifiers` rules of the packs, then the rules of
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
 4. text mode only: the `positions` rules of the packs.
+These steps give spans of the line; to them are added, each found on the line itself and not on
+another's output: every entry hit in other spellings (every dash as `-`, other decimal digits as
+ASCII, a long name with its separators changed or left out: inventory.py), and on a line with a
+hit, a folded dash or other digits, each rule's own matches (`_mask`). Every span takes the whole
+of a number it starts or ends inside; overlapping spans are joined, and each joined span becomes
+one placeholder (`_pick`). The masked line is printed with every dash as `-`. So a line is never
+masked less than by the steps alone.
 Table mode skips step 4 (a table's numeric cells are program-made numbers). This command and the
 git hook use it per line. `phiward run --table` reads columns instead (`Columns`): a cell under an
 identifier header is masked whole, and step 4 is skipped only for a plain number in another
@@ -390,93 +393,122 @@ class Sanitizer:
         base = token.rsplit("/", 1)[-1]
         return any(k.fullmatch(base) for k in self.keep_files)
 
-    def _mask(self, line: str, table: bool) -> str:
-        line = self._apply(self.first_rules, line)
+    def _mask(self, line: str, table: bool, before: Optional[str] = None) -> str:
+        """`line` masked; `before`: the same line in the form masking read it in before other
+        spellings were matched (`inventory.unfolded`; one character for one with `line`).
+
+        The spans of three sources, on the line as written, are joined in one pass; no source
+        sees another's output:
+        (a) the masks as they were before (`_before`), on `before`: the same steps one after
+        another, each rule on the text the step before it left, as then (a rule there may match
+        only next to a placeholder: `MRN77_<ENTRY>.1.vcf`), so nothing they masked is lost;
+        (b) every entry hit, in every spelling (`inventory.Matcher.spans`);
+        (c) on a line with a hit, with a folded dash or with other decimal digits, every rule's
+        own matches on the line (`_matches`).
+        Each span takes the whole of a number it starts or ends inside; overlapping spans are
+        joined, and each joined span becomes one placeholder (`_pick`)."""
+        base = self._apply(self.first_rules, line)
         if self.protected is not None:
             # another spelling of a path (`<root>\/Zorro` from JSON, `<root>//x`, `<root>/./x`):
             # the line is read plain where that makes a protected path, so the name after it
             # is masked too
-            plain = paths.plain_spelling(line)
-            spans = self.protected.text_spans(plain) if plain != line else []
+            plain = paths.plain_spelling(base)
+            spans = self.protected.text_spans(plain) if plain != base else []
             if spans:
                 # plain from the first protected path on; the text before it stays as written
-                plain, pos = paths.plain_spelling_map(line)
+                plain, pos = paths.plain_spelling_map(base)
                 cut = spans[0][0]
-                line = line[:pos[cut]] + plain[cut:]
-        if self.protected is not None:
-            # the root (or pattern) part first, as a mark; then the entry names, which may hold
-            # spaces; then the mark with the rest of the path (names, now placeholders, and
-            # path characters) becomes one placeholder: no part of `Doe Jane/x` is left
-            line = self._marked(line)
-        line = self._entries(line, table)
-        if self.protected is not None:
-            # a mark and the rest of its path; one whose path goes on past the root or the
-            # pattern (`<root>/New Person 7`) is followed by `_GOES_ON` for `_tail`
-            line = _AFTER_MARK.sub(
-                lambda m: "<PROTECTED>" + (_GOES_ON if len(m.group(0)) > 1 else ""), line)
-            line = _tail(line)
-        line = self._apply(self.path_rules, line)
-        line = self._apply(self.id_rules, line)
-        if self.re_names is not None:
-            line = self.re_names.sub("<NAME>", line)
-        if not table:
-            line = self._apply(self.pos_rules, line)
-        return line
+                base = base[:pos[cut]] + plain[cut:]
+        if before is None or base != line or len(before) != len(base):
+            before = base
+        hits, old = self.entries.found(base, before) if self.entries is not None else ([], [])
+        found = self._before(before, table, old)  # (start, end, placeholder, rank)
+        protected = [(s, e) for s, e, r, _k in found if r == "<PROTECTED>"]
+        if hits or old or before != base or inventory.ascii_digits(base) != base:
+            rules = self.path_rules + self.id_rules + ([] if table else self.pos_rules)
+            for k, (rx, repl) in enumerate(rules):
+                found += [(s, e, repl, _RULE + k) for s, e in self._matches(rx, repl, base)
+                          if e > s and not any(a < e and s < b for a, b in protected)]
+            if self.re_names is not None:
+                found += [(m.start(), m.end(), "<NAME>", _RULE + len(rules))
+                          for m in self.re_names.finditer(base) if m.end() > m.start()]
+        found += [(s, e, "<ENTRY>", _HIT) for s, e in hits]
+        if not found:
+            return base
+        out, pos = [], 0
+        for s, e, r in _joined(_widened(base, found)):
+            out += [base[pos:s], r]
+            pos = e
+        out.append(base[pos:])
+        return "".join(out)
 
-    def _entries(self, line: str, table: bool = False) -> str:
-        """Entry names as `<ENTRY>`; but where an entry name lies inside what a file or
-        identifier rule matches, that whole match becomes the rule's placeholder, as it would for
-        a name that does not exist. A hit that starts inside a rule's match and runs past it
-        takes that match with it (and so on), as `<ENTRY>`, so the match's start is not left
-        bare; a match that starts inside the hit is left to its rule, which masks it after (it
-        may then cover the placeholder too: `MRN77_<ENTRY>.1.vcf` is one file name). In text
-        mode a hit also takes every `positions` match that starts inside it and runs past it
-        (`ABCDE 12` in `ABCDE 12345`), so the rest of a number is not left; one that starts
-        before the hit is left to its rule. The same text is masked as before (or more): only
-        which placeholder it reads as changes."""
-        if self.entries is None:
-            return line
-        hits = self.entries.spans(line)
+    def _before(self, line: str, table: bool, hits: Optional[List[Tuple[int, int]]] = None
+                ) -> List[Tuple[int, int, str, int]]:
+        """The masks as they were before other spellings were matched, as spans of `line` (each
+        with its rank: the order it was made in): the protected paths, the entry names as
+        written (`inventory.Matcher.before`; `hits`: those of `line`, when known), then each
+        rule as a plain substitution on the text the step before it left."""
+        t = _Track(line)
+        if self.protected is not None:
+            t.sub(self._marks(t.text), record=False)
+        if self.entries is not None:
+            if hits is None or t.text != line:
+                hits = self.entries.before(t.text)
+            t.sub(self._entry_parts(t.text, hits))
+        if self.protected is not None and _MARK in t.text:
+            # a mark and the rest of its path; one whose path goes on past the root or the
+            # pattern (`<root>/New Person 7`) runs on to the next tab or the line's end when the
+            # name has not clearly ended (`_ENDED`)
+            t.sub([(m.start(), m.end(), "<PROTECTED>" + (_GOES_ON if m.end() - m.start() > 1
+                                                         else ""))
+                   for m in _AFTER_MARK.finditer(t.text)])
+            goes = []
+            i = t.text.find(_GOES_ON)
+            while i >= 0:
+                end = i + 1 if _ENDED.match(t.text, i + 1) else _line_end(t.text, i + 1)
+                goes.append((i - len("<PROTECTED>"), end, "<PROTECTED>"))
+                i = t.text.find(_GOES_ON, end)
+            t.sub(goes)
+        for rx, repl in self.path_rules + self.id_rules:
+            t.sub(self._plain(rx, repl, t.text))
+        if self.re_names is not None:
+            t.sub([(m.start(), m.end(), "<NAME>") for m in self.re_names.finditer(t.text)
+                   if m.end() > m.start()])
+        if not table:
+            for rx, repl in self.pos_rules:
+                t.sub(self._plain(rx, repl, t.text))
+        return t.spans
+
+    def _plain(self, rx: "Pattern[str]", repl: str, text: str) -> List[Tuple[int, int, str]]:
+        """A rule's matches in `text`, as a plain substitution makes them (but a file name
+        `keep_files` keeps)."""
+        return [(m.start(), m.end(), repl) for m in rx.finditer(text) if m.end() > m.start()
+                and not (repl == KEEP_PLACEHOLDER and self.keep_files and self._kept(m.group(0)))]
+
+    def _entry_parts(self, line: str, hits: Sequence[Tuple[int, int]]
+                     ) -> List[Tuple[int, int, str]]:
+        """The entry names as written (`hits`), as `<ENTRY>`; but where one lies inside what a
+        file or identifier rule matches, that whole match, as the rule's placeholder (as it reads
+        for a name that does not exist). Overlapping parts are joined; `<ENTRY>` wins a tie."""
         if not hits:
-            return line
+            return []
         spans: List[Tuple[int, int, str]] = []
         for rule, repl in self.path_rules + self.id_rules:
-            spans += [(s, e, repl) for s, e in self._matches(rule, repl, line)
-                      if e > s and _MARK not in line[s:e]]
-        numbers = [] if table else [m for rule, repl in self.pos_rules
-                                    for m in self._matches(rule, repl, line)]
-        parts: List[Tuple[int, int, str]] = []
-        for a, b in hits:
-            cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
-            if cover is None:
-                grown = True
-                while grown:
-                    grown = False
-                    for s, e, _r in spans:
-                        if s < a < e and b > e:
-                            a, grown = s, True
-                    for s, e in numbers:
-                        if a <= s < b < e:
-                            b, grown = e, True
-                cover = (a, b, "<ENTRY>")
-            parts.append(cover)
-        parts.sort()
+            spans += [(s, e, r) for s, e, r in self._plain(rule, repl, line)
+                      if _MARK not in line[s:e]]
+        parts = sorted(next(((s, e, r) for s, e, r in spans if s <= a and b <= e), (a, b, "<ENTRY>"))
+                       for a, b in hits)
         merged: List[List] = []
-        for a, b, r in parts:  # overlapping parts are joined; <ENTRY> wins a tie (more masked)
+        for a, b, r in parts:
             if merged and a < merged[-1][1]:
                 merged[-1][1] = max(merged[-1][1], b)
                 if r == "<ENTRY>" or merged[-1][2] != r:
                     merged[-1][2] = "<ENTRY>"
             else:
                 merged.append([a, b, r])
-        out, pos = [], 0
-        for a, b, r in merged:
-            out += [line[pos:a], r]
-            pos = b
-        out.append(line[pos:])
-        return "".join(out)
+        return [(a, b, r) for a, b, r in merged]
 
-    def _marked(self, line: str) -> str:
+    def _marks(self, line: str) -> List[Tuple[int, int, str]]:
         """Every protected root or pattern match as the mark. A pattern's wildcard may hold
         spaces, so its match runs to the end of the name, or past it. When the longest folder
         the pattern matches now starts at the match, that folder is marked whole (also when it
@@ -487,7 +519,7 @@ class Sanitizer:
         character: `phi_New;Quux`) that no such folder covers runs to the end of the line too.
         Every match counts, also one inside or across another: overlapping matches are joined."""
         if self.protected is None:
-            return line
+            return []
         marks: List[Tuple[int, int]] = []
         for start, end, open_ in self.protected.text_spans(line):
             for size in self.known_lengths:
@@ -504,22 +536,18 @@ class Sanitizer:
                 marks[-1] = (marks[-1][0], max(marks[-1][1], end))
             else:
                 marks.append((start, end))
-        out: List[str] = []
-        pos = 0
-        for start, end in marks:
-            out += [line[pos:start], _MARK]
-            pos = end
-        out.append(line[pos:])
-        return "".join(out)
+        return [(start, end, _MARK) for start, end in marks]
 
     def clean(self, line: str, table: bool = False) -> str:
         """The line with its identifiers masked (table mode: identifiers only). Never raises:
         a line it cannot process comes back as the fixed notice."""
         try:
-            line = normalize(line)
-            out = self._mask(line, table)
-            # the masks must not leave what they mask: a second pass changes nothing
-            if self._mask(out, table) != out:
+            before = inventory.unfolded(line)
+            line = before if before.isascii() else before.translate(inventory.DASHES)
+            out = self._mask(line, table, before)
+            # the masks must not leave what they mask: a second pass changes nothing (a line
+            # the first pass left as it was, read in one form, is that second pass already)
+            if not (out == line == before) and self._mask(out, table) != out:
                 return WITHHELD
             # nor a name written with escapes, as ordinary tools print one (git's octal quoting,
             # JSON's \u, Python's \x, a URL's %XX): the masked line, decoded, holds nothing
@@ -712,6 +740,100 @@ def _whole_numbers(line: str, spans: Sequence[Tuple[int, int]]) -> List[Tuple[in
         else:
             out.append((s, e))
     return out
+
+
+_RULE = 1 << 20  # the rank of a rule's own match (`_mask` (c)), after every mask of (a)
+_HIT = 1 << 21  # the rank of an entry hit (`_mask` (b))
+
+
+class _Track:
+    """A line and the masks made in it one after another: each character of the text now
+    knows the span of the first line it stands for (a placeholder: all it replaced)."""
+
+    def __init__(self, text: str):
+        self.text = text
+        self.lo: List[int] = []
+        self.hi: List[int] = []
+        self.spans: List[Tuple[int, int, str, int]] = []  # in the first line, with their rank
+
+    def sub(self, found: Sequence[Tuple[int, int, str]], record: bool = True) -> None:
+        """Replace each (start, end, text) of `found` (in the text now, in order, apart)."""
+        if not found:
+            return
+        text = self.text
+        if not self.lo:
+            self.lo = list(range(len(text)))
+            self.hi = list(range(1, len(text) + 1))
+        lo, hi = self.lo, self.hi
+        out: List[str] = []
+        nlo: List[int] = []
+        nhi: List[int] = []
+        pos = 0
+        for s, e, r in found:
+            out.append(text[pos:s])
+            nlo += lo[pos:s]
+            nhi += hi[pos:s]
+            a, b = lo[s], hi[e - 1]
+            out.append(r)
+            nlo += [a] * len(r)
+            nhi += [b] * len(r)
+            if record:
+                self.spans.append((a, b, r.rstrip(_GOES_ON), len(self.spans)))
+            pos = e
+        out.append(text[pos:])
+        nlo += lo[pos:]
+        nhi += hi[pos:]
+        self.text, self.lo, self.hi = "".join(out), nlo, nhi
+
+
+def _widened(line: str, found: Sequence[Tuple[int, int, str, int]]
+             ) -> List[Tuple[int, int, str, int]]:
+    """Each span widened to the whole of a number (`_NUMBER_RUN`) it starts or ends inside."""
+    runs = [(n.start(), n.end()) for n in _NUMBER_RUN.finditer(line)]
+    if not runs:
+        return list(found)
+    starts = [ns for ns, _ne in runs]
+
+    def run_at(i: int) -> Optional[Tuple[int, int]]:
+        k = bisect.bisect_right(starts, i) - 1
+        return runs[k] if k >= 0 and runs[k][0] < i < runs[k][1] else None
+    return [((run_at(s) or (s, s))[0], (run_at(e) or (e, e))[1], r, k) for s, e, r, k in found]
+
+
+def _joined(found: Sequence[Tuple[int, int, str, int]]) -> List[Tuple[int, int, str]]:
+    """Overlapping spans joined, each with its placeholder (`_pick`); spans that only touch
+    stay apart."""
+    out: List[Tuple[int, int, str]] = []
+    group: List[Tuple[int, int, str, int]] = []
+    end = -1
+    for f in sorted(found):
+        if group and f[0] >= end:
+            out.append((group[0][0], end, _pick(group, end)))
+            group = []
+        group.append(f)
+        end = max(end, f[1]) if len(group) > 1 else f[1]
+    if group:
+        out.append((group[0][0], end, _pick(group, end)))
+    return out
+
+
+def _pick(group: Sequence[Tuple[int, int, str, int]], end: int) -> str:
+    """The placeholder of a joined span, by a fixed precedence: (1) a mask as it was before that
+    covers the whole span (the last one made: it holds the others), (2) a rule's own match that
+    covers it (the first rule), (3) `<PROTECTED>` when a protected path is in it, (4) `<ENTRY>`
+    when an entry name is in it, (5) the placeholder of the span that starts first."""
+    start = group[0][0]
+    whole = [f for f in group if f[0] == start and f[1] == end and f[3] < _HIT]
+    if whole:
+        old = [f for f in whole if f[3] < _RULE]
+        return max(old, key=lambda f: f[3])[2] if old else min(whole, key=lambda f: f[3])[2]
+    names = {f[2] for f in group}
+    for r in ("<PROTECTED>", "<ENTRY>"):
+        if r in names:
+            return r
+    return min(group, key=lambda f: (f[0], f[3]))[2]
+
+
 _NAME_CHAR = re.compile(r"[\w.\-]")  # a character that would go on with a name
 # after a folder on disk: text that cannot be more of a name (a path goes on, a tab, the end,
 # or after `: ` counts, each with at most one plain unit, to a tab or the end: `: 12 reads, 3

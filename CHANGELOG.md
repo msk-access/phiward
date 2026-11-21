@@ -129,10 +129,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   space) changed or left out: `FAKE-PT-0001` masks `FAKE_PT_0001`, `FAKE PT 0001` and
   `FAKEPT0001`. Shorter names, digits-only names and names with a separator at either end are
   matched as written only; a name whose stem is matched that way (`FAKE-PT-0001.bam`) is
-  matched whole as written only, so its extension stays for the file rules. A name hit that
-  starts inside a rule's match and runs past it masks that whole match as `<ENTRY>`; in text
-  mode a hit takes the rest of a number it cuts. A rule's match is widened to the whole of a
-  number it starts or ends inside (`C-PLE12345`, `Donor-1,234,567`). The `msk` CMO rule takes
+  matched whole as written only, so its extension stays for the file rules. The masks the
+  sanitizer made before are all kept; the hits in other spellings, and each rule's own matches
+  on the line, are added to them, so a line is never masked less than before. Overlapping masks
+  become one placeholder: a mask made as before that covers them all keeps its placeholder,
+  else a rule's match that covers them all, else `<PROTECTED>`, then `<ENTRY>`, then the
+  placeholder of the first. Every mask takes the whole of a number it starts or ends inside
+  (`C-PLE12345`, `Donor-1,234,567`, `SAM_PLE12:00`). The `msk` CMO rule takes
   the whole run (`C-\w{6,}`), and the `genomics` read-name rule takes a first field with dots
   anywhere and no longer swallows the start of the next read name. A root whose name holds
   another dash also matches a path written with `-`, so the hook and the git hooks refuse that

@@ -50,8 +50,12 @@ _ZS = (0x20, 0xA0, 0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x200
 
 def ascii_digits(text: str) -> str:
     """Every Unicode decimal digit as its ASCII digit (`٩` -> `9`)."""
-    return "".join(str(unicodedata.decimal(ch)) if ch > "\x7f" and
-                   unicodedata.category(ch) == "Nd" else ch for ch in text)
+    if text.isascii() or _OTHER_DIGIT.search(text) is None:
+        return text
+    return _OTHER_DIGIT.sub(lambda m: str(unicodedata.decimal(m.group(0))), text)
+
+
+_OTHER_DIGIT = re.compile(r"(?![0-9])\d")  # `\d` in a str pattern: every decimal digit (Nd)
 
 
 def normalize(text: str) -> str:
@@ -63,13 +67,19 @@ def normalize(text: str) -> str:
     they meet in the same form; the masked line is printed in it too. Other decimal digits stay
     as they are (the rules' `\\d` matches them, and a rule's `[A-Za-z0-9]` does not): the entry
     matcher reads them as ASCII (`Matcher`), one character for one, so places do not move."""
+    text = unfolded(text)
+    return text if text.isascii() else text.translate(DASHES)
+
+
+def unfolded(text: str) -> str:
+    """`normalize` without the fold of dashes: the form lines were read in before other
+    spellings were matched (one character for one with `normalize`: places do not move)."""
     text = _ESCAPES.sub("", text)
     text = text.replace("\\ ", " ")  # `ls -b`, `printf %q`: an escaped space is a space
     if text.isascii():
-        return text  # NFKC and the fold below leave ASCII text as it is
+        return text  # NFKC leaves ASCII text as it is
     text = unicodedata.normalize("NFKC", text)
-    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
-    return text.translate(DASHES)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
 def _strings_of(name: str, stop: Set[str]) -> List[str]:
@@ -224,27 +234,54 @@ def _line_places(line: str) -> Callable[[int], int]:
 
 
 class Matcher:
-    """The entry names of one inventory as two tries: the long strings (`_glued`) by their
-    separator-free keys, searched in the line with its separators left out (a hit maps back to
-    the line from its first to its last character, separators inside included); the others as
-    written, searched in the line itself."""
+    """The entry names of one inventory as two tries: every string as written (the trie the
+    masking used before other spellings were matched: `before` reads a line with it), and the
+    long strings (`_glued`) by their separator-free keys, searched in the line with its
+    separators left out (a hit maps back to the line from its first to its last character,
+    separators inside included)."""
 
     def __init__(self, literal: Optional[Pattern[str]], glued: Optional[Pattern[str]]):
         self.literal = literal
         self.glued = glued
 
     def spans(self, line: str) -> List[Tuple[int, int]]:
-        """Every hit in `line`, as (start, end) in `line`, in order of start. The line's
-        decimal digits are read as ASCII (one character for one: places do not move)."""
-        if not line.isascii():
-            line = ascii_digits(line)
-        out = _all_starts(self.literal, line) if self.literal is not None else []
+        """Every hit in `line`, as (start, end) in `line`, in order of start, overlapping ones
+        too. The line's decimal digits are read as ASCII (one character for one: places do not
+        move)."""
+        return self.found(line)[0]
+
+    def found(self, line: str, before: Optional[str] = None
+              ) -> Tuple[List[Tuple[int, int]], Optional[List[Tuple[int, int]]]]:
+        """`spans(line)`, and `before(before)` when `before` is given (from the same search
+        when `before` reads as `line` does)."""
+        folded = ascii_digits(line)
+        starts = _all_starts(self.literal, folded) if self.literal is not None else []
+        out = starts
         if self.glued is not None:
-            hits = _all_starts(self.glued, _SEP_RUN.sub("", line))
+            hits = _all_starts(self.glued, _SEP_RUN.sub("", folded))
             if hits:
-                at = _line_places(line)
-                out += [(at(a), at(b - 1) + 1) for a, b in hits]
-        return sorted(out)
+                at = _line_places(folded)
+                out = sorted(starts + [(at(a), at(b - 1) + 1) for a, b in hits])
+        old: Optional[List[Tuple[int, int]]] = None
+        if before is not None:
+            if before == folded:
+                # what `finditer` finds: from the left, the longest match at each place one
+                # starts, after the end of the one before
+                old, end = [], 0
+                for a, b in starts:
+                    if a >= end:
+                        old.append((a, b))
+                        end = b
+            else:
+                old = self.before(before)
+        return out, old
+
+    def before(self, line: str) -> List[Tuple[int, int]]:
+        """The hits the masking found before other spellings were matched: the strings as
+        written, from the left, one after another (no hit inside another)."""
+        if self.literal is None:
+            return []
+        return [m.span() for m in self.literal.finditer(line) if m.end() > m.start()]
 
     def search(self, text: str) -> bool:
         return bool(self.spans(text))
@@ -279,19 +316,16 @@ def matcher(strings: Iterable[str], stop: Iterable[str] = (),
 
     folded = [w if w.isascii() else ascii_digits(w) for w in words]  # as `spans` reads a line
     present = set(folded)
-    literal: List[str] = []
+    # every string as written (also with its digits as ASCII), in one trie
+    literal = sorted(set(words) | present)
     glued: Set[str] = set()
     for w in folded:
         k = key_of(w)
         stem = w.split(".")[0]
         if k is not None and stem != w and stem in present and key_of(stem) is not None:
-            # the stem is matched in other spellings; the whole name only as written, so its
-            # extension stays for the file rules (`FAKE_PT_0001.bam` reads `<ENTRY>.bam`, which
-            # a file rule then masks with what is around it)
+            # the stem is matched in other spellings; the whole name only as written
             k = None
-        if k is None:
-            literal.append(w)
-        else:
+        if k is not None:
             glued.add(k)
     # A trie regex prefers the longest match at each place, because every optional part is
     # greedy; masking the longest name first keeps a stem from leaving the rest of a name.
