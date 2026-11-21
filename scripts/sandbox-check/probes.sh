@@ -8,6 +8,7 @@
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
 # content), other.
+set +x  # no trace, whatever started it: no command here may show what it reads
 cd "$(dirname "$0")" || exit 1
 : > results.txt
 p() { sed -n "s/^$1 //p" paths.txt; }
@@ -140,15 +141,23 @@ git reset -q -- "gh-$mode.txt" 2>/dev/null
 rm -f "gh-$mode.txt"
 
 # a token in another process's environment: read the environ of every process in /proc other
-# than this one, and record only how many could be read or were refused, how many hold a
-# credential variable's name (token-names.txt, beside this file), how many of those are this
-# shell's own ancestors, whether a step of the read failed, and their PIDs. No name or value is
-# written. /proc/$$ must be this process (/proc/self), else foreign-proc. PROC is /proc
+# than this one, and record only how many had a non-empty environ (readable), an empty one, or
+# were refused, how many hold a credential variable's name (token-names.txt, beside this file),
+# how many of those are this shell's own ancestors, whether a step failed, how many hold
+# CLAUDE_CODE_MESSAGING_TOKEN (given to Bash on purpose: a count apart), and their PIDs. No value
+# passes through the shell: each environ goes from tr straight to wc or grep -c, which print
+# numbers only. /proc/$$ must be this process (/proc/self), else foreign-proc. PROC is /proc
 # (paths.txt may name another, for tests).
 proc=$(p proc)
 [ -n "$proc" ] || proc=/proc
-names=$(grep -v '^#' token-names.txt 2>/dev/null | grep -E '^[A-Z][A-Z0-9_]*$' | tr '\n' '|')
-names=${names%|}
+# the name list, used whole or not at all: no CRLF, every line a comment, empty, or a name
+names=""
+cr=$(printf '\r')
+if [ -r token-names.txt ] && ! grep -q "$cr" token-names.txt &&
+   ! grep -v '^#' token-names.txt | grep -v '^$' | grep -qvE '^[A-Z][A-Z0-9_]*$'; then
+  names=$(grep -v '^#' token-names.txt | grep -v '^$' | tr '\n' '|')
+  names=${names%|}
+fi
 if [ ! -r "$proc/self/status" ]; then
   echo "parent-environ n/a" >> results.txt
 elif ! [ "$proc/self/status" -ef "$proc/$$/status" ] 2>/dev/null; then
@@ -166,6 +175,7 @@ else
     anc="$anc$pid "
   done
   readable=0
+  empty=0
   refused=0
   named=0
   ancestors=0
@@ -177,28 +187,29 @@ else
     pid=${d##*/}
     case $pid in ''|*[!0-9]*) continue ;; esac
     [ "$pid" = "$$" ] && continue
-    # held in memory only, never written; the open error goes to /dev/null
-    if text=$(tr '\0' '\n' 2>/dev/null < "$d/environ"); then
-      readable=$((readable + 1))
-      [ -n "$names" ] || continue
-      printf '%s\n' "$text" | grep -qE "^($names)="
-      case $? in
-        0) named=$((named + 1))
-           pids="$pids,$pid"
-           case $anc in *" $pid "*) ancestors=$((ancestors + 1)) ;; esac ;;
-        1) ;;
+    # numbers only: the byte count, then the count of matching lines (the open error to /dev/null)
+    if ! size=$(wc -c 2>/dev/null < "$d/environ"); then
+      refused=$((refused + 1))
+      continue
+    fi
+    size=$(echo $size)
+    case $size in ''|*[!0-9]*) failed=1; continue ;; 0) empty=$((empty + 1)); continue ;; esac
+    readable=$((readable + 1))
+    if [ -n "$names" ]; then
+      hits=$(tr '\0' '\n' 2>/dev/null < "$d/environ" | grep -cE "^($names)=")
+      case $?:$hits in
+        0:[0-9]*) named=$((named + 1))
+                  pids="$pids,$pid"
+                  case $anc in *" $pid "*) ancestors=$((ancestors + 1)) ;; esac ;;
+        1:0) ;;
         *) failed=1 ;;
       esac
-      # given to Bash on purpose by Claude Code (token-names.txt says why): a count of its own
-      printf '%s\n' "$text" | grep -q '^CLAUDE_CODE_MESSAGING_TOKEN='
-      case $? in 0) messaging=$((messaging + 1)) ;; 1) ;; *) failed=1 ;; esac
-    else
-      refused=$((refused + 1))
     fi
+    hits=$(tr '\0' '\n' 2>/dev/null < "$d/environ" | grep -c '^CLAUDE_CODE_MESSAGING_TOKEN=')
+    case $?:$hits in 0:[0-9]*) messaging=$((messaging + 1)) ;; 1:0) ;; *) failed=1 ;; esac
   done
-  text=""
   pids=${pids#,}
-  echo "parent-environ readable=$readable refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed messaging=$messaging pids=${pids:--}" >> results.txt
+  echo "parent-environ readable=$readable empty=$empty refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed messaging=$messaging pids=${pids:--}" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder

@@ -65,6 +65,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   after, and with `REMOTE` push, run and pull through the shared connection), reason classes
   per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
   every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+  The parents' environment probe scans every process the session can see in `/proc` and
+  records only counts and PIDs, never a name or a value; a credential variable's name from
+  `token-names.txt` in any of them fails the mode. `CLAUDE_CODE_MESSAGING_TOKEN`, which Claude
+  Code gives to Bash commands on purpose, is only counted and noted. Paste the token when
+  `check.sh` asks for it rather than exporting it: an exported token is in the start
+  environment of your shell and of the check.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 
