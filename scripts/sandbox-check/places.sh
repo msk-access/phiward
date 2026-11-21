@@ -62,9 +62,10 @@ sbx_tools_place() {
 # sbx_tools_safe PY SRC HOME TOOLS: phiward's own rule for a PATH folder (service.path_entries:
 # selfcheck.safe_path, not a project's, not a temp folder or one the session may write), and
 # safe_path for its socat (links followed): the source tree's phiward (SRC, its src folder), run
-# before the build by an isolated Python PY with the check's HOME (nothing of yours is read)
+# before the build by an isolated Python PY (-I -S: no site, so no .pth file of the base Python
+# runs) with the check's HOME (nothing of yours is read)
 sbx_tools_safe() {
-  env HOME="$3" TMPDIR="$3/tmp" "$1" -I -c '
+  env HOME="$3" TMPDIR="$3/tmp" "$1" -I -S -c '
 import os, sys
 sys.path.insert(0, sys.argv[1])
 from phiward import selfcheck, service
@@ -78,6 +79,15 @@ else:
 if why:
     sys.exit("sandbox-check: SBX_TOOLS is not a safe PATH folder (" + why + "): " + t)
 ' "$2" "$4" || return 2
+}
+
+# sbx_git H ARGS: git before the check's own HOME is set, reading nothing of your home: no
+# ~/.gitconfig, no ~/.config/git (attributes: an export-ignore would drop a file from the build;
+# ignore: a change hidden from the note)
+sbx_git() {
+  _gh=$1; shift
+  env -u XDG_CONFIG_HOME HOME="$_gh" GIT_CONFIG_GLOBAL=/dev/null \
+    git -c core.attributesFile=/dev/null -c core.excludesFile=/dev/null "$@"
 }
 
 # session_path H TOOLS SYSPATH: the session's PATH, with TOOLS (when given) before the system

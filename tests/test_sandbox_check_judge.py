@@ -1306,3 +1306,60 @@ def test_the_session_path_puts_sbx_tools_before_the_system_folders(tmp_path, too
     r = _places(tmp_path, "session_path", "/h", tools, "/usr/bin:/bin")
     assert r.returncode == 0, r.stderr
     assert r.stdout.strip() == want
+
+
+@pytest.mark.parametrize("variant, canon", [("claude.md", "CLAUDE.md"), (".Claude", ".claude"),
+                                            ("agents.MD", "AGENTS.md"), (".Claude-link", ".claude")])
+def test_a_name_in_other_letter_case_is_refused_where_case_is_ignored(tmp_path, variant, canon):
+    """On a volume that ignores letter case (macOS), Claude Code finds claude.md as CLAUDE.md."""
+    home, base = _made_up_home(tmp_path)
+    if variant == ".Claude-link":
+        (home / ".Claude").symlink_to(tmp_path / "nowhere")  # a dangling link
+    elif variant == ".Claude":
+        (home / variant).mkdir()
+    else:
+        (home / variant).write_text("made up\n")
+    if not os.path.lexists(home / canon):
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+def _git(cwd, *args, env=None):
+    import subprocess
+    return subprocess.run(["git", "-C", str(cwd)] + list(args), capture_output=True, text=True,
+                          env=env, timeout=60, check=True).stdout
+
+
+def test_git_before_the_home_switch_reads_nothing_of_your_home(tmp_path):
+    """check.sh's git calls before HOME=$H (status, archive) read no ~/.gitconfig and no
+    ~/.config/git/attributes or ignore of yours: an export-ignore there would drop a file from
+    the build, an ignore line would hide a change."""
+    real = tmp_path / "your-home"
+    (real / ".config" / "git").mkdir(parents=True)
+    (real / ".config" / "git" / "attributes").write_text("secret.txt export-ignore\n")
+    (real / ".config" / "git" / "ignore").write_text("hidden.txt\n")
+    env = dict(os.environ, HOME=str(real), XDG_CONFIG_HOME=str(real / ".config"),
+               GIT_CONFIG_NOSYSTEM="1")
+    env.pop("GIT_CONFIG_GLOBAL", None)
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", env=env)
+    (repo / "secret.txt").write_text("made up\n")
+    _git(repo, "add", "secret.txt", env=env)
+    _git(repo, "-c", "user.name=sbx", "-c", "user.email=sbx@example.invalid",
+         "-c", "commit.gpgsign=false", "commit", "-q", "-m", "init", env=env)
+    (repo / "hidden.txt").write_text("made up\n")
+    # the made-up home does what it says to plain git
+    assert "hidden.txt" not in _git(repo, "status", "--porcelain", env=env)
+    h = tmp_path / "check-home"
+    h.mkdir()
+    r = _places(tmp_path, "sbx_git", h, "-C", repo, "status", "--porcelain", env=env)
+    assert r.returncode == 0, r.stderr
+    assert "hidden.txt" in r.stdout
+    import subprocess
+    driver = tmp_path / "places-driver.sh"
+    out = subprocess.run(["sh", "-c", f'sh "{driver}" "{PLACES}" sbx_git "{h}" -C "{repo}" '
+                          'archive HEAD | tar -t'], capture_output=True, text=True, env=env,
+                         timeout=60)
+    assert "secret.txt" in out.stdout.split(), out.stderr

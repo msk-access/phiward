@@ -98,6 +98,10 @@ refused() {  # NAME TEXT: check.sh exited 2, said TEXT, and never started a sess
   if [ "$(cat "$o/rc")" = 2 ] && grep -qF -- "$2" "$o/console.txt" \
       && ! grep -q "one session" "$o/console.txt"; then echo "== ok    refused: $1"
   else echo "== NOT REFUSED: $1"; sed 's/^/   | /' "$o/console.txt" | tail -5; status=1; fi
+  # and left none of its folders
+  if ls -d "$HOME/sbx-$1/run"/phiward-sbx-* >/dev/null 2>&1; then
+    echo "== LEFT  the check's folders of refusal $1"; status=1
+  else echo "== ok    refusal $1 removed its folders"; fi
 }
 refusal_run() {  # NAME BASE TOOLS: one check.sh --stub, its output in ~/out-NAME
   o=$HOME/out-$1

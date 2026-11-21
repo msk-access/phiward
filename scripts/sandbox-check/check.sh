@@ -85,7 +85,7 @@ else
 fi
 python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV UV_NO_CONFIG=1 "$uv" python find --python-preference only-managed 2>/dev/null)}
 [ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
-claude=$("$python" -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
+claude=$("$python" -I -S -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
 if [ $os = darwin ]; then
   managed="/Library/Application Support/ClaudeCode
 /Library/Managed Preferences/com.anthropic.claudecode.plist"
@@ -97,15 +97,13 @@ echo "$managed" | while IFS= read -r m; do
 done
 if [ -n "$SBX_SRC" ]; then
   [ -f "$SBX_SRC/pyproject.toml" ] || { echo "sandbox-check: SBX_SRC is not a phiward source tree" >&2; exit 2; }
-else
-  [ -z "$(GIT_CONFIG_GLOBAL=/dev/null git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
 fi
 # where the home folder is made: never a home folder itself, never below a folder that holds a
 # name Claude Code or phiward read from a folder above the session's (places.sh), and never in a
 # shared temp folder
 . "$here/places.sh"
 # the home folder by passwd (what ssh and others use) and by $HOME, both resolved
-homes=$("$python" -I -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
+homes=$("$python" -I -S -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
 if [ $os = darwin ]; then
   # not /private/tmp or the per-user temp folder: Claude Code's sandbox lets the session write
   # there, and the judge's folder must not be writable by it
@@ -165,7 +163,9 @@ mkdir -p "$H/src" "$H/dist" "$H/tmp"
 if [ -n "$SBX_SRC" ]; then
   cp -R "$SBX_SRC/." "$H/src"
 else
-  GIT_CONFIG_GLOBAL=/dev/null git -C "$repo" archive HEAD | tar -x -C "$H/src"
+  # git with the check's home: nothing of yours is read (places.sh)
+  [ -z "$(sbx_git "$H" -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
+  sbx_git "$H" -C "$repo" archive HEAD | tar -x -C "$H/src"
 fi
 # SBX_TOOLS, before the build: phiward's own rule, by the source tree's phiward
 if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
@@ -174,9 +174,9 @@ echo "building in $H ..."
 env HOME="$H" UV_NO_CONFIG=1 UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never \
   "$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
 wheel=$(ls "$H"/dist/*.whl)
-pybase=$(cd "$(dirname "$("$python" -I -c 'import sys; print(sys.executable)')")/.." && pwd -P)
+pybase=$(cd "$(dirname "$("$python" -I -S -c 'import sys; print(sys.executable)')")/.." && pwd -P)
 cp -R "$pybase" "$H/py"
-pyname=$(basename "$("$python" -I -c 'import sys, os; print(os.path.realpath(sys.executable))')")
+pyname=$(basename "$("$python" -I -S -c 'import sys, os; print(os.path.realpath(sys.executable))')")
 py="$H/py/bin/$pyname"
 syspath=/usr/bin:/bin:/usr/sbin:/sbin
 [ $os = linux ] && syspath=/usr/local/bin:$syspath
@@ -190,7 +190,7 @@ free="$H/proj/free"
 mkdir -p "$H/bin" "$H/tmp" "$H/data/FAKE-PT-0001" "$H/proj" "$H/.config/phiward"
 ln -s "$claude" "$H/bin/claude"
 [ -n "$stub" ] && ln -s "$py" "$H/bin/python3"  # the stub's own Python
-rnd() { "$py" -c 'import secrets; print(secrets.token_hex(8))'; }
+rnd() { "$py" -I -S -c 'import secrets; print(secrets.token_hex(8))'; }
 [ -n "$stub" ] && token="FAKE-TOKEN-$(rnd)$(rnd)"
 marker="FAKE-MARK-$(rnd)"
 marker2="FREE-MARK-$(rnd)"
@@ -289,7 +289,7 @@ for f in --permission-prompts --max-budget-usd; do
 done
 landlock=n/a
 if [ $os = linux ]; then
-  landlock=$("$py" -c 'import ctypes; l = ctypes.CDLL(None, use_errno=True); l.syscall.restype = ctypes.c_long; print(l.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))')
+  landlock=$("$py" -I -S -c 'import ctypes; l = ctypes.CDLL(None, use_errno=True); l.syscall.restype = ctypes.c_long; print(l.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))')
 fi
 # the hook's time: 20 calls with a made-up Read payload (a note only)
 hook_ms=$("$py" - "$H" <<'PY' 2>/dev/null || echo unknown
