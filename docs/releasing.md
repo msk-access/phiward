@@ -55,17 +55,46 @@ Then push `main`, `develop` and the tag.
    folder of its own, no login service).
    Then check that the real Claude Code obeys the settings phiward writes, which the scripts above
    cannot show. You run it yourself, in a terminal: it asks only for a token from
-   `claude setup-token`, and builds the rest in a home folder of its own, with made-up data. An
-   agent never runs it (it refuses without a terminal, and refuses a token from the environment
-   inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
+   `claude setup-token`, pasted at its prompt (or `ANTHROPIC_API_KEY=KEY`), and builds the rest
+   in a home folder of its own, with made-up data. It takes no token from the environment. An
+   agent never runs it (it refuses without a terminal); an agent runs only
+   `sh scripts/sandbox-check/linux.sh --stub`.
+   It starts itself again under an empty environment first: only HOME, TMPDIR, TERM, your PATH
+   (to find uv and claude; then it uses the system folders) and its own variables (SBX_*, MODES,
+   KEEP, REMOTE*, CLAUDE_BIN) cross. The second start is clean: no variable, option or function
+   of your shell acts on it. The first start is your shell's, and what it was given acts before
+   the first line: under bash-as-sh, an exported `SHELLOPTS=xtrace` with a `PS4` that holds
+   `$(...)` runs that command. Run it with `sh`, not `bash` (`bash check.sh` reads `BASH_ENV`).
+   claude and uv, found through your PATH, must pass phiward's rule (`selfcheck.safe_path`)
+   before the token prompt. Its programs run with its own home as HOME, in its own folder.
+   `SBX_WHEEL` with `SBX_WHEEL_SHA256` installs a wheel you built beforehand instead of a build
+   (see docs/hpc.md). uv's Python is found in
+   `~/.local/share/uv/python`; give its path as an argument if yours is elsewhere.
    - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
      `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
-     folders; it may not be under /tmp, the temp folder or your home folder, nor anywhere the
-     settings phiward installs let the session write (the check refuses). On macOS it is
-     `/Users/Shared` by default; without that folder, set SBX_BASE to another folder outside
-     those (for example one you make for it on a second volume). On a cluster, run it as an
-     interactive job with SBX_BASE on scratch, for example `srun --pty --job-name auto-sbx-check
-     env SBX_BASE=/scratch/$USER sh scripts/sandbox-check/check.sh`.
+     folders; it may not be under /tmp or the temp folder, nor your home folder itself, nor
+     anywhere the settings phiward installs let the session write (the check refuses). A
+     folder below your home folder is fine. The check refuses SBX_BASE when it or any folder
+     above it, your home folder too, holds `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`,
+     `.claude`, `.git`, `.mcp.json`, `.phiward.toml` or `.agent-guards.toml`: Claude Code reads
+     CLAUDE.md, CLAUDE.local.md and `.claude/rules` from every folder above the session's, and
+     phiward the settings of every `.claude` or `.git` above it and its repository config, so
+     your own would be read into the test. It looks again right before each session. Get the
+     token first (`claude setup-token` may make `~/.claude` again), then move them away while
+     the check runs, or choose another folder. On macOS it is `/Users/Shared` by default;
+     without that folder, set SBX_BASE to another folder outside those (for example one you
+     make for it on a second volume).
+   - `SBX_TOOLS` names a folder for socat, when the system has none (a cluster). It may hold
+     socat and nothing else, so it cannot stand in for `bwrap`, `git` or `sh`. The check puts
+     it on the session's PATH after its own bin folders, before the system folders. It must be
+     an absolute folder outside SBX_BASE and outside what the session may write, and pass
+     phiward's own rule for a PATH folder: it, its socat (and what a link leads to) and every
+     folder above them (up to your home folder, when they are inside it) are yours or root's,
+     and no group or other account can write them. Else the check refuses, before the build.
+   - On a cluster, the check's folders go below your home folder, the one place no other
+     account can write a folder above it (scratch and group folders are writable by others, so
+     phiward's self-check refuses phiward installed there). The steps are in
+     [hpc.md](hpc.md#claude-code-on-the-login-node), at its end.
    - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
@@ -109,9 +138,9 @@ Then push `main`, `develop` and the tag.
    hook and a home folder on your machine. (That refusal looks for the container's marks,
    `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
    Paste the token when the check asks; do not export it. A token exported in your shell is
-   still taken (read once, and unset at the start, so only the claude process gets it), but
-   `/proc` keeps the start environment of your shell and of the check, which the session's scan
-   can see: such a run may FAIL for them, and the check warns. The check's home folder and its judge's folder are removed at the end, also
+   not used (the check starts again without it), and only the claude process gets the pasted
+   one. `/proc` still keeps the start environment of your shell and of the check's first start,
+   which the session's scan can see: such a run may FAIL for them, and the check warns. The check's home folder and its judge's folder are removed at the end, also
    after Ctrl-C, SIGTERM or a closed terminal; if one cannot be removed, the check names it and
    exits non-zero. A `kill -9` of `check.sh` or `launch.py` skips that: the session may keep
    running, and the folders stay (remove them yourself). Only the report and, per mode, the

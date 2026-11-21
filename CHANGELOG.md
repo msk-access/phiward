@@ -65,12 +65,24 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   after, and with `REMOTE` push, run and pull through the shared connection), reason classes
   per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
   every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+  `SBX_BASE` may be a folder below your home folder (not the home folder itself), and is
+  refused when it or a folder above it holds `CLAUDE.md`, `CLAUDE.local.md`, `.claude`,
+  `.git`, `.mcp.json`, `.phiward.toml`, `.agent-guards.toml` or `AGENTS.md`, also right before
+  each session. `SBX_TOOLS` puts a folder that holds only socat (a cluster has none) on the
+  session's PATH, when it and its socat pass phiward's own rule for a PATH folder. The check
+  starts itself again under an empty environment (only its own variables, HOME, TMPDIR, TERM
+  and PATH cross), runs in its own folder with its own home, and takes the token only at its
+  prompt, no longer from `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. claude and uv, found
+  through your PATH, must pass the same rule before the prompt. `SBX_WHEEL` with
+  `SBX_WHEEL_SHA256` installs a wheel built beforehand, checked by its sha256, so the node needs
+  no package index. `linux.sh` with
+  `SBX_SH=bash` runs the stub with bash as `/bin/sh`.
   The parents' environment probe scans every process the session can see in `/proc` and
   records only counts and PIDs, never a name or a value; a credential variable's name from
   `token-names.txt` in any of them fails the mode. `CLAUDE_CODE_MESSAGING_TOKEN`, which Claude
-  Code gives to Bash commands on purpose, is only counted and noted. Paste the token when
-  `check.sh` asks for it rather than exporting it: an exported token is in the start
-  environment of your shell and of the check.
+  Code gives to Bash commands on purpose, is only counted and noted. An exported token is
+  not used, but it is in the start environment of your shell and of the check's first start,
+  so the check warns: paste the token when `check.sh` asks for it.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 

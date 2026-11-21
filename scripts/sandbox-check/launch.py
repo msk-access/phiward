@@ -1,6 +1,7 @@
 """Start the real `claude -p` for the sandbox check with a clean environment: only the variables
-it needs, the credential from the caller's environment or the first line of stdin (never argv or
-a file; a line ANTHROPIC_API_KEY=VALUE names an API key), Claude Code's own credential scrub for its commands, no auto-update. A watchdog stops it.
+it needs, the credential from the first line of stdin only, as check.sh passes the one pasted at
+its prompt (never the environment, argv or a file; a line ANTHROPIC_API_KEY=VALUE names an API
+key), Claude Code's own credential scrub for its commands, no auto-update. A watchdog stops it.
 The session writes into a pipe; launch.py writes RUN_DIR/stream.jsonl itself once the session
 is stopped. However it ends (normally, the watchdog, SIGINT, SIGTERM or SIGHUP), it stops the
 session's process group, and records only whether the token was there: RUN_DIR/token-seen (in the
@@ -47,11 +48,8 @@ VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY")
 
 
 def _token():
-    """(the variable, the token): from the environment, else the first line of stdin, which
-    may name its variable (ANTHROPIC_API_KEY=VALUE; check.sh passes an API key so)."""
-    for var in VARS:
-        if os.environ.get(var):
-            return var, os.environ[var]
+    """(the variable, the token): from the first line of stdin, which may name its variable
+    (ANTHROPIC_API_KEY=VALUE, as pasted at check.sh's prompt); never from the environment."""
     line = sys.stdin.readline().strip()
     for var in VARS:
         if line.startswith(var + "="):
@@ -149,8 +147,7 @@ def main(argv):
     cmd = argv[argv.index("--") + 1:]
     name, token = _token()
     if not token:
-        sys.exit("no token: paste the one `claude setup-token` "
-                 "prints")
+        sys.exit("no token: paste the one `claude setup-token` prints at check.sh's prompt")
     env = {"HOME": home, "PATH": os.environ["PATH"], "USER": os.environ.get("USER", ""),
            "LOGNAME": os.environ.get("LOGNAME", ""), "LANG": os.environ.get("LANG", "en_US.UTF-8"),
            "TERM": "dumb", "SHELL": "/bin/bash", "TMPDIR": os.path.join(home, "tmp"),

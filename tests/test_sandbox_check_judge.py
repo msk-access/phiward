@@ -1402,3 +1402,372 @@ def test_a_second_signal_during_the_cleanup_does_not_cut_it_short(tmp_path):
     p.send_signal(signal.SIGINT)
     p.wait(timeout=30)
     assert not h.exists() and not j.exists()
+
+
+PLACES = JUDGE.parent / "places.sh"
+SRC = Path(__file__).resolve().parents[1] / "src"
+PLACES_DRIVER = '. "$1"; shift; "$@"\n'
+
+
+def _places(tmp_path, *args, env=None):
+    """Run one of places.sh's checks (check.sh sources it) on made-up folders: nothing is built."""
+    import subprocess
+    driver = tmp_path / "places-driver.sh"
+    driver.write_text(PLACES_DRIVER)
+    return subprocess.run(["sh", str(driver), str(PLACES)] + [str(a) for a in args],
+                          capture_output=True, text=True, timeout=60,
+                          env=env or dict(os.environ))
+
+
+def _made_up_home(tmp_path):
+    """A made-up home folder with a base below it (as on a cluster: ~/phiward-sbx/run)."""
+    home = (tmp_path / "home" / "fake-user").resolve()
+    base = home / "phiward-sbx" / "run"
+    base.mkdir(parents=True)
+    return home, base
+
+
+def test_a_base_below_a_clean_home_passes(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", base, f"{home}\n{home}")
+    assert r.returncode == 0, r.stderr
+
+
+def test_the_home_folder_itself_is_refused_as_the_base(tmp_path):
+    home, _base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", home, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+
+
+@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".claude", ".git",
+                                  ".mcp.json", ".phiward.toml", ".agent-guards.toml"])
+@pytest.mark.parametrize("where", ["home", "between", "base"])
+def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_path, name, where):
+    """Claude Code reads CLAUDE.md, CLAUDE.local.md and .claude/rules from every folder above the
+    session's, and phiward the settings of every .claude or .git above a call: a real one there
+    would be read into the test session."""
+    home, base = _made_up_home(tmp_path)
+    at = {"home": home, "between": base.parent, "base": base}[where]
+    if name in (".claude", ".git"):
+        (at / name).mkdir()
+    else:
+        (at / name).write_text("made up\n")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+    assert f"{at}/{name}" in r.stderr
+
+
+def test_another_spelling_of_the_home_folder_is_refused(tmp_path):
+    """The home folder is known by identity, not by its spelling (macOS folds letter case)."""
+    home, _base = _made_up_home(tmp_path)
+    other = home.parent / home.name.upper()
+    if not other.exists():
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", other, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+    t = home / "phiward-sbx" / "run" / "tools"
+    t.mkdir()
+    r = _places(tmp_path, "sbx_tools_place", t, home.parent / "FAKE-USER" / "phiward-sbx" / "run")
+    assert r.returncode == 2
+
+
+def test_a_link_by_such_a_name_is_refused_too(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    (home / ".claude").symlink_to(tmp_path / "nowhere")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+@pytest.mark.parametrize("tools", ["relative/bin", "/no/such/folder-FAKE"])
+def test_sbx_tools_must_be_an_existing_absolute_folder(tmp_path, tools):
+    _home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_tools_place", tools, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+@pytest.mark.parametrize("rel", [".", "phiward-sbx-FAKE/bin", ".."])
+def test_sbx_tools_in_or_above_the_base_is_refused(tmp_path, rel):
+    """The check's home and judge's folder are made in SBX_BASE: SBX_TOOLS may not be there, or
+    hold them."""
+    _home, base = _made_up_home(tmp_path)
+    t = base / rel
+    t.mkdir(parents=True, exist_ok=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+def _socat(folder):
+    """A made-up socat (it is never run)."""
+    f = folder / "socat"
+    f.write_text("#!/bin/sh\nexit 1\n")
+    f.chmod(0o755)
+    return f
+
+
+def test_sbx_tools_next_to_the_base_is_placed(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    _socat(t)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == str(t)
+
+
+@pytest.mark.parametrize("extra", ["bwrap", "git", "sh", ".hidden", "socat.d"])
+def test_sbx_tools_holds_only_socat(tmp_path, extra):
+    """Any other name could shadow a program the sandbox or the check runs (bwrap, git, sh)."""
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    _socat(t)
+    (t / extra).write_text("made up\n")
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS may hold only socat" in r.stderr
+
+
+def test_sbx_tools_without_socat_is_refused(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS holds no socat" in r.stderr
+
+
+def _phiward_env(tmp_path):
+    """The installed phiward of the check, made up: src on PYTHONPATH, a made-up home."""
+    home = tmp_path / "check-home"
+    (home / "tmp").mkdir(parents=True, exist_ok=True)
+    return home, dict(os.environ, HOME=str(home), TMPDIR=str(home / "tmp"), PYTHONPATH=str(SRC))
+
+
+def _tools_safe(tmp_path, tools):
+    """The check runs it before the build: the source tree's phiward, by an isolated Python
+    (-I, so no PYTHONPATH), with the check's home."""
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_tools_safe", sys.executable, SRC, home, tools, env=env)
+
+
+@pytest.fixture
+def outside_temp():
+    """A made-up folder outside every temp folder phiward knows. The tests' own folders are in
+    /tmp, which every account may write (sticky, mode 1777) and which phiward counts as a temp
+    folder, so a PATH folder or a wheel there is refused for that alone. On macOS: the per-user
+    temp folder, which the check's run does not count as one (its TMPDIR is the made-up home's).
+    Where TMPDIR is /tmp (Linux): a new folder in your home folder. Made 0700, removed after."""
+    import shutil
+    import tempfile
+    base = os.environ.get("TMPDIR", "")
+    tmp = os.path.realpath("/tmp")
+    if not base or os.path.realpath(base) == tmp or os.path.realpath(base).startswith(tmp + "/"):
+        base = str(Path.home())
+    d = Path(tempfile.mkdtemp(prefix="phiward-sbx-tools-", dir=base)).resolve()
+    d.chmod(0o700)
+    yield d
+    for p in [d] + list(d.rglob("*")):
+        if p.is_dir():
+            p.chmod(0o755)
+    shutil.rmtree(d)
+
+
+@pytest.mark.parametrize("bad", ["tools", "parent"])
+def test_sbx_tools_writable_by_group_is_refused(tmp_path, outside_temp, bad):
+    """phiward's own rule for a PATH folder (service.path_entries, selfcheck.safe_path): the
+    folder and every folder above it are the user's or root's, and no group can write them."""
+    t = outside_temp / "share" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t)
+    (t if bad == "tools" else t.parent).chmod(0o775)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr and "writable" in r.stderr
+
+
+def test_sbx_tools_in_a_temp_folder_is_refused(tmp_path):
+    """The session may write the temp folders: a program planted there would run as a tool."""
+    home, _env = _phiward_env(tmp_path)
+    t = home / "tmp" / "tools"
+    t.mkdir(parents=True)
+    _socat(t)
+    r = _tools_safe(tmp_path, t.resolve())
+    assert r.returncode == 2
+    assert "SBX_TOOLS is not a safe PATH folder (a temp folder" in r.stderr
+
+
+def test_a_safe_sbx_tools_passes(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_socat_others_can_write_is_refused(tmp_path, outside_temp):
+    """The folder is safe, the file in it is not (umask 002 on a cluster): another account could
+    replace what Claude Code's sandbox runs."""
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t).chmod(0o666)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
+
+
+def test_a_socat_linked_into_a_folder_others_can_write_is_refused(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    shared = outside_temp / "shared"
+    shared.mkdir()
+    real = _socat(shared)
+    shared.chmod(0o777)
+    (t / "socat").symlink_to(real)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
+
+
+@pytest.mark.parametrize("tools, want", [
+    ("", "/h/bin:/h/.local/bin:/usr/bin:/bin"),
+    ("/opt/FAKE-tools/bin", "/h/bin:/h/.local/bin:/opt/FAKE-tools/bin:/usr/bin:/bin")])
+def test_the_session_path_puts_sbx_tools_before_the_system_folders(tmp_path, tools, want):
+    r = _places(tmp_path, "session_path", "/h", tools, "/usr/bin:/bin")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == want
+
+
+@pytest.mark.parametrize("variant, canon", [("claude.md", "CLAUDE.md"), (".Claude", ".claude"),
+                                            ("agents.MD", "AGENTS.md"), (".Claude-link", ".claude")])
+def test_a_name_in_other_letter_case_is_refused_where_case_is_ignored(tmp_path, variant, canon):
+    """On a volume that ignores letter case (macOS), Claude Code finds claude.md as CLAUDE.md."""
+    home, base = _made_up_home(tmp_path)
+    if variant == ".Claude-link":
+        (home / ".Claude").symlink_to(tmp_path / "nowhere")  # a dangling link
+    elif variant == ".Claude":
+        (home / variant).mkdir()
+    else:
+        (home / variant).write_text("made up\n")
+    if not os.path.lexists(home / canon):
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+
+def test_the_passwd_home_is_found_for_this_account(tmp_path):
+    import pwd
+    r = _places(tmp_path, "sbx_passwd_home")
+    assert r.returncode == 0, r.stderr
+    assert os.path.samefile(r.stdout.rstrip("\n"), pwd.getpwuid(os.getuid()).pw_dir)
+
+
+def test_no_passwd_home_is_refused(tmp_path):
+    """When the account database names no home folder, the check cannot tell where yours is."""
+    import shutil
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    for tool in ("getent", "dscl"):
+        (fake / tool).write_text("#!/bin/sh\nexit 2\n")
+        (fake / tool).chmod(0o755)
+    for tool in ("id", "sh"):
+        (fake / tool).symlink_to(shutil.which(tool))
+    r = _places(tmp_path, "sbx_passwd_home", env=dict(os.environ, PATH=str(fake)))
+    assert r.returncode == 2
+    assert "home folder" in r.stderr
+
+
+def test_launch_takes_the_token_from_stdin_only(tmp_path):
+    """check.sh takes the token at its prompt only and passes it on stdin: a token variable in
+    launch.py's environment is not used (nor passed on)."""
+    import subprocess
+    import sys
+    home, run_dir, child, _pidfile, env = _setup_launch(tmp_path)
+    child.write_text(API_CHILD)
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = "FAKE-ENV-TOKEN"
+    r = subprocess.run([sys.executable, str(LAUNCH), str(home), str(run_dir), "30", "--",
+                        sys.executable, str(child)], input=f"ANTHROPIC_API_KEY={TOKEN}\n".encode(),
+                       env=env, timeout=60)
+    assert r.returncode == 0
+    assert (run_dir / "stream.jsonl").read_text().strip() == "api none"
+
+
+def _programs_safe(tmp_path, *progs):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_programs_safe", sys.executable, SRC, *progs, env=env)
+
+
+def test_a_claude_others_can_write_is_refused(tmp_path, outside_temp):
+    """claude gets the token, and uv builds what runs: found through your PATH, each must pass
+    phiward's rule (selfcheck.safe_path), as SBX_TOOLS does."""
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    d.chmod(0o775)
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 2
+    assert "claude" in r.stderr and "writable" in r.stderr
+
+
+def test_safe_programs_pass(tmp_path, outside_temp):
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 0, r.stderr
+
+
+def _wheel_check(tmp_path, wheel, digest):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_wheel_check", sys.executable, SRC, wheel, digest, env=env)
+
+
+def test_a_wheel_with_another_sha256_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o644)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"other").hexdigest())
+    assert r.returncode == 2
+    assert "sha256" in r.stderr
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_wheel_others_can_write_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o664)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 2
+    assert "writable" in r.stderr
+
+
+@pytest.mark.parametrize("digest", ["", "abc", "Z" * 64])
+def test_a_wheel_needs_its_sha256(tmp_path, digest):
+    w = tmp_path / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    r = _wheel_check(tmp_path, w, digest)
+    assert r.returncode == 2
+    assert "SBX_WHEEL_SHA256" in r.stderr
