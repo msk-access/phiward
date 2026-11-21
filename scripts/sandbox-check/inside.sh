@@ -21,11 +21,40 @@ if [ -n "$stub" ]; then
   ln -s /usr/bin/socat "$SBX_TOOLS/socat"  # root's: the one name SBX_TOOLS may hold
   export SBX_TOOLS
 fi
-{ sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
+check=/repo/scripts/sandbox-check/check.sh
+run_home=$HOME
+if [ -n "$stub" ]; then
+  # the check builds from git here (no SBX_SRC), so its git calls run too
+  cp -R /repo "$HOME/src-git"
+  git -C "$HOME/src-git" init -q
+  git -C "$HOME/src-git" add -A
+  git -C "$HOME/src-git" -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false commit -q -m src
+  unset SBX_SRC
+  check=$HOME/src-git/scripts/sandbox-check/check.sh
+  # a made-up home of yours as HOME, read only, whose files would each change the run if read
+  # (git: entries with no permissions, nothing exported, nothing seen; uv: an index that does
+  # not answer) or take a write (~/.cache): the check must read and write nothing of it
+  fake=$HOME/your-home
+  mkdir -p "$fake/.config/git" "$fake/.config/uv" "$fake/.cache"
+  printf '[tar]\n\tumask = 0777\n' > "$fake/.gitconfig"
+  echo '* export-ignore' > "$fake/.config/git/attributes"
+  echo '*' > "$fake/.config/git/ignore"
+  printf '[[index]]\nurl = "http://127.0.0.1:9/simple"\ndefault = true\n' > "$fake/.config/uv/uv.toml"
+  export UV_PYTHON_INSTALL_DIR="$(uv python dir)"  # where uv keeps its Pythons, named
+  chmod -R a-w "$fake"
+  fake_before=$(cd "$fake" && find . -exec ls -ld {} + | sort; find . -type f -exec cat {} +)
+  run_home=$fake
+fi
+{ HOME=$run_home sh "$check" $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
 code=$(cat /out/rc)
 [ -n "$stub" ] || exit "$code"
 
 status=0
+fake_after=$(cd "$fake" && find . -exec ls -ld {} + | sort; find . -type f -exec cat {} +)
+if [ "$fake_before" = "$fake_after" ]; then echo "== ok    nothing of the made-up home changed"
+else echo "== CHANGED the made-up home"; status=1; fi
+if [ "$code" = 1 ]; then echo "== ok    the check ran to its verdict"
+else echo "== EXIT $code: the check did not run to its verdict"; status=1; fi
 expect() {
   if grep -qxF -- "$1" /out/report.txt; then echo "== ok    $1"
   else echo "== MISSING $1"; status=1; fi
@@ -106,7 +135,7 @@ refused() {  # NAME TEXT: check.sh exited 2, said TEXT, and never started a sess
 refusal_run() {  # NAME BASE TOOLS: one check.sh --stub, its output in ~/out-NAME
   o=$HOME/out-$1
   mkdir -p -m 755 "$o"
-  SBX_BASE=$2 SBX_TOOLS=$3 SBX_OUT=$o sh /repo/scripts/sandbox-check/check.sh --stub > "$o/console.txt" 2>&1
+  SBX_SRC=/repo SBX_BASE=$2 SBX_TOOLS=$3 SBX_OUT=$o sh /repo/scripts/sandbox-check/check.sh --stub > "$o/console.txt" 2>&1
   echo $? > "$o/rc"
 }
 tools_case() {  # NAME: a base and a tools folder with a socat, both private
