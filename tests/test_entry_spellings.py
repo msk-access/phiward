@@ -9,6 +9,7 @@ import random
 import re
 import time
 import unicodedata
+from pathlib import Path
 
 import pytest
 
@@ -226,6 +227,15 @@ def test_a_rule_match_never_ends_or_starts_inside_a_number(line):
     assert not re.search(r"[0-9]", out), out
 
 
+@pytest.mark.parametrize("line, want", [
+    ("C–ABCDEF-L001", "<CMOID>"), ("Donor−7", "<DONOR>"), ("x P‐0001234‐T01 y", "x <SAMPLEID> y"),
+])
+def test_pack_rules_match_other_dashes_without_an_inventory(line, want):
+    s = Sanitizer(**_rules(("msk",)))
+    assert s.entries is None
+    assert s.clean(line) == want
+
+
 def test_a_hit_never_cuts_a_number():
     s = _one(["ABCDE12", "T_xyz9"], ("genomics",))
     assert re.fullmatch(r"(?:<[A-Z]+>)+", s.clean("ABCDE 12345")), s.clean("ABCDE 12345")
@@ -381,8 +391,13 @@ class _Before(Sanitizer):
             return WITHHELD
 
 
-def _rules(packs, patterns=()):
-    loaded = [load_pack(p) for p in packs]
+# the packs as they were before this change (a copy of develop's), for the reference: a change to
+# a pack can never weaken what the reference masks
+BEFORE_PACKS = Path(__file__).resolve().parent / "data" / "develop-packs"
+
+
+def _rules(packs, patterns=(), before=False):
+    loaded = [load_pack(str(BEFORE_PACKS / f"{p}.toml") if before else p) for p in packs]
     ids = [r for p in loaded for r in p.identifiers]
     ids += [parse_rule(v, "[sanitize] patterns") for v in patterns]
     ids = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in ids]
@@ -394,10 +409,11 @@ def _rules(packs, patterns=()):
 def _pair(names, packs, patterns=(), roots=(), remote=()):
     stop = {w.casefold() for w in STOP_WORDS}
     strings = sorted({s for n in names for s in inventory._strings_of(n, stop)})
-    rules = _rules(packs, patterns)
+    rules, old = _rules(packs, patterns), _rules(packs, patterns, before=True)
     if roots:
-        rules.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
-    pair = Sanitizer(entries=strings, **rules), _Before(strings=strings, **rules)
+        for r in (rules, old):
+            r.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
+    pair = Sanitizer(entries=strings, **rules), _Before(strings=strings, **old)
     for s in pair:
         s.first_rules += [(remote_root_regex(r), "<PROTECTED>") for r in remote]
     return pair
@@ -465,7 +481,8 @@ R9_CASES = ("AB123456-T xyz9", "AB123456-T_xyz9", "xx-abcdefg", "_lead_fake x", 
             "MRN77_Roe Ann.bam.1.vcf", "PT‐xyz90002", "C–PLE12345", "Donor–1,234,567",
             "ABCDE 12345", "SAM_PLE12:00‐C3", "lead/15–abc‐FAKE‐PT‐0001.bamFAKE x",
             "3\t9990001_2024‐a:b:c:d:e ", "PLE ١٢٣٤٥.1,234,567",
-            "fakept\tFAKE‐PT‐0001.bam9990001-ABC123−")
+            "fakept\tFAKE‐PT‐0001.bam9990001-ABC123−", "C-ABCDEF1_2,345,678",
+            "C-PLE12345_1,234,567")
 
 
 def _r9(packs, patterns, table, seeds):
@@ -622,6 +639,19 @@ def test_speed_within_the_targets():
           f"{l_new:.2f}s (before {l_old:.2f}s)")
     assert t_new <= 1.5 * t_old + 0.2, (t_new, t_old)
     assert l_new <= 1.5 * l_old + 0.2, (l_new, l_old)
+
+
+def test_a_long_line_with_many_hits_costs_little():
+    """At the 64 KiB cap, a line with a hit or a number every few characters: within 3x of the
+    masking before, or under 0.5 s."""
+    new, old = _pair(["FAKE-PT-00001"], ("genomics",))
+    for line in (("FAKE_PT_00001-" * 4700)[:65536], ("123456:" * 9400)[:65535] + "–"):
+        times = []
+        for s in (new, old):
+            t = time.perf_counter()
+            s.clean(line)
+            times.append(time.perf_counter() - t)
+        assert times[0] <= max(3 * times[1], 0.5), (line[:20], times)
 
 
 # --- R11: the cost in other text (measured) -------------------------------------------------------
