@@ -4,7 +4,8 @@
 # check.sh with SBX_BASE=/work, SBX_SRC=/repo and SBX_OUT=/out: check.sh keeps there only the
 # redacted report, streams and facts; the console output goes to /out/console.txt. It exits as
 # check.sh does. --stub runs in a cluster's shape instead: SBX_BASE in a folder below the home
-# folder (~/sbx/run) and SBX_TOOLS next to it (~/sbx/tools/bin).
+# folder (~/sbx/run) and SBX_TOOLS next to it (~/sbx/tools/bin), built from a git copy of the
+# source, with HOME a read-only made-up home that the check must leave untouched.
 # --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
 # nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), Mode B passes
 # (the wrapped MCP server starts in both modes), and the rest

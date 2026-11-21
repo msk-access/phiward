@@ -81,15 +81,6 @@ if why:
 ' "$2" "$4" || return 2
 }
 
-# sbx_git H ARGS: git before the check's own HOME is set, reading nothing of your home: no
-# ~/.gitconfig, no ~/.config/git (attributes: an export-ignore would drop a file from the build;
-# ignore: a change hidden from the note)
-sbx_git() {
-  _gh=$1; shift
-  env -u XDG_CONFIG_HOME HOME="$_gh" GIT_CONFIG_GLOBAL=/dev/null \
-    git -c core.attributesFile=/dev/null -c core.excludesFile=/dev/null "$@"
-}
-
 # session_path H TOOLS SYSPATH: the session's PATH, with TOOLS (when given) before the system
 session_path() {
   printf '%s\n' "$1/bin:$1/.local/bin${2:+:$2}:$3"

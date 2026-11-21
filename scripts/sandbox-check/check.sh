@@ -46,6 +46,14 @@
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
+# your home folder: one look here, before any program runs, and never again. Its path (for the
+# SBX_BASE check, with the passwd home) and where uv keeps its Pythons are kept; then HOME names
+# a folder that does not exist, and from the moment it is made the check's own home, so no
+# program of the check reads or writes anything of yours (no ~/.gitconfig, ~/.config, ~/.cache)
+real_home=${HOME:-}
+UV_PYTHON_INSTALL_DIR=${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$real_home/.local/share}/uv/python}
+export HOME=/nonexistent UV_PYTHON_INSTALL_DIR
+unset XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME
 stub=""
 if [ "${1:-}" = --stub ]; then stub=1; shift; fi
 case $(uname) in
@@ -83,9 +91,6 @@ if [ -n "$stub" ]; then
 else
   claude=${CLAUDE_BIN:-$(command -v claude)} || { echo "sandbox-check: needs claude on PATH" >&2; exit 2; }
 fi
-python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV UV_NO_CONFIG=1 "$uv" python find --python-preference only-managed 2>/dev/null)}
-[ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
-claude=$("$python" -I -S -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
 if [ $os = darwin ]; then
   managed="/Library/Application Support/ClaudeCode
 /Library/Managed Preferences/com.anthropic.claudecode.plist"
@@ -102,8 +107,14 @@ fi
 # name Claude Code or phiward read from a folder above the session's (places.sh), and never in a
 # shared temp folder
 . "$here/places.sh"
-# the home folder by passwd (what ssh and others use) and by $HOME, both resolved
-homes=$("$python" -I -S -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
+# the home folder by passwd (what ssh and others use; the shell's ~NAME) and by $HOME, as kept
+# above; sbx_base_check compares them by identity
+_u=$(id -un)
+pw_home=""
+case $_u in ""|*[!A-Za-z0-9._-]*) ;; *) eval "pw_home=~$_u" ;; esac
+case $pw_home in "~"*) pw_home="" ;; esac
+homes="$pw_home
+$real_home"
 if [ $os = darwin ]; then
   # not /private/tmp or the per-user temp folder: Claude Code's sandbox lets the session write
   # there, and the judge's folder must not be writable by it
@@ -142,6 +153,25 @@ trap cleanup EXIT
 trap 'stopped INT 130' INT
 trap 'stopped TERM 143' TERM
 trap 'stopped HUP 129' HUP
+H=$(mktemp -d "$sbx_base/phiward-sbx-XXXXXX")
+# the judge's folder: next to the home, outside the folders the session is given (its home, the
+# project, --add-dir); the stream, the facts, doctor's output and the report go there
+J=$(mktemp -d "$sbx_base/phiward-sbx-judge-XXXXXX")
+fail() { echo "sandbox-check: $1 failed:"; tail -20 "$2" 2>/dev/null; exit 2; }
+# the check's own home from here on, before uv, git or Python run
+mkdir -p "$H/src" "$H/dist" "$H/tmp"
+export HOME="$H" TMPDIR="$H/tmp" UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never
+python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV "$uv" python find --python-preference only-managed 2>/dev/null || true)}
+[ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
+claude=$("$python" -I -S -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
+if [ -n "$SBX_SRC" ]; then
+  cp -R "$SBX_SRC/." "$H/src"
+else
+  [ -z "$(git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
+  git -C "$repo" archive HEAD | tar -x -C "$H/src"
+fi
+# SBX_TOOLS, before the build: phiward's own rule, by the source tree's phiward
+if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
 if [ -z "$stub" ] && [ -z "$token" ]; then
   echo "In another terminal, run:  claude setup-token"
   printf "then paste the token here (it is not shown): "
@@ -153,26 +183,8 @@ if [ -z "$stub" ] && [ -z "$token" ]; then
   echo
   [ -n "$token" ] || { echo "sandbox-check: no token" >&2; exit 2; }
 fi
-
-H=$(mktemp -d "$sbx_base/phiward-sbx-XXXXXX")
-# the judge's folder: next to the home, outside the folders the session is given (its home, the
-# project, --add-dir); the stream, the facts, doctor's output and the report go there
-J=$(mktemp -d "$sbx_base/phiward-sbx-judge-XXXXXX")
-fail() { echo "sandbox-check: $1 failed:"; tail -20 "$2" 2>/dev/null; exit 2; }
-mkdir -p "$H/src" "$H/dist" "$H/tmp"
-if [ -n "$SBX_SRC" ]; then
-  cp -R "$SBX_SRC/." "$H/src"
-else
-  # git with the check's home: nothing of yours is read (places.sh)
-  [ -z "$(sbx_git "$H" -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
-  sbx_git "$H" -C "$repo" archive HEAD | tar -x -C "$H/src"
-fi
-# SBX_TOOLS, before the build: phiward's own rule, by the source tree's phiward
-if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
 echo "building in $H ..."
-# the build reads no uv config of yours and writes no cache of yours
-env HOME="$H" UV_NO_CONFIG=1 UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never \
-  "$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
+"$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
 wheel=$(ls "$H"/dist/*.whl)
 pybase=$(cd "$(dirname "$("$python" -I -S -c 'import sys; print(sys.executable)')")/.." && pwd -P)
 cp -R "$pybase" "$H/py"
