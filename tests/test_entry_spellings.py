@@ -241,11 +241,31 @@ def _nfkc_only(text):
     return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
 
 
+def _old_trie_regex(words):
+    """The trie regex as it was built before this change."""
+    trie = {}
+    for w in words:
+        node = trie
+        for ch in w:
+            node = node.setdefault(ch, {})
+        node[""] = {}
+
+    def emit(node):
+        ends = "" in node
+        alts = [re.escape(ch) + emit(sub) for ch, sub in sorted(node.items()) if ch]
+        if not alts:
+            return ""
+        body = alts[0] if len(alts) == 1 else "(?:" + "|".join(alts) + ")"
+        return "(?:" + body + ")?" if ends else body
+
+    return emit(trie)
+
+
 class _Before(Sanitizer):
     def __init__(self, *a, strings=(), **k):
         super().__init__(*a, **k)
         words = sorted(set(strings))
-        self.old = re.compile(inventory._trie_regex(words), re.IGNORECASE) if words else None
+        self.old = re.compile(_old_trie_regex(words), re.IGNORECASE) if words else None
 
     def _apply(self, rules, line):
         for rx, repl in rules:

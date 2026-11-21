@@ -175,7 +175,13 @@ def _trie_regex(words: Iterable[str]) -> str:
 
     def emit(node: Dict[str, dict]) -> str:
         ends = "" in node
-        alts = [re.escape(ch) + emit(sub) for ch, sub in sorted(node.items()) if ch]
+        subs = [(ch, sub) for ch, sub in sorted(node.items()) if ch]
+        if len(subs) > 1 and all(sub == {"": {}} for _ch, sub in subs):
+            # one character that ends every word here: one class (`[0-9]` for the last digit
+            # of numbered names), so a long list compiles in less time; it matches the same
+            alts = ["[" + "".join(re.escape(ch) for ch, _sub in subs) + "]"]
+        else:
+            alts = [re.escape(ch) + emit(sub) for ch, sub in subs]
         if not alts:
             return ""
         body = alts[0] if len(alts) == 1 else "(?:" + "|".join(alts) + ")"
@@ -196,7 +202,8 @@ def _glued(s: str) -> Optional[str]:
     digits with a letter, and no separator at either end (such a string is matched as written,
     so its separators stay masked)."""
     key = _SEP_RUN.sub("", s)
-    if sum(c.isalnum() for c in key) < 5 or not any(c.isalpha() for c in key):
+    alnum = len(key) if key.isalnum() else sum(c.isalnum() for c in key)
+    if alnum < 5 or not any(c.isalpha() for c in key):
         return None
     if _SEP_RUN.match(s[0]) or _SEP_RUN.match(s[-1]):
         return None
@@ -310,9 +317,13 @@ def matcher(strings: Iterable[str], stop: Iterable[str] = (),
     # every piece of 5 or more characters of an `inside` word, so a key is looked up in a set
     pieces = {w[i:j] for w in parts for i in range(len(w)) for j in range(i + 5, len(w) + 1)}
     pieces.update(stops)
+    keys: Dict[str, Optional[str]] = {}
+
     def key_of(w: str) -> Optional[str]:
-        k = _glued(w)
-        return None if k is None or k.casefold() in pieces else k
+        if w not in keys:
+            k = _glued(w)
+            keys[w] = None if k is None or k.casefold() in pieces else k
+        return keys[w]
 
     folded = [w if w.isascii() else ascii_digits(w) for w in words]  # as `spans` reads a line
     present = set(folded)
