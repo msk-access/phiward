@@ -290,7 +290,7 @@ def test_claude_gets_settings_that_keep_its_sandbox_on(tree):
 
 
 @below9
-def test_a_native_claude_with_its_own_filter_starts_without_sandbox_runtime(tree):
+def test_a_native_claude_whose_filter_works_starts(tree):
     native(tree)
     code, out = launch(tree, "", "claude", extra_env=on_path(tree), program=[])
     assert code == 0 and argv_of(out), out
@@ -340,7 +340,8 @@ def test_the_users_own_settings_flag_is_refused(tree, given):
 @below9
 @pytest.mark.parametrize("sub,word", [(["mcp", "list"], "mcp"), (["doctor"], "doctor"),
                                       (["update"], "update"), (["ultrareview"], "ultrareview"),
-                                      (["sandbox"], "sandbox"),
+                                      (["sandbox"], "sandbox"), (["logs"], "logs"),
+                                      (["upgrade"], "upgrade"),
                                       (["--debug", "mcp", "list"], "mcp"),
                                       (["--model", "opus", "doctor"], "doctor")])
 def test_a_claude_subcommand_is_refused(tree, sub, word):
@@ -398,3 +399,23 @@ def test_settings_that_say_what_launch_passes_are_passed_once(tree, form):
     argv = argv_of(out)
     assert argv[:2] == ["-p", "x"] and argv.count("--settings") == 1, argv
     assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
+
+
+@below9
+@pytest.mark.parametrize("args", [["init"], ["--model", "mcp", "explain"], ["-p", "fix", "mcp"],
+                                  ["tag"]])
+def test_words_that_are_not_commands_of_this_claude_start_as_a_prompt(tree, args):
+    # the commands are those the binary's own help lists: `init` and `tag` are not, and `mcp`
+    # after --model is the model's name, after a prompt a word of it
+    claude = native(tree)
+    code, out = launch(tree, "", "claude", program=["--", str(claude), *args])
+    assert code == 0 and argv_of(out)[:len(args)] == args, out
+
+
+@below9
+@pytest.mark.parametrize("help", ["", "Usage: claude\n\nno sections here\n"])
+def test_claude_does_not_start_when_its_help_cannot_be_read(tree, help):
+    claude = fake_native_claude(tree / "bin" / "claude", help=help)
+    code, out = launch(tree, "", "claude", program=["--", str(claude), "-p", "x"])
+    assert code == 126 and "ARGV" not in out, out
+    assert "--help" in out, out
