@@ -25,9 +25,19 @@
 #              is refused, as it would plant a git hook on a real machine.
 #   MODES      the modes to run (default "A B").
 #   SBX_BASE   where the home folder and the judge's folder are made: macOS /Users/Shared by
-#              default; on Linux required. Never under /tmp, /var/tmp, /dev/shm, the temp
-#              folder (TMPDIR) or your home folder (on a cluster: scratch), and never where the
-#              settings phiward installs let the session write (checked after the install).
+#              default; on Linux required. Never under /tmp, /var/tmp, /dev/shm or the temp
+#              folder (TMPDIR), never your home folder itself (a folder below it is fine), and
+#              never where the settings phiward installs let the session write (checked after
+#              the install). Refused when it or a folder above it holds CLAUDE.md,
+#              CLAUDE.local.md, .claude, .git, .mcp.json, .phiward.toml or .agent-guards.toml:
+#              Claude Code or phiward would read it into the test (places.sh). On a cluster: a folder of its
+#              own below your home folder (~/phiward-sbx/run), with those moved away from ~.
+#   SBX_TOOLS  a folder of tools the session needs (socat on a cluster), put on its PATH after
+#              its own bin folders, before the system folders. An absolute, existing folder,
+#              outside SBX_BASE, outside what the session may write, and kept by phiward's own
+#              rule for a PATH folder (yours or root's, it and every folder above it, up to your
+#              home folder when it is inside it, writable by no group or other account):
+#              refused otherwise. Unset: the system folders only.
 #   SBX_SRC    a source tree to build instead of `git archive HEAD` (the container has no .git).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.

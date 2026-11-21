@@ -5,16 +5,28 @@
 # the names Claude Code or phiward pick up from a folder above the session's: Claude Code reads
 # CLAUDE.md and CLAUDE.local.md in every parent, .claude/rules in every parent, .claude/skills and
 # the nearest .claude's settings; phiward reads the settings (and .mcp.json) of every .claude or
-# .git above a call, and .phiward.toml above a copy's input
-SBX_PICKED_UP="CLAUDE.md CLAUDE.local.md .claude .git .mcp.json .phiward.toml"
+# .git above a call, and its repository config (.phiward.toml, the old .agent-guards.toml) above
+# the folder it runs in
+SBX_PICKED_UP="CLAUDE.md CLAUDE.local.md .claude .git .mcp.json .phiward.toml .agent-guards.toml"
+
+# _at_or_below A B: A is B or inside it, by identity (a folder has more than one spelling: macOS
+# folds letter case, /System/Volumes/Data)
+_at_or_below() {
+  _a=$1
+  while :; do
+    [ "$_a" -ef "$2" ] && return 0
+    [ "$_a" = / ] && return 1
+    _a=$(dirname "$_a")
+  done
+}
 
 # sbx_base_check BASE HOMES: BASE (a real path) is not a home folder (HOMES: one per line), and no
 # folder from BASE up to / holds a name above, so nothing of your own setup is read into the test
 sbx_base_check() {
   _b=$1
   _bad=$(printf '%s\n' "$2" | while IFS= read -r _h; do
-    [ -n "$_h" ] && [ "$_h" != / ] && [ "$_b" = "$_h" ] && echo home
-  done)
+    [ -n "$_h" ] && [ "$_h" != / ] && [ "$_b" -ef "$_h" ] && echo home
+  done || true)
   [ -z "$_bad" ] || { echo "sandbox-check: SBX_BASE may not be your home folder; make a folder for it below it (docs/releasing.md)" >&2; return 2; }
   _d=$_b
   while :; do
@@ -35,8 +47,8 @@ sbx_base_check() {
 sbx_tools_place() {
   case $1 in /*) ;; *) echo "sandbox-check: SBX_TOOLS must be an absolute path" >&2; return 2 ;; esac
   _t=$(cd "$1" 2>/dev/null && pwd -P) || { echo "sandbox-check: SBX_TOOLS is not an existing folder" >&2; return 2; }
-  case $_t/ in "${2%/}"/*) echo "sandbox-check: SBX_TOOLS may not be in SBX_BASE (the check's home is made there)" >&2; return 2 ;; esac
-  case ${2%/}/ in "${_t%/}"/*) echo "sandbox-check: SBX_TOOLS may not hold SBX_BASE" >&2; return 2 ;; esac
+  if _at_or_below "$_t" "$2"; then echo "sandbox-check: SBX_TOOLS may not be in SBX_BASE (the check's home is made there)" >&2; return 2; fi
+  if _at_or_below "$2" "$_t"; then echo "sandbox-check: SBX_TOOLS may not hold SBX_BASE" >&2; return 2; fi
   printf '%s\n' "$_t"
 }
 

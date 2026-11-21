@@ -65,6 +65,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   after, and with `REMOTE` push, run and pull through the shared connection), reason classes
   per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
   every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+  `SBX_BASE` may be a folder below your home folder (not the home folder itself), and is
+  refused when it or a folder above it holds `CLAUDE.md`, `CLAUDE.local.md`, `.claude`,
+  `.git`, `.mcp.json`, `.phiward.toml` or `.agent-guards.toml`. `SBX_TOOLS` puts a folder of tools (socat on a
+  cluster) on the session's PATH, when it passes phiward's own rule for a PATH folder.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 

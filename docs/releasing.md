@@ -60,12 +60,28 @@ Then push `main`, `develop` and the tag.
    inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
    - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
      `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
-     folders; it may not be under /tmp, the temp folder or your home folder, nor anywhere the
-     settings phiward installs let the session write (the check refuses). On macOS it is
-     `/Users/Shared` by default; without that folder, set SBX_BASE to another folder outside
-     those (for example one you make for it on a second volume). On a cluster, run it as an
-     interactive job with SBX_BASE on scratch, for example `srun --pty --job-name auto-sbx-check
-     env SBX_BASE=/scratch/$USER sh scripts/sandbox-check/check.sh`.
+     folders; it may not be under /tmp or the temp folder, nor your home folder itself, nor
+     anywhere the settings phiward installs let the session write (the check refuses). A
+     folder below your home folder is fine. The check refuses SBX_BASE when it or any folder
+     above it, your home folder too, holds `CLAUDE.md`, `CLAUDE.local.md`, `.claude`, `.git`,
+     `.mcp.json`, `.phiward.toml` or `.agent-guards.toml`: Claude Code reads the first three
+     from every folder above the session's, and phiward the settings of every `.claude` or
+     `.git` above it and its repository config, so your own would be read into the test. Move them away while the check runs, or choose another
+     folder. On macOS it is `/Users/Shared` by default; without that folder, set SBX_BASE to
+     another folder outside those (for example one you make for it on a second volume).
+   - `SBX_TOOLS` names a folder of tools the session needs that the system lacks (socat on a
+     cluster). The check puts it on the session's PATH after its own bin folders, before the
+     system folders. It must be an absolute folder outside SBX_BASE and outside what the session
+     may write, and pass phiward's own rule for a PATH folder: it and every folder above it (up
+     to your home folder, when it is inside it) are yours or root's, and no group or other
+     account can write them. Else the check refuses.
+   - On a cluster, the check's folders go below your home folder, the one place no other account
+     can write a folder above it (scratch and group folders are writable by others, so phiward's
+     self-check refuses phiward installed there). Make `~/phiward-sbx/run` for SBX_BASE and
+     build socat into `~/phiward-sbx/tools/bin`, both `chmod go-w`, with your home folder
+     `chmod go-w ~`. Then run it as an interactive job, for example `srun --pty --job-name
+     auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run SBX_TOOLS=$HOME/phiward-sbx/tools/bin
+     sh scripts/sandbox-check/check.sh`.
    - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).

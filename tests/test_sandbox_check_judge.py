@@ -1100,7 +1100,7 @@ def test_the_home_folder_itself_is_refused_as_the_base(tmp_path):
 
 
 @pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude", ".git", ".mcp.json",
-                                  ".phiward.toml"])
+                                  ".phiward.toml", ".agent-guards.toml"])
 @pytest.mark.parametrize("where", ["home", "between", "base"])
 def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_path, name, where):
     """Claude Code reads CLAUDE.md, CLAUDE.local.md and .claude/rules from every folder above the
@@ -1115,6 +1115,21 @@ def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_pa
     r = _places(tmp_path, "sbx_base_check", base, str(home))
     assert r.returncode == 2
     assert f"{at}/{name}" in r.stderr
+
+
+def test_another_spelling_of_the_home_folder_is_refused(tmp_path):
+    """The home folder is known by identity, not by its spelling (macOS folds letter case)."""
+    home, _base = _made_up_home(tmp_path)
+    other = home.parent / home.name.upper()
+    if not other.exists():
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", other, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+    t = home / "phiward-sbx" / "run" / "tools"
+    t.mkdir()
+    r = _places(tmp_path, "sbx_tools_place", t, home.parent / "FAKE-USER" / "phiward-sbx" / "run")
+    assert r.returncode == 2
 
 
 def test_a_link_by_such_a_name_is_refused_too(tmp_path):
@@ -1207,7 +1222,7 @@ def test_sbx_tools_in_a_temp_folder_is_refused(tmp_path):
     t.mkdir(parents=True)
     r = _tools_safe(tmp_path, t.resolve())
     assert r.returncode == 2
-    assert "SBX_TOOLS" in r.stderr
+    assert "SBX_TOOLS is not a safe PATH folder (a temp folder" in r.stderr
 
 
 def test_a_safe_sbx_tools_passes(tmp_path, outside_temp):
