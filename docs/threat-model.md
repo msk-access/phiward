@@ -95,8 +95,10 @@ protected root (or, on macOS, a pattern match), the hidden list, or the phiward 
 status file. Claude Code's sandbox also keeps its own settings files, `.mcp.json`, the project's
 `.git/config` and hooks, the working folder's own `.vscode` and `.idea`, and the shell startup
 files from being written. A nested `.vscode` or `.idea` (`sub/.vscode/tasks.json`) is not in
-that list; on macOS `install` adds it. Git's other control files are a known limit (see
-"Git's control files" below, which also covers the nested `.vscode`). Links, letter case, nested shells and child
+that list: VS Code and JetBrains read one only when you open that subfolder as a workspace or
+project, and a rule for every depth would deny `npm install` and `git pull` in every project.
+The hook asks before a file tool writes one; a shell command can. Git's other control files are
+a known limit (see "Git's control files" below). Links, letter case, nested shells and child
 processes are covered for ASCII paths, because the kernel does the check. Exceptions (gaps 8, 9):
 other hard links to a protected file, other mounts of the same file system, and a root spelled
 `/System/Volumes/Data/...`. phiward does not confine the shell itself in Mode A. It checks that
@@ -529,13 +531,6 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     home folder (pre-commit, git dependencies of cargo, uv or npm). Claude Code's own worktrees are
     made outside it. Not covered by these rules: a `.git` folder renamed, changed and renamed back
     (a rule on `.git` itself would deny every write inside it).
-  - On macOS, with the same Claude Code, `install` also denies the shell writes to every
-    `.vscode` and `.idea` folder under your home folder (the folder itself too), and to the code
-    folders and settings files of every nested `.claude`. Claude Code's own sandbox covers only
-    the working folder's. The cost: `code --install-extension` from the agent's shell fails
-    (`~/.vscode/extensions` is code too), and so does a generator that writes `.vscode`; run
-    those yourself. On Linux a nested one is not covered by the sandbox; the hook still asks
-    before a file tool writes one.
   - A wrapped MCP server's profile is the session's (Mode B, "Files that run later"), and keeps
     every `.git` folder of the project read-only as a whole too: on macOS also one made while it
     runs; on Linux those that exist when it starts.
@@ -1104,7 +1099,7 @@ run later" or to the macOS process model:
 | | Limit | What reduces it |
 |---|---|---|
 | <a id="l1"></a>L1 | Files that run later and are not in launch's list (`.husky/`, `.envrc`, `.devcontainer/`, `.tool-versions`, a `Makefile`) can be made or changed in the project; the exit report lists them. | The rule above. |
-| <a id="l2"></a>L2 | Linux: a name of the list that is missing at the start can be made and written in the session: `.cursor`, `.gemini`, `.codex`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron` at the top, and any of them, `.claude`, `.vscode` and `.idea` too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk. A bind needs a file that exists. The exit report lists them. | The rule above. |
+| <a id="l2"></a>L2 | Linux: a name of the list that is missing at the start can be made and written in the session: `.cursor`, `.gemini`, `.codex`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron` at the top, and any of them, `.claude`, `.vscode` and `.idea` too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`) are not walked, and the names of the list inside them stay writable; the links in `.claude/worktrees` are not followed. | The rule above. |
 | <a id="l3"></a>L3 | `.claude/settings.local.json` is read-only, but a plain run outside `launch` still reads whatever was in it before the session. | Read it once before the first `launch`. |
 | <a id="l4"></a>L4 | macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also **read** `/private/tmp` (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's `RtmpXXXX`, Python temp files, other Claude Code sessions' scratch). | Do not run tools that load code from TMPDIR; keep protected data out of temp folders. |
 | <a id="l5"></a>L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |

@@ -18,6 +18,10 @@ uv run --with pytest --with pytest-timeout python -m pytest --timeout=300
 - `PHIWARD_CHECK_SKIPS=1` (CI) fails the run on a skip not listed in
   `expected_skips_<platform>.txt`; `PHIWARD_WRITE_SKIPS=FILE` writes this run's skips.
 - Linux in Docker, two Python versions and two layouts: `docs/releasing.md`.
+- The renv test of test_v2_runs_later needs `Rscript`, renv and bubblewrap, so it skips in CI
+  and in `scripts/linux-check`. Run it in a Linux container that
+  has them (Ubuntu 24.04: `apt-get install python3-venv bubblewrap r-base-core r-cran-renv`),
+  with `PHIWARD_REQUIRE_CONFINE=1`, before a change to launch's list ships.
 
 ## Where a feature is tested
 

@@ -211,10 +211,8 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     pat_read, pat_write = pattern_sandbox(list(cfg.patterns), home) if wild else ([], [])
     # git's control files at any depth below the home folder (a submodule's config, a
     # worktree's commondir, hooks): Claude Code runs git outside its sandbox, so the shell must
-    # not write what git then runs; and a nested `.vscode`, `.idea` or `.claude` code place,
-    # which Claude Code's sandbox denies only in the working folder itself. macOS only:
-    # elsewhere the sandbox has no wildcard denyWrite
-    git_write = list(claude_settings.GIT_CONTROL_GLOBS + claude_settings.NESTED_CODE_GLOBS) if (
+    # not write what git then runs. macOS only: elsewhere the sandbox has no wildcard denyWrite
+    git_write = list(claude_settings.GIT_CONTROL_GLOBS) if (
         wild and sys.platform == "darwin") else []
     entry: Dict[str, Any] = {"type": "command", "command": hook_cmd}
     note: Dict[str, Any] = {"type": "command", "command": note_cmd}

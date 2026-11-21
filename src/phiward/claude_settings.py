@@ -901,14 +901,11 @@ RUNS_LATER_FILES = (".mcp.json", ".gitmodules", ".ripgreprc", ".Rprofile", ".Ren
 # `claude_place`, so `.claude/worktrees` stays writable) and `.mcp.json` (asked as Claude's own)
 WORKSPACE_CODE_DIRS = tuple(d for d in RUNS_LATER_DIRS if d != ".claude")
 WORKSPACE_CODE_FILES = tuple(f for f in RUNS_LATER_FILES if f != ".mcp.json")
-# Claude Code's sandbox denies the working folder's own `.vscode` and `.idea` to the shell, not
-# a nested one (`sub/.vscode/tasks.json`). On macOS (wildcards from VERSION_PATTERNS) install
-# denies them at any depth under the home folder, the folder itself too (no rename and
-# replace), and the code places and settings of a nested `.claude`
+# the editors' folders. Claude Code's sandbox denies the working folder's own to the shell, not a
+# nested one (`sub/.vscode/tasks.json`); VS Code and JetBrains read them only at a workspace or
+# project root, and a wildcard rule for them would deny `npm install` and `git pull` in every
+# project, so a nested one is left to the hook's question (`workspace_code`)
 EDITOR_DIRS = (".vscode", ".idea")
-NESTED_CODE_GLOBS = tuple(f"~/**/{d}{t}" for d in EDITOR_DIRS for t in ("", "/**")) + tuple(
-    f"~/**/.claude/{n}{t}" for n in CODE_DIRS for t in ("", "/**")) + tuple(
-    f"~/**/.claude/{n}" for n in SETTINGS_NAMES)
 # git's control files below any `.git` folder under the home folder (a submodule's config, a
 # worktree's commondir, hooks): git runs what they name, and Claude Code runs git outside its
 # sandbox. Anchored to the control files themselves, so a branch named `config` or `hooks/x`
@@ -973,7 +970,15 @@ def _too_wide(real: str, keep: Sequence[str]) -> bool:
     return any((pathid.fold(k).rstrip("/") + "/").startswith(r) for k in keep if k)
 
 
-def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
+def _skipped(path: str, trees: Sequence[str]) -> bool:
+    """Whether the folder `path` is one of `trees` (folder names, or `a/b` for a name below
+    another: `renv/library`)."""
+    parts = path.rstrip("/").split("/")
+    return any(parts[-len(t.split("/")):] == t.split("/") for t in trees)
+
+
+def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = "",
+               skip: Sequence[str] = ()
                ) -> "Tuple[List[Tuple[str, str]], List[Tuple[str, str, str]]]":
     """The code roots below `starts` ([(a real code folder, how deep to walk or None, how it is
     named)]): each start, and where every link inside one leads, a linked folder walked in turn
@@ -981,7 +986,7 @@ def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
     there)], [(why, real path, link)] for `doctor`: "tree" a tree past TREE_WALK, "total" one not
     walked once LINK_WALK was passed (both still code as a whole; links deep in them not
     followed), "wide" a target that is or holds the home or user config folder, not taken as
-    code)."""
+    code). Folders named in `skip` (`_skipped`) are not walked."""
     roots: List[Tuple[str, str]] = []
     notes: List[Tuple[str, str, str]] = []
     keep = [os.path.realpath(home)] + ([os.path.realpath(user_dir(home))] if home else [])
@@ -1024,7 +1029,8 @@ def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
                             done.add(real)
                             if not _too_wide(real, keep):
                                 roots.append((real, e.path))  # a file, or nothing yet
-                    elif (limit is None or depth < limit) and e.is_dir(follow_symlinks=False):
+                    elif (limit is None or depth < limit) and e.is_dir(follow_symlinks=False) \
+                            and not (skip and _skipped(e.path, skip)):
                         stack.append((e.path, depth + 1))
                 except OSError:
                     continue  # an entry that vanished, or cannot be read (/dev/fd)

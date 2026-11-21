@@ -379,8 +379,12 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # inside them lead, when that is a place the session writes
     dirs = "|".join(_ci_rx(n) for n in RUNS_LATER_DIRS)
     files = "|".join(_ci_rx(n) for n in RUNS_LATER_FILES)
-    ro.append(f'(regex #"^{_rx(project)}/(.*/)?({dirs})(/.*)?$")')
-    ro.append(f'(regex #"^{_rx(project)}/(.*/)?({files})$")')
+    # but not inside the trees of installed code (SKIP_TREES; `.claude/worktrees` stays read-only
+    # with `.claude`)
+    trees = "|".join(_rx(t) for t in SKIP_TREES if t.split("/")[0] not in RUNS_LATER_DIRS)
+    inside = f'(require-not (regex #"^{_rx(project)}/(.*/)?({trees})/(.*/)?({dirs}|{files})(/.*)?$"))'
+    ro.append(f'(require-all (regex #"^{_rx(project)}/(.*/)?({dirs})(/.*)?$") {inside})')
+    ro.append(f'(require-all (regex #"^{_rx(project)}/(.*/)?({files})$") {inside})')
     linked = runs_later_links(runs_later_in(project), places, _real_home(env))
     ro += [f"(subpath {s(t)})" for t in confine._spellings(linked)]
     if server:
@@ -560,28 +564,50 @@ def _gitdir_of(dot_git: str) -> str:
     return os.path.normpath(os.path.join(os.path.dirname(dot_git), line[7:].strip()))
 
 
-def runs_later_in(project: str, limit: int = 50000) -> List[str]:
+# trees of installed or built code, which runs anyway and is not what an editor or agent tool
+# reads as a project's settings: the walks for files that run later (runs_later_in and the link
+# walk) do not enter them, and on macOS the names of the list inside them stay writable
+# (`npm install` unpacks packages that ship a `.vscode`). `.claude/worktrees` is read-only with
+# `.claude` as a whole; only its links are not followed
+SKIP_TREES = ("node_modules", ".venv", "venv", "site-packages", "renv/library", ".tox", "target",
+              ".git", "__pycache__", ".mypy_cache", ".claude/worktrees")
+RUNS_LATER_WALK = 50000  # entries runs_later_in looks at, past SKIP_TREES
+# where runs_later_in stopped at its bound, said at the start and again in the exit report
+WALK_NOTES: List[str] = []
+
+
+def runs_later_in(project: str, limit: Optional[int] = None) -> List[str]:
     """Every entry in the project at launch named in the one list (RUNS_LATER_DIRS,
     RUNS_LATER_FILES), at the top and nested, as names compare case-folded; a link is listed,
     never followed. Not walked: the inside of a listed folder (it is read-only as a whole) and
-    the folders `git_dirs_in` skips; the walk is bounded as that one is. Entries made during the
-    session are not in it (on Linux a stated limit; macOS covers them by name)."""
+    SKIP_TREES. Bounded at RUNS_LATER_WALK entries: where it stops is said (WALK_NOTES). Entries
+    made during the session are not in it (on Linux a stated limit; macOS covers them by
+    name)."""
+    limit = RUNS_LATER_WALK if limit is None else limit
     names = {n.casefold() for n in RUNS_LATER_DIRS + RUNS_LATER_FILES}
     out: List[str] = []
     seen = 0
     stack = [project]
-    skip = {"node_modules", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
-    while stack and seen < limit:
+    while stack:
         d = stack.pop()
         try:
             it = sorted(os.scandir(d), key=lambda e: e.name)
         except OSError:
             continue
         for e in it:
+            if seen >= limit:
+                note = (f"phiward launch: NOTE: the walk for files that run later stopped at "
+                        f"{limit} entries in {d}; below it and in the folders not yet walked, "
+                        "they are not read-only on Linux, and links in them are not followed")
+                if note not in WALK_NOTES:
+                    WALK_NOTES.append(note)
+                    sys.stderr.write(note + "\n")
+                return out
             seen += 1
             if e.name.casefold() in names:
                 out.append(e.path)
-            elif e.is_dir(follow_symlinks=False) and e.name not in skip and e.name != ".git":
+            elif e.is_dir(follow_symlinks=False) and not claude_settings._skipped(e.path,
+                                                                                 SKIP_TREES):
                 stack.append(e.path)
     return out
 
@@ -613,7 +639,7 @@ def runs_later_links(entries: Sequence[str], places: Sequence[str], home: str) -
                 judge(real, e)  # a file, or nothing yet
         elif os.path.isdir(e):
             starts.append((os.path.realpath(e), None, ""))
-    roots, notes = claude_settings._code_walk(starts, home)
+    roots, notes = claude_settings._code_walk(starts, home, SKIP_TREES)
     for why, real, via in notes:
         what = {"wide": "leads to a folder too wide to make read-only"}.get(
             why, f"has more entries than launch walks for links ({claude_settings.TREE_WALK} "
@@ -1670,7 +1696,7 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     git_after = _git_snapshot(project) if sys.platform.startswith("linux") else {}
     run.git = sorted(k for k in set(git_before) | set(git_after)
                      if git_before.get(k) != git_after.get(k))
-    for line in _git_lines(run.git):
+    for line in _git_lines(run.git) + WALK_NOTES:
         run.say(line)
     return code
 

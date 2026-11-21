@@ -238,9 +238,9 @@ def test_a_walk_that_stops_says_where(tree):
     code, out = _launch(tree, "print('RAN')",
                         pre="from phiward import wholetool\nwholetool.RUNS_LATER_WALK = 5")
     assert "RAN" in out, out
-    start, report = out.split("RAN", 1)
-    for part in (start, report):
-        assert "stopped" in part and str(repo) in part, out
+    # once at the start, once in the exit report (stdout and stderr are read apart here)
+    note = f"stopped at 5 entries in {repo}"
+    assert out.count(note) == 2, out
 
 
 # --- 4. the wrapped server on Linux: the editor folders and files too -----------------------------

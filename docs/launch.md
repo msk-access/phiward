@@ -174,9 +174,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
   inside `launch`. A folder that a link in them leads to (`.claude/skills -> ../.agents/skills`)
   is read-only too; `launch` refuses to start when such a link leads to a folder that holds the
   project, to one that does not exist (Linux), or when one of these folders has more entries than
-  it walks for links (50,000 in one tree). On macOS a package that ships a `.vscode` or `.idea`
-  folder cannot be unpacked inside the project (`npm install`), since every one at any depth is
-  read-only. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
+  it walks for links (50,000 in one tree; it names the folder). Trees of installed code
+  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`) are not
+  walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
+  the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
   `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work inside it (they write
   `renv/library`, which stays writable).
 - **Git control files are read-only** for the repositories found at the start, so `git remote

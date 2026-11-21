@@ -117,11 +117,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `--worktree` and `/loop` durable tasks do not work inside it, and `renv::init()` runs once
   outside it. A wrapped server on Linux can no longer write `.idea`, `.gitmodules` or
   `.ripgreprc` (they were read-only only on macOS). The hook also asks before a file tool writes
-  `.cursor`, `.gemini`, `.codex`, `.Rprofile` or `.Renviron`, and the exit report lists them, and
-  `.tool-versions`, at any depth.
-- On macOS with Claude Code 2.1.236 or newer, `install` denies the shell writes to every `.vscode`
-  and `.idea` folder under your home folder and to the code folders and settings of every nested
-  `.claude` (Claude Code's sandbox denies only the working folder's own).
+  `.cursor`, `.gemini`, `.codex`, `.Rprofile` or `.Renviron` anywhere in a project (in the modes
+  that do not prompt, it refuses), and the exit report lists them, and `.tool-versions`, at any
+  depth. Files in `.cursor/rules/` are now listed as settings, not as instructions for models.
+  Trees of installed code (`node_modules`, `.venv`, `site-packages`, `renv/library`, `target` and
+  similar) are left writable, and `.claude/worktrees` is not walked for links; where the walk
+  stops at its bound, `launch` says so at the start and in the exit report.
 - `[network] limit`: `install` replaces `sandbox.network.allowedDomains` in your user settings
   with exactly `allowed_domains` and prints each host it removes (it used to keep the hosts
   already there). `doctor` warns about each level (managed, user, project) whose
