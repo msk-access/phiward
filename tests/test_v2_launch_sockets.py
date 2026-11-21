@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from helpers import (CONFINE_WHY, fake_filter, fake_js_claude, fake_native_claude, filter_in_home,
-                     landlock_abi, ready_line)
+from helpers import (CONFINE_WHY, fake_native_claude, filter_in_home, landlock_abi, ready_line,
+                     tool_py)
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -214,42 +214,36 @@ def test_the_helper_stops_when_a_name_service_folder_cannot_be_opened(tmp_path):
 
 # --- below ABI 9: --tool claude needs Claude Code's filter, and settings that keep it ----------
 
-def js_claude(tree):
-    """A made-up JavaScript build of Claude Code (tree/js/claude), run as launch would run it."""
-    return ["--", str(fake_js_claude(tree / "js" / "claude")), "-c"]
-
-
 @below9
 def test_claude_starts_when_its_filter_blocks_unix_sockets(tree):
-    code, out = launch(tree, "", "claude", program=js_claude(tree) + ["print('RAN')"])
+    code, out = launch(tree, "", "claude", program=["--", tool_py(tree), "-c", "print('RAN')"])
     assert "RAN" in out, out
 
 
 @below9
-@pytest.mark.parametrize("how", ["missing", "no filter"])
-def test_claude_does_not_start_without_a_filter_that_works(tree, how):
-    f = filter_in_home(tree / "home")
-    if how == "missing":
-        f.unlink()
+@pytest.mark.parametrize("where", ["opt", "project", "cli.js"])
+def test_a_javascript_claude_is_refused(tree, where):
+    # a JavaScript build (or any node program) carries no filter of its own: below ABI 9 only
+    # the native build is accepted, wherever the program is
+    if where == "cli.js":
+        prog = tree / "js" / "cli.js"
+        prog.parent.mkdir()
+        prog.write_text(f"#!{PY}\nprint('STUB')\n")
     else:
-        fake_filter(f, works=False)
-    code, out = launch(tree, "", "claude", program=js_claude(tree) + ["print('RAN')"])
-    assert code == 126 and "RAN" not in out, out
-    assert "seccomp filter" in out, out
+        prog = (tree / "opt" if where == "opt" else tree / "repo" / "tools") / "npx"
+        prog.parent.mkdir()
+        prog.write_text("#!/usr/bin/env node\nconsole.log('STUB')\n")
+    prog.chmod(0o755)
+    code, out = launch(tree, "", "claude", program=["--", str(prog)])
+    assert code == 126 and "STUB" not in out, out
+    assert "native build" in out, out
 
 
 @below9
-def test_claude_does_not_start_with_a_filter_the_session_could_replace(tree):
-    # sandbox-runtime looks next to Claude Code's own files first: here, inside the project
-    tools = tree / "repo" / "tools"
-    tools.mkdir()
-    stub = tools / "claude"
-    stub.write_text("#!/usr/bin/env node\nprint('STUB')\n")
-    stub.chmod(0o755)
-    m = filter_in_home(tree / "home").parent.name
-    fake_filter(tools / "vendor" / "seccomp" / m / "apply-seccomp")
-    code, out = launch(tree, "", "claude", program=["--", str(stub)])
-    assert code == 126 and "STUB" not in out, out
+def test_claude_does_not_start_when_the_session_could_replace_it(tree):
+    claude = fake_native_claude(tree / "repo" / "tools" / "claude")
+    code, out = launch(tree, "", "claude", program=["--", str(claude)])
+    assert code == 126 and "ARGV" not in out, out
 
 
 @below9
@@ -342,16 +336,20 @@ def test_the_users_own_settings_flag_is_refused(tree, given):
     claude = native(tree)
     code, out = launch(tree, "", "claude", program=["--", str(claude), "-p", "x", *given])
     assert code == 126 and "ARGV" not in out, out
-    assert "user settings" in out, out
+    assert "phiward carryover" in out, out
 
 
 @below9
-@pytest.mark.parametrize("sub", [["mcp", "list"], ["doctor"], ["update"]])
-def test_a_claude_subcommand_is_refused(tree, sub):
+@pytest.mark.parametrize("sub,word", [(["mcp", "list"], "mcp"), (["doctor"], "doctor"),
+                                      (["update"], "update"), (["ultrareview"], "ultrareview"),
+                                      (["sandbox"], "sandbox"),
+                                      (["--debug", "mcp", "list"], "mcp"),
+                                      (["--model", "opus", "doctor"], "doctor")])
+def test_a_claude_subcommand_is_refused(tree, sub, word):
     claude = native(tree)
     code, out = launch(tree, "", "claude", program=["--", str(claude), *sub])
     assert code == 126 and "ARGV" not in out, out
-    assert "outside" in out and sub[0] in out, out
+    assert "outside" in out and word in out, out
 
 
 @below9
