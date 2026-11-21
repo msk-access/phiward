@@ -49,6 +49,7 @@ extra:
 
 nav:
   - Home: index.md
+  - Status: status.md
   - Use phiward:
       - Quick start: quickstart.md
       - Daily use: daily-use.md

@@ -122,7 +122,8 @@ NOT_DOCS = {"AGENTS.md", "CHANGELOG.md", "CLAUDE.md", "CLAUDE.local.md", "GEMINI
 # references to a part of a page by words, not by a quoted title: (the file that says it, its
 # words, the page, the text that page must hold)
 BY_WORDS = [
-    ("src/phiward/doctor.py", "known gap 9", "threat-model.md", "9. **Other names of a protected file**"),
+    ("src/phiward/doctor.py", "known gap 9", "threat-model.md",
+     '9. <a id="gap-9"></a>**Other names of a protected file**'),
     ("src/phiward/claude_settings.py", "git's control files", "threat-model.md", "**Git's control files.**"),
     ("src/phiward/wholetool.py", "files that run later", "threat-model.md", "**Files that run later.**"),
     ("src/phiward/install.py", "the agent-run first setup", "setup.md", "The agent-run setup takes"),
