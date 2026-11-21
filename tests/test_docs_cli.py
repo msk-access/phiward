@@ -176,3 +176,7 @@ def test_the_mcp_flags_on_the_page_are_the_parsers(quiet_home):
     parser = {f for flags in mcp_config._FLAGS.values() for f in flags}
     assert names - {"-h", "--help"} - set(mcp_config._FLAGS) == parser
     assert set(mcp_config._FLAGS) <= names
+    # and each subcommand's usage line names exactly the flags its parser takes
+    for ln in _page_usage(lines):
+        sub = ln.split("phiward mcp ", 1)[1].split()[0]
+        assert set(_FLAG.findall(ln.split("(")[0])) == set(mcp_config._FLAGS[sub]), ln

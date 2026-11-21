@@ -699,7 +699,7 @@ XDG_CONFIG_HOME or XDG_CACHE_HOME is set.
 
 
 def main(argv: List[str]) -> int:
-    if argv[:1] in (["-h"], ["--help"]):
+    if "-h" in argv or "--help" in argv:  # also after `claude`: help prints no wiring
         print(HELP, end="")
         return 0
     if argv[:1] != ["claude"]:

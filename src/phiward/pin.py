@@ -27,7 +27,8 @@ from phiward import config
 USAGE = ("Approve the programs of [broker] commands as they are now (the broker runs only "
          "approved ones),\nand pin the folders phiward found that hold copies of protected data; "
          "then restart the broker.\nRun it in your own terminal after you change a listed "
-         "program or add a script to your scripts folder.\nusage: phiward pin\n")
+         "program or add a script to your scripts folder.\nusage: phiward pin\n\n"
+         "Options:\n  -h, --help   show this help\n")
 
 
 def pins_path(env: Optional[dict] = None) -> str:

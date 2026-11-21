@@ -186,10 +186,10 @@ usage: phiward mcp wrap NAME...|--all [--yes|-y]
 | Command or option | What it does |
 |---|---|
 | `list` | Say which servers are wrapped, and the command for each that is not. |
-| `wrap NAME...` | Run these servers under `phiward launch`. |
+| `wrap NAME...` | Run these servers under `phiward launch`. It shows the change and asks first. |
 | `unwrap NAME...` | Run these servers as they were. Only in your own terminal. |
-| `--all` | With `wrap`: every server that can be wrapped. |
-| `--yes`, `-y` | Write without the question. |
+| `--all` | With `wrap`: every server. One that cannot be wrapped is left as it is. |
+| `--yes`, `-y` | Change the files without the question. |
 | `-h`, `--help` | Show the help. |
 
 ## Work with protected data
@@ -198,7 +198,7 @@ usage: phiward mcp wrap NAME...|--all [--yes|-y]
 
 Run a command with read access to protected data, and print its output masked.
 Guide: [Work with protected data](daily-use.md#work-with-protected-data-phiward-run).
-On HPC: [hpc.md](hpc.md#phiward-run---remote-host----cmd).
+On HPC: [hpc.md](hpc.md).
 
 ```text
 usage: phiward run [--write-to DIR]... [--net] [--names-from FILE]... [--table] -- CMD [ARG]...

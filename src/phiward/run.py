@@ -814,8 +814,9 @@ def _execute_remote(a: RunArgs, cwd: str, env: Dict[str, str], out: TextIO, cfg:
         return 3
 
 
-def main(argv: List[str], out: TextIO = sys.stdout) -> int:
+def main(argv: List[str], out: Optional[TextIO] = None) -> int:
     """The client: the request goes to the broker, which runs it outside the agent's sandbox."""
+    out = sys.stdout if out is None else out  # the stdout of the call, not of the import
     if argv[:1] in (["-h"], ["--help"]):
         out.write(HELP)
         return 0

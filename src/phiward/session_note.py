@@ -67,6 +67,7 @@ def _selfcheck_line() -> str:
 def main(argv: List[str]) -> int:
     if argv[:1] in (["-h"], ["--help"]):
         sys.stdout.write("usage: phiward session-note claude   (reads the hook payload on stdin)\n\n"
+                         "Options:\n  -h, --help   show this help\n\n"
                          + (__doc__ or ""))
         return 0
     try:

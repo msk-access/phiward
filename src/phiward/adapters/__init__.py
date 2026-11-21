@@ -50,6 +50,9 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
 
 HOOK_HELP = """usage: phiward hook claude
 
+Options:
+  -h, --help   show this help
+
 Read a Claude Code hook payload on stdin and reply as Claude Code expects. Claude Code runs it
 before each tool call; `phiward install claude` writes the wiring. It refuses a tool call that
 would read protected data. claude is the only tool for now.

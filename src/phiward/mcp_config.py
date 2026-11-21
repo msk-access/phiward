@@ -1402,7 +1402,18 @@ USAGE = ("Run your local MCP servers in phiward's kernel profile (wrap), or as t
          "usage: phiward mcp wrap NAME...|--all [--yes|-y]\n"
          "       phiward mcp unwrap NAME... [--yes|-y]   (only in your own terminal, even with "
          "--yes)\n"
-         "       phiward mcp list\n")
+         "       phiward mcp list\n"
+         "\n"
+         "Commands:\n"
+         "  list            say which servers are wrapped, and the command for each that is not\n"
+         "  wrap NAME...    run these servers under `phiward launch` (it shows the change, then\n"
+         "                  asks)\n"
+         "  unwrap NAME...  run these servers as they were (only in your own terminal)\n"
+         "\n"
+         "Options:\n"
+         "  --all           with wrap: every server (one that cannot be wrapped is left as it is)\n"
+         "  --yes, -y       change the files without the question\n"
+         "  -h, --help      show this help\n")
 _FLAGS = {"wrap": ("--yes", "-y", "--all"), "unwrap": ("--yes", "-y"), "list": ()}
 
 

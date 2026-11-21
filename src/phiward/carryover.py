@@ -1523,13 +1523,13 @@ Commands:
   status            show the size of each carry-over folder (sessions, trash, quarantine,
                     the trusted copy) and what it costs to delete it
   add PATH          put an instruction file or folder of your own into the trusted copy
-                    (--as NAME: the name it gets there)
   show              list the changes in quarantine, each with its ID and items
   accept ID [ITEM...]  keep a change from quarantine (all of it, or only the named items);
                     every later session starts with it
   reset             make the record again from the trusted copy, when it cannot be read
 
 Options:
+  --as NAME         with add: the name it gets in the trusted copy
   --tool NAME       the agent tool (default: claude)
   -h, --help        show this help
 
@@ -1544,7 +1544,7 @@ an agent tool.
 def main(argv: List[str]) -> int:
     from phiward import wholetool
     args = list(argv)
-    if args[:1] in (["-h"], ["--help"]):
+    if "-h" in args or "--help" in args:  # also after a subcommand: help changes nothing
         sys.stdout.write(HELP)
         return 0
     tool = "claude"
