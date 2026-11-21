@@ -82,7 +82,9 @@ def facts(platform="darwin", mode="A", **over):
          "remote": "no", "stub": "no", "protected_file": PROT,
          "loopback_127": "yes", "loopback_localhost": "yes", "loopback_v6": "yes",
          "loopback_mapped": "yes", "unix_renamed": "yes", "unix_late": "yes",
-         "runs_later_made": "none"}
+         "runs_later_made": "none", "loopback_127_after": "yes",
+         "loopback_localhost_after": "yes", "loopback_v6_after": "yes",
+         "loopback_mapped_after": "yes", "unix_renamed_after": "yes"}
     f.update(over)
     return f
 
@@ -756,7 +758,9 @@ def test_each_required_probe_missing_is_inconclusive(probe):
                                  "platform", "mode", "protected_file", "host_write_data",
                                  "host_write_phiward", "loopback_127", "loopback_localhost",
                                  "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
-                                 "runs_later_made"])
+                                 "runs_later_made", "loopback_127_after",
+                                 "loopback_localhost_after", "loopback_v6_after",
+                                 "loopback_mapped_after", "unix_renamed_after"])
 def test_each_required_fact_missing_is_inconclusive(key):
     f = facts()
     del f[key]
@@ -2087,6 +2091,8 @@ def test_probes_record_the_new_probes_with_fixed_words_only(tmp_path, netsrv):
     for name in RUNS_LATER + ["runs-later-node-modules"]:
         assert lines[name] == "OK", (name, text)
     assert (proj / ".claude" / "skills" / "x" / "SKILL.md").exists()
+    # a write to .Rprofile leaves a marker, so check.sh can see it on the host
+    assert (proj / ".Rprofile").read_text() != "# made up\n"
     assert lines["unix-renamed"] == "CONNECTED", text
     assert lines["unix-late"] == "CONNECTED", text
     assert "FAKE-PT" not in text
@@ -2122,3 +2128,99 @@ def test_the_cleanup_stops_the_made_up_servers(tmp_path):
     else:
         os.kill(pid, 9)
         pytest.fail("the made-up servers outlived the cleanup")
+
+
+# --- review round: the servers checked after the session, a hidden socket, the stub's
+# expectations from the kit and the host ---
+
+@pytest.mark.parametrize("name", LOOPBACK + ["unix-renamed"])
+def test_mode_b_a_server_that_died_during_the_session_is_inconclusive(name):
+    """The made-up servers are asked again from outside right after the session: a refusal
+    from a server that was gone proves nothing."""
+    verdict, report = run(mode="B", **{name.replace("-", "_") + "_after": "no"})
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any(name in ln and "after the session" in ln for ln in report), report
+
+
+@pytest.mark.parametrize("name", UNIX)
+def test_mode_b_a_hidden_unix_socket_is_inconclusive(name):
+    """The socket answered from outside, so "no such" inside is hidden, not refused."""
+    verdict, report = run(results=_set(LINUX, name, "REFUSED no-such"), mode="B",
+                          platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any(name in ln and "hidden" in ln for ln in report), report
+
+
+STUB_EXPECT = JUDGE.parent / "stub-expect.sh"
+OK_B = "\n".join(f"ok   {n}: refused (refused)" for n in LOOPBACK + UNIX) + "\nPASS Mode B\n"
+
+
+def _fail_lines(names):
+    return "".join(f"FAIL {n}: RESPONSE 222: the session reached this machine's loopback\n"
+                   if n.startswith("loopback") else
+                   f"FAIL {n}: CONNECTED: the session reached a unix socket outside\n"
+                   for n in names)
+
+
+def _stub_expect(tmp_path, report, proxy=False, unix=False, abi="6"):
+    """stub-expect.sh's check of Mode B's report, for a made-up kit (`proxy`: it has
+    netproxy.py; `unix`: its code has Landlock's RESOLVE_UNIX) on a host of Landlock `abi`."""
+    import subprocess
+    kit = tmp_path / "kit"
+    (kit / "src" / "phiward").mkdir(parents=True)
+    (kit / "src" / "phiward" / "wholetool.py").write_text(
+        "LANDLOCK_ACCESS_FS_RESOLVE_UNIX = 1 << 16\n" if unix else "X = 1\n")
+    if proxy:
+        (kit / "src" / "phiward" / "netproxy.py").write_text("X = 1\n")
+    rep = tmp_path / "mode-B.txt"
+    rep.write_text(report)
+    return subprocess.run(["sh", "-c", '. "$1"; sbx_newer_expect "$2" "$3" "$4"', "sh",
+                           str(STUB_EXPECT), str(rep), str(kit), abi],
+                          capture_output=True, text=True, timeout=60)
+
+
+def test_stub_a_kit_with_the_proxy_whose_loopback_gets_through_fails(tmp_path):
+    """The review's case: netproxy.py in the kit, but the profile lets loopback through."""
+    report = OK_B.replace("ok   loopback-127: refused (refused)\n", "") \
+        .replace("PASS Mode B", "FAIL Mode B") + _fail_lines(["loopback-127"])
+    r = _stub_expect(tmp_path, report, proxy=True)
+    assert r.returncode != 0, r.stdout
+
+
+def test_stub_a_kit_without_the_proxy_labels_loopback(tmp_path):
+    report = "\n".join(f"ok   {n}: refused (refused)" for n in UNIX) + "\n" + \
+        _fail_lines(LOOPBACK) + "FAIL Mode B\n"
+    r = _stub_expect(tmp_path, report, unix=True, abi="9")
+    assert r.returncode == 0, r.stdout
+    assert r.stdout.count("kit has no proxy") == 4, r.stdout
+
+
+@pytest.mark.parametrize("unix,abi,expected", [(True, "9", 1), (True, "10", 1), (True, "6", 0),
+                                               (False, "9", 0), (True, "n/a", 0)])
+def test_stub_unix_sockets_must_be_refused_only_with_resolve_unix_and_abi_9(tmp_path, unix, abi,
+                                                                           expected):
+    report = "\n".join(f"ok   {n}: refused (refused)" for n in LOOPBACK) + "\n" + \
+        _fail_lines(UNIX) + "FAIL Mode B\n"
+    r = _stub_expect(tmp_path, report, proxy=True, unix=unix, abi=abi)
+    assert (r.returncode != 0) == bool(expected), r.stdout
+    if not expected:
+        assert r.stdout.count("relies on Claude Code's sandbox (not in the stub)") == 2, r.stdout
+        assert "missing guard" not in r.stdout
+
+
+@pytest.mark.parametrize("extra", ["FAIL runs-later-vscode: OK: a file that runs later was written\n",
+                                   "???? net-api: FAILED tunnel: Bash has no network\n",
+                                   "FAIL files that run later were on the host right after the "
+                                   "session: .Rprofile\n"])
+def test_stub_any_other_failure_fails(tmp_path, extra):
+    r = _stub_expect(tmp_path, OK_B.replace("PASS Mode B", "FAIL Mode B") + extra, proxy=True,
+                     unix=True, abi="9")
+    assert r.returncode != 0, r.stdout
+
+
+def test_stub_every_guard_holding_passes(tmp_path):
+    r = _stub_expect(tmp_path, OK_B, proxy=True, unix=True, abi="9")
+    assert r.returncode == 0, r.stdout
+    r = _stub_expect(tmp_path, OK_B.replace("PASS Mode B", "FAIL Mode B"), proxy=True,
+                     unix=True, abi="9")
+    assert r.returncode != 0, r.stdout  # the verdict must match the lines
