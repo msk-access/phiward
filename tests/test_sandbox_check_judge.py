@@ -254,6 +254,44 @@ def test_a_read_not_found_is_inconclusive_on_macos():
     assert run(lines=lines)[0] == judge.INCONCLUSIVE
 
 
+DENIED_BY_RULES = ("<tool_use_error>File is in a directory that is denied by your permission "
+                   "settings.</tool_use_error>")
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_mode_a_read_refused_by_the_installed_permission_rules_passes(platform):
+    """Mode A: `install` writes permissions.deny Read(root) and Read(root/**) for every
+    protected root (install.permission_rules), and Claude Code applies it before the hook (the
+    third real Docker run)."""
+    base = GOOD if platform == "darwin" else LINUX
+    lines = stream(read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=base, platform=platform, mode="A")
+    assert verdict == judge.PASS, report
+    assert "ok   read-tool: the Read tool was refused by the permission rules phiward " \
+           "installed" in report, report
+
+
+def test_mode_b_read_refused_by_permission_rules_stays_inconclusive():
+    lines = stream(read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=LINUX, platform="linux", mode="B")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert not any("permission rules" in ln and ln.startswith("ok") for ln in report)
+
+
+def test_the_permission_phrase_does_not_excuse_the_content_in_the_stream():
+    lines = stream({"type": "assistant", "message": {"content": [
+        {"type": "text", "text": "FAKE-MARK-1"}]}}, read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=LINUX, platform="linux", mode="A")
+    assert verdict == judge.FAIL
+    assert not any("permission rules" in ln and ln.startswith("ok") for ln in report), report
+
+
+def test_a_near_miss_of_the_permission_phrase_is_inconclusive():
+    lines = stream(read=read_call("<tool_use_error>File is in a directory that is denied by "
+                                  "something else.</tool_use_error>"))
+    assert run(lines=lines, results=LINUX, platform="linux", mode="A")[0] == judge.INCONCLUSIVE
+
+
 def test_a_read_with_another_error_is_inconclusive():
     lines = stream(read=read_call("Internal error: something else"))
     assert run(lines=lines)[0] == judge.INCONCLUSIVE
@@ -323,13 +361,33 @@ def test_gateway_other_error_notes_its_class_only(why):
     from a fixed list (never any text of the output), and the judge prints it."""
     verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
     assert verdict == judge.INCONCLUSIVE
-    assert f"note gateway-run: {why}" in report, report
+    assert any(ln.startswith(f"note gateway-run: {why}") for ln in report), report
+
+
+@pytest.mark.parametrize("err", ["permission-denied", "read-only", "not-permitted", "no-such",
+                                 "python-fatal", "traceback", "landlock", "bwrap", "gateway",
+                                 "none"])
+def test_gateway_notes_its_exit_code_and_error_class(err):
+    results = gw("BAD other") + f"gateway-why other\ngateway-exit 1\ngateway-error {err}\n"
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+    assert f"note gateway-run: other, exit 1, error {err}" in report, report
+
+
+@pytest.mark.parametrize("code, err", [("x1", "none"), ("1", "FAKE-PT-0001"), ("1234", "none"),
+                                       ("", "")])
+def test_gateway_exit_or_class_not_in_the_list_is_never_printed(code, err):
+    results = gw("BAD other") + f"gateway-why other\ngateway-exit {code}\ngateway-error {err}\n"
+    verdict, report = run(results=results, platform="linux")
+    note = [ln for ln in report if ln.startswith("note gateway-run:")]
+    assert note and "unknown" in note[0], report
+    assert not any("FAKE-PT" in ln or "x1" in ln or "1234" in ln for ln in report), report
 
 
 @pytest.mark.parametrize("why", ["FAKE-PT-0001", "no-broker FAKE-PT-0001", "a.txt", ""])
 def test_gateway_class_not_in_the_list_is_never_printed(why):
     verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
-    assert "note gateway-run: unknown" in report, report
+    assert any(ln.startswith("note gateway-run: unknown") for ln in report), report
     assert not any("FAKE-PT" in ln or "a.txt" in ln for ln in report), report
 
 
@@ -353,9 +411,10 @@ FAKES = {
 }
 
 
-def _probes(tmp_path, fake):
-    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH). Made-up
-    folders only; a git repository of its own in tmp_path, no hook. -> (results, its text)"""
+def _probes(tmp_path, fake, proc=None):
+    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
+    `proc` as its /proc (a made-up one: {pid: (ppid, comm)}; the probe's own shell is "self").
+    Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
     import subprocess
     if shutil.which("git") is None:
@@ -380,14 +439,51 @@ def _probes(tmp_path, fake):
         ("settings", tmp_path / "settings.json"), ("fake-id", "P-9990001-T01-IM6"),
         ("claude-exe", "/nonexistent/claude"), ("claude-link", "/nonexistent/claude"),
         ("nonce", "n0"), ("remote", "no"))))
+    cmd = ["sh", "./probes.sh"]
+    if proc is not None:
+        root = tmp_path / "proc"
+        for pid, (ppid, comm) in proc.items():
+            (root / str(pid)).mkdir(parents=True)
+            (root / str(pid) / "status").write_text(f"Name:\t{comm}\nPPid:\t{ppid}\n")
+            (root / str(pid) / "comm").write_text(comm + "\n")
+            (root / str(pid) / "cmdline").write_text(comm + "\0")
+        with open(proj / "paths.txt", "a") as fh:
+            fh.write(f"proc {root}\n")
+        # the probe's own PID gets the "self" entry (exec keeps the PID)
+        cmd = ["sh", "-c", f'cp -R "{root}/self" "{root}/$$" && exec sh ./probes.sh']
     env = {"PATH": f"{fbin}:/usr/bin:/bin", "HOME": str(tmp_path),
            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
-    r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
-                       timeout=60)
+    r = subprocess.run(cmd, cwd=proj, env=env, capture_output=True, text=True, timeout=60)
     assert "probes-done" in r.stdout, r.stderr
     text = (proj / "results.txt").read_text()
     return dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln), text
+
+
+# a made-up failing phiward per error class: (its output, its exit code); the names in it are
+# made up and must never reach results.txt
+ERRORS = {
+    "permission-denied": ("PermissionError: [Errno 13] Permission denied: '/w/FAKE-PT-0001'", 1),
+    "read-only": ("OSError: [Errno 30] Read-only file system: '/w/FAKE-PT-0001'", 1),
+    "not-permitted": ("OSError: [Errno 1] Operation not permitted: '/w/FAKE-PT-0001'", 1),
+    "no-such": ("FileNotFoundError: [Errno 2] No such file or directory: '/w/FAKE-PT-0001'", 1),
+    "python-fatal": ("Fatal Python error: init_fs_encoding: FAKE-PT-0001", 1),
+    "traceback": ("Traceback (most recent call last):\n  File \"/w/FAKE-PT-0001.py\"\nKeyError", 1),
+    "landlock": ("phiward gateway: Landlock cannot add a rule; nothing runs FAKE-PT-0001", 0),
+    "bwrap": ("bwrap: Can't mount proc on /newroot/proc FAKE-PT-0001", 1),
+    "gateway": ("phiward gateway: the command could not start FAKE-PT-0001", 0),
+    "none": ("something FAKE-PT-0001", 2),
+}
+
+
+@pytest.mark.parametrize("err", sorted(ERRORS))
+def test_probes_record_the_exit_code_and_error_class_only(tmp_path, err):
+    text, code = ERRORS[err]
+    lines, kept = _probes(tmp_path, (text, code))
+    assert lines["gateway-run"] == "BAD other", lines
+    assert lines["gateway-error"] == err, lines
+    assert lines["gateway-exit"] == str(code), lines
+    assert "FAKE-PT-0001" not in kept and "Errno" not in kept, kept
 
 
 @pytest.mark.parametrize("why", sorted(FAKES) + ["not-found"])
@@ -739,6 +835,34 @@ def test_claude_environ_not_found_in_a_real_linux_run_is_inconclusive(value):
     assert run(results=results, platform="linux")[0] == judge.INCONCLUSIVE
     verdict, report = run(results=results, platform="linux", stub="yes")
     assert verdict == judge.PASS, report
+
+
+def test_own_pid_namespace_passes_with_a_note():
+    results = LINUX.replace("parent-environ unreadable", "parent-environ own-pid-ns")
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("note") and "PID namespace of its own" in ln for ln in report)
+
+
+# the sandbox's shell: sh (the probe) <- bash <- bwrap as PID 1 of its own namespace
+OWN_NS = {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "bwrap")}
+
+
+def test_probe_records_own_pid_ns_when_only_shells_and_bwrap_are_above_it(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc=OWN_NS)
+    assert lines["parent-environ"] == "own-pid-ns", lines
+
+
+@pytest.mark.parametrize("proc", [
+    {"self": (7, "sh"), 7: (5, "node"), 5: (1, "bash"), 1: (0, "bwrap")},  # another program above
+    {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "tini")},                   # PID 1 is not bwrap
+    {"self": (7, "sh"), 7: (0, "bash")},                                    # the walk never reached 1
+    {"self": (7, "sh"), 7: (1, "bash")},                                    # PID 1 cannot be read
+])
+def test_probe_keeps_not_found_without_proof_of_its_own_namespace(tmp_path, proc):
+    """A search that merely failed never becomes own-pid-ns."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == "not-found", lines
 
 
 def test_claude_environ_n_a_on_macos_passes():
