@@ -411,9 +411,10 @@ FAKES = {
 }
 
 
-def _probes(tmp_path, fake, proc=None):
+def _probes(tmp_path, fake, proc=None, foreign=False):
     """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
-    `proc` as its /proc (a made-up one: {pid: (ppid, comm)}; the probe's own shell is "self").
+    `proc` as its /proc (a made-up one: {pid: (ppid, comm[, cmdline])}; the probe's own shell
+    is "self"; `foreign`: /proc/$$ is another process than /proc/self).
     Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
     import subprocess
@@ -442,15 +443,18 @@ def _probes(tmp_path, fake, proc=None):
     cmd = ["sh", "./probes.sh"]
     if proc is not None:
         root = tmp_path / "proc"
-        for pid, (ppid, comm) in proc.items():
+        for pid, (ppid, comm, *cmdline) in proc.items():
             (root / str(pid)).mkdir(parents=True)
             (root / str(pid) / "status").write_text(f"Name:\t{comm}\nPPid:\t{ppid}\n")
             (root / str(pid) / "comm").write_text(comm + "\n")
-            (root / str(pid) / "cmdline").write_text(comm + "\0")
+            (root / str(pid) / "cmdline").write_text(
+                "\0".join((cmdline[0] if cmdline else comm).split()) + "\0")
         with open(proj / "paths.txt", "a") as fh:
             fh.write(f"proc {root}\n")
-        # the probe's own PID gets the "self" entry (exec keeps the PID)
-        cmd = ["sh", "-c", f'cp -R "{root}/self" "{root}/$$" && exec sh ./probes.sh']
+        # the probe's own PID is the "self" entry, as in a real /proc (exec keeps the PID); a
+        # foreign /proc has another process there
+        link = "cp -R" if foreign else "ln -s"
+        cmd = ["sh", "-c", f'{link} "{root}/self" "{root}/$$" && exec sh ./probes.sh']
     env = {"PATH": f"{fbin}:/usr/bin:/bin", "HOME": str(tmp_path),
            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
@@ -844,6 +848,30 @@ def test_own_pid_namespace_passes_with_a_note():
     assert any(ln.startswith("note") and "PID namespace of its own" in ln for ln in report)
 
 
+def test_own_pid_namespace_counts_in_mode_a_only():
+    """Under `phiward launch` (Mode B) bwrap is PID 1 of a namespace claude is inside of
+    (wholetool.py runs bwrap with --unshare-pid, without --as-pid-1): own-pid-ns proves nothing
+    there."""
+    results = LINUX.replace("parent-environ unreadable", "parent-environ own-pid-ns")
+    verdict, report = run(results=results, platform="linux", mode="B")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert not any("PID namespace of its own" in ln for ln in report), report
+
+
+# the reviewer's case: an orphaned probe shell under bwrap as PID 1, claude in the same namespace
+ORPHAN = {"self": (1, "sh"), 1: (0, "bwrap"), 9: (1, "claude", "/nonexistent/claude -p x")}
+
+
+@pytest.mark.parametrize("mode", ["A", "B"])
+def test_an_orphaned_shell_beside_a_visible_claude_is_not_own_pid_ns(tmp_path, mode):
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=ORPHAN)
+    assert lines["parent-environ"] == "not-found", lines
+    verdict, _ = run(results=LINUX.replace("parent-environ unreadable",
+                                           f"parent-environ {lines['parent-environ']}"),
+                     platform="linux", mode=mode)
+    assert verdict == judge.INCONCLUSIVE
+
+
 # the sandbox's shell: sh (the probe) <- bash <- bwrap as PID 1 of its own namespace
 OWN_NS = {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "bwrap")}
 
@@ -859,11 +887,23 @@ def test_probe_records_own_pid_ns_when_only_shells_and_bwrap_are_above_it(tmp_pa
     {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "sh")},                     # a container's sh init
     {"self": (7, "sh"), 7: (0, "bash")},                                    # the walk never reached 1
     {"self": (7, "sh"), 7: (1, "bash")},                                    # PID 1 cannot be read
+    {"self": (1, "sh"), 1: (0, "bwrap")},                                   # no shell between
+    {**OWN_NS, 9: (1, "claude", "/nonexistent/claude -p x")},       # claude seen elsewhere
+    {**OWN_NS, 9: (1, "node", "node /nonexistent/claude")},         # by its command line
 ])
 def test_probe_keeps_not_found_without_proof_of_its_own_namespace(tmp_path, proc):
     """A search that merely failed never becomes own-pid-ns."""
     lines, _ = _probes(tmp_path, FAKES["refused"], proc=proc)
     assert lines["parent-environ"] == "not-found", lines
+
+
+def test_probe_records_nothing_from_a_proc_that_is_not_its_own(tmp_path):
+    """/proc/$$ must be this process (/proc/self): else the walk would read another one."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc=OWN_NS, foreign=True)
+    assert lines["parent-environ"] == "foreign-proc", lines
+    verdict, _ = run(results=LINUX.replace("parent-environ unreadable",
+                                           "parent-environ foreign-proc"), platform="linux")
+    assert verdict == judge.INCONCLUSIVE
 
 
 def test_claude_environ_n_a_on_macos_passes():
