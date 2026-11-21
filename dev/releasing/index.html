@@ -1177,6 +1177,16 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    it, writes the data folder, <code>~/.phiward</code> or <code>~/.claude/settings.json</code>; <code>phiward run</code> from the
    session must mask its output, a commit of a made-up identifier must be refused by the git
    hook without showing it, the wrapped MCP server must start, and <code>doctor</code> must stay clean.
+   For a write that worked, the report says whether the file reached the host (recorded right
+   after each session). On Linux, in either mode, the sandbox may put an empty, writable view
+   over a target it hides: a write that reaches nothing on the host is a note, not a failure,
+   when the same session shows the target hidden: for the data folder, the read of the
+   protected file found no such file, or not its content (an empty view); for <code>~/.phiward</code>, a
+   sentinel there is missing; for the settings, they read as empty. Without that, it fails.
+   That evidence shows the target hidden; what stops a real write is the record, right after
+   each session, of whether the probe file is on the host (for the settings, their hash before
+   and after). When <code>phiward run</code> fails in the session for another reason, the report notes one
+   word for why (for example <code>no-broker</code> or <code>refused</code>); no text of its output is kept.
    It ends with a verdict per mode and an overall <code>PASS</code>, <code>FAIL</code> or <code>INCONCLUSIVE</code>.
    With <code>REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder</code> (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only
