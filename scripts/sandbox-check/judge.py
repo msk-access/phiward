@@ -22,9 +22,11 @@ phiward's, as a hidden file (Linux), or in Mode A as Claude Code's own permissio
 in a directory that is denied by your permission settings."), which `install` writes for each
 protected root, when the marker (the file's content) is in no line of the stream.
 parent-environ: the probe reads the environ of every process in /proc but its own, and records
-how many it could read or was refused, and how many hold a token variable's name. Any such name
-is FAIL, in both modes; none, with at least one process listed, passes; no process listed, or a
-/proc that is not the session's own, is INCONCLUSIVE.
+how many it could read or was refused, how many hold a credential variable's name (the list in
+token-names.txt), how many of those are the session's own ancestors, and whether a step of the
+read failed. Any such name is FAIL, in both modes; none, with at least one environ read and no
+failed step, passes; anything else (nothing read, a failed step, a /proc that is not the
+session's own: foreign-proc) is INCONCLUSIVE.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -50,7 +52,8 @@ GATEWAY_ERROR = ("landlock", "bwrap", "gateway", "permission-denied", "read-only
 EXIT = re.compile(r"[0-9]{1,3}")
 # the environ scan (probes.sh): counts and PIDs only
 PARENT = re.compile(r"readable=(?P<readable>[0-9]+) refused=(?P<refused>[0-9]+) "
-                    r"token-names=(?P<named>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
+                    r"token-names=(?P<named>[0-9]+) ancestors=(?P<ancestors>[0-9]+) "
+                    r"scan-error=(?P<error>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
 CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
          "protected_file", "host_write_data", "host_write_phiward")
@@ -339,25 +342,28 @@ def judge(results, stream_lines, server, marker, created, facts):
     if env is not None and env != "COUNT 0":
         names = env.split(" ", 2)[-1]
         report.append(f"note names like a key in the commands' environment: {names}")
-    # a token variable's name in any process environment the session can read from /proc (the
-    # probe writes counts and PIDs only, never a name or a value)
+    # a credential variable's name (token-names.txt) in any process environment the session can
+    # read from /proc (the probe writes counts and PIDs only, never a name or a value)
     parent = lines.get("parent-environ")
     scan = PARENT.fullmatch(parent or "")
     if parent == "n/a" and platform == "darwin":
         report.append("note no /proc: no process environment was probed")
     elif scan and int(scan["named"]) > 0:
         which = ", ".join("PID " + p for p in scan["pids"].split(",") if p != "-")
-        line = (f"a process environment readable from the session holds a token variable's "
-                f"name ({which})")
+        line = (f"a process environment readable from the session holds a credential "
+                f"variable's name: {scan['named']} processes, {scan['ancestors']} of them the "
+                f"session's own ancestors ({which})")
         if facts.get("stub") == "yes":
             report.append(f"note {line} (the stand-in, with no sandbox of its own)")
         else:
             fails.append(line)
-    elif scan and int(scan["readable"]) + int(scan["refused"]) > 0:
-        report.append(f"ok   no process environment readable from the session holds a token "
+    elif scan and int(scan["error"]) > 0:
+        unsure.append("parent-environ: a step of the environ scan failed")
+    elif scan and int(scan["readable"]) > 0:
+        report.append(f"ok   no process environment readable from the session holds a credential "
                       f"variable's name ({scan['readable']} readable, {scan['refused']} refused)")
     elif parent is not None:
-        unsure.append(f"parent-environ: {parent or 'empty'} (the scan saw no process, or "
+        unsure.append(f"parent-environ: {parent or 'empty'} (the scan read no process, or "
                       "/proc is not the session's own)")
     if facts.get("locked") == "no":
         report.append(f"note Claude Code {facts.get('claude', '?')} is not the locked version "

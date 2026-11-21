@@ -44,7 +44,7 @@ for m in A B; do
   done
   # the environ scan saw the stand-in's made-up token by its variable's name (the stand-in has
   # no sandbox of its own, so its environ is readable)
-  if grep -qE "^note a process environment readable from the session holds a token variable's name \(PID [0-9]" "/tmp/mode-$m.txt"; then
+  if grep -qE "^note a process environment readable from the session holds a credential variable's name: [1-9][0-9]* processes, [0-9]+ of them the session's own ancestors \(PID [0-9]" "/tmp/mode-$m.txt"; then
     echo "== ok    Mode $m: the environ scan found the stand-in's token name"
   else echo "== MISSING Mode $m: the environ scan found the stand-in's token name"; status=1; fi
 done

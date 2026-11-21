@@ -149,7 +149,7 @@ def main(argv):
     cmd = argv[argv.index("--") + 1:]
     name, token = _token()
     if not token:
-        sys.exit("no token: set CLAUDE_CODE_OAUTH_TOKEN or paste the one `claude setup-token` "
+        sys.exit("no token: paste the one `claude setup-token` "
                  "prints")
     env = {"HOME": home, "PATH": os.environ["PATH"], "USER": os.environ.get("USER", ""),
            "LOGNAME": os.environ.get("LOGNAME", ""), "LANG": os.environ.get("LANG", "en_US.UTF-8"),

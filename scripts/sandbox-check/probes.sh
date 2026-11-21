@@ -140,38 +140,61 @@ git reset -q -- "gh-$mode.txt" 2>/dev/null
 rm -f "gh-$mode.txt"
 
 # a token in another process's environment: read the environ of every process in /proc other
-# than this one, and record only how many could be read or were refused, how many hold a token
-# variable's name (the names check.sh and launch.py pass the token in, and Claude Code's own), and
-# their PIDs. No name or value is written. /proc/$$ must be this process (/proc/self), else
-# foreign-proc. PROC is /proc (paths.txt may name another, for tests).
+# than this one, and record only how many could be read or were refused, how many hold a
+# credential variable's name (token-names.txt, beside this file), how many of those are this
+# shell's own ancestors, whether a step of the read failed, and their PIDs. No name or value is
+# written. /proc/$$ must be this process (/proc/self), else foreign-proc. PROC is /proc
+# (paths.txt may name another, for tests).
 proc=$(p proc)
 [ -n "$proc" ] || proc=/proc
-tokens='^(CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_SESSION_ACCESS_TOKEN)='
+names=$(grep -v '^#' token-names.txt 2>/dev/null | grep -E '^[A-Z][A-Z0-9_]*$' | tr '\n' '|')
+names=${names%|}
 if [ ! -r "$proc/self/status" ]; then
   echo "parent-environ n/a" >> results.txt
 elif ! [ "$proc/self/status" -ef "$proc/$$/status" ] 2>/dev/null; then
   echo "parent-environ foreign-proc" >> results.txt
 else
+  # this shell's ancestors, by PID (at most 256 steps)
+  anc=" "
+  pid=$$
+  n=0
+  while [ "$n" -lt 256 ]; do
+    n=$((n + 1))
+    pid=$(sed -n 's/^PPid:[[:space:]]*//p' "$proc/$pid/status" 2>/dev/null)
+    case $pid in ''|0|*[!0-9]*) break ;; esac
+    case $anc in *" $pid "*) break ;; esac
+    anc="$anc$pid "
+  done
   readable=0
   refused=0
   named=0
+  ancestors=0
+  failed=0
   pids=""
+  [ -n "$names" ] || failed=1
   for d in "$proc"/[0-9]*; do
     pid=${d##*/}
     case $pid in ''|*[!0-9]*) continue ;; esac
     [ "$pid" = "$$" ] && continue
-    if tr '\0' '\n' < "$d/environ" > /dev/null 2>&1; then
+    # held in memory only, never written; the open error goes to /dev/null
+    if text=$(tr '\0' '\n' 2>/dev/null < "$d/environ"); then
       readable=$((readable + 1))
-      if tr '\0' '\n' < "$d/environ" 2>/dev/null | grep -qE "$tokens"; then
-        named=$((named + 1))
-        pids="$pids,$pid"
-      fi
+      [ -n "$names" ] || continue
+      printf '%s\n' "$text" | grep -qE "^($names)="
+      case $? in
+        0) named=$((named + 1))
+           pids="$pids,$pid"
+           case $anc in *" $pid "*) ancestors=$((ancestors + 1)) ;; esac ;;
+        1) ;;
+        *) failed=1 ;;
+      esac
     else
       refused=$((refused + 1))
     fi
   done
+  text=""
   pids=${pids#,}
-  echo "parent-environ readable=$readable refused=$refused token-names=$named pids=${pids:--}" >> results.txt
+  echo "parent-environ readable=$readable refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed pids=${pids:--}" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder
