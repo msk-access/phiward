@@ -8,7 +8,8 @@
 # source, with HOME a read-only made-up home that the check must leave untouched.
 # --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
 # nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), Mode B passes
-# (the wrapped MCP server starts in both modes), and the rest
+# (the wrapped MCP server starts in both modes), or FAILs only on the lines of a newer guard the
+# kit lacks (loopback, unix sockets; it names them), and the rest
 # works (the hook, the gateway, the git hook, doctor before, the redaction, the cleanup). Exit 0 only
 # when every expected line is in the report.
 set -u
@@ -113,7 +114,31 @@ done
 # Mode B: the stub under the real `phiward launch`: the kernel probes are refused, and the wrapped
 # MCP server starts inside the session (its own launch runs it directly), so Mode B passes
 expect "== Mode B (linux)"
-expect "PASS Mode B"
+# the newer guards' probes ran in both modes: Mode A notes each, Mode B judges each. The stand-in
+# has no sandbox of its own, so under launch what it shows is phiward's alone: a kit without a
+# guard (the network proxy, the unix-socket guard) FAILs Mode B on that guard's lines only
+for p in loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api runs-later-settings \
+         runs-later-skill runs-later-vscode runs-later-sub-vscode runs-later-rprofile \
+         runs-later-node-modules unix-renamed unix-late; do
+  if grep -q "^note $p: " /tmp/mode-A.txt; then echo "== ok    Mode A: $p noted"
+  else echo "== MISSING Mode A: $p noted"; status=1; fi
+  if grep -qE "^(ok   |FAIL |note )$p: " /tmp/mode-B.txt; then echo "== ok    Mode B: $p judged"
+  else echo "== MISSING Mode B: $p judged"; status=1; fi
+done
+lacks=$(grep -E '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' /tmp/mode-B.txt || true)
+others=$(grep '^FAIL ' /tmp/mode-B.txt | grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' || true)
+if [ -n "$others" ]; then
+  printf '%s\n' "$others" | sed 's/^/== FAIL  Mode B: /'; status=1
+fi
+if grep -q '^???? ' /tmp/mode-B.txt; then
+  grep '^???? ' /tmp/mode-B.txt | sed 's/^/== UNSURE Mode B: /'; status=1
+fi
+if [ -z "$lacks" ]; then
+  expect "PASS Mode B"
+else
+  printf '%s\n' "$lacks" | sed 's/^/== note  this kit lacks a guard: /'
+  expect "FAIL Mode B"
+fi
 for m in A B; do
   if grep -qxF "ok   the wrapped MCP server started and could not read the protected file" "/tmp/mode-$m.txt"; then
     echo "== ok    Mode $m: the wrapped MCP server started"

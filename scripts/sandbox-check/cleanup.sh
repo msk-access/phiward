@@ -1,13 +1,15 @@
 # The sandbox check's cleanup and signal handling, sourced by check.sh (and by its test):
-# cleanup removes the home folder H and the judge's folder J and says so if it cannot;
+# cleanup stops the broker and the made-up servers (netsrv.py), removes the home folder H (with
+# their sockets) and the judge's folder J, and says so if it cannot;
 # stopped passes a signal on to launch.py (pid in lpid), then exits.
-# Uses: H, J, lpid, broker, tty_mode; SBX_CLEANUP_WAIT (seconds, default 2).
+# Uses: H, J, lpid, broker, netsrv, tty_mode; SBX_CLEANUP_WAIT (seconds, default 2).
 cleanup() {
   st=$?
   trap '' INT TERM HUP  # a second signal must not cut the cleanup short
   set +e  # nor a failure
   [ -n "$tty_mode" ] && stty "$tty_mode" < /dev/tty 2>/dev/null
   [ -n "$broker" ] && kill "$broker" 2>/dev/null
+  [ -n "${netsrv:-}" ] && kill "$netsrv" 2>/dev/null
   # nothing of the home folder or the judge's folder is kept. After a short wait, so that a
   # process the session left behind (one in a session of its own outlives the stop) has less
   # time to write again; folders the session made unwritable are made writable first

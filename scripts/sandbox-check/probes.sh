@@ -140,6 +140,54 @@ echo "git-hook $r" >> results.txt
 git reset -q -- "gh-$mode.txt" 2>/dev/null
 rm -f "gh-$mode.txt"
 
+# the network and unix sockets, through net.py (beside this file): it prints fixed words and
+# digits only, and only those forms are kept, so nothing a server sends passes through the
+# shell. A probe whose target paths.txt does not name gives no line (the judge: INCONCLUSIVE).
+py=$(p python)
+net() { [ -n "$py" ] && "$py" -I -S ./net.py "$@" 2>/dev/null; }
+fixed() {
+  case $1 in
+    "RESPONSE "[0-9][0-9][0-9]|"RESPONSE other"|CONNECTED|"STATUS "[0-9][0-9][0-9]) echo "$1" ;;
+    "REFUSED "*|"FAILED "*)
+      case ${1#* } in
+        refused|not-permitted|permission|no-such|unreachable|timeout|no-name|tunnel|tls|other)
+          echo "$1" ;;
+        *) echo "${1%% *} other" ;;
+      esac ;;
+    *) echo n/a ;;
+  esac
+}
+# a made-up server on this machine's loopback, outside the session (netsrv.py), by each spelling
+port=$(p loopback-port)
+if [ -n "$port" ]; then
+  for t in 127=127.0.0.1 localhost=localhost v6=::1 mapped=::ffff:127.0.0.1; do
+    echo "loopback-${t%%=*} $(fixed "$(net tcp "${t#*=}" "$port")")" >> results.txt
+  done
+fi
+# the network itself, through the proxies the session's environment names
+url=$(p net-url)
+[ -z "$url" ] || echo "net-api $(fixed "$(net https "$url")")" >> results.txt
+# files that other tools run later (check.sh made their folders and .Rprofile): opened for
+# writing, nothing written; an installed tree (node_modules) must stay writable
+w() { try "runs-later-$1" sh -c 'mkdir -p "$(dirname "$1")" && : >> "$1"' sh "$2"; }
+w settings .claude/settings.json
+w skill .claude/skills/x/SKILL.md
+w vscode .vscode/tasks.json
+w sub-vscode sub/.vscode/tasks.json
+w rprofile .Rprofile
+w node-modules node_modules/pkg/.vscode/x
+# unix sockets outside the session (netsrv.py): one bound, then renamed, before the session; one
+# bound once this file says the session runs (it waits up to 20 seconds to see it)
+s=$(p unix-renamed)
+[ -z "$s" ] || echo "unix-renamed $(fixed "$(net unix "$s")")" >> results.txt
+s=$(p unix-late)
+if [ -n "$s" ]; then
+  : > "unix-ready-$mode"
+  i=0
+  while [ ! -S "$s" ] && [ "$i" -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
+  echo "unix-late $(fixed "$(net unix "$s")")" >> results.txt
+fi
+
 # a token in another process's environment: read the environ of every process in /proc other
 # than this one, and record only how many had a non-empty environ (readable), an empty one, or
 # were refused, how many hold a credential variable's name (token-names.txt, beside this file),

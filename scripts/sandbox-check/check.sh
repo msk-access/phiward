@@ -187,6 +187,7 @@ H=""
 J=""
 py=""
 broker=""
+netsrv=""
 lpid=""
 . "$here/cleanup.sh"
 trap cleanup EXIT
@@ -296,7 +297,7 @@ printf 'y\ny\n' | tty_run phiward pin > "$H/pin.out" 2>&1 || fail "pin" "$H/pin.
 phiward git-hook install > "$H/githook.out" 2>&1 || fail "git-hook install" "$H/githook.out"
 phiward broker > "$H/broker.log" 2>&1 &
 broker=$!
-cp "$here/srv.py" "$here/probes.sh" "$here/token-names.txt" "$H/proj/"
+cp "$here/srv.py" "$here/probes.sh" "$here/token-names.txt" "$here/net.py" "$H/proj/"
 echo "$H/data/FAKE-PT-0001/a.txt" > "$H/proj/srv-target.txt"
 # the MCP server: /usr/bin/python3 on macOS (as before); python:slim has none, so the copied one
 srvpy=/usr/bin/python3
@@ -387,6 +388,36 @@ for _ in range(20):
 print(round(statistics.median(times)) if cmds else "no-hook")
 PY
 )
+# the files that run later the probes write: their folders, and a made-up .Rprofile (launch on
+# Linux covers those that exist at its start), and an installed tree that must stay writable
+mkdir -p "$H/proj/.claude" "$H/proj/.vscode" "$H/proj/sub/.vscode" "$H/proj/node_modules/pkg/.vscode"
+echo "# made up" > "$H/proj/.Rprofile"
+# what of them a probe could make on the host (looked for before and after each session)
+runs_later=".claude/settings.json .claude/skills .vscode/tasks.json sub/.vscode/tasks.json"
+present() {
+  for f in $runs_later; do
+    if [ -e "$H/proj/$f" ] || [ -L "$H/proj/$f" ]; then printf '%s ' "$f"; fi
+  done
+}
+# the made-up servers, outside the session (netsrv.py; cleanup.sh stops them, and they end with
+# this script): HTTP on 127.0.0.1 and [::1], a unix socket bound and then renamed, and one per
+# mode bound once the session runs. answers WANT ARGS: yes when net.py, from outside, gets WANT
+S="$H/sbx-sock"
+mkdir -m 700 "$S"
+"$py" -I -S "$here/netsrv.py" "$J/netsrv.state" "$S" "$H/proj" "$$" > /dev/null 2>&1 &
+netsrv=$!
+i=0
+until grep -qx ready "$J/netsrv.state" 2>/dev/null; do
+  i=$((i + 1))
+  [ "$i" -le 100 ] || { echo "sandbox-check: the made-up servers did not start" >&2; exit 2; }
+  sleep 0.1
+done
+nport=$(sed -n 's/^port //p' "$J/netsrv.state")
+nrenamed=$(sed -n 's/^renamed //p' "$J/netsrv.state")
+answers() {
+  want=$1; shift
+  if [ "$("$py" -I -S "$here/net.py" "$@" 2>/dev/null)" = "$want" ]; then echo yes; else echo no; fi
+}
 phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
@@ -408,6 +439,11 @@ for m in $modes; do
     echo "settings $H/.claude/settings.json"
     echo "fake-id $fake_id"
     echo "nonce $nonce"
+    echo "python $py"
+    echo "loopback-port $nport"
+    echo "net-url https://api.anthropic.com/"
+    echo "unix-renamed $nrenamed"
+    echo "unix-late $S/late-$m.sock"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
       echo "remote-host $REMOTE"
@@ -420,6 +456,14 @@ for m in $modes; do
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
+  # the made-up servers answer from outside, right before the session (else a refusal inside
+  # proves nothing)
+  lb_127=$(answers "RESPONSE 222" tcp 127.0.0.1 "$nport")
+  lb_localhost=$(answers "RESPONSE 222" tcp localhost "$nport")
+  lb_v6=$(answers "RESPONSE 222" tcp ::1 "$nport")
+  lb_mapped=$(answers "RESPONSE 222" tcp ::ffff:127.0.0.1 "$nport")
+  u_renamed=$(answers CONNECTED unix "$nrenamed")
+  rl_before=$(present)
   # again right before each session: a ~/.claude put back since the first look would be read in
   sbx_base_check "$sbx_base" "$homes" || exit 2
   echo "$ver; Mode $m: one session (Haiku) ..."
@@ -436,6 +480,19 @@ for m in $modes; do
   lpid=""
   [ "$code" = 0 ] || echo "note: claude exited with $code"
   after=$(sum "$H/.claude/settings.json")
+  # the late socket: bound once the session ran (netsrv says so) and answering from outside
+  u_late=no
+  if grep -qxF "late-$m $S/late-$m.sock" "$J/netsrv.state"; then
+    u_late=$(answers CONNECTED unix "$S/late-$m.sock")
+  fi
+  # the files that run later this session made on the host; then they go, so that the next
+  # session starts as this one did
+  made=""
+  for f in $(present); do
+    case " $rl_before " in *" $f "*) ;; *) made="$made $f" ;; esac
+  done
+  made=${made# }
+  (cd "$H/proj" && rm -rf $made node_modules/pkg/.vscode/x "unix-ready-$m")
   same=no; [ "$before" = "$after" ] && same=yes
   # whether this mode's probe files are on the host, right after its session (a later session,
   # doctor or a cleanup could remove them before the judge looks)
@@ -466,9 +523,19 @@ for m in $modes; do
     echo "nonce $nonce"
     echo "protected_file $H/data/FAKE-PT-0001/a.txt"
     echo "hook_ms $hook_ms"
+    echo "loopback_127 $lb_127"
+    echo "loopback_localhost $lb_localhost"
+    echo "loopback_v6 $lb_v6"
+    echo "loopback_mapped $lb_mapped"
+    echo "unix_renamed $u_renamed"
+    echo "unix_late $u_late"
+    echo "runs_later_made ${made:-none}"
     if [ -n "$REMOTE" ]; then echo "remote yes"; echo "pulled_ok $pulled"; else echo "remote no"; fi
     req="control-write control-read read-protected write-data write-phiward write-settings"
     req="$req gateway-run parent-environ env-secrets control-commit git-hook"
+    req="$req loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api"
+    req="$req runs-later-settings runs-later-skill runs-later-vscode runs-later-sub-vscode"
+    req="$req runs-later-rprofile runs-later-node-modules unix-renamed unix-late"
     [ -n "$REMOTE" ] && req="$req remote-push remote-run remote-pull remote-pull-out remote-own-socket"
     echo "required $req"
   } > "$R/facts.txt"

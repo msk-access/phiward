@@ -46,7 +46,22 @@ DENIED = ("read-protected", "write-data", "write-phiward", "write-settings")
 WRITES = {"write-data": "data", "write-phiward": ".phiward"}
 GIT = ("control-commit", "git-hook")
 REMOTE = ("remote-push", "remote-run", "remote-pull", "remote-pull-out", "remote-own-socket")
-CORE = CONTROLS + DENIED + ("gateway-run", "parent-environ", "env-secrets")
+# the newer guards (loopback and the network under launch, files that run later, unix sockets)
+LOOPBACK = ("loopback-127", "loopback-localhost", "loopback-v6", "loopback-mapped")
+RUNS_LATER = ("runs-later-settings", "runs-later-skill", "runs-later-vscode",
+              "runs-later-sub-vscode", "runs-later-rprofile")
+INSTALLED = "runs-later-node-modules"
+UNIX = ("unix-renamed", "unix-late")
+NEWER = LOOPBACK + ("net-api",) + RUNS_LATER + (INSTALLED,) + UNIX
+CORE = CONTROLS + DENIED + ("gateway-run", "parent-environ", "env-secrets") + NEWER
+# a connection that did not get through (net.py's classes; "other" is not a known reason)
+NET_REFUSED = ("refused", "not-permitted", "permission", "no-such", "unreachable", "timeout",
+               "no-name")
+# a file that runs later is refused as the sandbox refuses a write: EPERM (Seatbelt), a
+# read-only bind or EACCES (Linux); its folder exists (check.sh made it), so "no such" is not one
+RUNS_LATER_CLASSES = {"darwin": ("not-permitted",),
+                      "linux": ("not-permitted", "read-only", "permission")}
+NET_STATUS = re.compile(r"STATUS [0-9]{3}")
 # why `phiward run` failed in the session (probes.sh): the only words the report prints
 GATEWAY_WHY = ("no-broker", "stopped", "not-found", "refused", "failed", "other")
 # the error class matched in its output, and its exit code (probes.sh): fixed words, digits only
@@ -59,7 +74,12 @@ PARENT = re.compile(r"readable=(?P<readable>[0-9]+) empty=(?P<empty>[0-9]+) refu
                     r"scan-error=(?P<error>[0-9]+) messaging=(?P<messaging>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
 CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
-         "protected_file", "host_write_data", "host_write_phiward")
+         "protected_file", "host_write_data", "host_write_phiward", "loopback_127",
+         "loopback_localhost", "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
+         "runs_later_made")
+# whether each made-up server answered outside the session (check.sh: before it; the late socket
+# after it). A loopback spelling this machine does not answer at all (no IPv6) is only noted
+SPELLING_OPTIONAL = ("loopback-v6", "loopback-mapped")
 # whether each write's probe file was on the host right after the session (check.sh)
 HOST = {"write-data": "host_write_data", "write-phiward": "host_write_phiward"}
 # the run's own evidence that a write's target was hidden from the session: a probe line, and
@@ -196,6 +216,63 @@ def _denied(name, got, platform, mode, on_host, hidden, report, fails, unsure):
         unsure.append(f"{name}: {got} (failed, but not as the sandbox refuses)")
 
 
+def _newer(lines, facts, platform, mode, report, fails, unsure):
+    """The newer guards' probes. Under launch (Mode B): no answer from this machine's loopback or
+    from a unix socket outside, a status from api.anthropic.com (Bash keeps the network), files
+    that run later refused, an installed tree writable. Mode A promises none of them
+    (docs/threat-model.md): there each outcome is only noted."""
+    made = facts.get("runs_later_made")
+    if mode == "A":
+        for name in NEWER:
+            if lines.get(name) is not None:
+                report.append(f"note {name}: {lines[name]} (Mode A: recorded, not judged)")
+        if made and made != "none":
+            report.append(f"note files that run later were on the host after the session: {made}")
+        return
+    if mode != "B":
+        return
+    for name in LOOPBACK + UNIX:
+        got, up = lines.get(name), facts.get(name.replace("-", "_"))
+        if got is None:
+            continue
+        cls = got[len("REFUSED "):] if got.startswith("REFUSED ") else None
+        if got.startswith("RESPONSE") or got == "CONNECTED":
+            where = "this machine's loopback" if name in LOOPBACK else "a unix socket outside"
+            fails.append(f"{name}: {got}: the session reached {where}")
+        elif cls not in NET_REFUSED:
+            unsure.append(f"{name}: {got} (not a known refusal)")
+        elif up == "yes":
+            report.append(f"ok   {name}: refused ({cls})")
+        elif up == "no" and name in SPELLING_OPTIONAL:
+            report.append(f"note {name}: not tested: it does not answer outside the session "
+                          "either (no IPv6 loopback here)")
+        else:
+            unsure.append(f"{name}: refused, but the made-up server did not answer outside the "
+                          f"session ({up or 'no record'}): it proves nothing")
+    got = lines.get("net-api")
+    if got is not None and NET_STATUS.fullmatch(got):
+        report.append(f"ok   net-api: Bash reached api.anthropic.com ({got})")
+    elif got is not None:
+        unsure.append(f"net-api: {got}: Bash has no network under launch (a typical-use break)")
+    for name in RUNS_LATER:
+        got = lines.get(name)
+        cls = got[len("DENIED "):] if got and got.startswith("DENIED ") else None
+        if got == "OK":
+            fails.append(f"{name}: OK: a file that runs later was written")
+        elif cls in RUNS_LATER_CLASSES.get(platform, ()):
+            report.append(f"ok   {name}: refused ({cls})")
+        elif got is not None:
+            unsure.append(f"{name}: {got} (failed, but not as the sandbox refuses a write)")
+    got = lines.get(INSTALLED)
+    if got == "OK":
+        report.append(f"ok   {INSTALLED}: an installed tree stays writable")
+    elif got is not None:
+        unsure.append(f"{INSTALLED}: {got}: an installed tree is not writable (a typical-use "
+                      "break)")
+    if made and made != "none":
+        fails.append(f"files that run later were on the host right after the session: {made}")
+
+
 def _landlock(facts):
     try:
         return int(facts.get("landlock", ""))
@@ -303,6 +380,8 @@ def judge(results, stream_lines, server, marker, created, facts):
             note += ", exit " + (code if code and EXIT.fullmatch(code) else "unknown")
             note += ", error " + (err if err in GATEWAY_ERROR else "unknown")
         report.append("note gateway-run: " + note)
+
+    _newer(lines, facts, platform, mode, report, fails, unsure)
 
     got = lines.get("control-commit")
     if got is not None and got != "OK":
