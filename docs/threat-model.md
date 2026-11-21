@@ -564,8 +564,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   many names in one request. Where a file or identifier rule (a pack, `[sanitize] patterns`)
   matches the text around a name, the name reads as that rule's placeholder, as a name that does
   not exist would. Elsewhere it reads `<ENTRY>`: plain names, names with a plain part, names
-  written where the rule does not match (inside a longer word, or joined to a plain name), and
-  `names_from` names can be
+  written where the rule does not match (inside a longer word, joined to a plain name, in
+  another spelling, or running past the rule's match), and `names_from` names can be
   tested. Masking hides names; it does not keep a name the agent already holds a secret.
 - <a id="known-encoded-output"></a>**Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,
@@ -664,7 +664,16 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
   Jane 1970`) is masked whole, after a root, under a pattern (`phi_*` matches `phi_Doe Jane`) and in
   escaped output (`Doe\ Jane`, from `ls -b`); the masked output shows an escaped space as a plain
-  space.
+  space. Every dash is read as `-` and every decimal digit as ASCII, and the masked output shows
+  them so. A name of 5 or more letters and digits, with a letter, is also masked with its
+  separators (`-`, `_`, `.`, a space) changed or left out; such a name may then mask ordinary
+  text too (`sample_01` masks `sample 01`). A shorter or digits-only name, or one whose
+  separator-free form is a stop word or part of a placeholder (`SAM_PLE`), is masked only as
+  written. Not matched: look-alike letters from other scripts (Cyrillic `А` for Latin `A`), an
+  accent added or left off (`José`, `Jose`), base64, hex and other encodings, a name broken
+  across lines, the separators `:` `+` `~` `,` `'` and `/`, and IDs that are not entry names
+  (only rules catch those). The pack rules know only `-` as a separator: `P_9990002_T01_IM6` is
+  not an `msk` ID.
 - <a id="known-names-from-files"></a>**`names_from` files** are themselves protected data. Keep them inside a protected root.
 - <a id="known-git-work-tree-root"></a>**A git work tree that holds a root** is closed to the agent's git.
 - <a id="known-claude-settings-in-write-place"></a>**Claude Code settings in a write place.** The gateway may not write a `.claude` folder: on macOS

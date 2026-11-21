@@ -8,10 +8,13 @@ touch protected data. The filter fails closed and never echoes a line that was n
 A line is masked in this order (a placeholder is written in angle brackets):
 1. protected paths of the config (roots, patterns, and the symlink-resolved spellings): <PROTECTED>;
    then, when the inventory is on, the name of every entry under the roots, wherever it
-   appears in the line (inventory.py): <ENTRY>, or the placeholder of a file or identifier
-   rule whose match holds it (so it reads as a name that does not exist would);
+   appears in the line, a long name also with its separators changed or left out
+   (inventory.py): <ENTRY>, or the placeholder of a file or identifier rule whose match holds
+   it (so it reads as a name that does not exist would); a hit that runs past a rule's match
+   takes every match it overlaps with it, as <ENTRY>;
    (before step 1, escape sequences and control characters are removed and the line is put in
-   Unicode NFKC form, so a name cannot hide behind color codes or look-alike letters);
+   Unicode NFKC form, every dash as `-` and every decimal digit as ASCII, so a name cannot hide
+   behind color codes, look-alike letters, other dashes or other digits);
 2. the `paths` rules of the packs, then the `identifiers` rules of the packs, then the rules of
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
@@ -275,11 +278,14 @@ class Sanitizer:
         # rules applied before every other step: the remote roots of `run --remote`, so a local
         # entry name inside a remote path cannot break its match
         self.first_rules: List[Rule] = []
-        self.entries = inventory.matcher(entries)
         self.path_rules = list(path_rules)
         self.id_rules = list(id_rules)
         self.pos_rules = list(pos_rules)
         self.keep_files = list(keep_files)
+        # a long name is also matched with its separators left out, but not when that form is a
+        # stop word or lies inside a placeholder's word (the second pass would withhold the line)
+        words = PLACEHOLDER_WORDS | {p.strip("<>").replace("_", "") for p in self.placeholders()}
+        self.entries = inventory.matcher(entries, STOP_WORDS, words)
         self.tokens = sorted(set(tokens), key=len, reverse=True)
         self.re_names: Optional[Pattern[str]] = None
         if self.tokens:
@@ -399,12 +405,13 @@ class Sanitizer:
     def _entries(self, line: str) -> str:
         """Entry names as `<ENTRY>`; but where an entry name lies inside what a file or
         identifier rule matches, that whole match becomes the rule's placeholder, as it would for
-        a name that does not exist. The same text is masked as before (or more): only which
-        placeholder it reads as changes."""
-        rx = self.entries
-        if rx is None:
+        a name that does not exist. A hit that runs past a rule's match is joined with every
+        match it overlaps (and those with the ones they overlap), as `<ENTRY>`: no part of a
+        match is left bare. The same text is masked as before (or more): only which placeholder
+        it reads as changes."""
+        if self.entries is None:
             return line
-        hits = [(m.start(), m.end()) for m in rx.finditer(line)]
+        hits = self.entries.spans(line)
         if not hits:
             return line
         spans: List[Tuple[int, int, str]] = []
@@ -416,7 +423,15 @@ class Sanitizer:
         parts: List[Tuple[int, int, str]] = []
         for a, b in hits:
             cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
-            parts.append(cover or (a, b, "<ENTRY>"))
+            if cover is None:
+                grown = True
+                while grown:
+                    grown = False
+                    for s, e, _r in spans:
+                        if s < b and a < e and (s < a or b < e):
+                            a, b, grown = min(a, s), max(b, e), True
+                cover = (a, b, "<ENTRY>")
+            parts.append(cover)
         parts.sort()
         merged: List[List] = []
         for a, b, r in parts:  # overlapping parts are joined; <ENTRY> wins a tie (more masked)

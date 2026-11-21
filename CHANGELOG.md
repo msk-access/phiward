@@ -120,6 +120,16 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   around a name under a root, the name reads as that rule's placeholder, as a name that does not
   exist would; nothing is masked less than before. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
   hook refuses them as identifiers.
+- Entry names now match across dashes, digits and separators. The sanitizer reads every dash
+  (U+2010, U+2013, U+2212, ...) as `-` and every decimal digit as its ASCII digit, in lines and
+  names alike, and prints the masked line in that form; pack rules written with `-` and `\d`
+  match those spellings too. A name of 5 or more letters and digits, with a letter, is also
+  masked with its separators (`-`, `_`, `.`, a space) changed or left out: `FAKE-PT-0001` masks
+  `FAKE_PT_0001`, `FAKE PT 0001` and `FAKEPT0001`. Shorter names and digits-only names are
+  matched as written only. A name hit that runs past a rule's match masks that whole match as
+  `<ENTRY>`. A root whose name holds another dash also matches a path written with `-`, so the
+  hook and the git hooks refuse that spelling too. Generic names under a root (`sample_01`)
+  now also mask text such as `sample 01`.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 

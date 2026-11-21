@@ -37,7 +37,7 @@ says what it holds. By feature:
 | HPC: remote runs and pushes | test_v2_remote, test_v2_push |
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, Markdown, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
-| The sanitizer (entry names in other spellings: test_entry_spellings) | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
+| The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta |
 | A launch inside a session (a wrapped MCP server in Mode B; the Linux seccomp fingerprint) | test_v2_nested_launch, test_v2_w1 |
 | Carry-over | test_v2_carryover, test_v2_s17, test_v2_old_glibc |

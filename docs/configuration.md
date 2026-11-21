@@ -159,7 +159,12 @@ table mode (identifiers only; numbers and positions are kept).
 
 An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
 one that is a common word of the built-in stop list (for example `patient`, `normal`, `tumour`,
-`bam`, `runs`, `test`).
+`bam`, `runs`, `test`). Lines and names are compared with every dash read as `-` and every
+decimal digit as ASCII. A name of 5 or more letters and digits, with a letter, is also masked
+with its separators (`-`, `_`, `.`, a space) changed or left out: `FAKE-PT-0001` masks
+`FAKE_PT_0001`, `FAKE PT 0001` and `FAKEPT0001`. Shorter and digits-only names are masked only
+as written. What is not matched is listed in the
+[threat model](threat-model.md#known-sanitizer-short-names).
 
 - **`packs`** (list). Built-in packs are `genomics` (the default) and `msk` (one institution's
   identifiers; an example, not a default). A name with `/` is the path of a pack file of your

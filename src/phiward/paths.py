@@ -17,7 +17,7 @@ import sys
 import unicodedata
 from typing import Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
-from phiward import pathid, pathmatch
+from phiward import inventory, pathid, pathmatch
 
 INSIDE = "inside"
 ABOVE = "above"
@@ -371,7 +371,9 @@ class _TextFinder:
     def __init__(self, roots: Sequence[str], patterns: Sequence[str]):
         literals = list(roots)
         self.patterns: List[_TextPattern] = []
-        for p in patterns:
+        # each pattern also in the form the sanitizer puts lines in (`inventory.normalize`):
+        # its literal part, resolved, may hold another dash or other digits
+        for p in dict.fromkeys(f for q in patterns for f in (q, inventory.normalize(q))):
             comps = pathmatch.parts(p)
             first = next((k for k, c in enumerate(comps) if "*" in c), None)
             if first is None:
@@ -382,14 +384,14 @@ class _TextFinder:
                 _fold_full("/" + "".join(c + "/" for c in comps[:first])),
                 [_fold_full(c).split("*") for c in later],
                 [{s: c.count(s) for s in _SEPARATORS} for c in later]))
-        # every root also in the Unicode form the sanitizer puts lines in (NFKC), and NFC and
-        # NFD: a root written in another form is found all the same; longer first, so a root
-        # inside another one is matched whole
+        # every root also in the form the sanitizer puts lines in (`inventory.normalize`: NFKC,
+        # every dash as `-`, ASCII digits), in NFKC, NFC and NFD: a root written in another form
+        # is found all the same; longer first, so a root inside another one is matched whole
         # (folded as names are, `ß` as `ss`, and found in the folded text)
         forms: List[str] = []
         for r in literals:
-            for f in (r, unicodedata.normalize("NFKC", r), unicodedata.normalize("NFC", r),
-                      unicodedata.normalize("NFD", r)):
+            for f in (r, inventory.normalize(r), unicodedata.normalize("NFKC", r),
+                      unicodedata.normalize("NFC", r), unicodedata.normalize("NFD", r)):
                 f = _fold_full(f)
                 if f not in forms:
                     forms.append(f)

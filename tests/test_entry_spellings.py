@@ -53,6 +53,14 @@ def test_each_spelling_of_an_entry_name_reads_entry(san, spelling):
     assert san.clean(f"x {spelling} y") == "x <ENTRY> y"
 
 
+def test_the_dash_and_space_lists_hold_every_one_this_python_knows():
+    import sys
+    known = {c: unicodedata.category(chr(c)) for c in range(sys.maxunicode + 1)
+             if unicodedata.category(chr(c)) in ("Pd", "Zs")}
+    assert {c for c, k in known.items() if k == "Pd"} <= set(inventory.DASHES)
+    assert {c for c, k in known.items() if k == "Zs"} <= set(inventory._ZS)
+
+
 # --- R2: the reverse: a name written without separators, text with them --------------------------
 
 @pytest.mark.parametrize("spelling", ["FAKE-PT-0005", "FAKE PT 0005", "fake_pt_0005"])
@@ -192,18 +200,16 @@ def test_another_spelling_is_masked_through_the_gateway(tree, broker):
 
 
 # --- R9: never less masked than before ------------------------------------------------------------
-# The masking as it was before this change, kept here as the reference: lines in NFKC only (no
-# dash or digit folding), every name string in one literal trie, and an entry hit covered only by
-# a rule match that holds it whole.
-
-def _plain_normalize(text):
-    text = inventory._ESCAPES.sub("", text)
-    text = text.replace("\\ ", " ")
-    text = unicodedata.normalize("NFKC", text)
-    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+# The masking as it was before this change, kept here as the reference: every name string in one
+# literal trie, and an entry hit covered only by a rule match that holds it whole. Both read the
+# line in the one form (`inventory.normalize`): a dash or digit spelling now reads as its ASCII
+# spelling did, and the rules match it as they matched that spelling (`C–PLE12345` reads
+# as `C-PLE12345` did before, `<CMOID>45`, where the line as written read `C–PLE<NUM>`).
 
 
 class _Before(Sanitizer):
+    form = staticmethod(inventory.normalize)
+
     def __init__(self, *a, strings=(), **k):
         super().__init__(*a, **k)
         words = sorted(set(strings))
@@ -244,17 +250,30 @@ class _Before(Sanitizer):
 
     def clean(self, line, table=False):
         try:
-            line = _plain_normalize(line)
+            line = self.form(line)
             out = self._mask(line, table)
             if self._mask(out, table) != out:
                 return WITHHELD
             if "\\" in out or "%" in out:
-                plain = _plain_normalize(unescape(out))
+                plain = self.form(unescape(out))
                 if plain != out and self._mask(plain, table) != plain:
                     return WITHHELD
             return out
         except Exception:  # noqa: BLE001
             return WITHHELD
+
+
+def _nfkc_only(text):
+    """The form lines were read in before this change: NFKC, with no fold of dashes or digits
+    (for the cost of R10)."""
+    text = inventory._ESCAPES.sub("", text)
+    text = text.replace("\\ ", " ")
+    text = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+
+
+class _BeforeTimed(_Before):
+    form = staticmethod(_nfkc_only)
 
 
 def _rules(packs, patterns=()):
@@ -337,6 +356,7 @@ def _made_up_lines(n):
             f"INFO {i}: processed sample_{k:06d} in {rnd.random():.3f}s, 0 errors",
             f"{i},FAKE-SPEED-{k:06d},tumor,{rnd.random():.4f},pass",
             f"[{i}] wrote out/run{k % 50}/summary.txt ({rnd.randrange(10**6)} bytes)",
+            f"{i}\tFAKE–SPEED–{k:06d}\t{rnd.randrange(100)} µg — ok",
         ]))
     return out
 
@@ -355,9 +375,9 @@ def test_speed_within_the_targets():
     t_new = time.perf_counter() - t
     re.purge()
     t = time.perf_counter()
-    old = _Before(strings=strings)
+    old = _BeforeTimed(strings=strings)
     t_old = time.perf_counter() - t
-    lines = _made_up_lines(100000)
+    lines = _made_up_lines(400000)
     size = sum(len(x) + 1 for x in lines)
     t = time.perf_counter()
     for x in lines:
@@ -369,8 +389,8 @@ def test_speed_within_the_targets():
     l_old = time.perf_counter() - t
     print(f"\nR10: build {t_new:.2f}s (before {t_old:.2f}s); {size / 1e6:.1f} MB masked in "
           f"{l_new:.2f}s (before {l_old:.2f}s)")
-    assert t_new <= 1.5 * t_old + 0.5, (t_new, t_old)
-    assert l_new <= 1.5 * l_old + 0.5, (l_new, l_old)
+    assert t_new <= 1.5 * t_old + 0.2, (t_new, t_old)
+    assert l_new <= 1.5 * l_old + 0.2, (l_new, l_old)
 
 
 # --- R11: the cost in other text (measured) -------------------------------------------------------
