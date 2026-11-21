@@ -42,6 +42,7 @@ runs-later-rprofile DENIED not-permitted
 runs-later-node-modules OK
 unix-renamed REFUSED not-permitted
 unix-late REFUSED not-permitted
+unix-rebound REFUSED not-permitted
 """
 REFUSAL = ("PreToolUse:Read hook error: This file tool names a protected path. Use `phiward run "
            "-- CMD` (the whole command) or `phiward copy`.")
@@ -84,7 +85,8 @@ def facts(platform="darwin", mode="A", **over):
          "loopback_mapped": "yes", "unix_renamed": "yes", "unix_late": "yes",
          "runs_later_made": "none", "loopback_127_after": "yes",
          "loopback_localhost_after": "yes", "loopback_v6_after": "yes",
-         "loopback_mapped_after": "yes", "unix_renamed_after": "yes"}
+         "loopback_mapped_after": "yes", "unix_renamed_after": "yes",
+         "unix_rebound": "yes", "unix_rebound_after": "yes"}
     f.update(over)
     return f
 
@@ -744,7 +746,7 @@ CORE = ["control-write", "control-read", "read-protected", "write-data", "write-
         "env-secrets", "loopback-127", "loopback-localhost", "loopback-v6", "loopback-mapped",
         "net-api", "runs-later-settings", "runs-later-skill", "runs-later-vscode",
         "runs-later-sub-vscode", "runs-later-rprofile", "runs-later-node-modules",
-        "unix-renamed", "unix-late"]
+        "unix-renamed", "unix-late", "unix-rebound"]
 
 
 @pytest.mark.parametrize("probe", CORE)
@@ -760,7 +762,8 @@ def test_each_required_probe_missing_is_inconclusive(probe):
                                  "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
                                  "runs_later_made", "loopback_127_after",
                                  "loopback_localhost_after", "loopback_v6_after",
-                                 "loopback_mapped_after", "unix_renamed_after"])
+                                 "loopback_mapped_after", "unix_renamed_after",
+                                 "unix_rebound", "unix_rebound_after"])
 def test_each_required_fact_missing_is_inconclusive(key):
     f = facts()
     del f[key]
@@ -1803,7 +1806,7 @@ def test_a_wheel_needs_its_sha256(tmp_path, digest):
 LOOPBACK = ["loopback-127", "loopback-localhost", "loopback-v6", "loopback-mapped"]
 RUNS_LATER = ["runs-later-settings", "runs-later-skill", "runs-later-vscode",
               "runs-later-sub-vscode", "runs-later-rprofile"]
-UNIX = ["unix-renamed", "unix-late"]
+UNIX = ["unix-renamed", "unix-late", "unix-rebound"]
 
 
 def _set(results, name, value):
@@ -2075,7 +2078,7 @@ def test_probes_record_the_new_probes_with_fixed_words_only(tmp_path, netsrv):
     (proj / "paths.txt").write_text("".join(f"{k} {v}\n" for k, v in (
         ("mode", "B"), ("python", sys.executable), ("loopback-port", state["port"]),
         ("net-url", "https://127.0.0.1:1/"), ("unix-renamed", state["renamed"]),
-        ("unix-late", os.path.join(sock, "late-B.sock")))))
+        ("unix-late", os.path.join(sock, "late-B.sock")), ("unix-rebound", state["rebound"]))))
     env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": os.devnull,
            "GIT_CONFIG_NOSYSTEM": "1"}
     r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
@@ -2095,6 +2098,7 @@ def test_probes_record_the_new_probes_with_fixed_words_only(tmp_path, netsrv):
     assert (proj / ".Rprofile").read_text() != "# made up\n"
     assert lines["unix-renamed"] == "CONNECTED", text
     assert lines["unix-late"] == "CONNECTED", text
+    assert lines["unix-rebound"] == "CONNECTED", text
     assert "FAKE-PT" not in text
 
 
@@ -2133,7 +2137,7 @@ def test_the_cleanup_stops_the_made_up_servers(tmp_path):
 # --- review round: the servers checked after the session, a hidden socket, the stub's
 # expectations from the kit and the host ---
 
-@pytest.mark.parametrize("name", LOOPBACK + ["unix-renamed"])
+@pytest.mark.parametrize("name", LOOPBACK + ["unix-renamed", "unix-rebound"])
 def test_mode_b_a_server_that_died_during_the_session_is_inconclusive(name):
     """The made-up servers are asked again from outside right after the session: a refusal
     from a server that was gone proves nothing."""
@@ -2206,7 +2210,7 @@ def test_stub_unix_sockets_must_be_refused_only_with_resolve_unix_and_abi_9(tmp_
     r = _stub_expect(tmp_path, report, proxy=True, unix=unix, abi=abi)
     assert (r.returncode != 0) == bool(expected), r.stdout
     if not expected:
-        assert r.stdout.count("relies on Claude Code's sandbox (not in the stub)") == 2, r.stdout
+        assert r.stdout.count("relies on Claude Code's sandbox (not in the stub)") == 3, r.stdout
         assert "missing guard" not in r.stdout
 
 
@@ -2226,3 +2230,22 @@ def test_stub_every_guard_holding_passes(tmp_path):
     r = _stub_expect(tmp_path, OK_B.replace("PASS Mode B", "FAIL Mode B"), proxy=True,
                      unix=True, abi="9")
     assert r.returncode != 0, r.stdout  # the verdict must match the lines
+
+
+def test_netsrv_binds_its_socket_again_at_the_same_path_on_the_ready_file(netsrv):
+    """unix-rebound: bound before the session, removed and bound again at the same path once the
+    session runs."""
+    import time
+    state, sock, proj, path = netsrv
+    rebound = state["rebound"]
+    assert rebound == os.path.join(sock, "rebound.sock")
+    before = os.stat(rebound).st_ino
+    assert _net("unix", rebound)[0] == "CONNECTED"
+    open(os.path.join(proj, "unix-ready-A"), "w").close()
+    for _ in range(100):
+        if "rebound-A" in _state(path):
+            break
+        time.sleep(0.1)
+    assert _state(path)["rebound-A"] == rebound
+    assert os.stat(rebound).st_ino != before
+    assert _net("unix", rebound)[0] == "CONNECTED"
