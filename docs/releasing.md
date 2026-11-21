@@ -93,7 +93,8 @@ Then push `main`, `develop` and the tag.
    name in any of them fails the mode, and the report says how many of those processes are the
    session's own ancestors. The names are the list in `scripts/sandbox-check/token-names.txt`,
    taken from Claude Code's docs (code.claude.com/docs/en/env-vars and the authentication
-   page). A scan that read no environment, whose read failed (`scan-error`), or whose `/proc`
+   page). `CLAUDE_CODE_MESSAGING_TOKEN` is not on it: Claude Code gives it to Bash commands on
+   purpose, so the report only notes how many processes hold it. A scan that read no environment, whose read failed (`scan-error`), or whose `/proc`
    is not the session's own (`foreign-proc`) is INCONCLUSIVE.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,

@@ -25,7 +25,8 @@ parent-environ: the probe reads the environ of every process in /proc but its ow
 how many it could read or was refused, how many hold a credential variable's name (the list in
 token-names.txt), how many of those are the session's own ancestors, and whether a step of the
 read failed. Any such name is FAIL, in both modes; none, with at least one environ read and no
-failed step, passes; anything else (nothing read, a failed step, a /proc that is not the
+failed step, passes (CLAUDE_CODE_MESSAGING_TOKEN, which Claude Code gives to Bash commands
+on purpose, is only counted and noted); anything else (nothing read, a failed step, a /proc that is not the
 session's own: foreign-proc) is INCONCLUSIVE.
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
@@ -53,7 +54,7 @@ EXIT = re.compile(r"[0-9]{1,3}")
 # the environ scan (probes.sh): counts and PIDs only
 PARENT = re.compile(r"readable=(?P<readable>[0-9]+) refused=(?P<refused>[0-9]+) "
                     r"token-names=(?P<named>[0-9]+) ancestors=(?P<ancestors>[0-9]+) "
-                    r"scan-error=(?P<error>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
+                    r"scan-error=(?P<error>[0-9]+) messaging=(?P<messaging>[0-9]+) pids=(?P<pids>-|[0-9]+(,[0-9]+)*)")
 CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
          "protected_file", "host_write_data", "host_write_phiward")
@@ -346,6 +347,11 @@ def judge(results, stream_lines, server, marker, created, facts):
     # read from /proc (the probe writes counts and PIDs only, never a name or a value)
     parent = lines.get("parent-environ")
     scan = PARENT.fullmatch(parent or "")
+    if scan and int(scan["messaging"]) > 0:
+        # Claude Code gives it to Bash commands on purpose: a note, never a verdict
+        report.append(f"note {scan['messaging']} process environment(s) readable from the "
+                      "session hold CLAUDE_CODE_MESSAGING_TOKEN, which Claude Code gives to Bash "
+                      "commands on purpose (not counted as a credential)")
     if parent == "n/a" and platform == "darwin":
         report.append("note no /proc: no process environment was probed")
     elif scan and int(scan["named"]) > 0:

@@ -170,6 +170,7 @@ else
   named=0
   ancestors=0
   failed=0
+  messaging=0
   pids=""
   [ -n "$names" ] || failed=1
   for d in "$proc"/[0-9]*; do
@@ -188,13 +189,16 @@ else
         1) ;;
         *) failed=1 ;;
       esac
+      # given to Bash on purpose by Claude Code (token-names.txt says why): a count of its own
+      printf '%s\n' "$text" | grep -q '^CLAUDE_CODE_MESSAGING_TOKEN='
+      case $? in 0) messaging=$((messaging + 1)) ;; 1) ;; *) failed=1 ;; esac
     else
       refused=$((refused + 1))
     fi
   done
   text=""
   pids=${pids#,}
-  echo "parent-environ readable=$readable refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed pids=${pids:--}" >> results.txt
+  echo "parent-environ readable=$readable refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed messaging=$messaging pids=${pids:--}" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder
