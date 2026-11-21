@@ -131,6 +131,8 @@ confined, with its output sanitized). Keep tools out of folders a project opens.
 
 "Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
 processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.
+For the agent tool under `launch` on Linux, unix sockets are limited as
+[below](#open-unix-sockets) says.
 
 The sanitizer masks protected paths, entry names under the roots, and identifiers from the packs.
 Out of the box, only file names, read names and loci are masked inside file contents; `phiward
@@ -1072,8 +1074,24 @@ test`), or read the change before you run it outside.
   above. `.claude` is read-only as a whole (its settings can hold hooks), so Claude Code's "don't
   ask again" answers, `--worktree` and `/loop` durable tasks do not stay in the project under
   `launch`;
-- <a id="open-unix-sockets"></a>Linux: abstract unix sockets are scoped only on kernels with Landlock ABI 6 (a warning says so).
-  Unix sockets made after `launch` starts, or with relative paths, are not covered. `launch` makes
+- <a id="open-unix-sockets"></a>Linux: unix sockets are limited by the kernel, not by their names.
+  From Landlock ABI 9 (Linux 7.1) the whole tool reaches only the sockets made in the session
+  and the name-service folders (sssd, nscd, userdb); a helper that cannot apply this stops the
+  start. Below ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all
+  (seccomp; io_uring too). Below ABI 9, `--tool claude` relies on Claude Code's own sandbox,
+  whose seccomp filter blocks unix sockets for Bash: `launch` gives it `--settings` that keep
+  it on and forbid unsandboxed retries, and refuses to start when the filter is missing, does
+  not work in the session's view, could be replaced by the session, or when settings open the
+  sandbox. What runs outside that sandbox can still reach unix sockets outside the session:
+  Claude Code itself, command hooks, MCP servers, LSP servers, the status line,
+  `apiKeyHelper` and `!` commands you type. You configure these; the session cannot change
+  the project's `.claude`. `launch` accepts only Claude Code's native build (a JavaScript
+  program is refused) and runs the filter of the program that will run as Claude Code does,
+  the binary itself with `ARGV0=apply-seccomp`; then it runs that same file. If a Claude Code
+  release runs its filter otherwise, `launch` may prove a filter Claude Code does not use. The tests use a made-up
+  filter; that the real binary's filter works inside launch's bubblewrap is shown only by
+  the sandbox check. `launch` passes `--settings` last and refuses another one, unless it
+  says the same, since Claude Code keeps only the last. `launch` makes
   `.claude`, `.vscode` and `.idea` if they are missing, and `.mcp.json` as a read-only `{}`
   placeholder. After a session, `launch` reports git control files that changed;
 - <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's

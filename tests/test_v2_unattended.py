@@ -124,20 +124,29 @@ def test_the_callback_fails_closed_without_phiward(tree, monkeypatch):
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_v2_carryover import launch, needs_confine  # noqa: E402
-from helpers import Tty, user_settings
+from helpers import Tty, tool_py, user_settings
 
 
 @needs_confine
 def test_launch_runs_headless_and_passes_the_arguments_through(tree):
     import subprocess
     from test_v2_carryover import PY, env
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                        tool_py(tree), "-c",
                         "import sys; print('ARGS', sys.argv[1:], 'TTY', sys.stdin.isatty())",
                         "-p", "summarize the counts"],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     assert r.returncode == 0, r.stderr
-    assert "ARGS ['-p', 'summarize the counts'] TTY False" in r.stdout
+    from helpers import landlock_abi
+    if sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 launch adds, last, the --settings that keep Claude Code's
+        # sandbox on (wholetool.INNER_SETTINGS); the operator's arguments come first, unchanged
+        from phiward import wholetool
+        want = ["-p", "summarize the counts", "--settings", json.dumps(wholetool.INNER_SETTINGS)]
+        assert f"ARGS {want!r} TTY False" in r.stdout, r.stdout
+    else:
+        assert "ARGS ['-p', 'summarize the counts'] TTY False" in r.stdout
 
 
 @needs_confine
@@ -417,7 +426,7 @@ def test_launch_writes_a_started_report_before_the_tool_runs(tree):
     code = ("import time; open('STARTED', 'w').close(); "
             "[time.sleep(0.1) for _ in range(300) if not __import__('os').path.exists('GO')]")
     p = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--report", str(rep),
-                          "--", PY, "-c", code], cwd=str(tree / "repo"), env=env(),
+                          "--", tool_py(tree), "-c", code], cwd=str(tree / "repo"), env=env(),
                          stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         for _ in range(300):
