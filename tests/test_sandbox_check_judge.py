@@ -1346,3 +1346,85 @@ def test_no_passwd_home_is_refused(tmp_path):
     r = _places(tmp_path, "sbx_passwd_home", env=dict(os.environ, PATH=str(fake)))
     assert r.returncode == 2
     assert "home folder" in r.stderr
+
+
+def test_launch_takes_the_token_from_stdin_only(tmp_path):
+    """check.sh takes the token at its prompt only and passes it on stdin: a token variable in
+    launch.py's environment is not used (nor passed on)."""
+    import subprocess
+    import sys
+    home, run_dir, child, _pidfile, env = _setup_launch(tmp_path)
+    child.write_text(API_CHILD)
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = "FAKE-ENV-TOKEN"
+    r = subprocess.run([sys.executable, str(LAUNCH), str(home), str(run_dir), "30", "--",
+                        sys.executable, str(child)], input=f"ANTHROPIC_API_KEY={TOKEN}\n".encode(),
+                       env=env, timeout=60)
+    assert r.returncode == 0
+    assert (run_dir / "stream.jsonl").read_text().strip() == "api none"
+
+
+def _programs_safe(tmp_path, *progs):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_programs_safe", sys.executable, SRC, *progs, env=env)
+
+
+def test_a_claude_others_can_write_is_refused(tmp_path, outside_temp):
+    """claude gets the token, and uv builds what runs: found through your PATH, each must pass
+    phiward's rule (selfcheck.safe_path), as SBX_TOOLS does."""
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    d.chmod(0o775)
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 2
+    assert "claude" in r.stderr and "writable" in r.stderr
+
+
+def test_safe_programs_pass(tmp_path, outside_temp):
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 0, r.stderr
+
+
+def _wheel_check(tmp_path, wheel, digest):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_wheel_check", sys.executable, SRC, wheel, digest, env=env)
+
+
+def test_a_wheel_with_another_sha256_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o644)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"other").hexdigest())
+    assert r.returncode == 2
+    assert "sha256" in r.stderr
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_wheel_others_can_write_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o664)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 2
+    assert "writable" in r.stderr
+
+
+@pytest.mark.parametrize("digest", ["", "abc", "Z" * 64])
+def test_a_wheel_needs_its_sha256(tmp_path, digest):
+    w = tmp_path / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    r = _wheel_check(tmp_path, w, digest)
+    assert r.returncode == 2
+    assert "SBX_WHEEL_SHA256" in r.stderr

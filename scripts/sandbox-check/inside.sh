@@ -160,12 +160,16 @@ refused() {  # NAME TEXT: check.sh exited 2, said TEXT, and never started a sess
     echo "== LEFT  the check's folders of refusal $1"; status=1
   else echo "== ok    refusal $1 removed its folders"; fi
 }
-refusal_run() {  # NAME BASE TOOLS: one check.sh --stub, its output in ~/out-NAME
+refusal_run() {  # NAME BASE TOOLS [SRC]: one check.sh --stub (of SRC, default /repo), its
+  # output in ~/out-NAME; wheel and wheel_sha, when set, become SBX_WHEEL and SBX_WHEEL_SHA256
   o=$HOME/out-$1
   mkdir -p -m 755 "$o"
-  SBX_SRC=/repo SBX_BASE=$2 SBX_TOOLS=$3 SBX_OUT=$o sh /repo/scripts/sandbox-check/check.sh --stub > "$o/console.txt" 2>&1
+  s=${4:-/repo}
+  SBX_SRC=$s SBX_BASE=$2 SBX_TOOLS=$3 SBX_OUT=$o SBX_WHEEL=${wheel-} SBX_WHEEL_SHA256=${wheel_sha-} \
+    sh "$s/scripts/sandbox-check/check.sh" --stub > "$o/console.txt" 2>&1
   echo $? > "$o/rc"
 }
+wheel="" wheel_sha=""
 tools_case() {  # NAME: a base and a tools folder with a socat, both private
   mkdir -p -m 755 "$HOME/sbx-$1/run" "$HOME/sbx-$1/tools/bin"
   printf '#!/bin/sh\nexit 1\n' > "$HOME/sbx-$1/tools/bin/socat"
@@ -180,10 +184,26 @@ refused gp "SBX_TOOLS is not a safe PATH folder"
 tools_case gs; chmod 666 "$HOME/sbx-gs/tools/bin/socat"
 refusal_run gs "$HOME/sbx-gs/run" "$HOME/sbx-gs/tools/bin"
 refused gs "SBX_TOOLS is not a safe PATH folder"
-for n in gw gp gs; do
+# claude found where another account could write it (here: the stand-in's folder) is refused
+cp -R /repo "$HOME/src-gc"
+chmod 775 "$HOME/src-gc/scripts/sandbox-check/stub"
+tools_case gc
+refusal_run gc "$HOME/sbx-gc/run" "$HOME/sbx-gc/tools/bin" "$HOME/src-gc"
+refused gc "is not safe to run"
+# a wheel built beforehand (SBX_WHEEL): one whose sha256 is not the one given is refused
+mkdir -p -m 755 "$HOME/wheel"
+uv build -q --wheel --out-dir "$HOME/wheel" "$HOME/src-git" > "$HOME/wheel-build.out" 2>&1
+wheel=$(ls "$HOME"/wheel/*.whl)
+wheel_sha=0000000000000000000000000000000000000000000000000000000000000000
+tools_case gh
+refusal_run gh "$HOME/sbx-gh/run" "$HOME/sbx-gh/tools/bin"
+refused gh "SBX_WHEEL's sha256"
+for n in gw gp gs gc gh; do
   if grep -q "^building in" "$HOME/out-$n/console.txt"; then echo "== LATE  refused $n after the build began"; status=1
   else echo "== ok    refused $n before the build"; fi
 done
+# the run that goes on to its sessions installs that wheel, with the right sha256
+wheel_sha=$(sha256sum "$wheel" | cut -d' ' -f1)
 tools_case late
 # the name appears once the check is past its first look (the wrapped server is set up)
 ( for _i in $(seq 1200); do
@@ -195,5 +215,7 @@ tools_case late
 refusal_run late "$HOME/sbx-late/run" "$HOME/sbx-late/tools/bin"
 wait
 refused late "$HOME/sbx-late/CLAUDE.md is above SBX_BASE"
+if grep -qxF "wheel: $wheel (no build)" "$HOME/out-late/console.txt"; then echo "== ok    the wheel given was installed"
+else echo "== MISSING the wheel given was installed"; status=1; fi
 [ "$status" = 0 ] && echo "PASS stub plumbing" || echo "FAIL stub plumbing"
 exit $status
