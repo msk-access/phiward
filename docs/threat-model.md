@@ -99,8 +99,12 @@ The kernel confines the agent's **shell**. In Mode A it is Claude Code's sandbox
 phiward's own profile, for the whole tool. An agent shell command cannot read or write anything in a
 protected root (or, on macOS, a pattern match), the hidden list, or the phiward config, code or
 status file. Claude Code's sandbox also keeps its own settings files, `.mcp.json`, the project's
-`.git/config` and hooks, and the shell startup files from being written. Git's other control files
-are a known limit (see "Git's control files" below). Links, letter case, nested shells and child
+`.git/config` and hooks, the working folder's own `.vscode` and `.idea`, and the shell startup
+files from being written. A nested `.vscode` or `.idea` (`sub/.vscode/tasks.json`) is not in
+that list: VS Code and JetBrains read one only when you open that subfolder as a workspace or
+project, and a rule for every depth would deny `npm install` and `git pull` in every project.
+The hook asks before a file tool writes one; a shell command can. Git's other control files are
+a known limit (see "Git's control files" below). Links, letter case, nested shells and child
 processes are covered for ASCII paths, because the kernel does the check. Exceptions (gaps 8, 9):
 other hard links to a protected file, other mounts of the same file system, and a root spelled
 `/System/Volumes/Data/...`. phiward does not confine the shell itself in Mode A. It checks that
@@ -281,7 +285,8 @@ a subagent's own tool calls reach the hook. For a write, in this order:
 2. Asked or refused: what Claude Code runs as code, and what an editor or a tool runs. Claude Code's
    code is skills, subagents, commands, hooks, workflows, plugins, routines, `launch.json` and
    `scheduled_tasks.json`, under any `.claude` folder but its `worktrees`, and under the user config
-   folder. An editor's or a tool's is any `.vscode` or `.idea` folder, `.gitmodules`, `.ripgreprc`.
+   folder. An editor's or a tool's is any `.vscode`, `.idea`, `.cursor`, `.gemini` or `.codex`
+   folder, `.gitmodules`, `.ripgreprc`, `.Rprofile`, `.Renviron`.
    The hook asks you in the modes known to prompt (`default`, `acceptEdits`, `plan`). It refuses in
    every other (`bypassPermissions`, `dontAsk`, `auto`, a missing mode). A skill or subagent may
    hold hooks that run with your rights: allow it only after reading it.
@@ -532,10 +537,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     home folder (pre-commit, git dependencies of cargo, uv or npm). Claude Code's own worktrees are
     made outside it. Not covered by these rules: a `.git` folder renamed, changed and renamed back
     (a rule on `.git` itself would deny every write inside it).
-  - A wrapped MCP server's profile keeps the project's `.claude`, `.vscode` and `.git` folders
-    read-only. On macOS also `.idea`, `.gitmodules`, `.ripgreprc` and any `.git` made while it runs.
-    On Linux only the `.claude`, `.vscode` and `.git` folders that exist when it starts; `.idea`,
-    `.gitmodules`, `.ripgreprc` and a new `.git` are not covered there.
+  - A wrapped MCP server's profile is the session's (Mode B, "Files that run later"), and keeps
+    every `.git` folder of the project read-only as a whole too: on macOS also one made while it
+    runs; on Linux those that exist when it starts.
   - `doctor` names a `commondir` in the project's `.git`, and a `.git` file that leads to a folder
     the agent can write. It does not name a `commondir` that holds only `.` (git then uses that
     `.git` folder itself). Claude Code writes one at start on Linux when
@@ -1044,9 +1048,13 @@ for them. What changes for the operator:
 **Files that run later.** A coding agent must write in the project, and you later run what is there:
 tests, builds, scripts, git with its hooks and config, editor tasks, git hook managers (`.husky/`,
 lefthook). No sandbox can tell a planted hook from a real change. `launch` makes the common places
-read-only (git control files of every repository it finds at start, `.claude` and `.vscode`
-settings, `.mcp.json`) and, on Linux, reports git control files a session changed, but the class
-cannot be closed by a list. **The rule:** treat everything in the project as written by the agent.
+read-only: git control files of every repository it finds at start, and, for the tool and a
+wrapped server alike, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex`
+folders as a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at
+any depth (on Linux, those that exist at start; it makes `.claude`, `.vscode` and `.idea` if
+there are none), and what a link inside them leads to (it refuses to start where it cannot
+tell). So R's `renv::init()`, which writes `.Rprofile`, runs once outside `launch`. On Linux it
+also reports git control files a session changed. But the class cannot be closed by a list. **The rule:** treat everything in the project as written by the agent.
 Run project commands inside `launch` (`phiward launch -- git status`, `phiward launch -- make
 test`), or read the change before you run it outside.
 
@@ -1088,15 +1096,15 @@ test`), or read the change before you run it outside.
   writable (the compiler uses it);
 - <a id="open-git-control-files"></a>both systems: git control files are covered for the repositories found when `launch` starts (top,
   nested, submodules; up to 50,000 entries, skipping `node_modules`, `.venv` and similar).
-  Repositories created during a session, nested `.claude`, `.vscode`, `.mcp.json` files and git hook
-  managers (`.husky/`) are not: see the rule above. `.claude/settings.local.json` is read-only (it
-  can hold hooks), so Claude Code's "don't ask again" answers do not stay in the project under
+  Repositories created during a session and git hook managers (`.husky/`) are not: see the rule
+  above. `.claude` is read-only as a whole (its settings can hold hooks), so Claude Code's "don't
+  ask again" answers, `--worktree` and `/loop` durable tasks do not stay in the project under
   `launch`;
 - <a id="open-unix-sockets"></a>Linux: the session's network namespace is its own, so no abstract unix socket outside is
   reachable, on every kernel. Path unix sockets made after `launch` starts, or with relative
-  paths, are not covered. Missing settings
-  files are made as read-only `{}` placeholders in the project. After a session, `launch` reports
-  git control files that changed;
+  paths, are not covered. `launch` makes `.claude`, `.vscode` and `.idea` if they are missing,
+  and `.mcp.json` as a read-only `{}` placeholder. After a session, `launch` reports git
+  control files that changed;
 - <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
   Kerberos ticket caches (the one `KRB5CCNAME` names, `krb5cc*` files in the shared temp folders,
   `/run/user/<uid>` on Linux), `~/.ssh`, the SSH agent, or the shared SSH connection's socket. So
@@ -1119,8 +1127,8 @@ run later" or to the macOS process model:
 
 | | Limit | What reduces it |
 |---|---|---|
-| <a id="l1"></a>L1 | macOS: other folders that a later plain run reads as settings (for example a nested `.claude`) can be made in the project. `launch` makes `.claude` at start and refuses to make `.vscode`, so these two cannot become links. | The rule above. |
-| <a id="l2"></a>L2 | Linux: a missing `.vscode` folder can be made, with files in it. `launch` makes placeholders only in a `.vscode` that exists. | The rule above. |
+| <a id="l1"></a>L1 | Files that run later and are not in launch's list (`.husky/`, `.envrc`, `.devcontainer/`, `.tool-versions`, a `Makefile`) can be made or changed in the project; the exit report lists them. | The rule above. |
+| <a id="l2"></a>L2 | Linux: a name of the list that is missing at the start can be made and written in the session: `.cursor`, `.gemini`, `.codex`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron` at the top, and any of them, `.claude`, `.vscode` and `.idea` too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are not walked, and the names of the list inside them stay writable; the links in `.claude/worktrees` are not followed. A `git pull`, `checkout` or `switch` that changes a tracked file in a `.claude`, `.vscode` or `.idea` folder fails partway inside `launch`: run it in your own terminal. | The rule above. |
 | <a id="l3"></a>L3 | `.claude/settings.local.json` is read-only, but a plain run outside `launch` still reads whatever was in it before the session. | Read it once before the first `launch`. |
 | <a id="l4"></a>L4 | macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also **read** `/private/tmp` (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's `RtmpXXXX`, Python temp files, other Claude Code sessions' scratch). | Do not run tools that load code from TMPDIR; keep protected data out of temp folders. |
 | <a id="l5"></a>L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). Its profile still allows its session's one proxy port on loopback, which the launcher no longer holds: a process that binds that port later (by chance or on purpose) can talk to it. The port is random for each launch, and a later session has its own port and token. | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |

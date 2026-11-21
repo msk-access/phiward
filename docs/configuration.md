@@ -352,14 +352,19 @@ wildcard forms. List only the hosts you need, and as narrowly as you can.
   wildcard over a top-level or two-part public suffix (`*.com`, `*.co.uk`) or over, or below, a
   common shared hosting name where anyone can have a site (`*.github.io`, `*.amazonaws.com`,
   `*.s3.amazonaws.com`, `*.vercel.app`, ...). This is a short list, not the whole public suffix list: check a
-  wildcard yourself. Empty: no host at all. Hosts of `WebFetch(domain:...)` allow rules in your user settings count too.
+  wildcard yourself. Empty: no host at all (Claude Code 2.1.219 and newer read an empty
+  `allowedDomains` under `strictAllowlist` as no host). Hosts of `WebFetch(domain:...)` allow
+  rules count too, at every level (managed, user and project settings): `phiward doctor` warns
+  for each level that has one.
 
 What it does not limit: Claude Code's own connection to the model provider, the WebFetch and
 WebSearch tools, MCP servers, hooks, and Mode B (`phiward launch`, whose own proxy allows only
-public addresses: [launch.md](launch.md#the-network)). `install` only adds: to
-remove a host, or to open the network again, edit `sandbox.network` in
-`~/.claude/settings.json` yourself. `phiward doctor` shows how many hosts are open and names
-hosts in the settings that the config no longer lists.
+public addresses: [launch.md](launch.md#the-network)). With `limit = true`,
+`install` replaces `sandbox.network.allowedDomains` in your user settings with exactly
+`allowed_domains`, and prints each host it removes. To open the network again, set
+`limit = false` and edit `sandbox.network` in `~/.claude/settings.json` yourself. `phiward
+doctor` shows how many hosts are open, and warns about hosts in the settings that the config
+does not list.
 
 ### `[git]`
 

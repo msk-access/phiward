@@ -267,7 +267,10 @@ What the node needs:
 - **socat on the PATH.** Without admin rights, make a conda environment for it in your own
   space, for example `mamba create -p /scratch/$USER/claude-env -c conda-forge socat`, and put its
   `bin` folder first on the PATH before you start Claude Code. (`sandbox.socatPath` would name
-  it too, but Claude Code reads it only from managed settings.)
+  it too, but Claude Code reads it only from managed settings.) For the release check below,
+  the folder must pass phiward's rule for a PATH folder (no other account can write it or a
+  folder above it), so build socat below your home folder instead, for example in
+  `~/phiward-sbx/tools/bin`.
 - **Claude Code 2.1.295 or newer**, as everywhere. It tells the hook which MCP server each tool
   belongs to. `bash tools/check-claude-mcp-source.sh` (from a phiward
   checkout) shows what yours sends.
@@ -296,7 +299,33 @@ login node (kernel 4.18, bubblewrap 0.4.0) passed all 21 tests:
 
 A home folder on NFS was not part of that probe. The release check with the real Claude Code
 (`scripts/sandbox-check/check.sh`, [releasing.md](releasing.md)) runs on Linux too; it has not
-been run on the cluster yet.
+been run on the cluster yet. To run it there, as an interactive job:
+
+1. Make a folder for it below your home folder, `~/phiward-sbx/run` (SBX_BASE), and one for
+   socat, `~/phiward-sbx/tools/bin` (SBX_TOOLS), with socat built into it and nothing else.
+   Run `chmod go-w ~`, and `chmod go-w` on both folders, the folders between, and socat (and
+   what it links to): the check refuses a tools folder or a socat another account could write.
+2. Get the token first: `claude setup-token`, with your `~/.claude` where it is. Keep the
+   token for step 4.
+3. Move away any `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude`, `.git`, `.mcp.json`,
+   `.phiward.toml` or `.agent-guards.toml` in your home folder or a folder above
+   `~/phiward-sbx/run` (your `~/.claude` too). Claude Code and phiward read them from a folder
+   above the session's, so the check refuses while they are there, also right before each
+   session. Start no `claude` until the check is done: it may make `~/.claude` again.
+4. Build the wheel on your laptop, from a clean checkout of the commit to test:
+   `uv build --wheel --out-dir dist .`, then `shasum -a 256 dist/phiward-*.whl` (or
+   `sha256sum`). Copy the wheel to `~/phiward-sbx/wheel/` on the cluster (`chmod go-w` on it and
+   its folder) and keep the sha256. Then run
+   `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
+   SBX_TOOLS=$HOME/phiward-sbx/tools/bin SBX_WHEEL=$HOME/phiward-sbx/wheel/phiward-VERSION-py3-none-any.whl
+   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh`, with `sh`, not `bash`, and
+   paste the token when it asks. It takes none from the environment. With the wheel, the node
+   needs no package index, only `api.anthropic.com`. The check starts itself again under an
+   empty environment, which drops proxy and CA variables on purpose (`HTTPS_PROXY`, `NO_PROXY`,
+   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and the like), so run it on a node that reaches
+   `api.anthropic.com` directly. There is no SBX_ variable for a proxy yet. Without SBX_WHEEL
+   the check builds the wheel itself and needs a package index too.
+5. Put the names back.
 
 ## Rules for the operator
 

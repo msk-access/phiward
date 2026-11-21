@@ -10,6 +10,7 @@
 #   --stub   a stand-in claude and a made-up token, no terminal: tests the plumbing, never
 #            Claude Code. This is the only form an agent may run.
 #   CLAUDE_VERSION   builds another Claude Code version than the lock (unlocked; the report says so)
+#   SBX_SH=bash      makes the image's /bin/sh bash, as on RHEL and macOS (default: dash)
 # Usage, from the repository: sh scripts/sandbox-check/linux.sh [--stub]
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
@@ -25,7 +26,8 @@ for v in CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY; do
   [ -z "$val" ] || echo "note: $v is set here; it is not passed into the container"
 done
 val=""
-image=phiward-sandbox-check
+image=phiward-sandbox-check${SBX_SH:+-$SBX_SH}
+case ${SBX_SH:-} in ""|bash|dash) ;; *) echo "sandbox-check: SBX_SH is bash or dash" >&2; exit 2 ;; esac
 work=$(mktemp -d)
 label="phiward-sandbox-check=$$"
 stop() {
@@ -41,7 +43,8 @@ chmod 777 "$work/out"  # the container's tester writes there; $work itself is pr
 git -C "$repo" archive HEAD | tar -x -C "$work/src"
 [ -z "$(git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
 echo "checking $(git -C "$repo" log --oneline -1 HEAD); output in $work/out"
-docker build -q -t "$image" --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION:-}" "$here/docker" >/dev/null
+docker build -q -t "$image" --build-arg "CLAUDE_VERSION=${CLAUDE_VERSION:-}" \
+  --build-arg "SH=${SBX_SH:-}" "$here/docker" >/dev/null
 id=$(docker image inspect -f '{{.Id}}' "$image")
 modes=${MODES:-A B}
 tty=""

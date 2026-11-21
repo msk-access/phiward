@@ -176,9 +176,11 @@ def test_a_stream_that_is_not_json_is_inconclusive_not_a_crash():
 
 # --- issue #6: Linux, Mode B, the new probes, the facts file ---
 
+CLEAN = ("parent-environ readable=2 empty=0 refused=1 token-names=0 ancestors=0 scan-error=0 "
+         "messaging=0 pids=-")
 LINUX = GOOD.replace("DENIED not-permitted", "DENIED read-only").replace(
     "read-protected DENIED read-only", "read-protected DENIED empty-view").replace(
-    "parent-environ n/a", "parent-environ unreadable")
+    "parent-environ n/a", CLEAN)
 
 
 def test_linux_full_run_is_pass():
@@ -189,7 +191,7 @@ def test_linux_full_run_is_pass():
 
 def test_read_only_passes_on_linux_but_not_on_macos():
     results = GOOD.replace("write-data DENIED not-permitted", "write-data DENIED read-only")
-    linux = results.replace("parent-environ n/a", "parent-environ unreadable")
+    linux = results.replace("parent-environ n/a", CLEAN)
     assert run(results=linux, platform="linux")[0] == judge.PASS
     assert run(results=results, platform="darwin")[0] == judge.INCONCLUSIVE
 
@@ -252,6 +254,44 @@ def test_a_read_not_found_is_inconclusive_on_macos():
     """Seatbelt never hides a file: on macOS only phiward's refusal passes."""
     lines = stream(read=read_call("File does not exist."))
     assert run(lines=lines)[0] == judge.INCONCLUSIVE
+
+
+DENIED_BY_RULES = ("<tool_use_error>File is in a directory that is denied by your permission "
+                   "settings.</tool_use_error>")
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_mode_a_read_refused_by_the_installed_permission_rules_passes(platform):
+    """Mode A: `install` writes permissions.deny Read(root) and Read(root/**) for every
+    protected root (install.permission_rules), and Claude Code applies it before the hook (the
+    third real Docker run)."""
+    base = GOOD if platform == "darwin" else LINUX
+    lines = stream(read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=base, platform=platform, mode="A")
+    assert verdict == judge.PASS, report
+    assert "ok   read-tool: the Read tool was refused by the permission rules phiward " \
+           "installed" in report, report
+
+
+def test_mode_b_read_refused_by_permission_rules_stays_inconclusive():
+    lines = stream(read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=LINUX, platform="linux", mode="B")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert not any("permission rules" in ln and ln.startswith("ok") for ln in report)
+
+
+def test_the_permission_phrase_does_not_excuse_the_content_in_the_stream():
+    lines = stream({"type": "assistant", "message": {"content": [
+        {"type": "text", "text": "FAKE-MARK-1"}]}}, read=read_call(DENIED_BY_RULES))
+    verdict, report = run(lines=lines, results=LINUX, platform="linux", mode="A")
+    assert verdict == judge.FAIL
+    assert not any("permission rules" in ln and ln.startswith("ok") for ln in report), report
+
+
+def test_a_near_miss_of_the_permission_phrase_is_inconclusive():
+    lines = stream(read=read_call("<tool_use_error>File is in a directory that is denied by "
+                                  "something else.</tool_use_error>"))
+    assert run(lines=lines, results=LINUX, platform="linux", mode="A")[0] == judge.INCONCLUSIVE
 
 
 def test_a_read_with_another_error_is_inconclusive():
@@ -323,13 +363,33 @@ def test_gateway_other_error_notes_its_class_only(why):
     from a fixed list (never any text of the output), and the judge prints it."""
     verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
     assert verdict == judge.INCONCLUSIVE
-    assert f"note gateway-run: {why}" in report, report
+    assert any(ln.startswith(f"note gateway-run: {why}") for ln in report), report
+
+
+@pytest.mark.parametrize("err", ["permission-denied", "read-only", "not-permitted", "no-such",
+                                 "python-fatal", "traceback", "landlock", "bwrap", "gateway",
+                                 "none"])
+def test_gateway_notes_its_exit_code_and_error_class(err):
+    results = gw("BAD other") + f"gateway-why other\ngateway-exit 1\ngateway-error {err}\n"
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+    assert f"note gateway-run: other, exit 1, error {err}" in report, report
+
+
+@pytest.mark.parametrize("code, err", [("x1", "none"), ("1", "FAKE-PT-0001"), ("1234", "none"),
+                                       ("", "")])
+def test_gateway_exit_or_class_not_in_the_list_is_never_printed(code, err):
+    results = gw("BAD other") + f"gateway-why other\ngateway-exit {code}\ngateway-error {err}\n"
+    verdict, report = run(results=results, platform="linux")
+    note = [ln for ln in report if ln.startswith("note gateway-run:")]
+    assert note and "unknown" in note[0], report
+    assert not any("FAKE-PT" in ln or "x1" in ln or "1234" in ln for ln in report), report
 
 
 @pytest.mark.parametrize("why", ["FAKE-PT-0001", "no-broker FAKE-PT-0001", "a.txt", ""])
 def test_gateway_class_not_in_the_list_is_never_printed(why):
     verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
-    assert "note gateway-run: unknown" in report, report
+    assert any(ln.startswith("note gateway-run: unknown") for ln in report), report
     assert not any("FAKE-PT" in ln or "a.txt" in ln for ln in report), report
 
 
@@ -340,6 +400,7 @@ def test_gateway_class_is_not_printed_when_the_gateway_masked():
 
 
 PROBES = JUDGE.parent / "probes.sh"
+NAMES = JUDGE.parent / "token-names.txt"
 NO_BROKER = ("run refused: no phiward broker is running. The operator starts one with "
              "`phiward broker` in a terminal outside the agent.")
 # a made-up phiward per class: what it prints (the real phrases of src/phiward), and its exit
@@ -353,9 +414,16 @@ FAKES = {
 }
 
 
-def _probes(tmp_path, fake):
-    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH). Made-up
-    folders only; a git repository of its own in tmp_path, no hook. -> (results, its text)"""
+def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=False,
+            xtrace=False):
+    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
+    `proc` as its /proc (a made-up one: {pid: environment dict, or None for an environ it cannot
+    read, or "dir" for one that opens but cannot be read}; the probe's own process is "self",
+    a child of 1; `foreign`: /proc/$$ is another
+    process; `names`: copy token-names.txt beside it; `grep_fails`: a grep that exits 2 on the
+    token-name pattern, as an awk that exits 2 on it; `names` may also be the file's text; `xtrace`: run it as sh -x).
+    Its stderr is in tmp_path/"stderr.txt".
+    Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
     import subprocess
     if shutil.which("git") is None:
@@ -370,6 +438,14 @@ def _probes(tmp_path, fake):
     (tmp_path / "settings.json").write_text("{}\n")
     (free / "b.txt").write_text("FREE-MARK-1\n")
     shutil.copy(PROBES, proj / "probes.sh")
+    if isinstance(names, str):
+        (proj / "token-names.txt").write_bytes(names.encode())
+    elif names:
+        shutil.copy(NAMES, proj / "token-names.txt")
+    if grep_fails:
+        (fbin / "awk").write_text('#!/bin/sh\ncase "$*" in *CLAUDE_CODE_OAUTH_TOKEN*) exit 2 ;; '
+                                  'esac\nexec /usr/bin/awk "$@"\n')
+        (fbin / "awk").chmod(0o755)
     if fake is not None:
         text, code = fake
         (fbin / "phiward").write_text(f"#!/bin/sh\ncat >&2 <<'EOF'\n{text}\nEOF\nexit {code}\n")
@@ -378,16 +454,60 @@ def _probes(tmp_path, fake):
         ("mode", "A"), ("free", free), ("free-marker", "FREE-MARK-1"), ("protected-file", prot),
         ("protected-hash", "0"), ("data", data), ("phiward", tmp_path / ".phiward"),
         ("settings", tmp_path / "settings.json"), ("fake-id", "P-9990001-T01-IM6"),
-        ("claude-exe", "/nonexistent/claude"), ("claude-link", "/nonexistent/claude"),
         ("nonce", "n0"), ("remote", "no"))))
+    cmd = ["sh", "./probes.sh"]
+    if proc is not None:
+        root = tmp_path / "proc"
+        for pid, env in {"self": {"PATH": "/x"}, **proc}.items():
+            (root / str(pid)).mkdir(parents=True)
+            ppid = 0 if str(pid) == "1" else 1
+            (root / str(pid) / "status").write_text(f"Name:\tx\nPPid:\t{ppid}\n")
+            if env == "dir":
+                (root / str(pid) / "environ").mkdir()
+            elif env is not None:
+                (root / str(pid) / "environ").write_text(
+                    "".join(f"{k}={v}\0" for k, v in env.items()))
+        with open(proj / "paths.txt", "a") as fh:
+            fh.write(f"proc {root}\n")
+        # the probe's own PID is the "self" entry, as in a real /proc (exec keeps the PID); a
+        # foreign /proc has another process there
+        link = "cp -R" if foreign else "ln -s"
+        x = " -x" if xtrace else ""
+        cmd = ["sh", "-c", f'{link} "{root}/self" "{root}/$$" && exec sh{x} ./probes.sh']
     env = {"PATH": f"{fbin}:/usr/bin:/bin", "HOME": str(tmp_path),
            "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
-    r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
-                       timeout=60)
+    r = subprocess.run(cmd, cwd=proj, env=env, capture_output=True, text=True, timeout=60)
+    (tmp_path / "stderr.txt").write_text(r.stderr)
     assert "probes-done" in r.stdout, r.stderr
     text = (proj / "results.txt").read_text()
     return dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln), text
+
+
+# a made-up failing phiward per error class: (its output, its exit code); the names in it are
+# made up and must never reach results.txt
+ERRORS = {
+    "permission-denied": ("PermissionError: [Errno 13] Permission denied: '/w/FAKE-PT-0001'", 1),
+    "read-only": ("OSError: [Errno 30] Read-only file system: '/w/FAKE-PT-0001'", 1),
+    "not-permitted": ("OSError: [Errno 1] Operation not permitted: '/w/FAKE-PT-0001'", 1),
+    "no-such": ("FileNotFoundError: [Errno 2] No such file or directory: '/w/FAKE-PT-0001'", 1),
+    "python-fatal": ("Fatal Python error: init_fs_encoding: FAKE-PT-0001", 1),
+    "traceback": ("Traceback (most recent call last):\n  File \"/w/FAKE-PT-0001.py\"\nKeyError", 1),
+    "landlock": ("phiward gateway: Landlock cannot add a rule; nothing runs FAKE-PT-0001", 0),
+    "bwrap": ("bwrap: Can't mount proc on /newroot/proc FAKE-PT-0001", 1),
+    "gateway": ("phiward gateway: the command could not start FAKE-PT-0001", 0),
+    "none": ("something FAKE-PT-0001", 2),
+}
+
+
+@pytest.mark.parametrize("err", sorted(ERRORS))
+def test_probes_record_the_exit_code_and_error_class_only(tmp_path, err):
+    text, code = ERRORS[err]
+    lines, kept = _probes(tmp_path, (text, code))
+    assert lines["gateway-run"] == "BAD other", lines
+    assert lines["gateway-error"] == err, lines
+    assert lines["gateway-exit"] == str(code), lines
+    assert "FAKE-PT-0001" not in kept and "Errno" not in kept, kept
 
 
 @pytest.mark.parametrize("why", sorted(FAKES) + ["not-found"])
@@ -717,28 +837,249 @@ def test_pulled_file_not_right_is_inconclusive(pulled):
     assert verdict == judge.INCONCLUSIVE
 
 
-# the token in the parent's environment: the documented limit, a note only
+# the token in another process's environment: the probe scans every /proc entry and records only
+# counts and PIDs; a token variable's name in a readable environ is FAIL
 
-def test_claude_environ_readable_is_a_note_and_still_pass():
-    results = LINUX.replace("parent-environ unreadable", "parent-environ readable")
-    verdict, report = run(results=results, platform="linux")
-    assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and "/proc" in ln and "documented limit" in ln
-               for ln in report)
+def pe(value, base=None):
+    return (LINUX if base is None else base).replace(CLEAN, f"parent-environ {value}")
 
 
-def test_claude_environ_unreadable_passes():
+def scan(readable=2, refused=1, named=0, ancestors=0, error=0, pids="-", messaging=0, empty=0):
+    return (f"readable={readable} empty={empty} refused={refused} token-names={named} "
+            f"ancestors={ancestors} scan-error={error} messaging={messaging} pids={pids}")
+
+
+@pytest.mark.parametrize("mode", ["A", "B"])
+def test_a_token_name_in_a_readable_environ_is_fail(mode):
+    verdict, report = run(results=pe(scan(3, 0, 2, 1, 0, "1,9")), platform="linux", mode=mode)
+    assert verdict == judge.FAIL, report
+    assert any(ln.startswith("FAIL") and "2 processes" in ln and "1 of them" in ln
+               and "ancestor" in ln and "PID 1" in ln and "PID 9" in ln for ln in report), report
+
+
+def test_a_token_name_is_fail_even_with_a_scan_error():
+    assert run(results=pe(scan(3, 0, 1, 0, 1, "9")), platform="linux")[0] == judge.FAIL
+
+
+def test_no_token_name_in_any_readable_environ_passes():
     verdict, report = run(results=LINUX, platform="linux")
     assert verdict == judge.PASS, report
+    assert any(ln.startswith("ok") and "2 readable, 1 refused" in ln for ln in report), report
 
 
-@pytest.mark.parametrize("value", ["not-found", "n/a", "made-up"])
-def test_claude_environ_not_found_in_a_real_linux_run_is_inconclusive(value):
-    """Fail closed: the probe did not find the claude process (another install, a hidden PID)."""
-    results = LINUX.replace("parent-environ unreadable", f"parent-environ {value}")
-    assert run(results=results, platform="linux")[0] == judge.INCONCLUSIVE
-    verdict, report = run(results=results, platform="linux", stub="yes")
+@pytest.mark.parametrize("value", [
+    scan(0, 0), scan(0, 5),                 # nothing readable: the reader may be broken
+    scan(2, 1, error=1),                    # a step of the read failed
+    "foreign-proc", "n/a", "readable", "unreadable", "not-found", "own-pid-ns",
+    scan(pids="x"), "readable=1 refused=0 token-names=0 pids=-",  # older forms
+    "readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 pids=-",
+    "readable=2 refused=1 token-names=0 ancestors=0 scan-error=0 messaging=0 pids=-",
+    scan(0, 0, empty=3),                    # only empty environs were read
+    "readable=1 refused=0 token-names=0", ""])
+def test_a_scan_that_read_nothing_failed_or_cannot_be_read_is_inconclusive(value):
+    verdict, report = run(results=pe(value), platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+def test_the_stand_in_holds_the_made_up_token_a_note():
+    """The stub runs with no sandbox of its own: its token is visible, a note."""
+    verdict, report = run(results=pe(scan(3, 0, 1, 1, 0, "5")), platform="linux", stub="yes")
     assert verdict == judge.PASS, report
+    assert any(ln.startswith("note") and "stand-in" in ln for ln in report), report
+
+
+TOKEN_ENV = {"PATH": "/x", "CLAUDE_CODE_OAUTH_TOKEN": "FAKE-TOKEN-1"}
+
+
+def test_probe_the_reviewers_shape_bwrap_as_pid_1_holds_the_token(tmp_path):
+    """bwrap as PID 1 of the sandbox's namespace, which started with the variable and then
+    unset it in its own process: its environ still holds it. PID 1 is the probe's ancestor."""
+    proc = {1: TOKEN_ENV, 3: {"PATH": "/x", "TERM": "dumb"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == scan(2, 0, 1, 1, 0, "1"), lines
+    verdict, _ = run(results=pe(lines["parent-environ"]), platform="linux")
+    assert verdict == judge.FAIL
+
+
+def _names():
+    return [ln.strip() for ln in NAMES.read_text().splitlines()
+            if ln.strip() and not ln.startswith("#")]
+
+
+def test_the_name_list_holds_claude_codes_documented_credentials():
+    """One list (token-names.txt), from code.claude.com/docs/en/env-vars and authentication."""
+    names = _names()
+    for n in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
+              "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "AWS_BEARER_TOKEN_BEDROCK",
+              "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "ANTHROPIC_AWS_API_KEY",
+              "ANTHROPIC_FOUNDRY_API_KEY", "ANTHROPIC_FOUNDRY_AUTH_TOKEN"):
+        assert n in names, n
+    assert "CLAUDE_CODE_SESSION_ACCESS_TOKEN" not in names
+    # Claude Code gives it to Bash commands on purpose: counted apart, never a FAIL
+    assert "CLAUDE_CODE_MESSAGING_TOKEN" not in names
+    assert "CLAUDE_CODE_MESSAGING_TOKEN" in NAMES.read_text()
+    assert len(names) == len(set(names)) and all(n.isupper() or "_" in n for n in names)
+    probes = PROBES.read_text()
+    assert not any(n in probes for n in names), "the probe holds a list of its own"
+
+
+@pytest.mark.parametrize("name", [
+    "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "AWS_SESSION_TOKEN", "MCP_CLIENT_SECRET",
+    "CLAUDE_CODE_OAUTH_REFRESH_TOKEN", "ANTHROPIC_FOUNDRY_AUTH_TOKEN"])
+def test_probe_any_process_with_a_listed_name_counts_however_it_is_named(tmp_path, name):
+    """No test of which process is claude: a process with a renamed title, or seen by its
+    command line only, counts by its environ."""
+    proc = {1: {"PATH": "/x"}, 9: {"PATH": "/x", name: "FAKE-VALUE-1"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == scan(2, 0, 1, 0, 0, "9"), lines
+    assert "FAKE-VALUE-1" not in text and name not in text, text
+
+
+def test_probe_nothing_readable_holds_a_name(tmp_path):
+    proc = {1: {"PATH": "/x"}, 4: None, 7: {"PATH": "/x", "MY_TOKENISH": "FAKE-VALUE-2"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == scan(2, 1, 0, 0, 0, "-"), lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.PASS
+    assert "FAKE-VALUE-2" not in text and "MY_TOKENISH" not in text
+
+
+def test_probe_counts_the_messaging_token_apart(tmp_path):
+    """Claude Code exports CLAUDE_CODE_MESSAGING_TOKEN to Bash commands on purpose (env-vars
+    docs): its presence is a count of its own, and the run still passes, with a note."""
+    proc = {1: {"PATH": "/x"}, 9: {"PATH": "/x", "CLAUDE_CODE_MESSAGING_TOKEN": "FAKE-MSG-1"}}
+    lines, text = _probes(tmp_path, FAKES["refused"], proc=proc)
+    assert lines["parent-environ"] == scan(2, 0, 0, 0, 0, "-", messaging=1), lines
+    assert "FAKE-MSG-1" not in text
+    verdict, report = run(results=pe(lines["parent-environ"]), platform="linux")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("note") and "CLAUDE_CODE_MESSAGING_TOKEN" in ln and "1 process" in ln
+               for ln in report), report
+
+
+def test_no_messaging_note_when_none_holds_it():
+    verdict, report = run(results=LINUX, platform="linux")
+    assert not any("MESSAGING" in ln for ln in report), report
+
+
+def test_probe_under_xtrace_never_shows_a_value(tmp_path):
+    """`sh -x ./probes.sh` (or an inherited xtrace): no environ value passes through the shell,
+    and the probe turns xtrace off first."""
+    proc = {1: TOKEN_ENV, 9: {"PATH": "/x", "OTHER": "FAKE-VALUE-3",
+                              "CLAUDE_CODE_MESSAGING_TOKEN": "FAKE-MSG-2"}}
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc=proc, xtrace=True)
+    err = (tmp_path / "stderr.txt").read_text()
+    for value in ("FAKE-TOKEN-1", "FAKE-VALUE-3", "FAKE-MSG-2"):
+        assert value not in err, err[-2000:]
+    assert lines["parent-environ"] == scan(2, 0, 1, 1, 0, "1", messaging=1), lines
+    first = [ln for ln in PROBES.read_text().splitlines() if ln and not ln.startswith("#")][0]
+    assert first.startswith("set +x"), first
+
+
+def test_probe_reads_each_environ_once():
+    """One open per environ, in one pipeline: a later open cannot fail unseen."""
+    text = PROBES.read_text()
+    scan = text[text.index("parent-environ readable") - 4000:]
+    assert scan.count('"$d/environ"') == 1, scan.count('"$d/environ"')
+
+
+def test_probe_a_failed_read_of_an_environ_is_a_scan_error(tmp_path):
+    """An environ that opens and then fails mid-read (here: a directory) is a scan error."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}, 4: "dir"})
+    assert "scan-error=1" in lines["parent-environ"], lines
+
+
+def test_probe_an_empty_environ_is_not_a_read(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {}, 4: None})
+    assert lines["parent-environ"] == scan(0, 1, 0, 0, 0, "-", empty=1), lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
+
+
+@pytest.mark.parametrize("text", ["ANTHROPIC_API_KEY\r\nCLAUDE_CODE_OAUTH_TOKEN\r\n",
+                                  "ANTHROPIC_API_KEY\nlower_case\n",
+                                  "ANTHROPIC_API_KEY\nBAD-NAME\n",
+                                  "# only a comment\n"])
+def test_probe_refuses_a_name_list_it_cannot_use_whole(tmp_path, text):
+    """A CRLF line or a name that is not ^[A-Z][A-Z0-9_]*$ is refused, never dropped."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: TOKEN_ENV}, names=text)
+    assert "scan-error=1" in lines["parent-environ"], lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] != judge.PASS
+
+
+def test_the_name_list_holds_the_header_and_github_names():
+    names = _names()
+    for n in ("ANTHROPIC_CUSTOM_HEADERS", "OTEL_EXPORTER_OTLP_HEADERS", "GH_TOKEN",
+              "GITHUB_TOKEN"):
+        assert n in names, n
+
+
+def test_a_probe_line_twice_is_inconclusive():
+    """The session can append to results.txt: a second line of any probe is never trusted."""
+    forged = LINUX + f"{CLEAN}\n"
+    verdict, report = run(results=pe(scan(3, 0, 1, 0, 0, "9")) + f"{CLEAN}\n", platform="linux")
+    assert verdict != judge.PASS, report
+    verdict, report = run(results=forged, platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any("parent-environ" in ln and "2 times" in ln for ln in report), report
+
+
+@pytest.mark.parametrize("command", ["sh -x ./probes.sh", "cd . && sh ./probes.sh",
+                                     "sh ./probes.sh; cat results.txt", "bash ./probes.sh"])
+def test_only_the_exact_probe_command_counts(command):
+    verdict, report = run(results=LINUX, lines=stream(command=command), platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+def _bash(tid, command):
+    return [{"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": command}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": tid, "content": ""}]}}]
+
+
+def test_a_second_bash_call_is_inconclusive():
+    """A second call can rewrite results.txt in place (no duplicate line): one Bash call only."""
+    after = _bash("t2", "sed -i 's/^read-protected .*/read-protected DENIED not-permitted/' "
+                        "results.txt")
+    verdict, report = run(lines=stream(*after))
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any("2 Bash calls" in ln for ln in report), report
+
+
+def test_a_bash_call_before_the_probes_is_inconclusive():
+    """A first call could edit probes.sh before the exact command runs."""
+    events = [json.loads(x) for x in stream()]
+    events[1:1] = _bash("t0", "sed -i 's/x/y/' probes.sh")
+    verdict, report = run(lines=[json.dumps(e) for e in events])
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+def test_probe_a_refused_read_prints_nothing(tmp_path):
+    _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}, 4: None})
+    assert "environ" not in (tmp_path / "stderr.txt").read_text()
+
+
+def test_probe_a_matcher_error_is_a_scan_error_not_no_name(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}}, grep_fails=True)
+    assert lines["parent-environ"] == scan(0, 0, 0, 0, 1, "-"), lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
+
+
+def test_probe_without_the_name_list_is_a_scan_error(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: TOKEN_ENV}, names=False)
+    assert "scan-error=1" in lines["parent-environ"], lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] != judge.PASS
+
+
+def test_probe_an_empty_proc_is_inconclusive(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={})
+    assert lines["parent-environ"] == scan(0, 0, 0, 0, 0, "-"), lines
+    assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
+
+
+def test_probe_records_nothing_from_a_proc_that_is_not_its_own(tmp_path):
+    """/proc/$$ must be this process (/proc/self): else the scan reads another view."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: TOKEN_ENV}, foreign=True)
+    assert lines["parent-environ"] == "foreign-proc", lines
 
 
 def test_claude_environ_n_a_on_macos_passes():
@@ -1061,3 +1402,372 @@ def test_a_second_signal_during_the_cleanup_does_not_cut_it_short(tmp_path):
     p.send_signal(signal.SIGINT)
     p.wait(timeout=30)
     assert not h.exists() and not j.exists()
+
+
+PLACES = JUDGE.parent / "places.sh"
+SRC = Path(__file__).resolve().parents[1] / "src"
+PLACES_DRIVER = '. "$1"; shift; "$@"\n'
+
+
+def _places(tmp_path, *args, env=None):
+    """Run one of places.sh's checks (check.sh sources it) on made-up folders: nothing is built."""
+    import subprocess
+    driver = tmp_path / "places-driver.sh"
+    driver.write_text(PLACES_DRIVER)
+    return subprocess.run(["sh", str(driver), str(PLACES)] + [str(a) for a in args],
+                          capture_output=True, text=True, timeout=60,
+                          env=env or dict(os.environ))
+
+
+def _made_up_home(tmp_path):
+    """A made-up home folder with a base below it (as on a cluster: ~/phiward-sbx/run)."""
+    home = (tmp_path / "home" / "fake-user").resolve()
+    base = home / "phiward-sbx" / "run"
+    base.mkdir(parents=True)
+    return home, base
+
+
+def test_a_base_below_a_clean_home_passes(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", base, f"{home}\n{home}")
+    assert r.returncode == 0, r.stderr
+
+
+def test_the_home_folder_itself_is_refused_as_the_base(tmp_path):
+    home, _base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", home, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+
+
+@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", "AGENTS.md", ".claude", ".git",
+                                  ".mcp.json", ".phiward.toml", ".agent-guards.toml"])
+@pytest.mark.parametrize("where", ["home", "between", "base"])
+def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_path, name, where):
+    """Claude Code reads CLAUDE.md, CLAUDE.local.md and .claude/rules from every folder above the
+    session's, and phiward the settings of every .claude or .git above a call: a real one there
+    would be read into the test session."""
+    home, base = _made_up_home(tmp_path)
+    at = {"home": home, "between": base.parent, "base": base}[where]
+    if name in (".claude", ".git"):
+        (at / name).mkdir()
+    else:
+        (at / name).write_text("made up\n")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+    assert f"{at}/{name}" in r.stderr
+
+
+def test_another_spelling_of_the_home_folder_is_refused(tmp_path):
+    """The home folder is known by identity, not by its spelling (macOS folds letter case)."""
+    home, _base = _made_up_home(tmp_path)
+    other = home.parent / home.name.upper()
+    if not other.exists():
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", other, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+    t = home / "phiward-sbx" / "run" / "tools"
+    t.mkdir()
+    r = _places(tmp_path, "sbx_tools_place", t, home.parent / "FAKE-USER" / "phiward-sbx" / "run")
+    assert r.returncode == 2
+
+
+def test_a_link_by_such_a_name_is_refused_too(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    (home / ".claude").symlink_to(tmp_path / "nowhere")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+@pytest.mark.parametrize("tools", ["relative/bin", "/no/such/folder-FAKE"])
+def test_sbx_tools_must_be_an_existing_absolute_folder(tmp_path, tools):
+    _home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_tools_place", tools, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+@pytest.mark.parametrize("rel", [".", "phiward-sbx-FAKE/bin", ".."])
+def test_sbx_tools_in_or_above_the_base_is_refused(tmp_path, rel):
+    """The check's home and judge's folder are made in SBX_BASE: SBX_TOOLS may not be there, or
+    hold them."""
+    _home, base = _made_up_home(tmp_path)
+    t = base / rel
+    t.mkdir(parents=True, exist_ok=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+def _socat(folder):
+    """A made-up socat (it is never run)."""
+    f = folder / "socat"
+    f.write_text("#!/bin/sh\nexit 1\n")
+    f.chmod(0o755)
+    return f
+
+
+def test_sbx_tools_next_to_the_base_is_placed(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    _socat(t)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == str(t)
+
+
+@pytest.mark.parametrize("extra", ["bwrap", "git", "sh", ".hidden", "socat.d"])
+def test_sbx_tools_holds_only_socat(tmp_path, extra):
+    """Any other name could shadow a program the sandbox or the check runs (bwrap, git, sh)."""
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    _socat(t)
+    (t / extra).write_text("made up\n")
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS may hold only socat" in r.stderr
+
+
+def test_sbx_tools_without_socat_is_refused(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS holds no socat" in r.stderr
+
+
+def _phiward_env(tmp_path):
+    """The installed phiward of the check, made up: src on PYTHONPATH, a made-up home."""
+    home = tmp_path / "check-home"
+    (home / "tmp").mkdir(parents=True, exist_ok=True)
+    return home, dict(os.environ, HOME=str(home), TMPDIR=str(home / "tmp"), PYTHONPATH=str(SRC))
+
+
+def _tools_safe(tmp_path, tools):
+    """The check runs it before the build: the source tree's phiward, by an isolated Python
+    (-I, so no PYTHONPATH), with the check's home."""
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_tools_safe", sys.executable, SRC, home, tools, env=env)
+
+
+@pytest.fixture
+def outside_temp():
+    """A made-up folder outside every temp folder phiward knows. The tests' own folders are in
+    /tmp, which every account may write (sticky, mode 1777) and which phiward counts as a temp
+    folder, so a PATH folder or a wheel there is refused for that alone. On macOS: the per-user
+    temp folder, which the check's run does not count as one (its TMPDIR is the made-up home's).
+    Where TMPDIR is /tmp (Linux): a new folder in your home folder. Made 0700, removed after."""
+    import shutil
+    import tempfile
+    base = os.environ.get("TMPDIR", "")
+    tmp = os.path.realpath("/tmp")
+    if not base or os.path.realpath(base) == tmp or os.path.realpath(base).startswith(tmp + "/"):
+        base = str(Path.home())
+    d = Path(tempfile.mkdtemp(prefix="phiward-sbx-tools-", dir=base)).resolve()
+    d.chmod(0o700)
+    yield d
+    for p in [d] + list(d.rglob("*")):
+        if p.is_dir():
+            p.chmod(0o755)
+    shutil.rmtree(d)
+
+
+@pytest.mark.parametrize("bad", ["tools", "parent"])
+def test_sbx_tools_writable_by_group_is_refused(tmp_path, outside_temp, bad):
+    """phiward's own rule for a PATH folder (service.path_entries, selfcheck.safe_path): the
+    folder and every folder above it are the user's or root's, and no group can write them."""
+    t = outside_temp / "share" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t)
+    (t if bad == "tools" else t.parent).chmod(0o775)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr and "writable" in r.stderr
+
+
+def test_sbx_tools_in_a_temp_folder_is_refused(tmp_path):
+    """The session may write the temp folders: a program planted there would run as a tool."""
+    home, _env = _phiward_env(tmp_path)
+    t = home / "tmp" / "tools"
+    t.mkdir(parents=True)
+    _socat(t)
+    r = _tools_safe(tmp_path, t.resolve())
+    assert r.returncode == 2
+    assert "SBX_TOOLS is not a safe PATH folder (a temp folder" in r.stderr
+
+
+def test_a_safe_sbx_tools_passes(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_socat_others_can_write_is_refused(tmp_path, outside_temp):
+    """The folder is safe, the file in it is not (umask 002 on a cluster): another account could
+    replace what Claude Code's sandbox runs."""
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    _socat(t).chmod(0o666)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
+
+
+def test_a_socat_linked_into_a_folder_others_can_write_is_refused(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    shared = outside_temp / "shared"
+    shared.mkdir()
+    real = _socat(shared)
+    shared.chmod(0o777)
+    (t / "socat").symlink_to(real)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "socat" in r.stderr and "writable" in r.stderr
+
+
+@pytest.mark.parametrize("tools, want", [
+    ("", "/h/bin:/h/.local/bin:/usr/bin:/bin"),
+    ("/opt/FAKE-tools/bin", "/h/bin:/h/.local/bin:/opt/FAKE-tools/bin:/usr/bin:/bin")])
+def test_the_session_path_puts_sbx_tools_before_the_system_folders(tmp_path, tools, want):
+    r = _places(tmp_path, "session_path", "/h", tools, "/usr/bin:/bin")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == want
+
+
+@pytest.mark.parametrize("variant, canon", [("claude.md", "CLAUDE.md"), (".Claude", ".claude"),
+                                            ("agents.MD", "AGENTS.md"), (".Claude-link", ".claude")])
+def test_a_name_in_other_letter_case_is_refused_where_case_is_ignored(tmp_path, variant, canon):
+    """On a volume that ignores letter case (macOS), Claude Code finds claude.md as CLAUDE.md."""
+    home, base = _made_up_home(tmp_path)
+    if variant == ".Claude-link":
+        (home / ".Claude").symlink_to(tmp_path / "nowhere")  # a dangling link
+    elif variant == ".Claude":
+        (home / variant).mkdir()
+    else:
+        (home / variant).write_text("made up\n")
+    if not os.path.lexists(home / canon):
+        pytest.skip("a volume that keeps letter case apart")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+
+def test_the_passwd_home_is_found_for_this_account(tmp_path):
+    import pwd
+    r = _places(tmp_path, "sbx_passwd_home")
+    assert r.returncode == 0, r.stderr
+    assert os.path.samefile(r.stdout.rstrip("\n"), pwd.getpwuid(os.getuid()).pw_dir)
+
+
+def test_no_passwd_home_is_refused(tmp_path):
+    """When the account database names no home folder, the check cannot tell where yours is."""
+    import shutil
+    fake = tmp_path / "bin"
+    fake.mkdir()
+    for tool in ("getent", "dscl"):
+        (fake / tool).write_text("#!/bin/sh\nexit 2\n")
+        (fake / tool).chmod(0o755)
+    for tool in ("id", "sh"):
+        (fake / tool).symlink_to(shutil.which(tool))
+    r = _places(tmp_path, "sbx_passwd_home", env=dict(os.environ, PATH=str(fake)))
+    assert r.returncode == 2
+    assert "home folder" in r.stderr
+
+
+def test_launch_takes_the_token_from_stdin_only(tmp_path):
+    """check.sh takes the token at its prompt only and passes it on stdin: a token variable in
+    launch.py's environment is not used (nor passed on)."""
+    import subprocess
+    import sys
+    home, run_dir, child, _pidfile, env = _setup_launch(tmp_path)
+    child.write_text(API_CHILD)
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = "FAKE-ENV-TOKEN"
+    r = subprocess.run([sys.executable, str(LAUNCH), str(home), str(run_dir), "30", "--",
+                        sys.executable, str(child)], input=f"ANTHROPIC_API_KEY={TOKEN}\n".encode(),
+                       env=env, timeout=60)
+    assert r.returncode == 0
+    assert (run_dir / "stream.jsonl").read_text().strip() == "api none"
+
+
+def _programs_safe(tmp_path, *progs):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_programs_safe", sys.executable, SRC, *progs, env=env)
+
+
+def test_a_claude_others_can_write_is_refused(tmp_path, outside_temp):
+    """claude gets the token, and uv builds what runs: found through your PATH, each must pass
+    phiward's rule (selfcheck.safe_path), as SBX_TOOLS does."""
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    d.chmod(0o775)
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 2
+    assert "claude" in r.stderr and "writable" in r.stderr
+
+
+def test_safe_programs_pass(tmp_path, outside_temp):
+    d = outside_temp / "bin"
+    d.mkdir()
+    d.chmod(0o755)
+    claude = _socat(d).rename(d / "claude")
+    r = _programs_safe(tmp_path, claude)
+    assert r.returncode == 0, r.stderr
+
+
+def _wheel_check(tmp_path, wheel, digest):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    env.pop("PYTHONPATH")
+    return _places(tmp_path, "sbx_wheel_check", sys.executable, SRC, wheel, digest, env=env)
+
+
+def test_a_wheel_with_another_sha256_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o644)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"other").hexdigest())
+    assert r.returncode == 2
+    assert "sha256" in r.stderr
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 0, r.stderr
+
+
+def test_a_wheel_others_can_write_is_refused(tmp_path, outside_temp):
+    import hashlib
+    w = outside_temp / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    w.chmod(0o664)
+    r = _wheel_check(tmp_path, w, hashlib.sha256(b"made up").hexdigest())
+    assert r.returncode == 2
+    assert "writable" in r.stderr
+
+
+@pytest.mark.parametrize("digest", ["", "abc", "Z" * 64])
+def test_a_wheel_needs_its_sha256(tmp_path, digest):
+    w = tmp_path / "phiward-0-py3-none-any.whl"
+    w.write_bytes(b"made up")
+    r = _wheel_check(tmp_path, w, digest)
+    assert r.returncode == 2
+    assert "SBX_WHEEL_SHA256" in r.stderr

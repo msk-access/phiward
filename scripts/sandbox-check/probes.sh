@@ -8,6 +8,7 @@
 # not-permitted (EPERM, as Seatbelt refuses), read-only (EROFS, a read-only bind), permission
 # (EACCES), no-such (ENOENT, "Directory nonexistent" in dash: a hidden file), empty-view (a read worked, but not of the real
 # content), other.
+set +x  # no trace, whatever started it: no command here may show what it reads
 cd "$(dirname "$0")" || exit 1
 : > results.txt
 p() { sed -n "s/^$1 //p" paths.txt; }
@@ -99,6 +100,23 @@ if [ "$r" = "BAD other" ]; then
     esac
   fi
   echo "gateway-why $why" >> results.txt
+  # its exit code, and one error class matched in its output (the OS's words for an errno, the
+  # gateway's own refusals in confine.py, a Python failure); never any text of the output
+  case $out in
+    *[Ll]andlock*) err=landlock ;;
+    *"bwrap:"*) err=bwrap ;;
+    *"phiward gateway: "*) err=gateway ;;
+    *"Permission denied"*|*EACCES*) err=permission-denied ;;
+    *"Read-only file system"*|*EROFS*) err=read-only ;;
+    *"Operation not permitted"*|*EPERM*) err=not-permitted ;;
+    *"No such file"*|*ENOENT*) err=no-such ;;
+    *"Fatal Python error"*) err=python-fatal ;;
+    *Traceback*) err=traceback ;;
+    *) err=none ;;
+  esac
+  case $code in ''|*[!0-9]*) code=unknown ;; esac
+  echo "gateway-exit $code" >> results.txt
+  echo "gateway-error $err" >> results.txt
 fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
@@ -122,32 +140,86 @@ echo "git-hook $r" >> results.txt
 git reset -q -- "gh-$mode.txt" 2>/dev/null
 rm -f "gh-$mode.txt"
 
-# the claude process's environment holds the token: can the session read it from /proc? Walk
-# the parents up to the claude process (its program, or the claude path in its command line: a
-# Node install, the stand-in), and record only whether its environ can be read. No environment
-# is written anywhere. Readable is a note; not found is INCONCLUSIVE in a real run.
-if [ -r /proc/self/status ]; then
-  r=not-found
-  pid=$$
-  want=$(p claude-exe)
-  link=$(p claude-link)
-  while :; do
-    pid=$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/$pid/status" 2>/dev/null)
-    [ -n "$pid" ] && [ "$pid" -gt 0 ] || break
-    args=$(tr '\0' ' ' 2>/dev/null < "/proc/$pid/cmdline")
-    case " $args " in *" $want "*|*" $link "*) found=1 ;; *) found="" ;; esac
-    if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$want" ] || [ -n "$found" ]; then
-      if [ "$(head -c 1 "/proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
-        r=readable
-      else
-        r=unreadable
-      fi
-      break
-    fi
-  done
-  echo "parent-environ $r" >> results.txt
-else
+# a token in another process's environment: read the environ of every process in /proc other
+# than this one, and record only how many had a non-empty environ (readable), an empty one, or
+# were refused, how many hold a credential variable's name (token-names.txt, beside this file),
+# how many of those are this shell's own ancestors, whether a step failed, how many hold
+# CLAUDE_CODE_MESSAGING_TOKEN (given to Bash on purpose: a count apart), and their PIDs. No value
+# passes through the shell or reaches a file: each environ is opened once, and goes from tr
+# straight to awk, which prints numbers only. /proc/$$ must be this process (/proc/self), else foreign-proc. PROC is /proc
+# (paths.txt may name another, for tests).
+proc=$(p proc)
+[ -n "$proc" ] || proc=/proc
+# the name list, used whole or not at all: no CRLF, every line a comment, empty, or a name
+names=""
+cr=$(printf '\r')
+if [ -r token-names.txt ] && ! grep -q "$cr" token-names.txt &&
+   ! grep -v '^#' token-names.txt | grep -v '^$' | grep -qvE '^[A-Z][A-Z0-9_]*$'; then
+  names=$(grep -v '^#' token-names.txt | grep -v '^$' | tr '\n' '|')
+  names=${names%|}
+fi
+if [ ! -r "$proc/self/status" ]; then
   echo "parent-environ n/a" >> results.txt
+elif ! [ "$proc/self/status" -ef "$proc/$$/status" ] 2>/dev/null; then
+  echo "parent-environ foreign-proc" >> results.txt
+else
+  # this shell's ancestors, by PID (at most 256 steps)
+  anc=" "
+  pid=$$
+  n=0
+  while [ "$n" -lt 256 ]; do
+    n=$((n + 1))
+    pid=$(sed -n 's/^PPid:[[:space:]]*//p' "$proc/$pid/status" 2>/dev/null)
+    case $pid in ''|0|*[!0-9]*) break ;; esac
+    case $anc in *" $pid "*) break ;; esac
+    anc="$anc$pid "
+  done
+  readable=0
+  empty=0
+  refused=0
+  named=0
+  ancestors=0
+  failed=0
+  messaging=0
+  pids=""
+  [ -n "$names" ] || failed=1
+  for d in "$proc"/[0-9]*; do
+    pid=${d##*/}
+    case $pid in ''|*[!0-9]*) continue ;; esac
+    [ "$pid" = "$$" ] && continue
+    # one open of the environ, one pipeline: tr feeds awk, which prints counts only (lines,
+    # credential names, the messaging token); tr's status comes back on fd 3. No "tr=" means
+    # the open was refused; any other failure of the read is a scan error.
+    res=$( { { tr '\0' '\n'; echo "tr=$?" >&3; } < "$d/environ" |
+             LC_ALL=C awk -v names="$names" '
+               names != "" && $0 ~ ("^(" names ")=") { h++ }
+               /^CLAUDE_CODE_MESSAGING_TOKEN=/ { m++ }
+               END { printf "lines=%d hits=%d msg=%d\n", NR, h, m }'
+           echo "awk=$?"; } 3>&1 2>/dev/null )
+    case $res in *tr=*) ;; *) refused=$((refused + 1)); continue ;; esac
+    t=""; a=""; nl=""; h=""; m=""
+    for w in $res; do
+      case $w in
+        tr=*) t=${w#tr=} ;; awk=*) a=${w#awk=} ;; lines=*) nl=${w#lines=} ;;
+        hits=*) h=${w#hits=} ;; msg=*) m=${w#msg=} ;; *) t=x ;;
+      esac
+    done
+    case $t:$a:$nl:$h:$m in
+      0:0:[0-9]*:[0-9]*:[0-9]*) ;;
+      *) failed=1; continue ;;
+    esac
+    case $nl$h$m in *[!0-9]*) failed=1; continue ;; esac
+    [ "$nl" -eq 0 ] && { empty=$((empty + 1)); continue; }
+    readable=$((readable + 1))
+    if [ "$h" -gt 0 ]; then
+      named=$((named + 1))
+      pids="$pids,$pid"
+      case $anc in *" $pid "*) ancestors=$((ancestors + 1)) ;; esac
+    fi
+    [ "$m" -gt 0 ] && messaging=$((messaging + 1))
+  done
+  pids=${pids#,}
+  echo "parent-environ readable=$readable empty=$empty refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed messaging=$messaging pids=${pids:--}" >> results.txt
 fi
 
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder

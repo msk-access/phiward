@@ -65,6 +65,24 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   after, and with `REMOTE` push, run and pull through the shared connection), reason classes
   per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
   every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+  `SBX_BASE` may be a folder below your home folder (not the home folder itself), and is
+  refused when it or a folder above it holds `CLAUDE.md`, `CLAUDE.local.md`, `.claude`,
+  `.git`, `.mcp.json`, `.phiward.toml`, `.agent-guards.toml` or `AGENTS.md`, also right before
+  each session. `SBX_TOOLS` puts a folder that holds only socat (a cluster has none) on the
+  session's PATH, when it and its socat pass phiward's own rule for a PATH folder. The check
+  starts itself again under an empty environment (only its own variables, HOME, TMPDIR, TERM
+  and PATH cross), runs in its own folder with its own home, and takes the token only at its
+  prompt, no longer from `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. claude and uv, found
+  through your PATH, must pass the same rule before the prompt. `SBX_WHEEL` with
+  `SBX_WHEEL_SHA256` installs a wheel built beforehand, checked by its sha256, so the node needs
+  no package index. `linux.sh` with
+  `SBX_SH=bash` runs the stub with bash as `/bin/sh`.
+  The parents' environment probe scans every process the session can see in `/proc` and
+  records only counts and PIDs, never a name or a value; a credential variable's name from
+  `token-names.txt` in any of them fails the mode. `CLAUDE_CODE_MESSAGING_TOKEN`, which Claude
+  Code gives to Bash commands on purpose, is only counted and noted. An exported token is
+  not used, but it is in the start environment of your shell and of the check's first start,
+  so the check warns: paste the token when `check.sh` asks for it.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 
@@ -124,6 +142,26 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   (`--unshare-pid`) leaves no process outside it to signal, on every kernel.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
+- `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
+  server alike: the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders as
+  a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at any depth on
+  macOS and, on Linux, those that exist at the start (it makes `.claude`, `.vscode` and `.idea`
+  if there are none). What a link inside them leads to is read-only too; `launch` refuses to
+  start where it cannot tell. So skills, hooks and editor settings are edited outside `launch`,
+  `--worktree`, agent worktrees (`isolation: worktree`) and `/loop` durable tasks do not work
+  inside it, a `git pull`, `checkout` or `switch` that changes a tracked file in those folders
+  fails partway there (run it in your own terminal), and `renv::init()` runs once
+  outside it. A wrapped server on Linux can no longer write `.idea`, `.gitmodules` or
+  `.ripgreprc` (they were read-only only on macOS). The hook also asks before a file tool writes
+  `.cursor`, `.gemini`, `.codex`, `.Rprofile` or `.Renviron` anywhere in a project (in the modes
+  that do not prompt, it refuses), and the exit report lists them, and `.tool-versions`, at any
+  depth. Files in `.cursor/rules/` are now listed as settings, not as instructions for models.
+  Trees of installed code (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are left writable, and `.claude/worktrees` is not walked for links; where the walk
+  stops at its bound, `launch` says so at the start and in the exit report.
+- `[network] limit`: `install` replaces `sandbox.network.allowedDomains` in your user settings
+  with exactly `allowed_domains` and prints each host it removes (it used to keep the hosts
+  already there). `doctor` warns about each level (managed, user, project) whose
+  `WebFetch(domain:...)` allow rules add hosts, and about listed hosts the config does not have.
 - `phiward run --table` is stricter: output without a header line (or with a line before the
   header, a warning on stderr too) is now masked as text, with a note that says so; before, every
   number in it was kept.

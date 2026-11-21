@@ -33,6 +33,9 @@ RUN case $(uname -m) in x86_64) a=x64 ;; aarch64) a=arm64 ;; *) echo "unknown ar
     case $got in "$want "*|"$want") ;; *) echo "claude is $got, not $want" >&2; exit 1 ;; esac
 COPY uv-requirements.txt /tmp/uv-requirements.txt
 RUN pip install -q --require-hashes -r /tmp/uv-requirements.txt
+# SH=bash makes /bin/sh bash, as on RHEL and macOS (linux.sh's SBX_SH); the default stays dash
+ARG SH=
+RUN [ -z "$SH" ] || ln -sf "$SH" /bin/sh
 RUN useradd -m tester && mkdir /work /out && chown tester /work /out
 USER tester
 RUN uv python install -q 3.12

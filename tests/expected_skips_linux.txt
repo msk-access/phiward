@@ -3,6 +3,7 @@
 # 3.12 and 3.9; scripts/linux-check installs node, as CI's runners have it); remake with
 # PHIWARD_WRITE_SKIPS=FILE. One entry runs on CI and skips only in Docker (no overlay in a user
 # namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
+# The sandbox check's letter-case tests need a volume that ignores letter case (macOS).
 tests/test_confinement.py::test_gateway_network_grant
 tests/test_protected_paths.py::test_case_folding_on_macos
 tests/test_round2.py::test_c_no_clipboard
@@ -12,6 +13,11 @@ tests/test_round4.py::test_bug1_the_profile_holds_the_resolved_place_only
 tests/test_round5.py::test_bug_the_seatbelt_gateway_pattern_rule_has_both_spellings
 tests/test_round5.py::test_k5_an_allow_read_in_another_case_re_opens_the_root
 tests/test_round5.py::test_k6_the_gateway_cannot_write_claude_settings
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[.Claude-.claude]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[.Claude-link-.claude]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[agents.MD-AGENTS.md]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[claude.md-CLAUDE.md]
+tests/test_sandbox_check_judge.py::test_another_spelling_of_the_home_folder_is_refused
 tests/test_v2_beta.py::test_l1_a_missing_claude_folder_cannot_be_made_a_link
 tests/test_v2_final_review.py::test_a_name_whose_case_folded_form_is_longer_is_masked_whole[phi_Stra\xdfe O'Brien Pat-Brien Pat]
 tests/test_v2_final_review.py::test_a_name_whose_case_folded_form_is_longer_is_masked_whole[phi_\u0130stanbul O'Neil-Neil]
@@ -77,6 +83,7 @@ tests/test_v2_round13.py::test_a_root_is_found_in_another_case_with_a_longer_fol
 tests/test_v2_round14.py::test_a_pattern_needs_both_of_its_sandbox_entries[0]
 tests/test_v2_round14.py::test_a_pattern_needs_both_of_its_sandbox_entries[1]
 tests/test_v2_round9.py::test_the_named_project_holds_a_folder_written_in_another_case
+tests/test_v2_runs_later.py::test_renv_restore_and_r_run_under_launch
 tests/test_v2_s17.py::test_17_6_a_locked_file_does_not_break_later_launches
 tests/test_v2_s17.py::test_r19_4_a_locked_folder_inside_the_run_does_not_block_removal
 tests/test_v2_unattended.py::test_launch_report_refuses_the_project_in_another_case
