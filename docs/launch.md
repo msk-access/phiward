@@ -169,17 +169,20 @@ when in doubt, reinstall: the step names the command for the tool that installed
 - **Files that other tools run later are read-only.** Skills, agents, commands, hooks and
   settings in the project's `.claude`, and editor and agent-tool settings (`.vscode`, `.idea`,
   `.cursor`, `.gemini`, `.codex`), cannot be written inside `launch`: edit them in your own
-  terminal, or bring them in with `phiward carryover add`. Claude Code's `--worktree` (it writes
-  `.claude/worktrees/`) and `/loop` durable tasks (`.claude/scheduled_tasks.json`) do not work
+  terminal, or bring them in with `phiward carryover add`. Claude Code's `--worktree` and agent worktrees
+  (`isolation: worktree`; both write `.claude/worktrees/`) and `/loop` durable tasks (`.claude/scheduled_tasks.json`) do not work
   inside `launch`. A folder that a link in them leads to (`.claude/skills -> ../.agents/skills`)
   is read-only too; `launch` refuses to start when such a link leads to a folder that holds the
   project, to one that does not exist (Linux), or when one of these folders has more entries than
   it walks for links (50,000 in one tree; it names the folder). Trees of installed code
-  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`) are not
+  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are not
   walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
   the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
   `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work inside it (they write
   `renv/library`, which stays writable).
+- **A `git pull`, `checkout` or `switch` that changes a tracked file in a `.claude`, `.vscode` or
+  `.idea` folder** (at any depth) fails partway inside `launch`, since those folders are
+  read-only. Run them in your own terminal.
 - **Git control files are read-only** for the repositories found at the start, so `git remote
   add`, `git config`, `git submodule update --init`, `git worktree add` and `git push -u` fail
   inside `launch` (and `git switch` to a remote branch, `git branch -u`, `-m` and `-d` cannot
