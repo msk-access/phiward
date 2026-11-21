@@ -1071,6 +1071,11 @@ test`), or read the change before you run it outside.
     decides itself what it forwards;
   - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
     lookups fail inside the session too;
+  - macOS: the user's `trustd` agent stays reachable, as the OS trust store is read through it
+    (Claude Code trusts that store by default). It runs outside the profile and may fetch the
+    URLs a certificate names (issuer, OCSP, CRL) when a program asks it to check a certificate,
+    one the session made too: a way to reach a host the proxy refuses. Not tested. The system
+    `trustd` and `ocspd` are not reachable;
 - <a id="open-environment"></a>the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
   `ANTHROPIC_`/`CLAUDE_` ones); add more with `[launch] pass_env` in the user config, knowing that
   whatever you pass is readable by the agent;

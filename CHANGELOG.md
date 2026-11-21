@@ -104,10 +104,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 - `phiward launch` routes the tool's network through a proxy that allows only public addresses.
   The tool has no direct IP network: on macOS its profile allows only the proxy's random port on
-  loopback (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
+  loopback, TCP only (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
   its own, with the proxy's socket bound in and a relay on the session's own 127.0.0.1. The
   proxy runs in the launcher, outside the profile. It takes HTTPS (CONNECT) only, needs a token
-  for the session, looks a name up once and connects to the address it checked. It refuses this
+  for the session, looks a name up once, checks every address, and connects to the checked addresses in turn
+  (a short timeout each, so broken IPv6 does not stop a connection). It refuses this
   machine, the local link and the private ranges; `[launch] private_networks` in the user config
   (never a project's) lists private ranges it may reach. A `HTTPS_PROXY` in the terminal is
   chained by checked address only. The tool's proxy variables all name the session's proxy and
@@ -115,9 +116,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   macOS one the session starts; tools that ignore the proxy variables; UDP; on Linux, name
   lookups inside the session). `launch` refuses to start when the proxy cannot start, and on
   Linux where network namespaces are not available, which `doctor` reports. On macOS the
-  profile no longer allows the `nsurlsessiond` and `networkd` services. On Linux the Landlock
-  scope for abstract unix sockets is gone: the session's network namespace already keeps them
-  apart, on every kernel.
+  profile no longer allows the `nsurlsessiond`, `networkd`, `ocspd` and system `trustd`
+  services (the user's `trustd` agent stays: it reads the OS trust store). The launcher raises
+  its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
+  held. On Linux the helper's Landlock scope is gone, for abstract unix sockets and for signals
+  both: the session's network namespace keeps abstract unix sockets apart, and its PID namespace
+  (`--unshare-pid`) leaves no process outside it to signal, on every kernel.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
 - `phiward run --table` is stricter: output without a header line (or with a line before the

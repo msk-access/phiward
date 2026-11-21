@@ -18,7 +18,8 @@ How one CONNECT is decided:
   refused unless the user config's `[launch] private_networks` names them; loopback,
   link-local, unspecified and multicast addresses always are. One address that fails refuses
   the name;
-- the connection goes to the address that was checked, never to the name again. Through an
+- the connection goes to an address that was checked (each in turn, a short timeout each),
+  never to the name again. Through an
   upstream proxy (the launcher's HTTPS_PROXY) it is `CONNECT <checked address>:<port>`; a name
   that does not resolve here is refused, never forwarded.
 
@@ -42,6 +43,7 @@ from typing import Callable, Iterable, List, NamedTuple, Optional, Sequence, Set
 PRIVATE = tuple(ipaddress.ip_network(n) for n in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7"))
 _COMPAT = ipaddress.ip_network("::/96")
+_TRANSLATED = ipaddress.ip_network("::ffff:0:0:0/96")
 _NAT64 = ipaddress.ip_network("64:ff9b::/96")
 _NAT64_LOCAL = ipaddress.ip_network("64:ff9b:1::/48")
 USER = "phiward"
@@ -49,6 +51,7 @@ MAX_CONNECTIONS = 64
 MAX_HEADER = 16384
 HEADER_TIMEOUT = 15.0
 CONNECT_TIMEOUT = 30.0
+PER_ADDRESS_TIMEOUT = 10.0  # each checked address in turn (broken IPv6 must not cost 30 s)
 IDLE_TIMEOUT = 900.0
 PORTS = (49152, 65535)  # the proxy's port, a new random one in this range for each launch
 _TRIES = 32
@@ -70,12 +73,13 @@ class Upstream(NamedTuple):
 # --- the address check -------------------------------------------------------------------------
 
 def _embedded(a: Address) -> Optional[ipaddress.IPv4Address]:
-    """The IPv4 address an IPv6 address carries (mapped, compatible, NAT64, 6to4), or None."""
+    """The IPv4 address an IPv6 address carries (mapped, compatible, translated, NAT64, 6to4),
+    or None."""
     if a.version != 6:
         return None
     if a.ipv4_mapped is not None:
         return a.ipv4_mapped
-    if a in _COMPAT or a in _NAT64:
+    if a in _COMPAT or a in _NAT64 or a in _TRANSLATED:
         return ipaddress.IPv4Address(int(a) & 0xFFFFFFFF)
     return a.sixtofour
 
@@ -492,16 +496,17 @@ class Proxy:
             why = address_problem(a, own, self.allow)
             if why:
                 raise _Refuse(403, f"{host} is {why}")
-        ip = addrs[0]
-        try:
-            if self.upstream is None:
-                return self.dial(ip, port, self.connect_timeout), rest, b""
-            remote, early = self._via_upstream(ip, port)
-            return remote, rest, early
-        except _Refuse:
-            raise
-        except Exception:  # noqa: BLE001
-            raise _Refuse(502, f"{host} cannot be reached") from None
+        # every address was checked above; each is tried in turn, with a short timeout
+        each = min(self.connect_timeout, PER_ADDRESS_TIMEOUT)
+        for ip in addrs:
+            try:
+                if self.upstream is None:
+                    return self.dial(ip, port, each), rest, b""
+                remote, early = self._via_upstream(ip, port, each)
+                return remote, rest, early
+            except Exception:  # noqa: BLE001 - this address failed: the next one
+                continue
+        raise _Refuse(502, f"{host} cannot be reached")
 
     def _token_ok(self, auth: str) -> bool:
         scheme, _, value = auth.partition(" ")
@@ -513,10 +518,10 @@ class Proxy:
             return False
         return hmac.compare_digest(got, self._want)
 
-    def _via_upstream(self, ip: str, port: int) -> Tuple[socket.socket, bytes]:
+    def _via_upstream(self, ip: str, port: int, timeout: float) -> Tuple[socket.socket, bytes]:
         up = self.upstream
         assert up is not None
-        s = socket.create_connection((up.host, up.port), timeout=self.connect_timeout)
+        s = socket.create_connection((up.host, up.port), timeout=timeout)
         try:
             where = f"[{ip}]:{port}" if ":" in ip else f"{ip}:{port}"
             req = f"CONNECT {where} HTTP/1.1\r\nHost: {where}\r\n"
@@ -524,7 +529,7 @@ class Proxy:
                 req += f"Proxy-Authorization: {up.auth}\r\n"
             s.sendall(req.encode("ascii") + b"\r\n")
             try:
-                head, early = _read_head(s, time.monotonic() + self.connect_timeout)
+                head, early = _read_head(s, time.monotonic() + timeout)
             except _Refuse:
                 raise _Refuse(502, "the upstream proxy did not answer") from None
             status = head.split(b"\r\n", 1)[0].split()

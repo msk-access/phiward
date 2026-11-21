@@ -200,8 +200,11 @@ SERVER_READ_ONLY = (".claude", ".vscode", ".idea", ".gitmodules", ".ripgreprc")
 PROJECT_SETTINGS = (".mcp.json", ".claude/settings.json", ".claude/settings.local.json",
                     ".vscode/settings.json", ".vscode/tasks.json", ".vscode/launch.json")
 MACH_ALLOW = (
-    "com.apple.SecurityServer", "com.apple.securityd.xpc", "com.apple.trustd",
-    "com.apple.trustd.agent", "com.apple.ocspd", "com.apple.SystemConfiguration.configd",
+    # certificates: only the user's trustd agent, which reads the OS trust store (Claude Code
+    # trusts it by default); the system trustd and ocspd, which fetch certificate URLs outside
+    # the profile, are not needed for that
+    "com.apple.SecurityServer", "com.apple.securityd.xpc",
+    "com.apple.trustd.agent", "com.apple.SystemConfiguration.configd",
     "com.apple.SystemConfiguration.DNSConfiguration", "com.apple.dnssd.service",
     "com.apple.system.opendirectoryd.libinfo", "com.apple.system.DirectoryService.libinfo_v1",
     "com.apple.system.notification_center", "com.apple.system.logger", "com.apple.logd",
@@ -424,11 +427,12 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     p += "".join(f"(allow network-outbound (remote unix-socket (subpath {s(q)})))" for q in own)
     # name lookups go through mDNSResponder's socket
     p += '(allow network-outbound (remote unix-socket (subpath "/private/var/run/mDNSResponder")))'
-    # no IP connection except to the session's proxy: an allow list (`localhost` here is
-    # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1)
+    # no IP connection except TCP to the session's proxy: an allow list (`localhost` here is
+    # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1); `tcp`, as the
+    # proxy holds only TCP on that port, and UDP to it would reach whoever binds it
     p += '(deny network-outbound (remote ip "*:*"))'
     if proxy_port:
-        p += f'(allow network-outbound (remote ip "localhost:{int(proxy_port)}"))'
+        p += f'(allow network-outbound (remote tcp "localhost:{int(proxy_port)}"))'
     p += "(deny lsopen)(deny appleevent-send)(deny user-preference-write)"
     p += "(deny mach-lookup)(allow mach-lookup " + " ".join(
         f"(global-name {s(m)})" for m in MACH_ALLOW) + ")"
@@ -1672,9 +1676,27 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
                 pass
         return 126
     try:
+        _raise_open_files()
         return _session(run, store, folder, cmd, child_env, fds, project, ready)
     finally:
         proxy.close()  # after the tool, the carry-over and the report
+
+
+OPEN_FILES_CAP = 10240  # OPEN_MAX on macOS
+
+
+def _raise_open_files() -> None:
+    """The launcher's soft limit of open files, up to its hard limit (at most OPEN_FILES_CAP):
+    the proxy holds two descriptors for each of its 64 tunnels, and carry-over and the report
+    still need their own while a session (or a process it left behind) holds them."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = OPEN_FILES_CAP if hard == resource.RLIM_INFINITY else min(hard, OPEN_FILES_CAP)
+    if soft != resource.RLIM_INFINITY and soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+        except (OSError, ValueError):
+            pass  # the limit stays: the proxy refuses what it cannot hold
 
 
 def _session(run: _Run, store: carryover.Store, folder: str, cmd: List[str],

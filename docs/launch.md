@@ -75,7 +75,7 @@ The session has no direct network. `launch` runs a proxy outside the profile, an
 this session only; `NO_PROXY` is empty. Claude Code, git, pip, npm and curl use it.
 
 - **Only public addresses.** The proxy looks the name up once, checks every address it gets
-  back, and connects to the address it checked. It refuses this machine (`localhost`,
+  back, and connects to the checked addresses in turn (so broken IPv6 falls back to IPv4). It refuses this machine (`localhost`,
   `127.0.0.1` in any spelling, `[::1]`, this machine's names and addresses, which it reads again
   for each connection), the local link (`169.254.x`, `fe80::`) and the private ranges (`10.x`,
   `172.16-31.x`, `192.168.x`, `100.64.x`, `fc00::/7`).
