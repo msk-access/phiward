@@ -7,13 +7,30 @@
 # credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
 # nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
 # probes meet the real boundary. It cannot test the terminal prompt.
+# Claude Code's native build is also its seccomp filter, run as itself with ARGV0=apply-seccomp
+# (phiward launch probes it so on Linux): the stand-in's filter is the made-up one beside it
+if [ "${ARGV0:-}" = apply-seccomp ]; then
+  exec python3 "$(dirname "$0")/apply-seccomp" "$@"
+fi
+# `claude --help`, and `claude WORD --help` as Claude Code answers it: a Usage line of its own
+# for a command, the root's for a prompt (phiward launch asks so below Landlock ABI 9)
+if { [ "$#" = 1 ] && [ "$1" = --help ]; } || { [ "$#" = 2 ] && [ "$2" = --help ]; }; then
+  if [ "$#" = 2 ] && [ "$1" = doctor ]; then
+    echo "Usage: claude doctor [options] (stand-in)"
+    exit 0
+  fi
+  echo "Usage: claude [options] [command] [prompt] (stand-in)"
+  echo
+  echo "Options:"
+  for f in -p --model --output-format --verbose --settings --add-dir --allowedTools \
+    --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
+  echo
+  echo "Commands:"
+  echo "  doctor                      Check the installation"
+  exit 0
+fi
 case ${1:-} in
   --version) echo "2.1.327 (Claude Code stand-in)"; exit 0 ;;
-  --help)
-    echo "Usage: claude [options] (stand-in)"
-    for f in -p --model --output-format --verbose --settings --add-dir --allowedTools \
-      --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
-    exit 0 ;;
 esac
 exec python3 - "$@" <<'PY'
 import json, os, re, subprocess, sys

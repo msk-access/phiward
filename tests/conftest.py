@@ -142,6 +142,9 @@ def tree(tmp_path, monkeypatch):
     monkeypatch.setenv("PHIWARD_CONFIG", str(cfg))
     monkeypatch.setenv("PHIWARD_DEV", "1")  # tests run from the source checkout
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    # what `launch --tool claude` runs in tests that need Python (helpers.tool_py): a made-up
+    # native build, whose filter launch proves below Landlock ABI 9
+    helpers.fake_native_claude(t / "claude-py" / "claude", python=True)
     yield t
     if sys.platform.startswith("linux"):
         # on Linux `launch` binds every entry next to a protected root into the session's view

@@ -810,6 +810,30 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
     return None
 
 
+def launch_sandbox_reason(project: str, home: str, env: Optional[Mapping[str, str]],
+                          flag: Dict[str, Any]) -> Optional[str]:
+    """`phiward launch` below Landlock ABI 9: why Claude Code's sandbox, with `flag` given by
+    `--settings` (below managed settings, above every file), would not keep Bash from unix
+    sockets, or None. Every `settings.local.json` Claude Code may read counts. A file that
+    does not parse counts as opening it."""
+    for local in local_candidates(project, home):
+        lv = levels(project, home, env, local)
+        managed = [x for x in lv if x[0] == "managed"]
+        lv = managed + [("command line", "--settings", flag)] + lv[len(managed):]
+        for _l, f, data in lv:
+            if data is None and os.path.lexists(f):
+                return f"{_shown_file(f, project, home)} cannot be read as JSON"
+        for key, want in (("enabled", True), ("allowUnsandboxedCommands", False),
+                          ("failIfUnavailable", True)):
+            if _first(lv, "sandbox", key) is not want:
+                return f"the managed settings set sandbox.{key}"
+        opened = _opened(lv)
+        if opened:
+            return (f"Claude Code's settings open its sandbox ({opened[0]}), so Bash could reach "
+                    "unix sockets outside the session; remove that setting")
+    return None
+
+
 NO_PROJECT_STEP = "update Claude Code (it gives hooks $CLAUDE_PROJECT_DIR)"
 OUTSIDE_PROJECT_STEP = "run the command inside the project folder ($CLAUDE_PROJECT_DIR)"
 

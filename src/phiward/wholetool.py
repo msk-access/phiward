@@ -97,6 +97,14 @@ What the session can do:
   variables, and UDP, have no network. On Linux the session has a network of its own (launch
   refuses where network namespaces are not available); on macOS it cannot reach servers on
   this machine, its own too (use unix sockets or IPC transports).
+- Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
+  (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
+  --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
+  turns it on (--settings, always passed last; another --settings or a Claude Code command
+  such as `claude mcp` is refused) and refuses to start unless the seccomp filter of the
+  program that runs blocks unix sockets in the session (run Claude Code's native binary
+  itself, which carries it; a JavaScript build is refused); hooks, MCP servers and Claude Code itself are outside that
+  sandbox. Any other tool cannot make unix sockets at all.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -493,11 +501,80 @@ def _sandbox_check_self() -> bool:
 FINGERPRINT_SYSCALL = 360
 FINGERPRINT_ERRNO = 3917
 
+# Landlock ABI 9 (Linux 7.1) limits connect() to pathname unix sockets made outside the session
+UNIX_ABI = 9
+# what launch gives Claude Code below ABI 9, by --settings (above the project's and the user's
+# files; with the unsandboxed retry off there, Claude Code ignores a repository's settings that
+# loosen its sandbox)
+INNER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                              "allowUnsandboxedCommands": False}}
+# Claude Code's sandbox has a seccomp filter for these only
+INNER_ARCH = ("x86_64", "aarch64")
+def _without_launch_settings(argv: List[str]) -> List[str]:
+    """argv less a --settings that says just what launch passes (INNER_SETTINGS, as in the file
+    `install` writes for `claude --settings`). Claude Code keeps one --settings, the last, so any
+    other would be dropped without a word: it stops the start."""
+    out, i = [argv[0]], 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--settings" or a.startswith("--settings="):
+            if a == "--settings":
+                if i + 1 >= len(argv):
+                    raise LaunchError("--settings has no value")
+                val, i = argv[i + 1], i + 2
+            else:
+                val, i = a.split("=", 1)[1], i + 1
+            try:
+                if val.lstrip().startswith("{"):
+                    data = json.loads(val)
+                else:
+                    with open(val, encoding="utf-8") as fh:
+                        data = json.loads(fh.read(1 << 20))
+            except (OSError, ValueError):
+                data = None
+            if data != INNER_SETTINGS:
+                raise LaunchError(
+                    "launch passes its own --settings to Claude Code, which keeps only one, so "
+                    f"these ({val}) would be dropped. Under launch Claude Code reads a config "
+                    "folder of its own, not ~/.claude: put them in managed settings, or in the "
+                    "settings.json of launch's trusted copy (`phiward carryover add FILE --as "
+                    "settings.json --tool claude`)")
+            continue
+        out.append(a)
+        i += 1
+    return out
 
-def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
+
+def landlock_abi() -> int:
+    """The kernel's Landlock ABI version (0 without Landlock)."""
+    import ctypes
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return 0
+    libc.syscall.restype = ctypes.c_long
+    return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
+
+
+def inner_sandbox_reason(project: str, env: Dict[str, str],
+                         machine: Optional[str] = None) -> Optional[str]:
+    """Why Claude Code's sandbox would not block unix sockets for Bash below ABI 9, or None:
+    an architecture with no filter, or settings (merged under INNER_SETTINGS, as Claude Code
+    merges them; `env` is the session's) that open the sandbox. Whether the filter is installed
+    and works is checked in the session's view (HELPER)."""
+    machine = machine or confine._machine()
+    if machine not in INNER_ARCH:
+        return (f"Claude Code's sandbox has no seccomp filter for the {machine} architecture, "
+                "so it cannot block unix sockets below Linux 7.1")
+    return claude_settings.launch_sandbox_reason(project, _real_home(env), env, INNER_SETTINGS)
+
+
+def tool_seccomp_program(machine: Optional[str] = None, deny_unix: bool = False) -> bytes:
     """No keystroke injection (ioctl TIOCSTI, TIOCLINUX: compared on the low 32 bits) and no
     kernel keyrings (keyctl, add_key, request_key: Kerberos KEYRING tickets); the x32 ABI is
-    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO."""
+    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO. With `deny_unix`
+    (below Landlock ABI 9, a tool with no inner sandbox): socket(AF_UNIX) fails with EPERM and
+    io_uring with ENOSYS (it could make sockets past the filter); socketpair stays."""
     machine = machine or confine._machine()
     if machine not in confine._AUDIT_ARCH:
         raise confine.ConfineError(f"no seccomp filter for the {machine} architecture")
@@ -513,33 +590,14 @@ def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
     prog += [(jeq, 0, 1, FINGERPRINT_SYSCALL), (ret, 0, 0, 0x00050000 | FINGERPRINT_ERRNO)]
     for k in keys:
         prog += [(jeq, 0, 1, k), (ret, 0, 0, eperm)]
+    if deny_unix:
+        for k in ("io_uring_setup", "io_uring_enter", "io_uring_register"):
+            prog += [(jeq, 0, 1, confine._DENY[k][col]), (ret, 0, 0, 0x00050026)]
+        prog += [(jeq, 0, 4, confine._SOCKET[col]), (ld, 0, 0, 16), (jeq, 0, 1, 1),
+                 (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     prog += [(jeq, 0, 4, ioctl), (ld, 0, 0, 24), (jeq, 1, 0, 0x5412), (jeq, 0, 1, 0x541C),
              (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     return b"".join(struct.pack("<HBBI", *i) for i in prog)
-
-
-# system name-service sockets stay reachable (user and group lookups on clusters: sssd, nscd)
-_NSS_SOCKETS = ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb")
-
-
-def _outside_sockets(places: Sequence[str]) -> List[str]:
-    """Path unix sockets bound outside the tool's places (from /proc/net/unix; the path is the
-    rest of the line after seven fields, so it may hold spaces)."""
-    out: List[str] = []
-    try:
-        with open("/proc/net/unix", encoding="utf-8", errors="replace") as fh:
-            next(fh, None)
-            for line in fh:
-                parts = line.rstrip("\n").split(None, 7)
-                if len(parts) == 8 and parts[7].startswith("/") and \
-                        not any(_inside(parts[7], n) for n in _NSS_SOCKETS):
-                    p = parts[7]
-                    if not any(_inside(p, pl) for pl in places) and os.path.lexists(p) and \
-                            p not in out:
-                        out.append(p)
-    except OSError:
-        pass
-    return out
 
 
 def git_dirs_in(project: str, limit: int = 50000) -> List[Tuple[str, str]]:
@@ -1112,11 +1170,9 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
     # session's proxy (its unix socket, bound in below)
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
              "--unshare-net", "--die-with-parent"]
-    # outside sockets first (before /tmp is replaced), then the tool's own temp folder as /tmp,
-    # then the write places on top (a project under /tmp stays visible)
-    for sock in _outside_sockets(list(places)):
-        args += ["--ro-bind-try", "/dev/null", sock]
-        over(sock)
+    # the tool's own temp folder as /tmp, then the write places on top (a project under /tmp
+    # stays visible). Unix sockets are not masked by name (a name in /proc/net/unix is the one
+    # a socket was bound with): the kernel limits them (HELPER, tool_seccomp_program)
     # the tool folder is hidden: a session sees only its own run folder, bound back below
     # (sessions cannot read each other)
     args += ["--tmpfs", folder]
@@ -1237,12 +1293,23 @@ def _raise_fd_limit(need: int) -> None:
 # the helper the tool starts through: on Linux it first checks that each bind in the session's
 # view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
 # a name in between), then it closes the launcher's descriptors, starts the relay to the proxy's
-# socket on the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:SOCKET`), and execs the
-# tool. The relay dies with the tool (PR_SET_PDEATHSIG). Abstract unix sockets belong to a
-# network namespace, so the session's own one reaches none outside
+# socket on the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:SOCKET`; it dies with the
+# tool, PR_SET_PDEATHSIG, and starts before the limits below, which are the tool's), limits
+# unix sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
+# argv: CHK UNIX N FD... CMD [ARG]...
+# - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
+#   session are refused, the session's own are not), the name-service folders allowed, REFER
+#   granted on / (cross-folder renames), abstract sockets and signals scoped. Any failure: 126.
+# - inner (Claude Code below ABI 9): Claude Code's sandbox blocks unix sockets for Bash with
+#   apply-seccomp, which the native build carries (run as itself with ARGV0=apply-seccomp). CMD,
+#   found on the view's PATH, is judged and then run by its real path: a JavaScript program, one
+#   the session could replace, or one that does not make socket(AF_UNIX) fail with EPERM when
+#   run as Claude Code runs its filter, stops the start (126).
+# - deny and inner: the ABI 6 scope for abstract sockets and signals where the kernel has it.
 HELPER = r"""
-import os, sys, ctypes
-chk = int(sys.argv[1]); n = int(sys.argv[2]); close = sys.argv[3:3 + n]; cmd = sys.argv[3 + n:]
+import os, sys, ctypes, struct
+chk = int(sys.argv[1]); unix = sys.argv[2]
+n = int(sys.argv[3]); close = sys.argv[4:4 + n]; cmd = sys.argv[4 + n:]; run = cmd[0]
 if chk >= 0:
     # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
     # start goes on only when every record was read and compared; anything else stops it
@@ -1344,8 +1411,162 @@ if relay:
         finally:
             os._exit(0)
     ls.close()
+def stop(why):
+    sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
+    sys.stderr.flush()
+    os._exit(126)
+if unix == "landlock":
+    RESOLVE_UNIX, REFER = 1 << 16, 1 << 13
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+        attr = struct.pack("<QQQ", RESOLVE_UNIX | REFER, 0, 3)  # scope: abstract unix, signals
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+        if rs < 0:
+            raise OSError(ctypes.get_errno(), "landlock_create_ruleset")
+        def allow(fd, access):
+            rule = struct.pack("<Qi", access, fd)  # struct landlock_path_beneath_attr (packed)
+            if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1),
+                            ctypes.create_string_buffer(rule, len(rule)), ctypes.c_uint32(0)) != 0:
+                raise OSError(ctypes.get_errno(), "landlock_add_rule")
+        fds = [os.open("/", os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)]
+        allow(fds[0], REFER)
+        # the system's name-service sockets (sssd, nscd, userdb): user and group lookups
+        for d in ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb"):
+            try:
+                fds.append(os.open(d, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC))
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            allow(fds[-1], RESOLVE_UNIX | REFER)
+        if libc.prctl(38, 1, 0, 0, 0) != 0:
+            raise OSError(ctypes.get_errno(), "prctl(PR_SET_NO_NEW_PRIVS)")
+        if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) != 0:
+            raise OSError(ctypes.get_errno(), "landlock_restrict_self")
+        for fd in fds + [rs]:
+            os.close(fd)
+    except Exception as e:
+        stop("Landlock could not limit unix sockets (%s)" % e)
+elif unix in ("inner", "deny"):
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    if libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)) >= 6:
+        attr = struct.pack("<QQQ", 0, 0, 3)  # no file rights handled; scope: abstract unix, signals
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+        if rs >= 0:
+            if libc.prctl(38, 1, 0, 0, 0) == 0:
+                libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0))
+            os.close(rs)
+if unix == "inner":
+    import shutil, subprocess
+    if os.uname().machine not in ("x86_64", "aarch64"):
+        stop("Claude Code's sandbox has no seccomp filter for %s" % os.uname().machine)
+    # judged is the program that runs: CMD, found on PATH here as execvp would, then run by its
+    # real path. Only the native build (one binary: no JavaScript file, no node line) is
+    # accepted: it carries apply-seccomp and runs it as itself with ARGV0=apply-seccomp
+    env = dict(os.environ, ARGV0="apply-seccomp")
+    run = cmd[0] if "/" in cmd[0] else shutil.which(cmd[0])
+    if not run:
+        stop("%s is not on the session's PATH" % cmd[0])
+    found = run = os.path.realpath(run)
+    try:
+        with open(run, "rb") as fh:
+            head = fh.read(256).split(b"\n")[0]
+    except OSError as e:
+        stop("Claude Code (%s) cannot be read (%s)" % (run, e.strerror))
+    if run.endswith((".js", ".mjs", ".cjs")) or (head.startswith(b"#!") and b"node" in head):
+        stop("%s is a JavaScript program, not Claude Code's native build; update Claude Code "
+             "to the native build: `claude install`, or `npm install -g "
+             "@anthropic-ai/claude-code@latest`" % run)
+    p = found
+    while True:  # neither the program nor a folder above it may be writable in the session
+        if os.access(p, os.W_OK):
+            stop("Claude Code (%s) can be changed by the session; install "
+                 "Claude Code outside the project and the session's folders" % found)
+        if p == "/":
+            break
+        p = os.path.dirname(p)
+    # the probe prints a word only it knows when socket(AF_UNIX) fails with EPERM: a filter
+    # that exits 0 without running it does not pass
+    word = os.urandom(8).hex()
+    probe = ("import errno, socket, sys\ntry:\n    socket.socket(socket.AF_UNIX)\n"
+             "except OSError as e:\n    e.errno == errno.EPERM and print(sys.argv[1])\n")
+    try:
+        r = subprocess.run([found, sys.executable, "-I", "-S", "-c", probe, word],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, timeout=60, env=env)
+        ok = r.returncode == 0 and r.stdout.split() == [word.encode()]
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    if not ok:
+        stop("Claude Code's seccomp filter (%s, as apply-seccomp) does not block unix sockets "
+             "here; run the Claude Code binary directly: a wrapper that adds arguments, or "
+             "another program (env, npx, node), is not its filter" % found)
+    # a Claude Code command (`claude mcp list`, `claude daemon run`) is no session: some take
+    # no --settings, some ignore it and run, and some are hidden from the help. So the binary
+    # itself is asked: `claude WORD --help` prints a help of its own for a command (any
+    # alias, hidden or not), the root's for a prompt. After -p too: launch does not rely on how
+    # Claude Code reads a word there. The root takes positional options: the
+    # first word that is neither an option nor an option's value (the arity from the root's
+    # help) is WORD; a word that may be an optional value is asked too. Any help that cannot be
+    # read stops the start. Cost: the root help, and one more for each word asked
+    import re
+    del env["ARGV0"]
+
+    def helped(words):
+        try:
+            r = subprocess.run([found] + words + ["--help"], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
+                               env=env)
+        except (OSError, subprocess.SubprocessError):
+            r = None
+        text = r.stdout.decode("utf-8", "replace") if r is not None and r.returncode == 0 else ""
+        if not text.strip():
+            stop("`%s %s--help` cannot be read; launch cannot tell a Claude Code command from a "
+                 "prompt" % (found, "".join(w + " " for w in words)))
+        return text
+
+    text = helped([])
+    if not any(ln.startswith("Usage:") for ln in text.splitlines()):
+        stop("`%s --help` has no Usage line; launch cannot tell a Claude Code command from a "
+             "prompt" % found)
+    arity, part = {}, None
+    for ln in text.splitlines():
+        if ln and not ln[0].isspace():
+            part = ln.strip()
+            continue
+        m = re.match(r"  (-\S.*?)(?:  |$)", ln)
+        if part == "Options:" and m:
+            spec = m.group(1)
+            kind = ("many" if re.search(r"\.\.\.[>\]]", spec) else "one" if "<" in spec else
+                    "maybe" if "[" in spec else "none")
+            for flag in re.findall(r"(?:^|, )(-[-\w]+)", spec):
+                arity[flag] = kind
+
+    def command(word):  # a help other than the root's, in any way, is a command's
+        if helped([word]) != text:
+            stop("`claude %s` is a Claude Code command, not a session, and does not take "
+                 "--settings: run it outside launch" % word)
+
+    args, i = cmd[1:-2], 0  # less the --settings launch adds last
+    while i < len(args):
+        a = args[i]
+        i += 1
+        if not a.startswith("-") or a == "-":
+            command(a)
+            break
+        kind = "none" if "=" in a else arity.get(a, "maybe")
+        if kind == "one":
+            i += 1
+        elif kind == "many":
+            while i < len(args) and not args[i].startswith("-"):
+                i += 1
+        elif kind == "maybe" and i < len(args) and not args[i].startswith("-"):
+            command(args[i])  # a value, or the command
+            i += 1
 try:
-    os.execvp(cmd[0], cmd)
+    os.execvp(run, cmd)
 except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
@@ -1602,7 +1823,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         except BaseException:
             proxy.close()
             raise
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "0"] + list(argv), child_env, \
+        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "none", "0"] + list(argv), \
+            child_env, \
             [], project, lambda: None, proxy
     if backend == "bwrap":
         if not os.path.isfile(config.user_config_path(env)):
@@ -1621,6 +1843,25 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if made:
             sys.stderr.write("phiward launch: made read-only placeholders in the project: "
                              f"{', '.join(made)}\n")
+        # unix sockets: Landlock where the kernel can tell the session's own from those
+        # outside (ABI 9); below it, Claude Code's own sandbox blocks them for Bash, and a tool
+        # without one cannot make any
+        if landlock_abi() >= UNIX_ABI:
+            unix = "landlock"
+        elif adapter.name == "claude" and not server:
+            unix = "inner"
+            why = inner_sandbox_reason(project, child_env)
+            if why:
+                raise LaunchError(why)
+            # whatever runs (claude, a versioned binary, a wrapper), the flag goes last; after a
+            # `--` it would be read as an argument, so the start is refused
+            if "--" in argv[1:]:
+                raise LaunchError("launch passes --settings to Claude Code as the last "
+                                  "arguments, so `--` cannot be among them")
+            argv = _without_launch_settings(argv)
+            argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
+        else:
+            unix = "deny"
         # the proxy's socket in a folder of its own, outside every place the session can see; the
         # session reaches it at PROXY_SOCKET through the relay on its own 127.0.0.1
         sockdir = tempfile.mkdtemp(prefix="phiward-proxy-",
@@ -1641,7 +1882,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             proxy.close()
             raise
         r, w = os.pipe()
-        os.write(w, tool_seccomp_program())
+        os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
         os.close(w)
         os.set_inheritable(r, True)
         # the helper's checks, written by `ready` right before bwrap starts (an unlinked file:
@@ -1651,7 +1892,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         os.set_inheritable(chk, True)
         held = [str(fd) for fd in fds]
         try:
-            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk)], held, argv)
+            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
+                                 argv)
         except LaunchError:
             for fd in fds + [r, chk]:
                 os.close(fd)

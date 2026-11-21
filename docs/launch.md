@@ -65,7 +65,7 @@ phiward launch --tool claude
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
 | Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps |
-| Network | HTTPS to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker) |
+| Network | HTTPS to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
 
 ## The network
@@ -235,6 +235,51 @@ when in doubt, reinstall: the step names the command for the tool that installed
   Bash command is not retried outside it. Bash reaches the network through Claude Code's own
   proxy, which then goes through phiward's; that a given Claude Code version does this is for
   the real-tool check to confirm.
+- **Linux: unix sockets.** `launch` does not mask sockets by name; the kernel limits them.
+  - From Linux 7.1 (Landlock ABI 9): the session reaches only the unix sockets it made itself,
+    and the system's name-service sockets (sssd, nscd).
+  - Before 7.1, with `--tool claude`: Claude Code's own sandbox blocks unix sockets for Bash
+    (its seccomp filter, which the native build carries). `launch` turns that sandbox on with
+    `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`, and
+    `sandbox.allowUnsandboxedCommands` false), passed as the last arguments of whatever
+    `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
+    stops the start. Claude Code keeps only one `--settings`, so your own stops the start too,
+    unless it says just the same (the file `install` writes for `claude --settings`).
+    Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
+    settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
+    --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,
+    ...), also after options (`claude --debug mcp list`), is not a session: some ignore
+    `--settings` and run, and some are hidden from the help. `launch` refuses it: run it outside
+    `launch`. To tell a command from a prompt, `launch` asks the program that runs, inside
+    the session: `claude WORD --help` for the first word that is not an option (which options
+    take a value comes from `claude --help`). A help other than the root's means a command; so
+    `claude -p mcp` is refused too. A help that hangs, fails or is empty stops the start.
+    Some options run something other than a session (`--chrome-native-host`, `--preload`,
+    `--eval-mock-server`, `--daemon-worker`). `launch` does not refuse them; they run inside
+    the session's confinement, so the guards still hold. Cost: one help run
+    at each start, and one more when there is such a word. Only Claude Code's native build is accepted (npm
+    and the installer give it from 2.1.250; for an older JavaScript build, run `claude
+    install`). Before the tool starts, `launch` runs the filter of the program that will run
+    (found on the session's `PATH`, then run by its real path) as Claude Code does (the native
+    binary with `ARGV0=apply-seccomp`) and requires `socket(AF_UNIX)` to fail. So run the
+    Claude Code binary itself: `env`, `npx`, `node`, a JavaScript program or a wrapper that
+    adds arguments does not pass.
+    It refuses to start when the filter does not block unix sockets, when the session can
+    write the program's real file or a folder above it, on a machine other than x86_64 or
+    aarch64, or when settings
+    open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
+    `enableWeakerNestedSandbox`). A read-only wrapper of your own, inside the project, that
+    runs a native binary the session can write is not caught: only the wrapper is checked.
+    The tests use a made-up native build. Only the sandbox check shows that the real
+    binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
+    starts in the background (`--bg`, its background service) get the same sandbox
+    settings. Claude Code
+    also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
+    Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
+    itself run outside that sandbox: they can reach sockets outside. You configure them; the
+    session cannot, because the project's `.claude` is read-only.
+  - Before 7.1, with any other tool (`--tool generic`, a wrapped MCP server): the tool cannot
+    make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
   keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;

@@ -44,6 +44,7 @@ says what it holds. By feature:
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta |
 | `launch`'s network: the proxy (token, the address check, an upstream proxy, limits), the macOS profile's one port, Linux's network namespace and relay | test_v2_launch_network |
+| Unix sockets under `launch` on Linux (Landlock ABI 9; below it Claude Code's seccomp filter for `--tool claude`, and no unix sockets for other tools). `conftest.py` plants a made-up native Claude Code that runs as Python (`helpers.tool_py`) | test_v2_launch_sockets, test_v2_nested_launch |
 | Files that other tools run later (read-only under `launch` for the tool and a wrapped server, at any depth, with link targets; Mode A's nested `.vscode` and `.idea` on macOS; the network limit's exact host list; renv under `launch`, Linux with R) | test_v2_runs_later |
 | A launch inside a session (a wrapped MCP server in Mode B; the Linux seccomp fingerprint) | test_v2_nested_launch, test_v2_w1 |
 | Carry-over | test_v2_carryover, test_v2_s17, test_v2_old_glibc |

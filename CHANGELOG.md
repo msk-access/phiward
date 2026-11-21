@@ -137,11 +137,27 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   profile no longer allows the `nsurlsessiond`, `networkd`, `ocspd` and system `trustd`
   services (the user's `trustd` agent stays: it reads the OS trust store). The launcher raises
   its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
-  held. On Linux the helper's Landlock scope is gone, for abstract unix sockets and for signals
-  both: the session's network namespace keeps abstract unix sockets apart, and its PID namespace
-  (`--unshare-pid`) leaves no process outside it to signal, on every kernel.
+  held. On Linux the session's network namespace keeps abstract unix sockets apart, on every
+  kernel.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
+- Linux: `launch` no longer masks host unix sockets by name; the kernel limits them. From
+  Landlock ABI 9 (Linux 7.1) the session reaches only the unix sockets it made itself (and the
+  name-service ones), and a helper that cannot apply this stops the start. Below ABI 9,
+  `--tool claude` relies on Claude Code's sandbox to block unix sockets for Bash: `launch`
+  passes `--settings` that turn it on (`enabled`, `failIfUnavailable`, no unsandboxed
+  retries) as the last arguments of whatever it runs, and refuses to start when that sandbox
+  cannot apply its filter (the native binary's, run as Claude Code runs it, does not block
+  unix sockets in the session; the session could replace it; another architecture than
+  x86_64 or aarch64), when settings open it, or when a `--` is among the arguments. The
+  filter judged is that of the program that runs, and only Claude Code's native build is
+  accepted (a JavaScript program, `env`, `npx`, `node` or a wrapper that adds arguments is
+  refused). Your own `--settings` is refused unless it says just what launch passes, and so is
+  a Claude Code command (`claude mcp`, `daemon`, `rc`), also after options and hidden ones:
+  `launch` asks the program that runs (`claude WORD --help` has a Usage line of its own), and a
+  help that cannot be read stops the start. Below
+  ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all (also their
+  own; socketpairs and pipes work). The warnings about Landlock scopes are gone.
 - `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
   server alike: the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders as
   a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at any depth on
