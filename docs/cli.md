@@ -116,6 +116,7 @@ usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
 | `--keep H,...` | Columns (in JSON, key paths) that look like identifiers, kept as they are on your word. |
 | `--keep-samples N,...` | With a VCF: keep the names of these samples, on your word. |
 | `--keep-order` | Keep the order of the rows, of a VCF's sample columns or of JSON arrays. |
+| `--` | End the options. IN and OUT follow. |
 | `-h`, `--help` | Show the help, with the rules for each kind of file. |
 
 ## Wire a project and a tool
@@ -150,7 +151,7 @@ usage: phiward install claude [--user|--project] [--no-hooks] [--block-outside-r
 | `--user` | The user settings, `~/.claude/settings.json` (the default). |
 | `--project` | The project settings, `.claude/settings.json` and `.claude/settings.local.json`. |
 | `--no-hooks` | Write only the sandbox and permission settings, not the hooks. |
-| `--block-outside-reads` | With `--user`: also turn on two Claude Code permission settings: Read, Grep and Glob refuse paths outside the working folders, and a call that would wait on a prompt is refused. |
+| `--block-outside-reads` | With `--user`: also set up to two Claude Code permission settings, as defence in depth around the project. Each is set only when the installed Claude Code takes it: which ones, and from which version, is in [setup.md](setup.md#claude-code). |
 | `--write` | Merge the wiring into the settings file, show the difference, write it after a yes. |
 | `--yes` | With `--write`: write without the question. |
 | `--json` | Print the user wiring as one JSON object, for an unattended run. See [unattended.md](unattended.md). |
@@ -167,7 +168,7 @@ usage: phiward doctor [--verbose] [--show-paths | --headless]
 
 | Option | What it does |
 |---|---|
-| `--verbose` | Every check on its own line, and the detail counts. |
+| `--verbose`, `-v` | Every check on its own line, and the detail counts. |
 | `--show-paths` | Also print the protected paths (by default only their counts). |
 | `--headless` | A short check before an unattended run: exit 0 when the session would be guarded. See [unattended.md](unattended.md). |
 | `-h`, `--help` | Show the help. |

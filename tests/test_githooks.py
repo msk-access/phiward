@@ -290,6 +290,28 @@ def test_install_refuses_to_clobber_foreign_hook(ctx: Env) -> None:
     assert "phiward git-hook pre-push" in foreign.read_text()
 
 
+@pytest.mark.parametrize("args", [("install", "--help"), ("install", "--force", "--help"),
+                                  ("install", "-h", "--force")])
+def test_help_after_install_prints_the_help_and_installs_nothing(ctx: Env, args) -> None:
+    r = ctx.hook(*args)
+    assert r.returncode == 0 and "Commands:" in r.stdout and not r.stderr, out(r)
+    assert not (hooks_dir(ctx) / "pre-commit").exists() and not (hooks_dir(ctx) / "pre-push").exists()
+
+
+def test_a_hook_given_help_still_checks_and_prints_no_help(ctx: Env) -> None:
+    # git runs pre-commit and pre-push; an argument never turns their check off
+    use_msk_pack(ctx)
+    ctx.write("report.txt", "sample %s was run\n" % FAKE_ID)
+    ctx.stage("report.txt")
+    for args in (("pre-commit", "--help"), ("pre-commit", "-h")):
+        r = ctx.hook(*args)
+        assert r.returncode == 1 and "<SAMPLEID>" in out(r) and "Commands:" not in out(r), out(r)
+    protect_main(ctx)
+    for args in (("pre-push", "--help"), ("pre-push", "-h")):
+        r = ctx.hook(*args, stdin=push_line("main"))
+        assert r.returncode == 1 and "Commands:" not in out(r), out(r)
+
+
 def test_install_respects_core_hooks_path(ctx: Env) -> None:
     ctx.git("config", "core.hooksPath", ".githooks")
     assert ctx.hook("install").returncode == 0
