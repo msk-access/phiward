@@ -285,6 +285,56 @@ def test_3_it_connects_to_the_checked_address_after_one_lookup(make_proxy):
     assert b"FAKE-PT-0001" in rest
 
 
+class FlakyDial(Dial):
+    """Made up: the IPv6 addresses do not connect (broken IPv6), the others do."""
+
+    def __init__(self):
+        super().__init__()
+        self.timeouts = []
+
+    def __call__(self, ip, port, timeout):
+        self.timeouts.append(timeout)
+        if ":" in ip:
+            self.calls.append((ip, port))
+            raise OSError(errno.ENETUNREACH, "made-up broken IPv6")
+        return super().__call__(ip, port, timeout)
+
+
+def test_3_each_checked_address_is_tried_in_turn(make_proxy):
+    dial = FlakyDial()
+    res = Resolver({"pub.example": ["2001:4860:4860::8888", "8.8.4.4"]})
+    p = make_proxy(dial=dial, resolver=res)
+    try:
+        line, rest = ask(p, "pub.example:443", read_more=True)
+    finally:
+        dial.close()
+    assert _status(line) == 200 and b"FAKE-PT-0001" in rest, line
+    assert dial.calls == [("2001:4860:4860::8888", 443), ("8.8.4.4", 443)], dial.calls
+    assert all(t <= _np().PER_ADDRESS_TIMEOUT for t in dial.timeouts), dial.timeouts
+
+
+def test_3_every_address_is_checked_before_any_is_dialled(make_proxy):
+    dial = FlakyDial()
+    res = Resolver({"pub.example": ["2001:4860:4860::8888", "8.8.4.4", "10.1.2.3"]})
+    p = make_proxy(dial=dial, resolver=res)
+    try:
+        line, _ = ask(p, "pub.example:443")
+    finally:
+        dial.close()
+    assert _status(line) == 403 and not dial.calls, (line, dial.calls)
+
+
+def test_3_when_no_address_connects_it_is_a_502(make_proxy):
+    dial = FlakyDial()
+    res = Resolver({"pub.example": ["2001:4860:4860::8888", "2001:4860:4860::8844"]})
+    p = make_proxy(dial=dial, resolver=res)
+    try:
+        line, _ = ask(p, "pub.example:443")
+    finally:
+        dial.close()
+    assert _status(line) == 502 and len(dial.calls) == 2, (line, dial.calls)
+
+
 def test_3_a_lookup_that_fails_is_refused(make_proxy):
     dial = Dial()
     res = Resolver({"broken.example": socket.gaierror(socket.EAI_NONAME, "made up")})
@@ -298,6 +348,7 @@ def test_3_a_lookup_that_fails_is_refused(make_proxy):
 
 @pytest.mark.parametrize("literal", [
     "::127.0.0.1", "64:ff9b::7f00:1", "64:ff9b:1::7f00:1", "2002:7f00:1::", "::ffff:127.0.0.1",
+    "::ffff:0:7f00:1",
     "2130706433", "0x7f.1", "0177.1", "0", "localhost.", "::1"])
 def test_7_every_loopback_spelling_is_refused(make_proxy, literal):
     dial = Dial()
@@ -311,7 +362,7 @@ def test_7_every_loopback_spelling_is_refused(make_proxy, literal):
 
 
 @pytest.mark.parametrize("answer", ["::127.0.0.1", "64:ff9b::7f00:1", "64:ff9b:1::7f00:1",
-                                    "2002:7f00:1::", "::ffff:127.0.0.1"])
+                                    "2002:7f00:1::", "::ffff:127.0.0.1", "::ffff:0:7f00:1"])
 def test_7_the_check_judges_the_lookups_answer_not_the_text(make_proxy, answer):
     dial, res = Dial(), Resolver({"looks-public.example": [answer]})
     p = make_proxy(dial=dial, resolver=res)
@@ -789,30 +840,158 @@ def test_1_the_profile_allows_only_the_proxys_port(tree, server):
     assert "ALLOWED PROXY-PORT" in out, out
 
 
-# --- 13: limits at launch level: the launcher still writes its report ----------------------------
-
-HOG = """
-import os, socket, time
-url = os.environ.get('HTTPS_PROXY', '')
-where = url.rstrip('/').rpartition('@')[2]
-h, _, p = where.rpartition(':')
-held = []
-for _ in range(80):
+@macos
+def test_1_the_profiles_one_port_is_tcp_only(tree):
+    """The profile's one allowed port takes TCP only: a UDP datagram to 127.0.0.1:P or [::1]:P
+    does not arrive; TCP to [::1]:P does, and ::ffff:127.0.0.1:P is refused."""
+    from phiward import config, confine, wholetool
+    if confine.backend() != "seatbelt":
+        pytest.skip("no sandbox-exec")
+    tcp = FakeServer(answer=b"PROXY-PORT\n")
+    port = tcp.port
+    udp = []
+    for fam, host in ((socket.AF_INET, "127.0.0.1"), (socket.AF_INET6, "::1")):
+        u = socket.socket(fam, socket.SOCK_DGRAM)
+        if fam == socket.AF_INET6:
+            u.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+        u.bind((host, port))
+        u.settimeout(0.5)
+        udp.append(u)
     try:
-        held.append(socket.create_connection((h, int(p)), timeout=2))
+        cfg = config.load(str(tree / "repo"))
+        folder = tree / "home" / ".phiward" / "tools" / "generic"
+        run = folder / "runs" / "r1"
+        (run / "tmp").mkdir(parents=True)
+        prof = wholetool.seatbelt_tool_profile(cfg, [str(tree / "repo"), str(run)],
+                                               str(tree / "repo"), dict(os.environ), str(folder),
+                                               str(tree / "home" / ".phiward" / "canary"),
+                                               proxy_port=port)
+        code = ("import socket\n"
+                "for fam, host in ((socket.AF_INET, '127.0.0.1'), (socket.AF_INET6, '::1')):\n"
+                "    u = socket.socket(fam, socket.SOCK_DGRAM)\n"
+                "    try:\n"
+                f"        u.sendto(b'FAKE-PT-0001', (host, {port}))\n"
+                "        print('SENT', host)\n"
+                "    except OSError as e:\n"
+                "        print('UDP-REFUSED', host, e.errno)\n"
+                "for host in ('::1', '::ffff:127.0.0.1'):\n"
+                "    try:\n"
+                f"        s = socket.create_connection((host, {port}), timeout=5)\n"
+                "        print('TCP', host, s.recv(64).decode().strip())\n"
+                "    except OSError as e:\n"
+                "        print('TCP-REFUSED', host, e.errno)\n")
+        r = subprocess.run([confine.SANDBOX_EXEC, "-p", prof, PY, "-c", code],
+                           capture_output=True, text=True, timeout=60)
+        out = r.stdout + r.stderr
+        got = []
+        for u in udp:
+            try:
+                got.append(u.recv(64))
+            except OSError:
+                pass
+    finally:
+        tcp.close()
+        for u in udp:
+            u.close()
+    assert got == [], (got, out)
+    assert "TCP ::1 PROXY-PORT" in out and "TCP-REFUSED ::ffff:127.0.0.1" in out, out
+
+
+# --- 13: limits at launch level: tunnels held while carry-over runs ------------------------------
+
+class HoldingUpstream(FakeUpstream):
+    """A made-up upstream proxy that answers 200 and keeps every tunnel open until stopped."""
+
+    def __init__(self):
+        self.held = []
+        super().__init__()
+
+    def _serve(self):
+        while not self.stop.is_set():
+            try:
+                c, _ = self.sock.accept()
+            except OSError:
+                continue
+            try:
+                c.settimeout(2)
+                buf = b""
+                while b"\r\n\r\n" not in buf:
+                    d = c.recv(4096)
+                    if not d:
+                        break
+                    buf += d
+                self.heads.append(buf)
+                c.sendall(b"HTTP/1.1 200 OK\r\n\r\n")
+                self.held.append(c)
+            except OSError:
+                c.close()
+
+    def close(self):
+        super().close()
+        for c in self.held:
+            c.close()
+
+
+# the tool opens 64 tunnels (to a public address, through the made-up upstream), leaves them to a
+# child that keeps them open for a while, and exits: on macOS the child outlives the tool, so the
+# tunnels are open while carry-over runs (on Linux the session's namespace ends them)
+HOG = r"""
+import base64, os, socket, sys, time
+url = os.environ.get('HTTPS_PROXY', '')
+cred, _, where = url[7:].rstrip('/').rpartition('@')
+h, _, p = where.rpartition(':')
+auth = base64.b64encode(cred.encode()).decode()
+held = []
+for _ in range(64):
+    try:
+        s = socket.create_connection((h, int(p)), timeout=10)
+        s.sendall(('CONNECT 8.8.4.4:443 HTTP/1.1\r\nProxy-Authorization: Basic %s\r\n\r\n'
+                   % auth).encode())
+        if not s.recv(200).startswith(b'HTTP/1.1 200'):
+            break
+        held.append(s)
     except OSError:
         break
-print('HELD', len(held))
+print('HELD', len(held), flush=True)
+pid = os.fork()
+if pid == 0:
+    os.setsid()
+    nul = os.open(os.devnull, os.O_RDWR)
+    for fd in (0, 1, 2):
+        os.dup2(nul, fd)
+    time.sleep(8)
+    os._exit(0)
+print('CHILD', pid, flush=True)
 """
 
 
 @needs_confine
-def test_13_a_session_that_holds_many_connections_still_gets_its_report(tree):
+def test_13_carry_over_finishes_while_64_tunnels_are_held(tree):
+    import resource
+    up = HoldingUpstream()
     report = tree / "pub" / "report.json"
-    code, out = launch(tree, HOG, extra=("--report", str(report)))
-    assert code == 0 and "HELD" in out, out
+    hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+
+    def low_limit():  # a low soft limit of open files: the launcher must raise it itself
+        resource.setrlimit(resource.RLIMIT_NOFILE, (100, hard))
+    env = dict(os.environ, PYTHONPATH=SRC, HTTPS_PROXY=f"http://127.0.0.1:{up.port}")
+    try:
+        r = subprocess.run([PY, "-m", "phiward", "launch", "--report", str(report), "--", PY, "-c",
+                            HOG], cwd=str(tree / "repo"), capture_output=True, text=True, env=env,
+                           timeout=120, stdin=subprocess.DEVNULL, preexec_fn=low_limit)
+        out = r.stdout + r.stderr
+        child = [ln.split()[1] for ln in out.splitlines() if ln.startswith("CHILD ")]
+        if sys.platform == "darwin" and child:  # the child this test's session started
+            try:
+                os.kill(int(child[0]), 9)
+            except (ProcessLookupError, PermissionError):
+                pass
+    finally:
+        up.close()
+    assert r.returncode == 0 and "HELD 64" in out, out
     data = json.loads(report.read_text())
     assert data["exit"] == 0 and data["ran"] is True, data
+    assert not any("did not finish" in n for n in data["notes"]), data["notes"]
 
 
 # --- 5, 15: Linux -------------------------------------------------------------------------------
@@ -886,3 +1065,7 @@ def test_16_no_background_transfer_service_in_the_mach_allows():
     from phiward import wholetool
     assert "com.apple.nsurlsessiond" not in wholetool.MACH_ALLOW
     assert "com.apple.networkd" not in wholetool.MACH_ALLOW
+    # certificate services that can fetch URLs outside the profile: the OS trust store needs
+    # only the user's trustd agent (kept: a stated limit)
+    assert "com.apple.ocspd" not in wholetool.MACH_ALLOW
+    assert "com.apple.trustd" not in wholetool.MACH_ALLOW
