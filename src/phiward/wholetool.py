@@ -1354,63 +1354,7 @@ for c in close:
         os.close(int(c))
     except OSError:
         pass
-relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
-if relay:
-    import socket, threading
-    rport, _, rpath = relay.partition(":")
-    try:
-        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ls.bind(("127.0.0.1", int(rport)))
-        ls.listen(128)
-    except (OSError, ValueError) as e:
-        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
-        os._exit(126)
-    parent = os.getpid()
-    if os.fork() == 0:
-        try:
-            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
-            if os.getppid() != parent:
-                os._exit(0)
-            nul = os.open("/dev/null", os.O_RDWR)
-            os.dup2(nul, 0)
-            os.dup2(nul, 1)
-            os.closerange(3, ls.fileno())
-            os.closerange(ls.fileno() + 1, 65536)
-
-            def pump(a, b):
-                try:
-                    while True:
-                        d = a.recv(65536)
-                        if not d:
-                            break
-                        b.sendall(d)
-                except OSError:
-                    pass
-                try:
-                    b.shutdown(socket.SHUT_WR)
-                except OSError:
-                    pass
-
-            def serve(c):
-                u = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                try:
-                    u.connect(rpath)
-                except OSError:
-                    c.close()
-                    u.close()
-                    return
-                t = threading.Thread(target=pump, args=(u, c), daemon=True)
-                t.start()
-                pump(c, u)
-                t.join()
-                c.close()
-                u.close()
-            while True:
-                c, _ = ls.accept()
-                threading.Thread(target=serve, args=(c,), daemon=True).start()
-        finally:
-            os._exit(0)
-    ls.close()
+# RELAY (Linux: the relay to the proxy's socket, RELAY below)
 def stop(why):
     sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
     sys.stderr.flush()
@@ -1570,6 +1514,71 @@ try:
 except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
+
+# the relay, put into the helper only on Linux, where the session reaches the proxy through it.
+# On macOS the helper has none: it does not need one, and some security software on macOS
+# ends a `python -c` whose code holds both this relay and the Landlock calls
+RELAY = r"""
+relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
+if relay:
+    import socket, threading
+    rport, _, rpath = relay.partition(":")
+    try:
+        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ls.bind(("127.0.0.1", int(rport)))
+        ls.listen(128)
+    except (OSError, ValueError) as e:
+        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
+        os._exit(126)
+    parent = os.getpid()
+    if os.fork() == 0:
+        try:
+            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
+            if os.getppid() != parent:
+                os._exit(0)
+            nul = os.open("/dev/null", os.O_RDWR)
+            os.dup2(nul, 0)
+            os.dup2(nul, 1)
+            os.closerange(3, ls.fileno())
+            os.closerange(ls.fileno() + 1, 65536)
+
+            def pump(a, b):
+                try:
+                    while True:
+                        d = a.recv(65536)
+                        if not d:
+                            break
+                        b.sendall(d)
+                except OSError:
+                    pass
+                try:
+                    b.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+
+            def serve(c):
+                u = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                try:
+                    u.connect(rpath)
+                except OSError:
+                    c.close()
+                    u.close()
+                    return
+                t = threading.Thread(target=pump, args=(u, c), daemon=True)
+                t.start()
+                pump(c, u)
+                t.join()
+                c.close()
+                u.close()
+            while True:
+                c, _ = ls.accept()
+                threading.Thread(target=serve, args=(c,), daemon=True).start()
+        finally:
+            os._exit(0)
+    ls.close()
+"""
+HELPER_LINUX = HELPER.replace(
+    "# RELAY (Linux: the relay to the proxy's socket, RELAY below)\n", RELAY, 1)
 
 
 def _git_snapshot(project: str, limit: int = 20000) -> Dict[str, str]:
@@ -1808,7 +1817,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         raise LaunchError(selfcheck.refusal(problems) + "; " +
                           selfcheck.fix_text(problems, selfcheck._running_package()))
     backend = confine.backend()
-    helper = [sys.executable, "-I", "-S", "-c", HELPER]
+    helper = [sys.executable, "-I", "-S", "-c",
+              HELPER_LINUX if backend == "bwrap" else HELPER]
     if backend == "seatbelt":
         if _sandbox_check_self():
             raise LaunchError("this process is inside another sandbox; macOS cannot apply a second "
