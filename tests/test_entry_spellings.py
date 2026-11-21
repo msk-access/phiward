@@ -5,6 +5,7 @@ changed or left out, with other dashes (U+2010, U+2013, U+2212...) and with othe
 with its separators changed or left out. A hit that runs past a rule's match takes that match
 with it. Made-up names only (FAKE-PT-0001, Doe_Jane_FAKE, P-9990001-T01-IM6)."""
 
+import importlib.util
 import random
 import re
 import time
@@ -351,10 +352,10 @@ class _Before(Sanitizer):
         """The steps one after another, each on the text the step before it left."""
         line = self._apply(self.first_rules, line)
         if self.protected is not None:
-            plain = paths.plain_spelling(line)
+            plain = old_paths.plain_spelling(line)
             spans = self.protected.text_spans(plain) if plain != line else []
             if spans:
-                plain, pos = paths.plain_spelling_map(line)
+                plain, pos = old_paths.plain_spelling_map(line)
                 cut = spans[0][0]
                 line = line[:pos[cut]] + plain[cut:]
             line = self._marked(line)
@@ -390,9 +391,13 @@ class _Before(Sanitizer):
             return WITHHELD
 
 
-# the packs as they were before this change (a copy of develop's), for the reference: a change to
-# a pack can never weaken what the reference masks
+# the packs and paths.py as they were before this change (copies of develop's), for the
+# reference: a change to a pack or to how paths are found can never weaken what it masks
 BEFORE_PACKS = Path(__file__).resolve().parent / "data" / "develop-packs"
+_spec = importlib.util.spec_from_file_location(
+    "_paths_before", Path(__file__).resolve().parent / "data" / "develop_paths.py")
+old_paths = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(old_paths)
 
 
 def _rules(packs, patterns=(), before=False):
@@ -410,8 +415,8 @@ def _pair(names, packs, patterns=(), roots=(), remote=()):
     strings = sorted({s for n in names for s in inventory._strings_of(n, stop)})
     rules, old = _rules(packs, patterns), _rules(packs, patterns, before=True)
     if roots:
-        for r in (rules, old):
-            r.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
+        rules.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
+        old.update(protected=old_paths.ProtectedSet(list(roots), []), roots=roots)
     pair = Sanitizer(entries=strings, **rules), _Before(strings=strings, **old)
     for s in pair:
         s.first_rules += [(remote_root_regex(r), "<PROTECTED>") for r in remote]
@@ -507,16 +512,18 @@ def test_never_less_masked_than_before_over_many_lines(packs, patterns, table):
     _r9(packs, patterns, table, range(1, 61))
 
 
-# Protected roots, a remote root, paths written another way, and user rules that read a dash as
-# written (ASCII and U+2010)
-R9_ROOTS, R9_REMOTE = ("/T/phi",), ("/R/rem",)
+# Protected roots (some with a dash: ASCII, U+2013, U+2010), a remote root, paths written another
+# way, and user rules that read a dash as written (ASCII and U+2010)
+R9_ROOTS, R9_REMOTE = ("/T/phi", "/data/p-y", "/data/p–x", "/T/ph‐i"), ("/R/rem",)
 R9_DASH_RULES = (r"(?<![\w-])MRN\d{6}\b => <MRN>", r"(?<![\w‐])MRN‐\d{6}\b => <MRNU>",
                  r"\bRUN-\d{4}\b => <RUNID>")
 R9_PATH_PIECES = ["/T/phi", "/T//phi/x", "/T/./phi/a", "\\/T\\/phi\\/y", "/T/phi–", "/T/phi-",
                   "/R/rem/z", "/R//rem", "/R/./rem/q", "MRN123456", "MRN‐123456", "MRN-123456",
-                  "run–", "run-", "RUN-2024", "RUN‐2024", " ok ", "a ", "\t"]
+                  "run–", "run-", "RUN-2024", "RUN‐2024", " ok ", "a ", "\t", "/data/p-x/a.bam",
+                  "/data/p–x", "/data/p–y/b", "/T/ph-i/q.bam", "/T/ph‐i", "sample_FAKE"]
 R9_PATH_CASES = ("a run–MRN123456\t/T//phi/x", "/T/phi– ok /T//phi/x", "x /R//rem/FAKE PT y",
-                 "MRN‐123456 /T/./phi/a", "RUN‐2024 and RUN-2024", "\\/T\\/phi\\/FAKE_PT_0001")
+                 "MRN‐123456 /T/./phi/a", "RUN‐2024 and RUN-2024", "\\/T\\/phi\\/FAKE_PT_0001",
+                 "sample_FAKE/data/p-x/a.bam", "AB123456-T-the/T/ph-i/q.bam")
 
 
 def _r9_path_lines(seed, n):
@@ -534,6 +541,16 @@ def _r9_paths(table, seeds):
     bad = [f for seed in seeds for f in (_less(new, old, x, table)
                                          for x in _r9_path_lines(seed, 1500)) if f]
     assert not bad, (len(bad), bad[:5])
+
+
+@pytest.mark.parametrize("line, want", [
+    ("sample_FAKE/data/p-x/a.bam", "<BAMFILE>"), ("AB123456-T-the/T/ph-i/q.bam", "<BAMFILE>"),
+    ("ls /data/p-x/q", "ls <PROTECTED>"), ("ls /data/p–y/q", "ls <PROTECTED>"),
+    ("ls /data/p–x/q", "ls <PROTECTED>"),
+])
+def test_a_root_in_another_dash_spelling_is_masked_after_the_rules_as_before(line, want):
+    new, _old = _pair([], ("genomics", "msk"), (), R9_ROOTS)
+    assert new.clean(line) == want
 
 
 @pytest.mark.parametrize("table", [False, True])
@@ -577,6 +594,19 @@ def _r9_rows(seeds, fixed=()):
             if any(not any(k in y for y in olds) for k in _kept(n)):
                 bad.append((row, n, o))
     return bad
+
+
+@pytest.mark.parametrize("row", ["FAKE‐PT‐0001 \t5\tok", " FAKE_PT_0001\t5\tok",
+                                 "AB123456-T \t5\tFAKE‐PT‐0001 x", "C‐ABC123‐L001‐ddefgbam\t5\tok"])
+def test_an_id_cell_reads_as_before_by_column(row):
+    """An ID cell takes the form it took before (`<IDCOL>`, or a placeholder the steps wrote,
+    with its spaces), also when a name in another spelling is in it."""
+    new, old = _pair(R9_NAMES, ("genomics", "msk"))
+    cn, co = Columns(new), Columns(old)
+    for c in (cn, co):
+        c.line("sample_id\tvalue\tnote")
+    got, before = cn.line(row), co.line(row)
+    assert got.split("\t")[0] == before.split("\t")[0], (got, before)
 
 
 def test_never_less_masked_than_before_by_column():
