@@ -321,6 +321,8 @@ The grants. Nothing asks the operator at run time: what is not written here is r
   - an entry **inside** a protected root is fine: gateway commands write only in `write_to`
     folders (protected roots are read only for them), and what they write there stays
     protected.
+  - on Linux, a request whose write place is at or below a path the gateway hides (credentials,
+    traces) stops before its command runs.
 - **`net`** (`true` or `false`; default `false`). With `true`, `phiward run --net` gets the
   network. On macOS it may also look up DNS; local unix sockets stay blocked (an SSH agent's or
   a shared connection's socket would log in to HPC as you). On Linux it gets the host network

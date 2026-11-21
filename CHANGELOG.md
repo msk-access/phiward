@@ -92,6 +92,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   session's folder back its owner bits (a refused `phiward launch` ended with a traceback).
 - Two tests of the output cap restart the broker after changing the config, so they test the
   cap; before, every run in them was refused and their bounds held trivially.
+- Linux: before a `phiward run` or `phiward copy` command starts, the gateway confirms that each
+  folder and file it binds (the write places, a `.claude` folder in one, the ssh config, the
+  shared connection's socket) is, inside, the same file it found at that name before the start
+  (a link not followed), mounted at that name. Anything it cannot confirm, an error included,
+  stops the request (nothing runs). Some settings that ran before now stop the request: a
+  hidden path at or above a write place or at its `.claude` (before, the command ran with it
+  masked or without writes there), and a bind listed twice.
 
 ### Changed
 

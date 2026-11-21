@@ -199,7 +199,8 @@ _BWRAP_BASE = ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--die-with-
 
 def open_place(path: str) -> int:
     """An O_PATH descriptor of the folder `path`, reached part by part without following a
-    link. bwrap reads the folder's current name back from it and binds that name."""
+    link. bwrap reads the folder's current name back from it and binds that name; the helper
+    confirms inside the view that the mount at that name is this folder."""
     flags = os.O_PATH | os.O_NOFOLLOW | os.O_DIRECTORY | os.O_CLOEXEC  # type: ignore[attr-defined]
     fd = os.open("/", flags)
     try:
@@ -214,12 +215,35 @@ def open_place(path: str) -> int:
     return fd
 
 
+def _source_stat(path: str) -> os.stat_result:
+    """The stat of what is at `path` itself, a link not followed, its folder reached part by
+    part without following a link: the identity a read-only bind must show inside the view. A
+    link here does not match what bwrap mounts through it, so the helper stops the start."""
+    try:
+        fd = open_place(os.path.dirname(path) or "/")
+    except ConfineError:
+        raise ConfineError("a file the request binds is reached through a link; nothing runs")
+    try:
+        return os.stat(os.path.basename(path), dir_fd=fd, follow_symlinks=False)
+    except OSError:
+        raise ConfineError("a file the request binds is no longer there; nothing runs")
+    finally:
+        os.close(fd)
+
+
 def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bool,
                        fds: Optional[Dict[str, int]] = None,
                        deny_read: Sequence[str] = (), socket: str = "",
-                       allow_read: Sequence[str] = ()) -> List[str]:
+                       allow_read: Sequence[str] = (),
+                       checks: Optional[List[Tuple[str, str, str, str]]] = None,
+                       places: Optional[Sequence[str]] = None) -> List[str]:
     """`fds` maps each place to a descriptor from open_place; each place is bound from its
-    descriptor (/proc/self/fd/N), never by its path."""
+    descriptor (/proc/self/fd/N), never by its path. `places`: the places the caller listed
+    (and opened), so they are listed once; else gateway_places. `checks`, when given, gets one
+    (destination, kind, source, place) for each bind with a host source: kind `w` a place, `r`
+    read only; `place` is the place a `.claude` folder is in. The helper checks each one inside
+    before the command runs."""
+    found: List[Tuple[str, str, str, str]] = [] if checks is None else checks
     args = ["--ro-bind", "/", "/"] + _BWRAP_BASE + [
         "--unshare-ipc", "--new-session"]
     if socket:
@@ -233,15 +257,21 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
     # no empty /tmp: it would hide a request folder (or a root) under /tmp, and bubblewrap would
     # then run the command in $HOME without a word. The host /tmp stays
     # read-only, like all of /; the command's TMPDIR is its private scratch folder.
-    for w in gateway_places(writable, patterns):
+    # shallowest first: a bind is recursive, so a folder bound after a place inside it would
+    # cover that place
+    places = sorted(gateway_places(writable, patterns) if places is None else places,
+                    key=lambda p: p.count("/"))
+    for w in places:
         src = f"/proc/self/fd/{fds[w]}" if fds and w in fds else w
         args += ["--bind", src, w]
+        found.append((w, "w", w, ""))
     # Claude Code settings inside a write place stay read-only; a new one can
     # still be made in a write place that has none (docs/threat-model.md)
-    for w in gateway_places(writable, patterns):
+    for w in places:
         c = os.path.join(w, ".claude")
         if os.path.isdir(c) and not os.path.islink(c):
             args += ["--ro-bind", c, c]
+            found.append((c, "r", c, w))
     # what the command may not read (credentials, traces): masked last, over every bind, each at
     # its real place (bubblewrap cannot make a mount point through a link: /var/run -> /run)
     masked: List[str] = []
@@ -256,11 +286,12 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
             args += ["--ro-bind", "/dev/null", p]
     hidden = [os.path.realpath(h) for h in deny_read]
     for p in allow_read:
-        # the file itself, also when the name is a link (dotfile managers): bound from its
-        # resolved target, unless that target is hidden
+        # the resolved file, unless it is hidden, bound at the name. A name that is itself a
+        # link cannot be bound: bwrap fails to mount at a link (the start stops)
         real = os.path.realpath(p)
         if os.path.isfile(real) and not any(real == h or real.startswith(h + "/") for h in hidden):
             args += ["--ro-bind", real, _mount_point(p)]
+            found.append((_mount_point(p), "r", real, ""))
     if socket:
         # every other socket that has a path (an SSH agent's, X11's, another shared
         # connection's) is masked: a read-only bind does not stop a connect;
@@ -270,6 +301,7 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
                     s == d or s.startswith(d + "/") for d in ("/tmp", "/var/tmp")):
                 args += ["--ro-bind", "/dev/null", s]
         args += ["--bind", socket, LINUX_SOCKET, "--unshare-net"]
+        found.append((LINUX_SOCKET, "r", socket, ""))
     elif not net:
         args.append("--unshare-net")
     return args
@@ -350,53 +382,116 @@ def seccomp_program(machine: Optional[str] = None, unix: bool = False) -> bytes:
     return b"".join(struct.pack("<HBBI", *ins) for ins in prog)
 
 
-# Runs inside bubblewrap before the command: Landlock allows writes only below the given paths.
-# argv: N PATH... CMD [ARG]...   Exit 126 when Landlock (ABI 2 or later) is not available.
+# Runs inside bubblewrap before the command. argv: N ENTRY... K FD... CMD [ARG]...
+# ENTRY is HEXPATH:DEV:INO:KIND: the path in the view as hex bytes; KIND `w` a place (checked,
+# and Landlock allows writes below it), `r` a read-only bind (checked only), `d` a device (DEV and
+# INO `-`; writes allowed, no check). A checked entry must be the recorded object (device and
+# inode), and the root of a mount whose mount point is exactly its path: bwrap mounts each source
+# by the name it reads back, so this is what confirms that what was checked is what got mounted.
+# FD: the broker's descriptors of the places, closed first. Any failure, of any kind: exit 126.
 LANDLOCK_HELPER = r"""
-import ctypes, os, struct, sys
-libc = ctypes.CDLL(None, use_errno=True)
-libc.syscall.restype = ctypes.c_long
+import os, sys
+class Stop(Exception):
+    pass
 def fail(msg):
-    sys.stderr.write("phiward gateway: " + msg + "; nothing runs\n"); os._exit(126)
-abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
-if abi < 2:
-    fail("Landlock ABI 2 or later is needed (the kernel has %s)" % ("none" if abi < 0 else abi))
-fs = 0
-for bit in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):  # write, remove, make, refer
-    fs |= 1 << bit
-if abi >= 3: fs |= 1 << 14  # truncate
-if abi >= 5: fs |= 1 << 15  # ioctl on devices
-attr = struct.pack("<Q", fs)
-if abi >= 4: attr += struct.pack("<Q", 0)
-if abi >= 6: attr += struct.pack("<Q", 3)  # scope: abstract unix sockets, signals
-buf = ctypes.create_string_buffer(attr, len(attr))
-rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
-if rs < 0: fail("Landlock cannot make a ruleset")
-n = int(sys.argv[1]); entries = sys.argv[2:2 + n]
-k = int(sys.argv[2 + n]); close = sys.argv[3 + n:3 + n + k]; cmd = sys.argv[3 + n + k:]
-for c in close:  # the broker's descriptors of the places: the command does not get them
+    raise Stop(msg)
+try:
+    import ctypes, re, stat, struct
+    MALFORMED = "the list of binds is malformed"
+    NUM = re.compile("[0-9]+")
+    args = sys.argv[1:]
+    if not args or not NUM.fullmatch(args[0]):
+        fail(MALFORMED)
+    n = int(args[0])
+    if len(args) < n + 2 or not NUM.fullmatch(args[n + 1]):
+        fail(MALFORMED)
+    k = int(args[n + 1]); close = args[n + 2:n + 2 + k]; cmd = args[n + 2 + k:]
+    if len(close) != k or not cmd or not all(NUM.fullmatch(c) for c in close):
+        fail(MALFORMED)
+    recs, seen = [], set()
+    for e in args[1:n + 1]:
+        f = e.split(":")
+        if len(f) != 4 or f[3] not in ("w", "r", "d") or \
+                not re.fullmatch("(?:[0-9a-f]{2})+", f[0]):
+            fail(MALFORMED)
+        path = bytes.fromhex(f[0])
+        if not path.startswith(b"/") or b"\0" in path:
+            fail(MALFORMED)
+        if f[3] == "d":
+            if (f[1], f[2]) != ("-", "-"):
+                fail(MALFORMED)
+            ident = None
+        elif NUM.fullmatch(f[1]) and NUM.fullmatch(f[2]):
+            ident = (int(f[1]), int(f[2]))
+        else:
+            fail(MALFORMED)
+        if path in seen:
+            fail("a bind is listed twice")
+        seen.add(path)
+        recs.append((path, ident, f[3]))
+    for c in close:  # the broker's descriptors of the places: the command does not get them
+        try:
+            os.close(int(c))
+        except OSError:
+            pass
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
+    if abi < 2:
+        fail("Landlock ABI 2 or later is needed (the kernel has %s)" % ("none" if abi < 0 else abi))
+    fs = 0
+    for bit in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):  # write, remove, make, refer
+        fs |= 1 << bit
+    if abi >= 3: fs |= 1 << 14  # truncate
+    if abi >= 5: fs |= 1 << 15  # ioctl on devices
+    attr = struct.pack("<Q", fs)
+    if abi >= 4: attr += struct.pack("<Q", 0)
+    if abi >= 6: attr += struct.pack("<Q", 3)  # scope: abstract unix sockets, signals
+    buf = ctypes.create_string_buffer(attr, len(attr))
+    rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+    if rs < 0: fail("Landlock cannot make a ruleset")
+    filebits = (1 << 1) | (fs & ((1 << 14) | (1 << 15)))
+    # each mount's ID and its mount point, as bytes (the kernel escapes space, tab, newline and
+    # backslash as \NNN)
+    with open("/proc/self/mountinfo", "rb") as fh:
+        table = fh.read()
+    points = {}
+    for line in table.split(b"\n"):
+        if line:
+            fl = line.split(b" ")
+            points.setdefault(fl[0], []).append(
+                re.sub(rb"\\([0-7]{3})", lambda m: bytes([int(m.group(1), 8)]), fl[4]))
+    for path, ident, kind in recs:
+        where = path.decode("utf-8", "backslashreplace")
+        try:
+            fd = os.open(path, os.O_PATH | os.O_CLOEXEC | (os.O_NOFOLLOW if kind != "d" else 0))
+        except OSError:
+            fail(where + " cannot be opened")
+        st = os.fstat(fd)
+        if ident is not None:
+            if (st.st_dev, st.st_ino) != ident:
+                fail(where + " is not what was checked before the start")
+            with open("/proc/self/fdinfo/%d" % fd, "rb") as fh:
+                ids = [l.split(b":", 1)[1].strip() for l in fh.read().split(b"\n")
+                       if l.startswith(b"mnt_id:")]
+            if len(ids) != 1 or points.get(ids[0]) != [path]:
+                fail(where + " is not a mount at its name")
+        if kind != "r":
+            bits = fs if stat.S_ISDIR(st.st_mode) else filebits
+            rule = ctypes.create_string_buffer(struct.pack("<Qi", bits, fd), 12)
+            if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1), rule, ctypes.c_uint32(0)) < 0:
+                fail("Landlock cannot add a rule")
+        os.close(fd)
+    if libc.prctl(38, 1, 0, 0, 0) != 0: fail("no_new_privs cannot be set")
+    if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) < 0: fail("Landlock cannot be enforced")
+    os.close(rs)
+except BaseException as exc:
+    why = str(exc) if isinstance(exc, Stop) else "the helper could not check the request"
     try:
-        os.close(int(c))
-    except OSError:
-        pass
-filebits = (1 << 1) | (fs & ((1 << 14) | (1 << 15)))
-for e in entries:
-    p, dev, ino = e.rsplit("|", 2)
-    try:
-        fd = os.open(p, os.O_PATH | os.O_CLOEXEC | (os.O_NOFOLLOW if dev != "-" else 0))
-    except OSError:
-        continue
-    st = os.fstat(fd)
-    if dev != "-" and (st.st_dev, st.st_ino) != (int(dev), int(ino)):
-        fail("a write place changed before the command started")  # the bound folder only
-    bits = fs if os.path.isdir(p) else filebits
-    rule = ctypes.create_string_buffer(struct.pack("<Qi", bits, fd), 12)
-    if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1), rule, ctypes.c_uint32(0)) < 0:
-        fail("Landlock cannot add a rule")
-    os.close(fd)
-if libc.prctl(38, 1, 0, 0, 0) != 0: fail("no_new_privs cannot be set")
-if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) < 0: fail("Landlock cannot be enforced")
-os.close(rs)
+        sys.stderr.write("phiward gateway: " + why + "; nothing runs\n")
+        sys.stderr.flush()
+    finally:
+        os._exit(126)
 try:
     os.execvp(cmd[0], cmd)
 except OSError:
@@ -417,7 +512,8 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
                     socket: str = "", allow_read: Sequence[str] = ()) -> Tuple[List[str], List[int]]:
     """`argv` wrapped so that it writes only to `writable` (and pattern matches), with no
     network unless `net`, and the file descriptors that must stay open for it (Linux: the
-    seccomp program). The caller closes the descriptors after the process starts."""
+    seccomp program). The caller closes the descriptors after the process starts. `socket`
+    is a resolved path (remote.shared_socket gives one): a link in it stops the request."""
     b = backend()
     if b == "seatbelt":
         return [SANDBOX_EXEC, "-p", seatbelt_gateway_profile(writable, patterns, net, deny_read,
@@ -429,24 +525,38 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
         os.write(w, prog)  # small: it fits in the pipe buffer
         os.close(w)
         fds: Dict[str, int] = {}
+        checks: List[Tuple[str, str, str, str]] = []
         try:
-            for p in gateway_places(writable, patterns):
+            places = gateway_places(writable, patterns)  # once: what is opened is what is bound
+            for p in places:
                 fds[p] = open_place(p)
-        except ConfineError:
+            bw = bwrap_gateway_args(writable, patterns, net, fds, deny_read, socket, allow_read,
+                                    checks, places)
+            entries = []
+            for dest, kind, src, place in checks:
+                # each identity from the name bwrap binds, a link not followed
+                if kind == "w":
+                    st = os.fstat(fds[src])
+                elif place:
+                    st = os.stat(os.path.basename(src), dir_fd=fds[place],
+                                 follow_symlinks=False)
+                else:
+                    st = _source_stat(src)
+                entries.append(f"{os.fsencode(dest).hex()}:{st.st_dev}:{st.st_ino}:{kind}")
+        except BaseException as exc:
             for fd in list(fds.values()) + [r]:
                 os.close(fd)
-            raise
-        entries = []
-        for p, fd in fds.items():
+            if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
+                raise
+            raise ConfineError("the request's binds could not be recorded; nothing runs") \
+                from None
+        for fd in fds.values():
             os.set_inheritable(fd, True)
-            st = os.fstat(fd)
-            entries.append(f"{p}|{st.st_dev}|{st.st_ino}")
-        entries += [f"{d}|-|-" for d in _GATEWAY_DEVICES]
+        entries += [f"{os.fsencode(d).hex()}:-:-:d" for d in _GATEWAY_DEVICES]
         held = [str(fd) for fd in fds.values()]
         helper = [sys.executable, "-I", "-S", "-c", LANDLOCK_HELPER, str(len(entries))] + \
             entries + [str(len(held))] + held
-        return [shutil.which("bwrap") or "bwrap", "--seccomp", str(r)] + \
-            bwrap_gateway_args(writable, patterns, net, fds, deny_read, socket, allow_read) + \
+        return [shutil.which("bwrap") or "bwrap", "--seccomp", str(r)] + bw + \
             ["--"] + helper + \
             list(argv), \
             [r] + list(fds.values())
