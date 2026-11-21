@@ -197,12 +197,17 @@ when in doubt, reinstall: the step names the command for the tool that installed
   - From Linux 7.1 (Landlock ABI 9): the session reaches only the unix sockets it made itself,
     and the system's name-service sockets (sssd, nscd).
   - Before 7.1, with `--tool claude`: Claude Code's own sandbox blocks unix sockets for Bash
-    (its seccomp filter). `launch` turns that sandbox on with `--settings`
-    (`sandbox.enabled`, `sandbox.failIfUnavailable`, and `sandbox.allowUnsandboxedCommands`
-    false). It refuses to start when the filter is not installed (`npm install -g
-    @anthropic-ai/sandbox-runtime`), when it does not work in the session, on a machine other
-    than x86_64 or aarch64, or when settings open the sandbox (`excludedCommands`,
-    `allowAllUnixSockets`, `allowUnixSockets`, `enableWeakerNestedSandbox`). Claude Code
+    (its seccomp filter, which the native build carries). `launch` turns that sandbox on with
+    `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`, and
+    `sandbox.allowUnsandboxedCommands` false), passed as the last arguments of whatever
+    `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
+    stops the start. Before the tool starts, it runs the filter in the session as Claude Code
+    does (the native binary with `ARGV0=apply-seccomp`) and requires `socket(AF_UNIX)` to fail.
+    It refuses to start when the filter is missing or does not block unix sockets, when the
+    session could replace it, on a machine other than x86_64 or aarch64, or when settings
+    open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
+    `enableWeakerNestedSandbox`). The tests use a made-up filter: that the real binary's
+    filter works inside launch's bubblewrap is shown only by the sandbox check. Claude Code
     also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
     Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
     itself run outside that sandbox: they can reach sockets outside. You configure them; the

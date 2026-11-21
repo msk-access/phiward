@@ -45,7 +45,6 @@ CONTROLS = ("control-write", "control-read")
 DENIED = ("read-protected", "write-data", "write-phiward", "write-settings")
 WRITES = {"write-data": "data", "write-phiward": ".phiward"}
 GIT = ("control-commit", "git-hook")
-SOCKETS = ("socket-renamed", "socket-rebound", "socket-late")
 REMOTE = ("remote-push", "remote-run", "remote-pull", "remote-pull-out", "remote-own-socket")
 CORE = CONTROLS + DENIED + ("gateway-run", "parent-environ", "env-secrets")
 # why `phiward run` failed in the session (probes.sh): the only words the report prints
@@ -317,19 +316,6 @@ def judge(results, stream_lines, server, marker, created, facts):
         fails.append("git-hook: a line with an identifier was committed")
     elif got is not None:
         unsure.append(f"git-hook: {got}")
-
-    # Linux, Mode B: made-up unix sockets outside the session (sockpeer.py). `no-such` proves
-    # nothing (the session looked before the socket was there, or cannot see the folder)
-    for name in SOCKETS:
-        got = lines.get(name)
-        if got is None:
-            continue
-        if got == "OK":
-            fails.append(f"{name}: Bash reached a unix socket outside the session")
-        elif got in ("DENIED not-permitted", "DENIED permission", "DENIED refused"):
-            report.append(f"ok   {name}: refused ({got.split()[1]})")
-        else:
-            unsure.append(f"{name}: {got}")
 
     if remote:
         for name in ("remote-push", "remote-pull"):

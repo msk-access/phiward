@@ -93,9 +93,9 @@ What the session can do:
 - Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
   (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
   --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
-  turns it on and refuses to start unless its seccomp filter is installed (npm install -g
-  @anthropic-ai/sandbox-runtime) and works; hooks, MCP servers and Claude Code itself are
-  outside that sandbox. Any other tool cannot make unix sockets at all.
+  turns it on (--settings, always passed last) and refuses to start unless its seccomp filter
+  blocks unix sockets in the session (the native build carries it); hooks, MCP servers and
+  Claude Code itself are outside that sandbox. Any other tool cannot make unix sockets at all.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -1234,9 +1234,10 @@ def _raise_fd_limit(need: int) -> None:
 #   session are refused, the session's own are not), the name-service folders allowed, REFER
 #   granted on / (cross-folder renames), abstract sockets and signals scoped. Any failure: 126.
 # - inner (Claude Code below ABI 9): Claude Code's sandbox blocks unix sockets for Bash with
-#   sandbox-runtime's apply-seccomp. It is looked for as sandbox-runtime does, here in the view
-#   (npm runs confined); one the session could replace, or one that does not make socket(AF_UNIX)
-#   fail with EPERM, stops the start (126).
+#   apply-seccomp: the native binary itself (ARGV0=apply-seccomp), or for a JavaScript build
+#   sandbox-runtime's file, looked for as sandbox-runtime does, here in the view (npm runs
+#   confined). One the session could replace, or one that does not make socket(AF_UNIX) fail
+#   with EPERM when run as Claude Code runs it, stops the start (126).
 # - deny and inner: the ABI 6 scope for abstract sockets and signals where the kernel has it.
 HELPER = r"""
 import os, sys, ctypes, struct
@@ -1335,55 +1336,75 @@ elif unix in ("inner", "deny"):
             os.close(rs)
 if unix == "inner":
     import subprocess
-    INSTALL = "install it with `npm install -g @anthropic-ai/sandbox-runtime`"
     arch = {"x86_64": "x64", "aarch64": "arm64"}.get(os.uname().machine)
     if arch is None:
         stop("Claude Code's sandbox has no seccomp filter for %s" % os.uname().machine)
-    rel = os.path.join("vendor", "seccomp", arch, "apply-seccomp")
-    # sandbox-runtime's order (getApplySeccompBinaryPath): next to Claude Code's own files, then
-    # the npm global root, then fixed folders
-    places = []
+    # the native build (one binary: no JavaScript file, no node line) carries apply-seccomp and
+    # runs it as itself with ARGV0=apply-seccomp; sandbox-runtime looks for no file then. A
+    # JavaScript build uses sandbox-runtime's file, found in its order (getApplySeccompBinaryPath):
+    # next to Claude Code's own files, then the npm global root, then fixed folders
+    native, env = False, dict(os.environ)
     if claude != "-":
-        base = os.path.dirname(os.path.realpath(claude))
-        places += [os.path.join(base, rel), os.path.join(base, "..", "..", rel),
-                   os.path.join(base, "..", rel)]
-    pkg = os.path.join("@anthropic-ai", "sandbox-runtime")
-    try:
-        root = subprocess.run(["npm", "root", "-g"], stdin=subprocess.DEVNULL,
-                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
-                              universal_newlines=True).stdout.strip()
-    except (OSError, subprocess.SubprocessError):
-        root = ""
-    home = os.path.expanduser("~")
-    for b in ([os.path.join(root, pkg)] if root else []) + [
-            os.path.join("/usr/lib/node_modules", pkg), os.path.join("/usr/local/lib/node_modules", pkg),
-            os.path.join("/opt/homebrew/lib/node_modules", pkg),
-            os.path.join(home, ".npm", "lib", "node_modules", pkg),
-            os.path.join(home, ".npm-global", "lib", "node_modules", pkg)]:
-        places.append(os.path.join(b, rel))
-    found = next((p for p in places if os.path.exists(p)), None)
-    if found is None:
-        stop("Claude Code's sandbox cannot block unix sockets: its seccomp filter "
-             "(apply-seccomp) is not installed; " + INSTALL)
+        real = os.path.realpath(claude)
+        try:
+            with open(real, "rb") as fh:
+                head = fh.read(256).split(b"\n")[0]
+        except OSError as e:
+            stop("Claude Code (%s) cannot be read (%s)" % (real, e.strerror))
+        native = not (real.endswith((".js", ".mjs", ".cjs")) or
+                      (head.startswith(b"#!") and b"node" in head))
+    if native:
+        found, env["ARGV0"] = real, "apply-seccomp"
+    else:
+        rel = os.path.join("vendor", "seccomp", arch, "apply-seccomp")
+        places = []
+        if claude != "-":
+            base = os.path.dirname(real)
+            places += [os.path.join(base, rel), os.path.join(base, "..", "..", rel),
+                       os.path.join(base, "..", rel)]
+        pkg = os.path.join("@anthropic-ai", "sandbox-runtime")
+        try:
+            root = subprocess.run(["npm", "root", "-g"], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
+                                  universal_newlines=True).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            root = ""
+        home = os.path.expanduser("~")
+        for b in ([os.path.join(root, pkg)] if root else []) + [
+                os.path.join("/usr/lib/node_modules", pkg), os.path.join("/usr/local/lib/node_modules", pkg),
+                os.path.join("/opt/homebrew/lib/node_modules", pkg),
+                os.path.join(home, ".npm", "lib", "node_modules", pkg),
+                os.path.join(home, ".npm-global", "lib", "node_modules", pkg)]:
+            places.append(os.path.join(b, rel))
+        found = next((p for p in places if os.path.exists(p)), None)
+        if found is None:
+            stop("Claude Code's sandbox cannot block unix sockets: %s no seccomp filter "
+                 "(apply-seccomp); install Claude Code's native build" % (
+                     "this JavaScript build of Claude Code has" if claude != "-" else
+                     "claude is not on the session's PATH, and there is"))
     p = os.path.realpath(found)
     while True:  # neither the filter nor a folder above it may be writable in the session
         if os.access(p, os.W_OK):
-            stop("Claude Code's seccomp filter %s can be changed by the session; %s outside "
-                 "the project" % (found, INSTALL))
+            stop("Claude Code's seccomp filter %s can be changed by the session; install "
+                 "Claude Code outside the project and the session's folders" % found)
         if p == "/":
             break
         p = os.path.dirname(p)
+    # the probe prints a word only it knows when socket(AF_UNIX) fails with EPERM: a filter
+    # that exits 0 without running it does not pass
+    word = os.urandom(8).hex()
     probe = ("import errno, socket, sys\ntry:\n    socket.socket(socket.AF_UNIX)\n"
-             "except OSError as e:\n    sys.exit(0 if e.errno == errno.EPERM else 3)\nsys.exit(4)\n")
+             "except OSError as e:\n    e.errno == errno.EPERM and print(sys.argv[1])\n")
     try:
-        code = subprocess.run([found, sys.executable, "-I", "-S", "-c", probe],
-                              stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.DEVNULL, timeout=60).returncode
+        r = subprocess.run([found, sys.executable, "-I", "-S", "-c", probe, word],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, timeout=60, env=env)
+        ok = r.returncode == 0 and r.stdout.split() == [word.encode()]
     except (OSError, subprocess.SubprocessError):
-        code = -1
-    if code != 0:
-        stop("Claude Code's seccomp filter %s does not block unix sockets here; %s" % (
-            found, INSTALL))
+        ok = False
+    if not ok:
+        stop("Claude Code's seccomp filter (%s%s) does not block unix sockets here" % (
+            found, ", as apply-seccomp" if native else ""))
 try:
     os.execvp(cmd[0], cmd)
 except OSError as e:
@@ -1644,8 +1665,12 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             if why:
                 raise LaunchError(why)
             claude = shutil.which("claude", path=child_env.get("PATH", "")) or "-"
-            if os.path.basename(argv[0]) == "claude":
-                argv = [argv[0], "--settings", json.dumps(INNER_SETTINGS)] + list(argv[1:])
+            # whatever runs (claude, a versioned binary, a wrapper, npx), the flag goes last;
+            # after a `--` it would be read as an argument, so the start is refused
+            if "--" in argv[1:]:
+                raise LaunchError("launch passes --settings to Claude Code as the last "
+                                  "arguments, so `--` cannot be among them")
+            argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
             unix = "deny"
         args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)

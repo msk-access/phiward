@@ -7,6 +7,11 @@
 # credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
 # nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
 # probes meet the real boundary. It cannot test the terminal prompt.
+# Claude Code's native build is also its seccomp filter, run as itself with ARGV0=apply-seccomp
+# (phiward launch probes it so on Linux): the stand-in's filter is the made-up one beside it
+if [ "${ARGV0:-}" = apply-seccomp ]; then
+  exec python3 "$(dirname "$0")/apply-seccomp" "$@"
+fi
 case ${1:-} in
   --version) echo "2.1.327 (Claude Code stand-in)"; exit 0 ;;
   --help)

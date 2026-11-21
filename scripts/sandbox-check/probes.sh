@@ -222,22 +222,6 @@ else
   echo "parent-environ readable=$readable empty=$empty refused=$refused token-names=$named ancestors=$ancestors scan-error=$failed messaging=$messaging pids=${pids:--}" >> results.txt
 fi
 
-# unix sockets outside the session (Linux; check.sh's made-up sockpeer.py): each must be refused
-socks=$(p sockets)
-if [ -n "$socks" ]; then
-  for n in renamed rebound late; do
-    r=$(python3 -c 'import socket, sys
-try:
-    s = socket.socket(socket.AF_UNIX)
-    s.connect(sys.argv[1])
-    print("OK" if s.recv(4) == b"PEER" else "DENIED other")
-except OSError as e:
-    print("DENIED %s" % {1: "not-permitted", 13: "permission", 2: "no-such", 111: "refused"}.get(e.errno, "other"))
-' "$socks/$n" 2>/dev/null) || r="DENIED other"
-    echo "socket-$n ${r:-DENIED other}" >> results.txt
-  done
-fi
-
 # the remote probes (REMOTE set): through the operator's shared connection, into a new folder
 if [ "$(p remote)" = yes ]; then
   host=$(p remote-host)

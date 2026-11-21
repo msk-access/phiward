@@ -230,7 +230,7 @@ def test_claude_does_not_start_without_a_filter_that_works(tree, how):
         fake_filter(f, works=False)
     code, out = launch(tree, "print('RAN')", "claude")
     assert code == 126 and "RAN" not in out, out
-    assert "npm install -g @anthropic-ai/sandbox-runtime" in out, out
+    assert "seccomp filter" in out, out
 
 
 @below9

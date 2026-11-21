@@ -1085,9 +1085,13 @@ test`), or read the change before you run it outside.
   sandbox. What runs outside that sandbox can still reach unix sockets outside the session:
   Claude Code itself, command hooks, MCP servers, LSP servers, the status line,
   `apiKeyHelper` and `!` commands you type. You configure these; the session cannot change
-  the project's `.claude`. `launch` looks for the filter as sandbox-runtime does; if a
-  Claude Code release looks elsewhere, `launch` may find a filter that Claude Code does not
-  (the sandbox check catches this). `launch` makes
+  the project's `.claude`. `launch` runs the filter as Claude Code does: the native binary
+  (a `claude` that is not a JavaScript file) with `ARGV0=apply-seccomp`, or for a JavaScript
+  build sandbox-runtime's `apply-seccomp`, found in its order. If a Claude Code release runs
+  it otherwise, `launch` may prove a filter Claude Code does not use. The tests use a made-up
+  filter; that the real binary's filter works inside launch's bubblewrap is shown only by
+  the sandbox check. `launch` passes `--settings` last, assuming Claude Code keeps the last
+  of two `--settings` (the sandbox check passes its own first). `launch` makes
   `.claude`, `.vscode` and `.idea` if they are missing, and `.mcp.json` as a read-only `{}`
   placeholder. After a session, `launch` reports git control files that changed;
 - <a id="open-hpc"></a>HPC through Kerberos and mounts (the operator's setup): a session cannot read the operator's
