@@ -41,12 +41,28 @@ if [ -n "$stub" ]; then
   echo '* export-ignore' > "$fake/.config/git/attributes"
   echo '*' > "$fake/.config/git/ignore"
   printf '[[index]]\nurl = "http://127.0.0.1:9/simple"\ndefault = true\n' > "$fake/.config/uv/uv.toml"
+  # the check starts from a folder in it, with uv's config in that folder and above it, and with
+  # variables exported that point git, uv, pip and Python at more of it
+  mkdir -p "$fake/work" "$fake/py"
+  for d in "$fake" "$fake/work"; do
+    printf '[[index]]\nurl = "http://127.0.0.1:9/simple"\ndefault = true\n' > "$d/uv.toml"
+    printf '[project]\nname = "made-up"\nversion = "0"\n[tool.uv]\nindex-url = "http://127.0.0.1:9/simple"\n' > "$d/pyproject.toml"
+  done
+  echo 'raise SystemExit("the made-up PYTHONPATH was read")' > "$fake/py/sitecustomize.py"
   export UV_PYTHON_INSTALL_DIR="$(uv python dir)"  # where uv keeps its Pythons, named
   chmod -R a-w "$fake"
   fake_before=$(cd "$fake" && find . -exec ls -ld {} + | sort; find . -type f -exec cat {} +)
   run_home=$fake
 fi
-{ HOME=$run_home sh "$check" $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
+if [ -n "$stub" ]; then
+  { (cd "$fake/work" && env HOME="$fake" GIT_CONFIG_GLOBAL="$fake/.gitconfig" \
+      GIT_CONFIG_SYSTEM="$fake/.gitconfig" GIT_DIR="$fake/no-git" \
+      UV_INDEX_URL=http://127.0.0.1:9/simple UV_CONFIG_FILE="$fake/uv.toml" \
+      PIP_INDEX_URL=http://127.0.0.1:9/simple PYTHONPATH="$fake/py" sh "$check" --stub) 2>&1
+    echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)
+else
+  { HOME=$run_home sh "$check" 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
+fi
 code=$(cat /out/rc)
 [ -n "$stub" ] || exit "$code"
 
