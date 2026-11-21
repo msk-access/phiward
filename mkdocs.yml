@@ -58,6 +58,7 @@ nav:
       - "Mode B: phiward launch": launch.md
       - Setup in detail: setup.md
       - Configuration: configuration.md
+      - Commands: cli.md
       - Glossary: glossary.md
   - Decide whether it is enough:
       - Why phiward: why.md

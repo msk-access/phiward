@@ -37,6 +37,9 @@ Commands:
   install          write both hooks into this repository's hooks folder
   install --force  replace hooks that are there already
 
+Options:
+  -h, --help       show this help
+
 pre-commit refuses a staged file inside a protected folder, and an added line or file name
 that holds an identifier. pre-push refuses a push to a protected branch
 (`[git] protected_branches` in the repo config). The hooks never print a line's content or a
@@ -237,6 +240,9 @@ def main(argv: List[str]) -> int:
             data = sys.stdin.buffer.read().decode("utf-8", "replace")
             return pre_push(cwd, data)
         if cmd == "install":
+            if "-h" in rest or "--help" in rest:  # the operator's; never pre-commit or pre-push
+                print(HELP, end="")
+                return 0
             if any(a != "--force" for a in rest):
                 print(USAGE, file=sys.stderr)
                 return 2

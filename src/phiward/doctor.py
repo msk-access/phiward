@@ -579,7 +579,7 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
 USAGE = "usage: phiward doctor [--verbose] [--show-paths | --headless]\n"
 HELP = USAGE + """
 Options:
-  --verbose      every check on its own line (by default, before Claude Code is wired, its
+  --verbose, -v  every check on its own line (by default, before Claude Code is wired, its
                  parts are one next step), and the detail counts
   --show-paths   also print the protected paths (by default only their counts)
   --headless     a short check before an unattended run (`claude -p`, an Agent SDK app, a

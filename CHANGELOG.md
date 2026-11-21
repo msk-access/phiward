@@ -65,9 +65,14 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   after, and with `REMOTE` push, run and pull through the shared connection), reason classes
   per platform, a facts file, and a verdict per mode. The token is replaced by `<TOKEN>` in
   every kept file. `--stub` checks the plumbing with a stand-in claude (issue #6).
+- A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
+  disagree.
 
 ### Fixed
 
+- `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
+  `install claude --help`, `git-hook install --help`); before, it printed the usage as an error
+  or refused without a terminal. Every command's help lists its options.
 - Linux: `phiward launch` no longer fails to start (`bwrap: Can't get type of source ...`,
   `Can't find source path /proc/self/fd/N`) when the host removes an entry of a rebuilt folder
   while the session starts (systemd's private folders in `/var/tmp`, on GitHub's runners). The

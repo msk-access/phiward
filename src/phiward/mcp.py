@@ -146,7 +146,8 @@ def main(argv: List[str]) -> int:
     if argv[:1] in (["-h"], ["--help"]):
         sys.stdout.write("usage: phiward mcp   (an MCP server on stdin and stdout)\n"
                          "       phiward mcp list|wrap|unwrap ...   your own MCP servers: see "
-                         "`phiward mcp list --help`\n\n" + (__doc__ or ""))
+                         "`phiward mcp list --help`\n\n"
+                         "Options:\n  -h, --help   show this help\n\n" + (__doc__ or ""))
         return 0
     if not argv and sys.stdin.isatty():
         # typed in a terminal: this is the server Claude Code starts, not a command for you

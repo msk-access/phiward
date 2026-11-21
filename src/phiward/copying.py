@@ -23,7 +23,7 @@ from phiward.sanitize import Sanitizer, SanitizerError
 USAGE = "usage: phiward copy [--dry-run] SRC... DST\n"
 HELP = USAGE + """
 Options:
-  --dry-run    check the request and copy nothing
+  --dry-run    check the request and copy nothing (only as the first word)
   -h, --help   show this help
 
 Copy protected data without printing it. DST must be inside a protected root of your user
@@ -561,8 +561,9 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
     return code
 
 
-def main(argv: List[str], out: TextIO = sys.stdout) -> int:
+def main(argv: List[str], out: Optional[TextIO] = None) -> int:
     """The client: the request goes to the broker, which runs it outside the agent's sandbox."""
+    out = sys.stdout if out is None else out  # the stdout of the call, not of the import
     if argv[:1] in (["-h"], ["--help"]):
         out.write(HELP)
         return 0

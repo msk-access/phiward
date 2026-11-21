@@ -21,7 +21,11 @@ from typing import List
 
 from phiward import config, pathid
 
-USAGE = "usage: phiward init [--root DIR]...\n"
+USAGE = ("usage: phiward init [--root DIR]...\n\n"
+         "Options:\n"
+         "  --root DIR   add DIR to the project's protected folders (.phiward.toml); may be "
+         "given again\n"
+         "  -h, --help   show this help\n")
 MARK = "## Protected data (phiward)"
 
 

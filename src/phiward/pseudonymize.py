@@ -70,6 +70,7 @@ Options:
                    arrays of objects (by default they are shuffled, so the order of a sorted
                    file does not give away the order of the IDs); for the whole run, never
                    for one array alone
+  --               ends the options; IN and OUT follow
   -h, --help       show this help
 
 The key: ~/.phiward/backups/keys/NAME.tsv (ID, a tab, the code). No agent session, launch or
