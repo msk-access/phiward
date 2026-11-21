@@ -21,6 +21,13 @@ tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-nfc-name-U]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-C]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-F]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-U]
+tests/test_v2_launch_network.py::test_1_the_profile_allows_only_the_proxys_port
+tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v4]
+tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v6]
+tests/test_v2_launch_network.py::test_8_launch_refuses_when_the_proxys_port_is_squatted
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[None]
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[SO_REUSEADDR]
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[SO_REUSEPORT]
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[firmlink]
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[upper case]
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[volfs]
