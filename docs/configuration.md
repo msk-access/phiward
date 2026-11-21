@@ -30,135 +30,76 @@ The agent can edit a repo config, and it chooses the folder that a gateway reque
 So a repo config may only **add protection**. Everything that **widens or changes** what a
 gateway command can do comes from the user config only.
 
-| Key | User config | Repo config |
-|---|---|---|
-| `[protected_paths] roots`, `patterns` | yes | yes, adds (the gateway cannot write a repo-only root) |
-| `[protected_paths] unresolved` | yes | only stricter |
-| `[protected_paths] snapshot_names` | yes | yes, adds |
-| `[sanitize] packs` | yes (built-in names and pack files) | built-in names only; pack files are ignored |
-| `[sanitize] names_from`, `patterns`, `subjects` | yes | ignored |
-| `[sanitize] inventory_limit` | yes | only lower |
-| `[copy] remotes`, `ssh_config`, `push_limit_gib` | yes | ignored |
-| `[sanitize] table`, `id_columns` | yes | ignored |
-| `[remote] hosts`, `commands`, `roots`, `use_shared_connection` | yes | ignored |
-| `[launch] pass_env` | yes | ignored |
-| `[broker] write_to`, `net` | yes | ignored |
-| `[network] limit`, `allowed_domains` | yes | ignored |
-| `[broker] commands` | yes | narrows: a program must be in every list that is set |
-| `[broker] max_output_lines` | yes | only lower |
-| `[git] protected_branches` | yes | yes, adds |
-| `[shell] best_effort` | yes | ignored |
+This table lists every key. The user config may set each one; the column "Repo config" says
+what a repo config may do with it. Each key links to its section below.
+
+| Key | Type | Default | Repo config | What it does |
+|---|---|---|---|---|
+| [`[protected_paths] roots`](#protected_paths) | list of folders | none | adds (the gateway cannot write a repo-only root) | Folders the agent must never read. |
+| [`[protected_paths] patterns`](#protected_paths) | list of globs | none | adds | Protected places that are spread out. Prefer roots. |
+| [`[protected_paths] unresolved`](#protected_paths) | one of `"allow"`, `"ask"`, `"deny"` | `"deny"` | only stricter | What the hook's text check does with a variable it cannot see. |
+| [`[protected_paths] snapshot_names`](#protected_paths) | list of folder names | none (the usual names are always found) | adds | More names of snapshot folders, which are protected too. |
+| [`[sanitize] packs`](#sanitize) | list | `["genomics"]` | built-in names only; pack files are ignored | The pattern packs that mask output. |
+| [`[sanitize] names_from`](#sanitize) | list of files | none | ignored | Index files whose path parts are masked as `<NAME>`. Keep them inside a protected root. |
+| [`[sanitize] patterns`](#sanitize) | list | none | ignored | Extra rules, each `REGEX => <PLACEHOLDER>`. |
+| [`[sanitize] subjects`](#sanitize) | text: only `"none"` | not set | ignored | Your record that the data holds no subject or sample IDs beyond the names under the roots. |
+| [`[sanitize] inventory_limit`](#sanitize) | whole number | 200000 | only lower | The most entries under the roots. With more, the sanitizer stops (fails closed). |
+| [`[sanitize] table`](#sanitize) | true or false | false | ignored | Whether `phiward run --table` may be used (it lets numbers through). |
+| [`[sanitize] id_columns`](#sanitize) | list | none | ignored | More column headers whose cells `phiward run --table` masks whole. |
+| [`[copy] remotes`](#copy) | list of `host:/absolute/prefix` | none | ignored | Places on other machines that `phiward copy` may use. |
+| [`[copy] ssh_config`](#copy) | text: a file | none | ignored | The ssh config that every HPC request uses. |
+| [`[copy] push_limit_gib`](#copy) | whole number | 5 | ignored | A larger push is refused. |
+| [`[remote] hosts`](#remote) | list | none | ignored | The hosts `phiward run --remote` may name. |
+| [`[remote] commands`](#remote) | list | none: every remote run is refused | ignored | The programs a remote run may run there. |
+| [`[remote] roots`](#remote) | list of absolute paths | none: every push is refused | ignored | Protected paths there: masked, and a push goes only under one. |
+| [`[remote] use_shared_connection`](#remote) | true or false | true | ignored | Join your shared SSH connection, so no request reads a key or ticket. |
+| [`[launch] pass_env`](#launch) | list | none | ignored | More environment variables for `phiward launch` (the agent can read them). |
+| [`[broker] write_to`](#broker) | list of folders | none | ignored | The folders where gateway commands may write. |
+| [`[broker] net`](#broker) | true or false | false | ignored | Whether `phiward run --net` gets the network. |
+| [`[broker] commands`](#broker) | list | not set: any program may run | narrows: a program must be in every list that is set | The programs gateway commands may run. **Set it for real patient data.** |
+| [`[broker] max_output_lines`](#broker) | whole number | 2000 | only lower | The most lines of a gateway command's output that the agent sees. |
+| [`[network] limit`](#network) | true or false | false | ignored | Shell commands in Claude Code sessions reach only the listed hosts (Mode A). |
+| [`[network] allowed_domains`](#network) | list | none | ignored | The hosts they may reach. Each one is a way out. |
+| [`[git] protected_branches`](#git) | list | none | adds | Branches that the pre-push hook keeps from a push. |
+| [`[shell] best_effort`](#shell) | true or false | false | ignored | The hook's text check, in place of a refusal, for a shell that no kernel confines. |
+| [`[shell] strict`](#shell) | true or false | not set | loads, does nothing | Removed before release. Remove it. |
+| [`[shell] commands`](#shell) | list | not set | ignored; does nothing | Removed before release. Remove it. |
 
 A repo config that sets an ignored key is not an error. `phiward doctor` lists the ignored
-keys.
+keys. A key that is not in this table is a bad config ([Fail closed](#fail-closed)).
 
 ## Every key
 
-An example user config with every key:
+A short user config for real patient data, with the safe choices. The sections below say
+what each key does.
 
 ```toml
 [protected_paths]
-# Folders that the agent must never read. Absolute, or starting with ~/ or $HOME.
-# No "..", no "$" variable other than $HOME (or ${HOME}), no wildcard (* ? [).
-# Each should exist.
 roots = ["~/data/patients", "~/data/study-a"]
 
-# Glob patterns for protected places. Absolute, or starting with ~/ or $HOME. "*" matches inside
-# one path part ("?" and "[...]" are refused).
-# Prefer roots: Claude Code's sandbox cannot take patterns.
-patterns = ["~/projects/*/inputs/patient"]
-
-# More folder names that hold snapshots of a root (protected too). The usual ones (.snapshot,
-# .snapshots, .zfs, ~snapshot) are always found.
-snapshot_names = [".backups"]
-
-# What the hook's text check does with a variable it cannot see: "allow", "ask" or "deny".
-# Default "deny". Used only where the shell is not kernel-confined.
-unresolved = "deny"
-
 [sanitize]
-# Pattern packs. A name without "/" is a built-in pack ("genomics", "msk", "dates").
-# A name with "/" is the path of your own pack file. Default ["genomics"].
 packs = ["genomics"]
-
-# Index files whose paths hold names to mask (<NAME>): lines of tab-separated fields; each
-# field with a "/" is a path, and its parts (and their dash pieces) are masked. Keep the files
-# inside a protected root: the list is protected data, and elsewhere the agent can read it.
-names_from = ["~/data/patients/.names.txt"]
-
-# Extra rules, each 'REGEX => <PLACEHOLDER>'.
-patterns = ['\bPT-\d{6}\b => <SAMPLEID>']
-
-# Or your record that the protected data holds no subject or sample IDs beyond the names
-# under the roots (phiward doctor warns until a rule masks them or this is set):
-# subjects = "none"
-
-# The most entries the sanitizer lists under the roots. Default 200000.
-inventory_limit = 200000
-
-# Whether `phiward run --table` may be used (it lets numbers through in columns not named as
-# identifiers). Default false.
-table = false
-# More column headers whose cells `phiward run --table` masks whole, added to the built-in list.
-id_columns = ["lab_code", "Visit-Code"]
-
-[copy]
-# Places on other machines that `phiward copy` may copy to or from: "host:/absolute/prefix".
-remotes = ["cluster:/data/work/study-a"]
-# The ssh config every HPC request uses (it names the host's ControlPath; see hpc.md).
-ssh_config = "~/.config/phiward/ssh_config"
-# A push larger than this many GiB is refused: copy it yourself. Default 5.
-push_limit_gib = 5
-
-[remote]
-# Hosts `phiward run --remote` may name, programs it may run there, protected paths there
-# (masked in remote output; a push goes only under one).
-hosts = ["cluster"]
-commands = ["squeue", "sacct", "sinfo"]
-roots = ["/data/protected", "/data/work/study-a"]
-# Join your shared SSH connection (no request reads a key or ticket). Default true.
-use_shared_connection = true
-
-[launch]
-# Extra environment variables passed to a `phiward launch` session (the agent can read them).
-pass_env = []
+names_from = ["~/data/patients/.names.txt"]   # keep it inside a protected root
 
 [broker]
-# Folders where `phiward run --write-to DIR` may write (DIR is one of them or inside one).
-# Each must be a real, existing folder. Default: none.
-write_to = ["~/projects/study-a/results"]
-
-# Whether `phiward run --net` gets the network. Default false.
-net = false
-
-# The most lines of a gateway command's output that the agent sees. Default 2000.
-max_output_lines = 2000
-# The programs gateway commands may run (default: any). Set it for real patient data. A listed
-# program starts in a private folder, not in the agent's: paths are given in full.
-# commands = ["@genomics", "~/pipelines/bin/"]
-
-[git]
-# Branches that `git push` must not change (the pre-push hook).
-protected_branches = ["main", "release"]
+commands = ["@genomics", "~/pipelines/bin/"]  # set it for real patient data
+net = false                                   # leave write_to empty unless you need it
 
 [network]
-# Shell commands in Claude Code sessions reach only these hosts (Mode A). Default false.
 limit = true
-allowed_domains = ["github.com", "pypi.org"]
-
-[shell]
-# Take the hook's text check where Claude Code's sandbox does not confine the shell. Default
-# false: then such a shell runs only gateway calls.
-best_effort = false
+allowed_domains = ["github.com"]
 ```
 
 ### `[protected_paths]`
 
-- **`roots`** (list of folders). Claude Code's sandbox (as `install` writes it) denies the
+- **`roots`** (list of folders). Each is absolute, or starts with `~/` or `$HOME`, and should
+  exist. No `..`, no `$` variable other than `$HOME` (or `${HOME}`), no wildcard (`*`, `?`,
+  `[`). Claude Code's sandbox (as `install` writes it) denies the
   agent's shell every read and write of each root, and the hook refuses the file tools. The
   gateway can read every root. It writes only in `[broker] write_to` folders, which may sit
   inside a root.
-- **`patterns`** (list of globs). Like roots, for places that are spread out. `*` matches any run
+- **`patterns`** (list of globs). Like roots, for places that are spread out. Each is absolute,
+  or starts with `~/` or `$HOME`. `*` matches any run
   of characters in one path part, names that start with a dot included; it is the only wildcard.
   `?`, `[...]` and any character outside printable ASCII are refused (the config is then bad, and
   the message suggests a rewrite): give such names as roots. On macOS, letter case does not matter.
@@ -221,7 +162,8 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
 `bam`, `runs`, `test`).
 
 - **`packs`** (list). Built-in packs are `genomics` (the default) and `msk` (one institution's
-  identifiers; an example, not a default). A pack file has the lists `paths`, `identifiers`,
+  identifiers; an example, not a default). A name with `/` is the path of a pack file of your
+  own (user config only). A pack file has the lists `paths`, `identifiers`,
   `positions` and `keep_files`; the format is at the top of
   `phiward/packs/genomics.toml` in the installed package. A pack file must be a regular
   file, not a link.
@@ -350,7 +292,8 @@ The grants. Nothing asks the operator at run time: what is not written here is r
   What runs is always the entry of your user config that lists it, never a link of the
   agent's: a repo config's list can only narrow yours.
 
-  When it is set, any other program is refused. You approve the listed programs as they are:
+  When it is set, any other program is refused. A listed program starts in a private folder, not
+  in the agent's: give paths in full. You approve the listed programs as they are:
   `phiward setup` does it when it writes the config, and `phiward pin` does it again. The broker
   runs no listed program whose content differs from what you approved, and stops when one
   changes while it runs. After you update a listed program, check it and run `phiward pin`, then
