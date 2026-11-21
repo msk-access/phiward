@@ -421,7 +421,7 @@ def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=Fal
     read, or "dir" for one that opens but cannot be read}; the probe's own process is "self",
     a child of 1; `foreign`: /proc/$$ is another
     process; `names`: copy token-names.txt beside it; `grep_fails`: a grep that exits 2 on the
-    token-name pattern; `names` may also be the file's text; `xtrace`: run it as sh -x).
+    token-name pattern, as an awk that exits 2 on it; `names` may also be the file's text; `xtrace`: run it as sh -x).
     Its stderr is in tmp_path/"stderr.txt".
     Made-up folders only; a git repository of its own in tmp_path, no hook. -> (results, text)"""
     import shutil
@@ -443,9 +443,9 @@ def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=Fal
     elif names:
         shutil.copy(NAMES, proj / "token-names.txt")
     if grep_fails:
-        (fbin / "grep").write_text('#!/bin/sh\ncase "$*" in *CLAUDE_CODE_OAUTH_TOKEN*) exit 2 ;; '
-                                   'esac\nexec /usr/bin/grep "$@"\n')
-        (fbin / "grep").chmod(0o755)
+        (fbin / "awk").write_text('#!/bin/sh\ncase "$*" in *CLAUDE_CODE_OAUTH_TOKEN*) exit 2 ;; '
+                                  'esac\nexec /usr/bin/awk "$@"\n')
+        (fbin / "awk").chmod(0o755)
     if fake is not None:
         text, code = fake
         (fbin / "phiward").write_text(f"#!/bin/sh\ncat >&2 <<'EOF'\n{text}\nEOF\nexit {code}\n")
@@ -1058,9 +1058,9 @@ def test_probe_a_refused_read_prints_nothing(tmp_path):
     assert "environ" not in (tmp_path / "stderr.txt").read_text()
 
 
-def test_probe_a_grep_error_is_a_scan_error_not_no_name(tmp_path):
+def test_probe_a_matcher_error_is_a_scan_error_not_no_name(tmp_path):
     lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}}, grep_fails=True)
-    assert lines["parent-environ"] == scan(1, 0, 0, 0, 1, "-"), lines
+    assert lines["parent-environ"] == scan(0, 0, 0, 0, 1, "-"), lines
     assert run(results=pe(lines["parent-environ"]), platform="linux")[0] == judge.INCONCLUSIVE
 
 
