@@ -314,8 +314,14 @@ been run on the cluster yet. To run it there, as an interactive job:
    session. Start no `claude` until the check is done: it may make `~/.claude` again.
 4. `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
    SBX_TOOLS=$HOME/phiward-sbx/tools/bin sh scripts/sandbox-check/check.sh`, and paste the
-   token when it asks.
+   token when it asks. It takes none from the environment.
 5. Put the names back.
+
+The check starts itself again under an empty environment, so none of your variables reaches
+it. That drops proxy and CA variables on purpose (`HTTPS_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`,
+`REQUESTS_CA_BUNDLE` and the like): the check needs the network for the build and for Claude
+Code, so run it on a node that reaches the internet directly. There is no SBX_ variable for a
+proxy yet.
 
 ## Rules for the operator
 

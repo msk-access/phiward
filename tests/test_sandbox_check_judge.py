@@ -1326,39 +1326,6 @@ def test_a_name_in_other_letter_case_is_refused_where_case_is_ignored(tmp_path, 
 
 
 
-SBX_ALLOWED = {"PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "USER", "LOGNAME",
-               "SHELL", "MODES", "KEEP", "REMOTE", "REMOTE_DIR", "REMOTE_HOSTNAME", "REMOTE_USER",
-               "CLAUDE_BIN", "UV_PYTHON_INSTALL_DIR"}
-
-
-def _env_names(text):
-    return {ln.split("=", 1)[0] for ln in text.splitlines() if "=" in ln}
-
-
-def test_the_check_keeps_only_the_variables_it_names(tmp_path):
-    """Nothing the operator exported applies to the check's programs (git, uv, Python, pip):
-    only an allow-list stays, read once at the start."""
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "LANG": "C",
-           "SBX_BASE": "/made/up", "GIT_CONFIG_GLOBAL": "/made/up/gitconfig",
-           "GIT_CONFIG_SYSTEM": "/made/up/system", "GIT_DIR": "/made/up/git",
-           "UV_INDEX_URL": "http://127.0.0.1:9/simple", "UV_CONFIG_FILE": "/made/up/uv.toml",
-           "PYTHONPATH": "/made/up/py", "PIP_INDEX_URL": "http://127.0.0.1:9/simple",
-           "LD_PRELOAD": "/made/up/lib.so"}
-    r = _places(tmp_path, "sh", "-c", '. "$0"; sbx_keep_env && env', PLACES, env=env)
-    assert r.returncode == 0, r.stderr
-    left = _env_names(r.stdout)
-    assert left <= SBX_ALLOWED | {"SBX_BASE", "PWD", "OLDPWD", "SHLVL", "_"}, left
-    assert "SBX_BASE" in left and "PATH" in left
-
-
-def test_an_exported_shell_function_is_refused(tmp_path):
-    """A name the shell cannot unset (bash's exported functions) would reach the session's bash."""
-    env = {"PATH": os.environ["PATH"], "HOME": str(tmp_path), "BASH_FUNC_ls%%": "() { :; }"}
-    r = _places(tmp_path, "sh", "-c", '. "$0"; sbx_keep_env', PLACES, env=env)
-    assert r.returncode == 2
-    assert "BASH_FUNC_ls%%" in r.stderr
-
-
 def test_the_passwd_home_is_found_for_this_account(tmp_path):
     import pwd
     r = _places(tmp_path, "sbx_passwd_home")

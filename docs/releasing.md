@@ -55,9 +55,15 @@ Then push `main`, `develop` and the tag.
    folder of its own, no login service).
    Then check that the real Claude Code obeys the settings phiward writes, which the scripts above
    cannot show. You run it yourself, in a terminal: it asks only for a token from
-   `claude setup-token`, and builds the rest in a home folder of its own, with made-up data. An
-   agent never runs it (it refuses without a terminal, and refuses a token from the environment
-   inside a Claude Code session); an agent runs only `sh scripts/sandbox-check/linux.sh --stub`.
+   `claude setup-token`, pasted at its prompt (or `ANTHROPIC_API_KEY=KEY`), and builds the rest
+   in a home folder of its own, with made-up data. It takes no token from the environment. An
+   agent never runs it (it refuses without a terminal); an agent runs only
+   `sh scripts/sandbox-check/linux.sh --stub`.
+   It starts itself again under an empty environment first: only HOME, TMPDIR, TERM, your PATH
+   (to find uv and claude; then it uses the system folders) and its own variables (SBX_*, MODES,
+   KEEP, REMOTE*, CLAUDE_BIN) cross. No variable, option or function of your shell acts on it.
+   Its programs run with its own home as HOME, in its own folder. uv's Python is found in
+   `~/.local/share/uv/python`; give its path as an argument if yours is elsewhere.
    - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
      `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
      folders; it may not be under /tmp or the temp folder, nor your home folder itself, nor
@@ -111,8 +117,7 @@ Then push `main`, `develop` and the tag.
    container (`linux.sh --stub`): elsewhere `check.sh --stub` refuses, as it would plant a git
    hook and a home folder on your machine. (That refusal looks for the container's marks,
    `/.dockerenv` or SBX_IMAGE: a tripwire, not a gate.)
-   A token you set in the environment is read once and unset at the start: only the claude
-   process gets it. The check's home folder and its judge's folder are removed at the end, also
+   Only the claude process gets the token. The check's home folder and its judge's folder are removed at the end, also
    after Ctrl-C, SIGTERM or a closed terminal; if one cannot be removed, the check names it and
    exits non-zero. A `kill -9` of `check.sh` or `launch.py` skips that: the session may keep
    running, and the folders stay (remove them yourself). Only the report and, per mode, the

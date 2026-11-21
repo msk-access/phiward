@@ -7,16 +7,18 @@
 # (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
-# The operator runs it, in a terminal: it asks only for a token (set CLAUDE_CODE_OAUTH_TOKEN or
-# ANTHROPIC_API_KEY, or paste the one `claude setup-token` prints). A token from the environment
-# is read once and both variables are unset at the start, so no other program of the check gets
-# it; the token reaches only the claude process (through launch.py's stdin), never a file or a
-# command line, and every kept file is redacted. A run without a terminal is refused, and so is
-# a token from the environment inside a Claude Code session (CLAUDECODE).
-# Nothing of your own setup is read or changed: its programs run with the check's own home as
-# HOME, in its own folder, and with only the variables it names (places.sh; an exported bash
-# function is refused). Your home's path and uv's Python folder are looked at once, at the start;
-# the home folder of the account database comes from getent or dscl (none: refused).
+# The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
+# `claude setup-token` prints, or ANTHROPIC_API_KEY=KEY); none is taken from the environment.
+# The token reaches only the claude process (through launch.py's stdin), never a file or a
+# command line, and every kept file is redacted. A run without a terminal is refused.
+# Nothing of your own setup is read or changed. Its first statement starts it again under an
+# empty environment (env -i): only HOME, TMPDIR, TERM, your PATH (to find uv and claude, then
+# the system folders) and the variables below cross, so no variable, option or function of your
+# shell applies to it. Its programs then run with the check's own home as HOME and in its own
+# folder. Your home's path is looked at once, for the SBX_BASE check and uv's Python folder
+# (~/.local/share/uv/python, given to the one uv command that finds it; else give PYTHON); the
+# home folder of the account database comes from getent or dscl (none: refused). No proxy or CA
+# variable crosses (HTTPS_PROXY, SSL_CERT_FILE and the like): see docs/hpc.md.
 # The home folder and the judge's folder (next to
 # it, outside the folders the session is given: the stream, the facts, doctor's output, the
 # report) are removed at the end; if one cannot be, the check says so, names it, and exits
@@ -44,21 +46,38 @@
 #              folder above them, up to your home folder when inside it, writable by no group or
 #              other account): refused otherwise, before the build. Unset: the system folders only.
 #   SBX_SRC    a source tree to build instead of `git archive HEAD` (the container has no .git).
+#   SBX_OUT, KEEP, CLAUDE_BIN, SBX_IMAGE, SBX_LOCKED, SBX_CLEANUP_WAIT: as linux.sh and
+#              inside.sh use them (kept files, the claude to test, the container's marks).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
 # Usage: sh scripts/sandbox-check/check.sh [--stub] [PYTHON]  (default: uv's own Python)
+# First, before anything of your shell can act: start again under an empty environment. Only a
+# keyword (case) and a special built-in (exec) run before it, which no exported function can
+# replace; the argument --sbx-clean, which this line adds itself and never the environment,
+# marks the second start.
+case ${1-} in
+  --sbx-clean) shift ;;
+  *) exec /usr/bin/env -i PATH=/usr/bin:/bin HOME="${HOME-}" TMPDIR="${TMPDIR-}" TERM="${TERM-}" \
+       SBX_PATH="${PATH-}" SBX_BASE="${SBX_BASE-}" SBX_SRC="${SBX_SRC-}" SBX_TOOLS="${SBX_TOOLS-}" \
+       SBX_OUT="${SBX_OUT-}" SBX_IMAGE="${SBX_IMAGE-}" SBX_LOCKED="${SBX_LOCKED-}" \
+       SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" \
+       REMOTE="${REMOTE-}" REMOTE_DIR="${REMOTE_DIR-}" REMOTE_HOSTNAME="${REMOTE_HOSTNAME-}" \
+       REMOTE_USER="${REMOTE_USER-}" CLAUDE_BIN="${CLAUDE_BIN-}" \
+       /bin/sh "$0" --sbx-clean "$@" ;;
+esac
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 . "$here/places.sh"
-# your home folder: one look here, before any program runs, and never again. Its path (for the
-# SBX_BASE check, with the passwd home) and where uv keeps its Pythons are kept; then HOME names
-# a folder that does not exist, and from the moment it is made the check's own home, so no
-# program of the check reads or writes anything of yours (no ~/.gitconfig, ~/.config, ~/.cache)
-real_home=${HOME:-}
-UV_PYTHON_INSTALL_DIR=${UV_PYTHON_INSTALL_DIR:-${XDG_DATA_HOME:-$real_home/.local/share}/uv/python}
-export HOME=/nonexistent UV_PYTHON_INSTALL_DIR
-unset XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME
+# your home folder: its path is kept (for the SBX_BASE check, with the passwd home, and uv's
+# Python folder); then HOME names a folder that does not exist, and from the moment it is made
+# the check's own home, so no program of the check reads or writes anything of yours
+real_home=$HOME
+uv_pythons=$real_home/.local/share/uv/python
+export HOME=/nonexistent
+USER=$(id -un)
+LOGNAME=$USER
+export USER LOGNAME
 stub=""
 if [ "${1:-}" = --stub ]; then stub=1; shift; fi
 case $(uname) in
@@ -68,37 +87,31 @@ case $(uname) in
 esac
 if [ -z "$stub" ]; then
   [ -t 0 ] || { echo "sandbox-check: a real run needs a terminal (the operator runs it; an agent runs only --stub, in the container)" >&2; exit 2; }
-  if [ -n "$CLAUDECODE" ] && { [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ] || [ -n "$ANTHROPIC_API_KEY" ]; }; then
-    echo "sandbox-check: refused: a token from the environment inside a Claude Code session (CLAUDECODE is set); run it in your own terminal" >&2
-    exit 2
-  fi
 else
   # a tripwire, not a gate: anyone can set SBX_IMAGE
   [ -e /.dockerenv ] || [ -n "$SBX_IMAGE" ] || { echo "sandbox-check: --stub runs only in the container: sh scripts/sandbox-check/linux.sh --stub" >&2; exit 2; }
   [ -z "$REMOTE" ] || { echo "sandbox-check: REMOTE is for a real run, not --stub" >&2; exit 2; }
 fi
-# a token from the environment: read once, then both variables unset, so uv, install, doctor and
-# the broker never get it; launch.py gets it on stdin (an API key as ANTHROPIC_API_KEY=VALUE)
+# the token: only at the prompt below, never from the environment (none crossed the new start);
+# launch.py gets it on stdin (an API key as ANTHROPIC_API_KEY=VALUE)
 token=""
-if [ -z "$stub" ]; then
-  if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then token=$CLAUDE_CODE_OAUTH_TOKEN
-  elif [ -n "$ANTHROPIC_API_KEY" ]; then token="ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY"
-  fi
-fi
-unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY  # the stub gets a made-up token only
-# none of the variables you exported applies to the check's programs: only those it names
-# (places.sh) stay
-sbx_keep_env || exit 2
 modes=${MODES:-A B}
 for m in $modes; do
   case $m in A|B) ;; *) echo "sandbox-check: MODES holds A and B only" >&2; exit 2 ;; esac
 done
-uv=$(command -v uv) || { echo "sandbox-check: needs uv" >&2; exit 2; }
+# uv and claude by your PATH, once; then the system folders only
+uv=$(PATH=$SBX_PATH; command -v uv) || { echo "sandbox-check: needs uv" >&2; exit 2; }
 if [ -n "$stub" ]; then
   claude="$here/stub/claude"
+elif [ -n "$CLAUDE_BIN" ]; then
+  claude=$CLAUDE_BIN
 else
-  claude=${CLAUDE_BIN:-$(command -v claude)} || { echo "sandbox-check: needs claude on PATH" >&2; exit 2; }
+  claude=$(PATH=$SBX_PATH; command -v claude) || { echo "sandbox-check: needs claude on PATH" >&2; exit 2; }
 fi
+unset SBX_PATH
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+[ $os = linux ] && PATH=/usr/local/bin:$PATH
+case $uv in /*) ;; *) uv=$PWD/$uv ;; esac
 # the check works in its own folder once it is made: a path you gave relative to where you
 # started is made absolute now
 case $claude in /*) ;; *) claude=$PWD/$claude ;; esac
@@ -172,7 +185,7 @@ mkdir -p "$H/src" "$H/dist" "$H/tmp"
 # and its own folder: uv and git look for their config in the folder they start in and above it
 cd "$H"
 export HOME="$H" TMPDIR="$H/tmp" UV_CACHE_DIR="$H/.cache/uv" UV_PYTHON_DOWNLOADS=never
-python=${1:-$(env -u CONDA_PREFIX -u VIRTUAL_ENV "$uv" python find --python-preference only-managed 2>/dev/null || true)}
+python=${1:-$(UV_PYTHON_INSTALL_DIR=$uv_pythons "$uv" python find --python-preference only-managed 2>/dev/null || true)}
 [ -x "$python" ] || { echo "sandbox-check: no uv Python; run \`uv python install 3.12\` or give PYTHON" >&2; exit 2; }
 claude=$("$python" -I -S -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$claude")
 if [ -n "$SBX_SRC" ]; then
@@ -185,7 +198,7 @@ fi
 if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
 if [ -z "$stub" ] && [ -z "$token" ]; then
   echo "In another terminal, run:  claude setup-token"
-  printf "then paste the token here (it is not shown): "
+  printf "then paste the token here, or ANTHROPIC_API_KEY=KEY (it is not shown): "
   tty_mode=$(stty -g < /dev/tty)
   stty -echo < /dev/tty
   IFS= read -r token < /dev/tty
