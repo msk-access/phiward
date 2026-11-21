@@ -17,7 +17,8 @@ sbx_newer_expect() {
   _unix=no
   if grep -qs RESOLVE_UNIX "$_kit"/src/phiward/*.py && [ "$_abi" -ge 9 ]; then _unix=yes; fi
   echo "== kit: proxy $_proxy, unix-socket guard on this host $_unix (Landlock ABI $_abi)"
-  for _p in loopback-127 loopback-localhost loopback-v6 loopback-mapped unix-renamed unix-late; do
+  for _p in loopback-127 loopback-localhost loopback-v6 loopback-mapped unix-renamed unix-late \
+            unix-rebound; do
     case $_p in
       loopback-*) _must=$_proxy _why="kit has no proxy" ;;
       *) _must=$_unix _why="relies on Claude Code's sandbox (not in the stub)" ;;
@@ -34,7 +35,7 @@ sbx_newer_expect() {
     fi
   done
   _others=$(grep -E '^(FAIL|\?\?\?\?) ' "$_r" | grep -vxF 'FAIL Mode B' |
-            grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' || true)
+            grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late|unix-rebound): ' || true)
   if [ -n "$_others" ]; then
     printf '%s\n' "$_others" | sed 's/^/== FAIL  Mode B, unexpected: /'; _st=1
   fi

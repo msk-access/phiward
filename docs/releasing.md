@@ -148,8 +148,10 @@ Then push `main`, `develop` and the tag.
      host right after the session. A write to `node_modules/pkg/.vscode/x` must work: refused,
      the mode is INCONCLUSIVE.
    - **Unix sockets.** The check binds a made-up socket outside the session under a temporary
-     name and renames it (as ssh's ControlMaster does), and binds another once the session
-     runs (`unix-renamed`, `unix-late`). A connect to either fails the mode. A refusal counts
+     name and renames it (as ssh's ControlMaster does), binds another once the session runs,
+     and binds a third before the session that it removes and binds again at the same path
+     once the session runs (`unix-renamed`, `unix-late`, `unix-rebound`). A connect to any of
+     them fails the mode. A refusal counts
      only when the socket answered from outside; "no such file" there is hidden, not refused,
      and INCONCLUSIVE.
    The servers and sockets are asked again from outside right after the session: one that no

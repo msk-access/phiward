@@ -2019,7 +2019,7 @@ def test_netsrv_renames_its_socket_and_binds_the_late_one_on_the_ready_file(nets
     state, sock, proj, path = netsrv
     renamed = state["renamed"]
     assert renamed == os.path.join(sock, "cm.sock")
-    assert sorted(os.listdir(sock)) == ["cm.sock"]  # bound under another name, then renamed
+    assert sorted(os.listdir(sock)) == ["cm.sock", "rebound.sock"]  # no temporary name left
     out, r = _net("unix", renamed)
     assert out == "CONNECTED" and "FAKE-PT" not in r.stdout + r.stderr
     late = os.path.join(sock, "late-B.sock")

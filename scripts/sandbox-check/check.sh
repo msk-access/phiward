@@ -8,8 +8,8 @@
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
 # The probes include the newer guards (docs/releasing.md): made-up servers outside the session
-# (netsrv.py: HTTP on 127.0.0.1 and [::1], a unix socket bound and renamed, one bound once the
-# session runs), which must not answer under launch; api.anthropic.com, which must; and files
+# (netsrv.py: HTTP on 127.0.0.1 and [::1], a unix socket bound and renamed, one bound again at
+# its path once the session runs, one bound once the session runs), which must not answer under launch; api.anthropic.com, which must; and files
 # that run later, which must not be written (node_modules must). cleanup.sh stops the servers.
 # The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
 # `claude setup-token` prints, or ANTHROPIC_API_KEY=KEY); none is taken from the environment.
@@ -418,6 +418,7 @@ until grep -qx ready "$J/netsrv.state" 2>/dev/null; do
 done
 nport=$(sed -n 's/^port //p' "$J/netsrv.state")
 nrenamed=$(sed -n 's/^renamed //p' "$J/netsrv.state")
+nrebound=$(sed -n 's/^rebound //p' "$J/netsrv.state")
 answers() {
   want=$1; shift
   if [ "$("$py" -I -S "$here/net.py" "$@" 2>/dev/null)" = "$want" ]; then echo yes; else echo no; fi
@@ -448,6 +449,7 @@ for m in $modes; do
     echo "net-url https://api.anthropic.com/"
     echo "unix-renamed $nrenamed"
     echo "unix-late $S/late-$m.sock"
+    echo "unix-rebound $nrebound"
     if [ -n "$REMOTE" ]; then
       echo "remote yes"
       echo "remote-host $REMOTE"
@@ -467,6 +469,7 @@ for m in $modes; do
   lb_v6=$(answers "RESPONSE 222" tcp ::1 "$nport")
   lb_mapped=$(answers "RESPONSE 222" tcp ::ffff:127.0.0.1 "$nport")
   u_renamed=$(answers CONNECTED unix "$nrenamed")
+  u_rebound=$(answers CONNECTED unix "$nrebound")
   rl_before=$(present)
   rprofile_before=$(sum "$H/proj/.Rprofile")
   # again right before each session: a ~/.claude put back since the first look would be read in
@@ -492,6 +495,11 @@ for m in $modes; do
   lb_v6_after=$(answers "RESPONSE 222" tcp ::1 "$nport")
   lb_mapped_after=$(answers "RESPONSE 222" tcp ::ffff:127.0.0.1 "$nport")
   u_renamed_after=$(answers CONNECTED unix "$nrenamed")
+  # the rebound socket: bound again during the session (netsrv says so), and answering
+  u_rebound_after=no
+  if grep -qxF "rebound-$m $nrebound" "$J/netsrv.state"; then
+    u_rebound_after=$(answers CONNECTED unix "$nrebound")
+  fi
   # the late socket: bound once the session ran (netsrv says so) and answering from outside
   u_late=no
   if grep -qxF "late-$m $S/late-$m.sock" "$J/netsrv.state"; then
@@ -552,6 +560,8 @@ for m in $modes; do
     echo "loopback_v6_after $lb_v6_after"
     echo "loopback_mapped_after $lb_mapped_after"
     echo "unix_renamed_after $u_renamed_after"
+    echo "unix_rebound $u_rebound"
+    echo "unix_rebound_after $u_rebound_after"
     echo "unix_late $u_late"
     echo "runs_later_made ${made:-none}"
     if [ -n "$REMOTE" ]; then echo "remote yes"; echo "pulled_ok $pulled"; else echo "remote no"; fi
@@ -559,7 +569,7 @@ for m in $modes; do
     req="$req gateway-run parent-environ env-secrets control-commit git-hook"
     req="$req loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api"
     req="$req runs-later-settings runs-later-skill runs-later-vscode runs-later-sub-vscode"
-    req="$req runs-later-rprofile runs-later-node-modules unix-renamed unix-late"
+    req="$req runs-later-rprofile runs-later-node-modules unix-renamed unix-late unix-rebound"
     [ -n "$REMOTE" ] && req="$req remote-push remote-run remote-pull remote-pull-out remote-own-socket"
     echo "required $req"
   } > "$R/facts.txt"

@@ -56,7 +56,7 @@ LOOPBACK = ("loopback-127", "loopback-localhost", "loopback-v6", "loopback-mappe
 RUNS_LATER = ("runs-later-settings", "runs-later-skill", "runs-later-vscode",
               "runs-later-sub-vscode", "runs-later-rprofile")
 INSTALLED = "runs-later-node-modules"
-UNIX = ("unix-renamed", "unix-late")
+UNIX = ("unix-renamed", "unix-late", "unix-rebound")
 NEWER = LOOPBACK + ("net-api",) + RUNS_LATER + (INSTALLED,) + UNIX
 CORE = CONTROLS + DENIED + ("gateway-run", "parent-environ", "env-secrets") + NEWER
 # a connection that did not get through (net.py's classes; "other" is not a known reason)
@@ -82,7 +82,8 @@ FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "non
          "protected_file", "host_write_data", "host_write_phiward", "loopback_127",
          "loopback_localhost", "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
          "runs_later_made", "loopback_127_after", "loopback_localhost_after",
-         "loopback_v6_after", "loopback_mapped_after", "unix_renamed_after")
+         "loopback_v6_after", "loopback_mapped_after", "unix_renamed_after", "unix_rebound",
+         "unix_rebound_after")
 # whether each made-up server answered outside the session (check.sh: right before it, and again
 # right after it, KEY_after; the late socket after it only). A loopback spelling this machine
 # does not answer at all (no IPv6) is only noted

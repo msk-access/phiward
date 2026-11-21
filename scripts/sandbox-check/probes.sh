@@ -179,7 +179,8 @@ w sub-vscode sub/.vscode/tasks.json
 try runs-later-rprofile sh -c 'echo "# phiward sandbox check" >> "$1"' sh .Rprofile
 w node-modules node_modules/pkg/.vscode/x
 # unix sockets outside the session (netsrv.py): one bound, then renamed, before the session; one
-# bound once this file says the session runs (it waits up to 20 seconds to see it)
+# bound once this file says the session runs (it waits up to 20 seconds to see it); one bound
+# before the session and bound again at the same path when this file appears
 s=$(p unix-renamed)
 [ -z "$s" ] || echo "unix-renamed $(fixed "$(net unix "$s")")" >> results.txt
 s=$(p unix-late)
@@ -189,6 +190,8 @@ if [ -n "$s" ]; then
   while [ ! -S "$s" ] && [ "$i" -lt 40 ]; do sleep 0.5; i=$((i + 1)); done
   echo "unix-late $(fixed "$(net unix "$s")")" >> results.txt
 fi
+s=$(p unix-rebound)
+[ -z "$s" ] || echo "unix-rebound $(fixed "$(net unix "$s")")" >> results.txt
 
 # a token in another process's environment: read the environ of every process in /proc other
 # than this one, and record only how many had a non-empty environ (readable), an empty one, or

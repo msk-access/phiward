@@ -5,10 +5,12 @@ only (FAKE-PT-0001):
   and the made-up body;
 - a unix socket bound under a temporary name and then renamed, as ssh's ControlMaster does
   (SOCKDIR/cm.sock), that sends the made-up body to whoever connects;
+- one bound before the session (SOCKDIR/rebound.sock), removed and bound again at the same path
+  once the session wrote its ready file (PROJECT/unix-ready-MODE);
 - for each mode, one more (SOCKDIR/late-MODE.sock), bound only once the session wrote its ready
-  file (PROJECT/unix-ready-MODE): a socket made after the session started.
-What it did goes to STATE, one fact per line: `port N`, `v6 yes|no`, `renamed PATH`, then
-`ready`; later `late-MODE PATH` (or `late-MODE error`). It ends once its parent is no longer
+  file: a socket made after the session started.
+What it did goes to STATE, one fact per line: `port N`, `v6 yes|no`, `renamed PATH`,
+`rebound PATH`, then `ready`; later `rebound-MODE PATH` and `late-MODE PATH` (or `... error`). It ends once its parent is no longer
 PARENT (check.sh's PID, given, since check.sh may be gone before this starts).
 Usage: python3 netsrv.py STATE SOCKDIR PROJECT PARENT"""
 import errno
@@ -96,11 +98,24 @@ def main(state, sockdir, project, parent):
     os.rename(tmp, renamed)
     start(s, BODY)
     note(f"renamed {renamed}")
+    rebound = os.path.join(sockdir, "rebound.sock")
+    r = unix(rebound)
+    start(r, BODY)
+    note(f"rebound {rebound}")
     note("ready")
     late = {}
     while os.getppid() == parent:  # check.sh is gone (a kill -9): end with it
         for m in MODES:
             if m not in late and os.path.lexists(os.path.join(project, f"unix-ready-{m}")):
+                # the same path bound again (before the late one, which the probe waits for)
+                try:
+                    r.close()
+                    os.unlink(rebound)
+                    r = unix(rebound)
+                    start(r, BODY)
+                    note(f"rebound-{m} {rebound}")
+                except OSError:
+                    note(f"rebound-{m} error")
                 path = os.path.join(sockdir, f"late-{m}.sock")
                 try:
                     late[m] = unix(path)

@@ -85,8 +85,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   so the check warns: paste the token when `check.sh` asks for it.
   Probes for the newer guards, from Bash, in each mode: made-up servers outside the session
   (HTTP on 127.0.0.1 and `[::1]`, a unix socket bound and then renamed as ssh's ControlMaster
-  does, and one bound after the session starts; stopped by the cleanup) must not answer under
-  `launch` by `127.0.0.1`, `localhost`, `[::1]` or `[::ffff:127.0.0.1]`, nor a unix socket
+  does, one bound after the session starts, and one bound again at its path then; stopped by
+  the cleanup) must not answer under `launch` by `127.0.0.1`, `localhost`, `[::1]` or `[::ffff:127.0.0.1]`, nor a unix socket
   connect; a request to `https://api.anthropic.com` must get an HTTP status (Bash keeps the
   network); writes to `.claude/settings.json`, `.claude/skills/x/SKILL.md`, `.vscode/tasks.json`,
   `sub/.vscode/tasks.json` and `.Rprofile` must be refused, and one in

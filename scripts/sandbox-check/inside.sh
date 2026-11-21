@@ -117,7 +117,7 @@ expect "== Mode B (linux)"
 # the newer guards' probes ran in both modes: Mode A notes each, Mode B judges each
 for p in loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api runs-later-settings \
          runs-later-skill runs-later-vscode runs-later-sub-vscode runs-later-rprofile \
-         runs-later-node-modules unix-renamed unix-late; do
+         runs-later-node-modules unix-renamed unix-late unix-rebound; do
   if grep -q "^note $p: " /tmp/mode-A.txt; then echo "== ok    Mode A: $p noted"
   else echo "== MISSING Mode A: $p noted"; status=1; fi
   if grep -qE "^(ok   |FAIL |note )$p: " /tmp/mode-B.txt; then echo "== ok    Mode B: $p judged"
