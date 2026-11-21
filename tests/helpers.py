@@ -201,7 +201,8 @@ os.execvp(sys.argv[1], sys.argv[1:])
 '''
 
 
-# The help of the made-up native build: commander's layout, as Claude Code prints it
+# The help of the made-up native build: commander's layout, as Claude Code prints it. As in the
+# real binary, some commands are hidden from it (CLAUDE_HIDDEN), and an alias is not shown
 CLAUDE_HELP = """Usage: claude [options] [command] [prompt]
 
 Claude Code (made up)
@@ -221,25 +222,36 @@ Commands:
   doctor                      Check the installation
   logs [options] [id]         Show a background session's log
   mcp                         Configure MCP servers
-  sandbox                     Sandbox status
   ultrareview                 Review in the cloud
-  update|upgrade              Update Claude Code
+  update                      Update Claude Code
   help [command]              display help for command
 """
+# its commands: each answers `claude WORD --help` with a Usage line of its own
+CLAUDE_COMMANDS = ("doctor", "logs", "mcp", "ultrareview", "update", "upgrade", "help")
+CLAUDE_HIDDEN = ("daemon", "rc", "remote-control", "sandbox", "self-hosted-runner")
 
 
-def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HELP):
+def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HELP, bad=None):
     """A made-up stand-in for Claude Code's native build at `path`: started with
     ARGV0=apply-seccomp it is the filter (it denies socket(AF_UNIX), unless not `works`, and runs
     CMD; with runs=False it exits 0 without running CMD), as the real binary carries
     apply-seccomp; otherwise it prints ARGV and its arguments as JSON, or with `python` runs as
-    Python with its arguments (python -c CODE ignores the --settings launch adds last). With
-    just --help it prints `help`."""
+    Python with its arguments (python -c CODE ignores the --settings launch adds last). Asked
+    `--help` it prints `help`; `WORD --help` prints a Usage of its own for a command (listed or
+    hidden), else `help` (a prompt). `bad` maps a WORD to "hang" or "fail" for WORD --help."""
     import sys
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(f"#!{sys.executable} -IS\nimport json, os, sys\n"
-                 f"if sys.argv[1:] == ['--help']:\n    print({help!r}, end='')\n    sys.exit(0)\n"
+                 f"a = sys.argv[1:]\nbad = {dict(bad or {})!r}\n"
+                 "if a[-1:] == ['--help'] and len(a) <= 2:\n"
+                 "    w = a[0] if len(a) == 2 else ''\n"
+                 "    if bad.get(w) == 'hang':\n        import time; time.sleep(600)\n"
+                 "    if bad.get(w) == 'fail':\n        sys.exit(1)\n"
+                 f"    if w in {CLAUDE_COMMANDS + CLAUDE_HIDDEN!r}:\n"
+                 "        print('Usage: claude %s [options]\\n\\nA command' % w)\n"
+                 f"    else:\n        print({help!r}, end='')\n"
+                 "    sys.exit(0)\n"
                  "if os.environ.get('ARGV0') == 'apply-seccomp':\n"
                  f"    if not {bool(runs)}:\n        sys.exit(0)\n"
                  f"    WORKS = {bool(works)}\n" +
