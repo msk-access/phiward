@@ -72,7 +72,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   session's PATH, when it and its socat pass phiward's own rule for a PATH folder. The check
   starts itself again under an empty environment (only its own variables, HOME, TMPDIR, TERM
   and PATH cross), runs in its own folder with its own home, and takes the token only at its
-  prompt, no longer from `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. `linux.sh` with
+  prompt, no longer from `CLAUDE_CODE_OAUTH_TOKEN` or `ANTHROPIC_API_KEY`. claude and uv, found
+  through your PATH, must pass the same rule before the prompt. `SBX_WHEEL` with
+  `SBX_WHEEL_SHA256` installs a wheel built beforehand, checked by its sha256, so the node needs
+  no package index. `linux.sh` with
   `SBX_SH=bash` runs the stub with bash as `/bin/sh`.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.

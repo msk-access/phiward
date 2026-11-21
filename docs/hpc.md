@@ -312,16 +312,20 @@ been run on the cluster yet. To run it there, as an interactive job:
    `~/phiward-sbx/run` (your `~/.claude` too). Claude Code and phiward read them from a folder
    above the session's, so the check refuses while they are there, also right before each
    session. Start no `claude` until the check is done: it may make `~/.claude` again.
-4. `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
-   SBX_TOOLS=$HOME/phiward-sbx/tools/bin sh scripts/sandbox-check/check.sh`, and paste the
-   token when it asks. It takes none from the environment.
+4. Build the wheel on your laptop, from a clean checkout of the commit to test:
+   `uv build --wheel --out-dir dist .`, then `shasum -a 256 dist/phiward-*.whl` (or
+   `sha256sum`). Copy the wheel to `~/phiward-sbx/wheel/` on the cluster (`chmod go-w` on it and
+   its folder) and keep the sha256. Then run
+   `srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
+   SBX_TOOLS=$HOME/phiward-sbx/tools/bin SBX_WHEEL=$HOME/phiward-sbx/wheel/phiward-VERSION-py3-none-any.whl
+   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh`, with `sh`, not `bash`, and
+   paste the token when it asks. It takes none from the environment. With the wheel, the node
+   needs no package index, only `api.anthropic.com`. The check starts itself again under an
+   empty environment, which drops proxy and CA variables on purpose (`HTTPS_PROXY`, `NO_PROXY`,
+   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and the like), so run it on a node that reaches
+   `api.anthropic.com` directly. There is no SBX_ variable for a proxy yet. Without SBX_WHEEL
+   the check builds the wheel itself and needs a package index too.
 5. Put the names back.
-
-The check starts itself again under an empty environment, so none of your variables reaches
-it. That drops proxy and CA variables on purpose (`HTTPS_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`,
-`REQUESTS_CA_BUNDLE` and the like): the check needs the network for the build and for Claude
-Code, so run it on a node that reaches the internet directly. There is no SBX_ variable for a
-proxy yet.
 
 ## Rules for the operator
 

@@ -61,8 +61,14 @@ Then push `main`, `develop` and the tag.
    `sh scripts/sandbox-check/linux.sh --stub`.
    It starts itself again under an empty environment first: only HOME, TMPDIR, TERM, your PATH
    (to find uv and claude; then it uses the system folders) and its own variables (SBX_*, MODES,
-   KEEP, REMOTE*, CLAUDE_BIN) cross. No variable, option or function of your shell acts on it.
-   Its programs run with its own home as HOME, in its own folder. uv's Python is found in
+   KEEP, REMOTE*, CLAUDE_BIN) cross. The second start is clean: no variable, option or function
+   of your shell acts on it. The first start is your shell's, and what it was given acts before
+   the first line: under bash-as-sh, an exported `SHELLOPTS=xtrace` with a `PS4` that holds
+   `$(...)` runs that command. Run it with `sh`, not `bash` (`bash check.sh` reads `BASH_ENV`).
+   claude and uv, found through your PATH, must pass phiward's rule (`selfcheck.safe_path`)
+   before the token prompt. Its programs run with its own home as HOME, in its own folder.
+   `SBX_WHEEL` with `SBX_WHEEL_SHA256` installs a wheel you built beforehand instead of a build
+   (see docs/hpc.md). uv's Python is found in
    `~/.local/share/uv/python`; give its path as an argument if yours is elsewhere.
    - `sh scripts/sandbox-check/check.sh` on macOS, and on a real Linux machine with
      `SBX_BASE` set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's

@@ -81,6 +81,50 @@ if why:
 ' "$2" "$4" || return 2
 }
 
+# sbx_programs_safe PY SRC PROG...: each program the check found through your PATH (claude,
+# which gets the token; uv, which builds and installs what runs) passes phiward's rule
+# (selfcheck.safe_path: it, what a link leads to, and the folders above, yours or root's and
+# writable by no group or other account), by the source tree's phiward
+sbx_programs_safe() {
+  _py=$1 _src=$2
+  shift 2
+  "$_py" -I -S -c '
+import os, sys
+sys.path.insert(0, sys.argv[1])
+from phiward import selfcheck
+for p in sys.argv[2:]:
+    why = selfcheck.safe_path(p)
+    if why:
+        sys.exit("sandbox-check: " + os.path.basename(p) + " is not safe to run (" + why + "): " + p)
+' "$_src" "$@" || return 2
+}
+
+# sbx_wheel_check PY SRC WHEEL SHA256 [COPY]: a wheel built beforehand (SBX_WHEEL) passes
+# phiward's rule where you keep it, and COPY (the one the check installs; default WHEEL) has the
+# sha256 you gave (SBX_WHEEL_SHA256, 64 lower-case hex digits)
+sbx_wheel_check() {
+  case $4 in
+    *[!0-9a-f]*|"") echo "sandbox-check: SBX_WHEEL needs SBX_WHEEL_SHA256, its sha256 (64 lower-case hex digits)" >&2; return 2 ;;
+  esac
+  [ ${#4} = 64 ] || { echo "sandbox-check: SBX_WHEEL needs SBX_WHEEL_SHA256, its sha256 (64 lower-case hex digits)" >&2; return 2; }
+  case $3 in /*) ;; *) echo "sandbox-check: SBX_WHEEL must be an absolute path" >&2; return 2 ;; esac
+  "$1" -I -S -c '
+import hashlib, sys
+sys.path.insert(0, sys.argv[1])
+from phiward import selfcheck
+wheel, want, copy = sys.argv[2:5]
+why = selfcheck.safe_path(wheel)
+if why:
+    sys.exit("sandbox-check: SBX_WHEEL is not safe to install (" + why + "): " + wheel)
+h = hashlib.sha256()
+with open(copy, "rb") as f:
+    for block in iter(lambda: f.read(1 << 20), b""):
+        h.update(block)
+if h.hexdigest() != want:
+    sys.exit("sandbox-check: SBX_WHEEL'"'"'s sha256 is not SBX_WHEEL_SHA256: " + wheel)
+' "$2" "$3" "$4" "${5:-$3}" || return 2
+}
+
 # sbx_passwd_home: your home folder as the account database names it (what ssh and others use),
 # for any account name; refused when it names none
 sbx_passwd_home() {

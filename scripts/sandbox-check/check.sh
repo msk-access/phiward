@@ -14,8 +14,10 @@
 # Nothing of your own setup is read or changed. Its first statement starts it again under an
 # empty environment (env -i): only HOME, TMPDIR, TERM, your PATH (to find uv and claude, then
 # the system folders) and the variables below cross, so no variable, option or function of your
-# shell applies to it. Its programs then run with the check's own home as HOME and in its own
-# folder. Your home's path is looked at once, for the SBX_BASE check and uv's Python folder
+# shell applies to the second start (what your shell runs before the first line is yours: see
+# below). Its programs then run with the check's own home as HOME and in its own folder. claude
+# and uv, found through your PATH, must pass phiward's rule (selfcheck.safe_path), before the
+# token prompt. Your home's path is looked at once, for the SBX_BASE check and uv's Python folder
 # (~/.local/share/uv/python, given to the one uv command that finds it; else give PYTHON); the
 # home folder of the account database comes from getent or dscl (none: refused). No proxy or CA
 # variable crosses (HTTPS_PROXY, SSL_CERT_FILE and the like): see docs/hpc.md.
@@ -46,20 +48,28 @@
 #              folder above them, up to your home folder when inside it, writable by no group or
 #              other account): refused otherwise, before the build. Unset: the system folders only.
 #   SBX_SRC    a source tree to build instead of `git archive HEAD` (the container has no .git).
+#   SBX_WHEEL, SBX_WHEEL_SHA256: a phiward wheel built beforehand, and its sha256 (64 lower-case
+#              hex digits), installed instead of a build: then the machine needs no package index
+#              (only api.anthropic.com). It must pass phiward's rule where you keep it, and the
+#              copy the check installs must have that sha256. Unset: the check builds the wheel.
 #   SBX_OUT, KEEP, CLAUDE_BIN, SBX_IMAGE, SBX_LOCKED, SBX_CLEANUP_WAIT: as linux.sh and
 #              inside.sh use them (kept files, the claude to test, the container's marks).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
 # Usage: sh scripts/sandbox-check/check.sh [--stub] [PYTHON]  (default: uv's own Python)
-# First, before anything of your shell can act: start again under an empty environment. Only a
-# keyword (case) and a special built-in (exec) run before it, which no exported function can
-# replace; the argument --sbx-clean, which this line adds itself and never the environment,
-# marks the second start.
+# Run it with sh, not bash: `bash check.sh` reads BASH_ENV before its first line.
+# First: start again under an empty environment. The second start is clean. The first is the
+# caller's shell, and what it was given acts before this line can: under bash-as-sh, for
+# example, an exported SHELLOPTS=xtrace with a PS4 that holds $(...) runs that command on the
+# first traced line. Here only a keyword (case) and a special built-in (exec) run, which no
+# exported function can replace, and they hold no token. The argument --sbx-clean, which this
+# line adds itself and never the environment, marks the second start.
 case ${1-} in
   --sbx-clean) shift ;;
   *) exec /usr/bin/env -i PATH=/usr/bin:/bin HOME="${HOME-}" TMPDIR="${TMPDIR-}" TERM="${TERM-}" \
        SBX_PATH="${PATH-}" SBX_BASE="${SBX_BASE-}" SBX_SRC="${SBX_SRC-}" SBX_TOOLS="${SBX_TOOLS-}" \
        SBX_OUT="${SBX_OUT-}" SBX_IMAGE="${SBX_IMAGE-}" SBX_LOCKED="${SBX_LOCKED-}" \
+       SBX_WHEEL="${SBX_WHEEL-}" SBX_WHEEL_SHA256="${SBX_WHEEL_SHA256-}" \
        SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" \
        REMOTE="${REMOTE-}" REMOTE_DIR="${REMOTE_DIR-}" REMOTE_HOSTNAME="${REMOTE_HOSTNAME-}" \
        REMOTE_USER="${REMOTE_USER-}" CLAUDE_BIN="${CLAUDE_BIN-}" \
@@ -117,6 +127,7 @@ case $uv in /*) ;; *) uv=$PWD/$uv ;; esac
 case $claude in /*) ;; *) claude=$PWD/$claude ;; esac
 case ${1:-} in ""|/*) ;; *) set -- "$PWD/$1" ;; esac
 case ${SBX_OUT:-} in ""|/*) ;; *) SBX_OUT=$PWD/$SBX_OUT ;; esac
+case ${SBX_WHEEL:-} in ""|/*) ;; *) SBX_WHEEL=$PWD/$SBX_WHEEL ;; esac
 if [ $os = darwin ]; then
   managed="/Library/Application Support/ClaudeCode
 /Library/Managed Preferences/com.anthropic.claudecode.plist"
@@ -196,6 +207,16 @@ else
 fi
 # SBX_TOOLS, before the build: phiward's own rule, by the source tree's phiward
 if [ -n "$sbx_tools" ]; then sbx_tools_safe "$python" "$H/src/src" "$H" "$sbx_tools" || exit 2; fi
+# claude (it gets the token) and uv (it builds and installs what runs), found through your PATH:
+# the same rule, before the token prompt
+sbx_programs_safe "$python" "$H/src/src" "$claude" "$uv" || exit 2
+# a wheel built beforehand (SBX_WHEEL): the copy the check installs must have the sha256 you gave
+wheel=""
+if [ -n "$SBX_WHEEL" ]; then
+  wheel="$H/dist/${SBX_WHEEL##*/}"
+  cp "$SBX_WHEEL" "$wheel" 2>/dev/null || { echo "sandbox-check: SBX_WHEEL cannot be read: $SBX_WHEEL" >&2; exit 2; }
+  sbx_wheel_check "$python" "$H/src/src" "$SBX_WHEEL" "$SBX_WHEEL_SHA256" "$wheel" || exit 2
+fi
 if [ -z "$stub" ] && [ -z "$token" ]; then
   echo "In another terminal, run:  claude setup-token"
   printf "then paste the token here, or ANTHROPIC_API_KEY=KEY (it is not shown): "
@@ -207,9 +228,13 @@ if [ -z "$stub" ] && [ -z "$token" ]; then
   echo
   [ -n "$token" ] || { echo "sandbox-check: no token" >&2; exit 2; }
 fi
-echo "building in $H ..."
-"$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
-wheel=$(ls "$H"/dist/*.whl)
+if [ -n "$wheel" ]; then
+  echo "wheel: $SBX_WHEEL (no build)"
+else
+  echo "building in $H ..."
+  "$uv" build -q --python "$python" --wheel --out-dir "$H/dist" "$H/src" > "$H/build.out" 2>&1 || fail "the build" "$H/build.out"
+  wheel=$(ls "$H"/dist/*.whl)
+fi
 pybase=$(cd "$(dirname "$("$python" -I -S -c 'import sys; print(sys.executable)')")/.." && pwd -P)
 cp -R "$pybase" "$H/py"
 pyname=$(basename "$("$python" -I -S -c 'import sys, os; print(os.path.realpath(sys.executable))')")
@@ -249,7 +274,8 @@ mkdir -p "$free"
 echo "$marker2" > "$free/b.txt"
 printf 'free/\n' >> .git/info/exclude
 git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false commit -q --allow-empty -m init
-"$uv" tool install -q --python "$py" "$wheel" > "$H/install.out" 2>&1 || fail "uv tool install" "$H/install.out"
+# with a wheel given, no package index is asked (phiward has no dependencies)
+"$uv" tool install -q ${SBX_WHEEL:+--offline} --python "$py" "$wheel" > "$H/install.out" 2>&1 || fail "uv tool install" "$H/install.out"
 {
   printf '[protected_paths]\nroots = ["%s/data"]\n[broker]\ncommands = ["wc"]\n' "$H"
   printf '[sanitize]\npacks = ["genomics", "msk"]\n'
