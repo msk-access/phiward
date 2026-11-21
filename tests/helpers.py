@@ -229,6 +229,22 @@ def fake_native_claude(path, works=True, runs=True):
     return p
 
 
+def fake_js_claude(path):
+    """A made-up stand-in for a JavaScript build of Claude Code: `path` links to a `cli.js`
+    beside it (so launch looks for sandbox-runtime's filter, as for npm's install). It runs as
+    Python with its arguments, less the --settings pair launch adds last."""
+    import sys
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    js = p.parent / "cli.js"
+    js.write_text(f"#!{sys.executable} -IS\nimport os, sys\na = sys.argv[1:]\n"
+                  "if a[-2:-1] == ['--settings']:\n    a = a[:-2]\n"
+                  "os.execv(sys.executable, [sys.executable] + a)\n")
+    os.chmod(js, 0o755)
+    p.symlink_to(js.name)
+    return p
+
+
 def filter_in_home(home) -> Path:
     """Where sandbox-runtime looks for `apply-seccomp` in a user-local npm folder:
     `~/.npm-global/lib/node_modules/@anthropic-ai/sandbox-runtime/vendor/seccomp/<arch>`."""

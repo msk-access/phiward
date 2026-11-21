@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from helpers import (CONFINE_WHY, fake_filter, fake_native_claude, filter_in_home, landlock_abi,
-                     ready_line)
+from helpers import (CONFINE_WHY, fake_filter, fake_js_claude, fake_native_claude, filter_in_home,
+                     landlock_abi, ready_line)
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -214,9 +214,14 @@ def test_the_helper_stops_when_a_name_service_folder_cannot_be_opened(tmp_path):
 
 # --- below ABI 9: --tool claude needs Claude Code's filter, and settings that keep it ----------
 
+def js_claude(tree):
+    """A made-up JavaScript build of Claude Code (tree/js/claude), run as launch would run it."""
+    return ["--", str(fake_js_claude(tree / "js" / "claude")), "-c"]
+
+
 @below9
 def test_claude_starts_when_its_filter_blocks_unix_sockets(tree):
-    code, out = launch(tree, "print('RAN')", "claude")
+    code, out = launch(tree, "", "claude", program=js_claude(tree) + ["print('RAN')"])
     assert "RAN" in out, out
 
 
@@ -228,7 +233,7 @@ def test_claude_does_not_start_without_a_filter_that_works(tree, how):
         f.unlink()
     else:
         fake_filter(f, works=False)
-    code, out = launch(tree, "print('RAN')", "claude")
+    code, out = launch(tree, "", "claude", program=js_claude(tree) + ["print('RAN')"])
     assert code == 126 and "RAN" not in out, out
     assert "seccomp filter" in out, out
 
@@ -239,13 +244,12 @@ def test_claude_does_not_start_with_a_filter_the_session_could_replace(tree):
     tools = tree / "repo" / "tools"
     tools.mkdir()
     stub = tools / "claude"
-    stub.write_text(f"#!{PY}\nprint('STUB')\n")
+    stub.write_text("#!/usr/bin/env node\nprint('STUB')\n")
     stub.chmod(0o755)
     m = filter_in_home(tree / "home").parent.name
     fake_filter(tools / "vendor" / "seccomp" / m / "apply-seccomp")
-    code, out = launch(tree, "print('RAN')", "claude",
-                       extra_env={"PATH": f"{tools}:{os.environ['PATH']}"})
-    assert code == 126 and "RAN" not in out and "STUB" not in out, out
+    code, out = launch(tree, "", "claude", program=["--", str(stub)])
+    assert code == 126 and "STUB" not in out, out
 
 
 @below9
@@ -295,22 +299,66 @@ def test_claude_gets_settings_that_keep_its_sandbox_on(tree):
 @below9
 def test_a_native_claude_with_its_own_filter_starts_without_sandbox_runtime(tree):
     native(tree)
-    code, out = launch(tree, "print('RAN')", "claude", extra_env=on_path(tree))
-    assert "RAN" in out, out
+    code, out = launch(tree, "", "claude", extra_env=on_path(tree), program=[])
+    assert code == 0 and argv_of(out), out
 
 
 @below9
 @pytest.mark.parametrize("kw", [{"works": False}, {"runs": False}])
 def test_a_native_claude_whose_filter_does_not_block_unix_sockets_is_refused(tree, kw):
     fake_native_claude(tree / "bin" / "claude", **kw)  # sandbox-runtime's filter is there too
-    code, out = launch(tree, "print('RAN')", "claude", extra_env=on_path(tree))
-    assert code == 126 and "RAN" not in out, out
+    code, out = launch(tree, "", "claude", extra_env=on_path(tree), program=[])
+    assert code == 126 and "ARGV" not in out, out
+
+
+@below9
+@pytest.mark.parametrize("which", ["another claude", "python"])
+def test_the_program_that_runs_is_the_one_whose_filter_is_proved(tree, which):
+    native(tree)  # a working claude on PATH
+    prog = (str(fake_native_claude(tree / "other" / "claude", works=False))
+            if which == "another claude" else PY)
+    code, out = launch(tree, "", "claude", extra_env=on_path(tree),
+                       program=["--", prog, "-c", "print('RAN')"])
+    assert code == 126 and "RAN" not in out and "ARGV" not in out, out
+    assert "directly" in out, out
+
+
+@below9
+def test_a_wrapper_that_adds_arguments_is_refused_with_a_hint(tree):
+    filter_in_home(tree / "home").unlink()
+    real = fake_native_claude(tree / "opt" / "claude")
+    w = tree / "bin" / "my-claude"
+    w.parent.mkdir(exist_ok=True)
+    w.write_text(f'#!/bin/sh\nexec "{real}" --verbose "$@"\n')
+    w.chmod(0o755)
+    code, out = launch(tree, "", "claude", program=["--", str(w), "-p", "hello"])
+    assert code == 126 and "ARGV" not in out, out
+    assert "wrapper" in out, out
+
+
+@below9
+@pytest.mark.parametrize("given", [["--settings", "{}"], ["--settings={}"]])
+def test_the_users_own_settings_flag_is_refused(tree, given):
+    claude = native(tree)
+    code, out = launch(tree, "", "claude", program=["--", str(claude), "-p", "x", *given])
+    assert code == 126 and "ARGV" not in out, out
+    assert "user settings" in out, out
+
+
+@below9
+@pytest.mark.parametrize("sub", [["mcp", "list"], ["doctor"], ["update"]])
+def test_a_claude_subcommand_is_refused(tree, sub):
+    claude = native(tree)
+    code, out = launch(tree, "", "claude", program=["--", str(claude), *sub])
+    assert code == 126 and "ARGV" not in out, out
+    assert "outside" in out and sub[0] in out, out
 
 
 @below9
 @pytest.mark.parametrize("how", ["versioned", "wrapper"])
 def test_claude_gets_the_settings_whatever_its_path(tree, how):
     import json
+    filter_in_home(tree / "home").unlink()  # only the program that runs can pass
     real = fake_native_claude(tree / "home" / ".local" / "share" / "claude" / "versions" /
                               "2.1.330")
     if how == "versioned":
