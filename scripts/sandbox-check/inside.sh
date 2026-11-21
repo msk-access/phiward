@@ -126,7 +126,7 @@ for p in loopback-127 loopback-localhost loopback-v6 loopback-mapped net-api run
   else echo "== MISSING Mode B: $p judged"; status=1; fi
 done
 lacks=$(grep -E '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' /tmp/mode-B.txt || true)
-others=$(grep '^FAIL ' /tmp/mode-B.txt | grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): ' || true)
+others=$(grep '^FAIL ' /tmp/mode-B.txt | grep -vE '^FAIL (loopback-[a-z0-9]+|unix-renamed|unix-late): |^FAIL Mode B$' || true)
 if [ -n "$others" ]; then
   printf '%s\n' "$others" | sed 's/^/== FAIL  Mode B: /'; status=1
 fi

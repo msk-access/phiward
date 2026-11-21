@@ -129,6 +129,34 @@ Then push `main`, `develop` and the tag.
    (`scan-error`), or whose `/proc` is not the session's own (`foreign-proc`) is INCONCLUSIVE.
    So is a probe line that appears twice in the results, and a session that made anything
    other than exactly one Bash call, `sh ./probes.sh`.
+   The newer guards have probes too, one line each, run from Bash in both modes; Mode A
+   promises none of them (Claude Code's sandbox makes no loopback promise), so there they are
+   only noted. Under `launch` (Mode B):
+   - **Loopback.** The check starts a made-up HTTP server outside the session, on 127.0.0.1
+     and, where the machine has it, `[::1]` (`netsrv.py`; it serves `FAKE-PT-0001`). The
+     session connects straight, by `127.0.0.1`, `localhost`, `[::1]` and
+     `[::ffff:127.0.0.1]` (`loopback-*`). Any answer fails the mode. A refusal counts only when
+     the server answered from outside right before the session; a spelling that does not
+     answer outside either (no IPv6) is a note.
+   - **The network.** A request to `https://api.anthropic.com` through the session's proxies
+     must get an HTTP status, any status (`net-api`): Bash keeps the network. Without one the
+     mode is INCONCLUSIVE (a typical-use break).
+   - **Files that run later.** Writes to `.claude/settings.json`, `.claude/skills/x/SKILL.md`,
+     `.vscode/tasks.json`, `sub/.vscode/tasks.json` and `.Rprofile` must be refused, as the
+     sandbox refuses a write (`runs-later-*`; the check makes their folders and the
+     `.Rprofile` first); one that works fails the mode, and so does one of them found on the
+     host right after the session. A write to `node_modules/pkg/.vscode/x` must work: refused,
+     the mode is INCONCLUSIVE.
+   - **Unix sockets.** The check binds a made-up socket outside the session under a temporary
+     name and renames it (as ssh's ControlMaster does), and binds another once the session
+     runs (`unix-renamed`, `unix-late`). A connect to either fails the mode; a refusal counts
+     only when the socket answered from outside.
+   No byte the servers send passes through the probe's shell (`net.py` prints fixed words
+   only). The servers are stopped and their sockets removed by the cleanup, also on failure,
+   and they end when the check does. On Linux, Bash runs inside Claude Code's own sandbox under
+   `launch` too, so a refusal there may be that sandbox's; `linux.sh --stub`, whose stand-in
+   has no sandbox of its own, shows phiward's alone (a kit without a guard fails Mode B on that
+   guard's lines, and the stub names them).
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only

@@ -7,6 +7,10 @@
 # (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
+# The probes include the newer guards (docs/releasing.md): made-up servers outside the session
+# (netsrv.py: HTTP on 127.0.0.1 and [::1], a unix socket bound and renamed, one bound once the
+# session runs), which must not answer under launch; api.anthropic.com, which must; and files
+# that run later, which must not be written (node_modules must). cleanup.sh stops the servers.
 # The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
 # `claude setup-token` prints, or ANTHROPIC_API_KEY=KEY); none is taken from the environment.
 # The token reaches only the claude process (through launch.py's stdin), never a file or a

@@ -83,6 +83,14 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   Code gives to Bash commands on purpose, is only counted and noted. An exported token is
   not used, but it is in the start environment of your shell and of the check's first start,
   so the check warns: paste the token when `check.sh` asks for it.
+  Probes for the newer guards, from Bash, in each mode: made-up servers outside the session
+  (HTTP on 127.0.0.1 and `[::1]`, a unix socket bound and then renamed as ssh's ControlMaster
+  does, and one bound after the session starts; stopped by the cleanup) must not answer under
+  `launch` by `127.0.0.1`, `localhost`, `[::1]` or `[::ffff:127.0.0.1]`, nor a unix socket
+  connect; a request to `https://api.anthropic.com` must get an HTTP status (Bash keeps the
+  network); writes to `.claude/settings.json`, `.claude/skills/x/SKILL.md`, `.vscode/tasks.json`,
+  `sub/.vscode/tasks.json` and `.Rprofile` must be refused, and one in
+  `node_modules/pkg/.vscode` must work. Mode A only notes them.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
 

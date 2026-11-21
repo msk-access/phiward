@@ -1956,7 +1956,8 @@ def netsrv():
     os.mkdir(sock, 0o700)
     os.mkdir(proj)
     state = os.path.join(base, "state")
-    p = subprocess.Popen([sys.executable, "-I", "-S", str(NETSRV), state, sock, proj],
+    p = subprocess.Popen([sys.executable, "-I", "-S", str(NETSRV), state, sock, proj,
+                          str(os.getpid())],
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(100):
@@ -2038,7 +2039,7 @@ def test_netsrv_stops_when_its_parent_is_gone():
         os.mkdir(os.path.join(base, "p"))
         # a parent shell that starts it and exits at once
         r = subprocess.run(["sh", "-c", f'"{sys.executable}" -I -S "{NETSRV}" "{base}/state" '
-                                        f'"{base}/s" "{base}/p" >/dev/null 2>&1 & echo $!'],
+                                        f'"{base}/s" "{base}/p" "$$" >/dev/null 2>&1 & echo $!'],
                            capture_output=True, text=True, timeout=30)
         pid = int(r.stdout.strip())
         for _ in range(100):
