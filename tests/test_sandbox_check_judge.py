@@ -418,7 +418,8 @@ def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=Fal
             xtrace=False):
     """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH), and
     `proc` as its /proc (a made-up one: {pid: environment dict, or None for an environ it cannot
-    read}; the probe's own process is "self", a child of 1; `foreign`: /proc/$$ is another
+    read, or "dir" for one that opens but cannot be read}; the probe's own process is "self",
+    a child of 1; `foreign`: /proc/$$ is another
     process; `names`: copy token-names.txt beside it; `grep_fails`: a grep that exits 2 on the
     token-name pattern; `names` may also be the file's text; `xtrace`: run it as sh -x).
     Its stderr is in tmp_path/"stderr.txt".
@@ -461,7 +462,9 @@ def _probes(tmp_path, fake, proc=None, foreign=False, names=True, grep_fails=Fal
             (root / str(pid)).mkdir(parents=True)
             ppid = 0 if str(pid) == "1" else 1
             (root / str(pid) / "status").write_text(f"Name:\tx\nPPid:\t{ppid}\n")
-            if env is not None:
+            if env == "dir":
+                (root / str(pid) / "environ").mkdir()
+            elif env is not None:
                 (root / str(pid) / "environ").write_text(
                     "".join(f"{k}={v}\0" for k, v in env.items()))
         with open(proj / "paths.txt", "a") as fh:
@@ -972,6 +975,19 @@ def test_probe_under_xtrace_never_shows_a_value(tmp_path):
     assert first.startswith("set +x"), first
 
 
+def test_probe_reads_each_environ_once():
+    """One open per environ, in one pipeline: a later open cannot fail unseen."""
+    text = PROBES.read_text()
+    scan = text[text.index("parent-environ readable") - 4000:]
+    assert scan.count('"$d/environ"') == 1, scan.count('"$d/environ"')
+
+
+def test_probe_a_failed_read_of_an_environ_is_a_scan_error(tmp_path):
+    """An environ that opens and then fails mid-read (here: a directory) is a scan error."""
+    lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {"PATH": "/x"}, 4: "dir"})
+    assert "scan-error=1" in lines["parent-environ"], lines
+
+
 def test_probe_an_empty_environ_is_not_a_read(tmp_path):
     lines, _ = _probes(tmp_path, FAKES["refused"], proc={1: {}, 4: None})
     assert lines["parent-environ"] == scan(0, 1, 0, 0, 0, "-", empty=1), lines
@@ -1010,6 +1026,30 @@ def test_a_probe_line_twice_is_inconclusive():
                                      "sh ./probes.sh; cat results.txt", "bash ./probes.sh"])
 def test_only_the_exact_probe_command_counts(command):
     verdict, report = run(results=LINUX, lines=stream(command=command), platform="linux")
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+def _bash(tid, command):
+    return [{"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": tid, "name": "Bash", "input": {"command": command}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": tid, "content": ""}]}}]
+
+
+def test_a_second_bash_call_is_inconclusive():
+    """A second call can rewrite results.txt in place (no duplicate line): one Bash call only."""
+    after = _bash("t2", "sed -i 's/^read-protected .*/read-protected DENIED not-permitted/' "
+                        "results.txt")
+    verdict, report = run(lines=stream(*after))
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any("2 Bash calls" in ln for ln in report), report
+
+
+def test_a_bash_call_before_the_probes_is_inconclusive():
+    """A first call could edit probes.sh before the exact command runs."""
+    events = [json.loads(x) for x in stream()]
+    events[1:1] = _bash("t0", "sed -i 's/x/y/' probes.sh")
+    verdict, report = run(lines=[json.dumps(e) for e in events])
     assert verdict == judge.INCONCLUSIVE, report
 
 
