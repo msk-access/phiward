@@ -164,12 +164,14 @@ def test_9_tmux_gets_its_own_folder(tree):
     assert "/.phiward/tools/" in out, out
 
 
-def test_10_claude_folder_exists_and_other_files_in_it_can_be_saved(tree):
-    # settings.local.json is read-only now; other files in .claude can still be written
-    code = (f"import os\nos.makedirs({str(tree / 'repo' / '.claude')!r}, exist_ok=True)\n"
-            f"open({str(tree / 'repo' / '.claude' / 'notes.md')!r}, 'w').write('x')\nprint('SAVED')\n")
+def test_10_claude_folder_exists_and_is_read_only_as_a_whole(tree):
+    # .claude is made at start, and nothing in it can be saved: a list of names in it misses the
+    # next place Claude Code runs code from (test_v2_runs_later.py)
+    code = (f"import os\nprint('EXISTS', os.path.isdir({str(tree / 'repo' / '.claude')!r}))\n"
+            f"try:\n    open({str(tree / 'repo' / '.claude' / 'notes.md')!r}, 'w').write('x')\n"
+            "    print('SAVED')\nexcept OSError:\n    print('REFUSED')\n")
     _, out = launch(tree, code)
-    assert "SAVED" in out, out
+    assert "EXISTS True" in out and "REFUSED" in out and "SAVED" not in out, out
 
 
 def test_10_claude_shared_settings_stay_read_only(tree):

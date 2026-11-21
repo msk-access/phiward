@@ -108,6 +108,24 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `launch` makes files that other tools run later read-only, for the tool and a wrapped MCP
+  server alike: the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders as
+  a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.Renviron`, at any depth on
+  macOS and, on Linux, those that exist at the start (it makes `.claude`, `.vscode` and `.idea`
+  if there are none). What a link inside them leads to is read-only too; `launch` refuses to
+  start where it cannot tell. So skills, hooks and editor settings are edited outside `launch`,
+  `--worktree` and `/loop` durable tasks do not work inside it, and `renv::init()` runs once
+  outside it. A wrapped server on Linux can no longer write `.idea`, `.gitmodules` or
+  `.ripgreprc` (they were read-only only on macOS). The hook also asks before a file tool writes
+  `.cursor`, `.gemini`, `.codex`, `.Rprofile` or `.Renviron`, and the exit report lists them, and
+  `.tool-versions`, at any depth.
+- On macOS with Claude Code 2.1.236 or newer, `install` denies the shell writes to every `.vscode`
+  and `.idea` folder under your home folder and to the code folders and settings of every nested
+  `.claude` (Claude Code's sandbox denies only the working folder's own).
+- `[network] limit`: `install` replaces `sandbox.network.allowedDomains` in your user settings
+  with exactly `allowed_domains` and prints each host it removes (it used to keep the hosts
+  already there). `doctor` warns about each level (managed, user, project) whose
+  `WebFetch(domain:...)` allow rules add hosts, and about listed hosts the config does not have.
 - `phiward run --table` is stricter: output without a header line (or with a line before the
   header, a warning on stderr too) is now masked as text, with a note that says so; before, every
   number in it was kept.

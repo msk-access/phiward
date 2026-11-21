@@ -1147,18 +1147,28 @@ def network_report(project: Optional[str], home: str, cfg: config.Config) -> Lis
         return ["  network for shell commands: open (any host; see [network] in "
                 "docs/configuration.md)"]
     hosts = set(claude_settings._merged_list(trusted, "sandbox", "network", "allowedDomains"))
-    for _lvl, _path, data in trusted:
+    # every level, the project's too: whether a project's rule extends a strict allowlist
+    # depends on how Claude Code was started, so each one is counted as a way out
+    every = claude_settings.levels(project, home)
+    added: List[Tuple[str, str, List[str]]] = []
+    for lvl, path, data in every:
         allow = ((data or {}).get("permissions") or {}).get("allow") or []
-        for rule in allow if isinstance(allow, list) else []:
-            if isinstance(rule, str) and rule.startswith("WebFetch(domain:") and rule.endswith(")"):
-                hosts.add(rule[len("WebFetch(domain:"):-1])
+        rules = [r[len("WebFetch(domain:"):-1] for r in (allow if isinstance(allow, list) else [])
+                 if isinstance(r, str) and r.startswith("WebFetch(domain:") and r.endswith(")")]
+        if rules:
+            added.append((lvl, path, rules))
+            hosts.update(rules)
     n = len(hosts)
     out = [f"  network for shell commands: limited to {n} host{'' if n == 1 else 's'}"
            + (f" ({', '.join(sorted(hosts)[:5])}{', ...' if n > 5 else ''})" if hosts else
               " (none)")
            + "; WebFetch and MCP servers are not limited by it; each listed host is a way out"]
+    for lvl, path, rules in added:
+        out.append(f"  WARNING: {len(rules)} WebFetch(domain:...) allow rule(s) in the {lvl} "
+                   f"settings ({path}) add hosts to the network limit: "
+                   f"{', '.join(sorted(rules)[:5])}{', ...' if len(rules) > 5 else ''}. Remove "
+                   "them if shell commands must not reach those hosts.")
     # every level, the project's too: a command outside the sandbox has no network limit
-    every = claude_settings.levels(project, home)
     if claude_settings._first(every, "sandbox", "enabled") is not True \
             or claude_settings._merged_list(every, "sandbox", "excludedCommands"):
         out.append("  WARNING: the network limit does not hold for every command: the sandbox is "
@@ -1169,10 +1179,10 @@ def network_report(project: Optional[str], home: str, cfg: config.Config) -> Lis
                                                         "allowedDomains"))
                        - set(cfg.allowed_domains))
         if extra:
-            out.append(f"  NOTE: {len(extra)} host(s) in Claude Code's user settings are not in "
-                       "[network] allowed_domains (install only adds hosts): remove them from "
-                       "sandbox.network.allowedDomains in ~/.claude/settings.json if you no "
-                       "longer want them.")
+            out.append(f"  WARNING: {len(extra)} host(s) in Claude Code's user settings are not "
+                       "in [network] allowed_domains: run `(cd ~ && phiward install claude "
+                       "--user --write)` again, which replaces sandbox.network.allowedDomains "
+                       "with that list.")
     return out
 
 

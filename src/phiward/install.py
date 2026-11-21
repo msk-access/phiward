@@ -211,8 +211,10 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     pat_read, pat_write = pattern_sandbox(list(cfg.patterns), home) if wild else ([], [])
     # git's control files at any depth below the home folder (a submodule's config, a
     # worktree's commondir, hooks): Claude Code runs git outside its sandbox, so the shell must
-    # not write what git then runs. macOS only: elsewhere the sandbox has no wildcard denyWrite
-    git_write = list(claude_settings.GIT_CONTROL_GLOBS) if (
+    # not write what git then runs; and a nested `.vscode`, `.idea` or `.claude` code place,
+    # which Claude Code's sandbox denies only in the working folder itself. macOS only:
+    # elsewhere the sandbox has no wildcard denyWrite
+    git_write = list(claude_settings.GIT_CONTROL_GLOBS + claude_settings.NESTED_CODE_GLOBS) if (
         wild and sys.platform == "darwin") else []
     entry: Dict[str, Any] = {"type": "command", "command": hook_cmd}
     note: Dict[str, Any] = {"type": "command", "command": note_cmd}
@@ -468,12 +470,11 @@ def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
             if v not in have:
                 have.append(v)
     if "network" in want["sandbox"]:
+        # exactly the configured hosts: a host kept from before would be open while the config
+        # lists none (`_network_notes` names each one removed)
         net = sb.setdefault("network", {})
         net["strictAllowlist"] = True
-        domains = net.setdefault("allowedDomains", [])
-        for d in want["sandbox"]["network"]["allowedDomains"]:
-            if d not in domains:
-                domains.append(d)
+        net["allowedDomains"] = list(want["sandbox"]["network"]["allowedDomains"])
     if want.get("env"):
         env = out.get("env") if isinstance(out.get("env"), dict) else {}
         env.update(want["env"])
@@ -584,6 +585,19 @@ def _env_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:
             if k in before and before[k] != after.get("env", {}).get(k)]
 
 
+def _network_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:
+    """Each host the merge removes from `sandbox.network.allowedDomains` (the network limit
+    keeps exactly the configured ones)."""
+    def hosts(data: Dict[str, Any]) -> List[str]:
+        sb = data.get("sandbox") if isinstance(data.get("sandbox"), dict) else {}
+        net = sb.get("network") if isinstance(sb.get("network"), dict) else {}
+        got = net.get("allowedDomains")
+        return [h for h in got if isinstance(h, str)] if isinstance(got, list) else []
+    keep = set(hosts(after))
+    return [f"[network] removed {h} from sandbox.network.allowedDomains (not in [network] "
+            "allowed_domains)" for h in dict.fromkeys(hosts(current)) if h not in keep]
+
+
 def _write(target: str, want: Dict[str, Any], notes: List[str], argv: List[str]) -> int:
     """Merge `want` into `target` after a yes. Read and written never through a link (a project's
     `.claude` folder is one the agent can write): the target is read only as a regular file, and
@@ -609,7 +623,7 @@ def _write(target: str, want: Dict[str, Any], notes: List[str], argv: List[str])
     if after_text == before_text or after == current:
         print(f"{target} already has the phiward wiring.")
         return 0
-    notes = notes + _env_notes(current, after)
+    notes = notes + _env_notes(current, after) + _network_notes(current, after)
     diff = difflib.unified_diff(before_text.splitlines(True), after_text.splitlines(True),
                                 fromfile=f"{target} (now)", tofile=f"{target} (new)")
     sys.stdout.writelines(diff)
@@ -768,9 +782,11 @@ def main(argv: List[str]) -> int:
                  "gateway commands, with the grants of your user config.")
     if "network" in want["sandbox"]:
         n = len(cfg.allowed_domains)
-        notes.append(f"[network] limit: shell commands reach only {n} listed host(s) "
-                     "(sandbox.network.strictAllowlist), plus hosts of WebFetch(domain:...) allow "
-                     "rules in your user settings. WebFetch and MCP servers are not limited by it.")
+        notes.append(f"[network] limit: shell commands reach only the {n} host(s) of [network] "
+                     "allowed_domains (sandbox.network.strictAllowlist; no host when the list is "
+                     "empty): install replaces sandbox.network.allowedDomains with that list. "
+                     "WebFetch(domain:...) allow rules at any level add hosts (doctor warns). "
+                     "WebFetch and MCP servers are not limited by it.")
     elif cfg.network_limit and project:
         notes.append("[network] limit is written only by `install claude --user`: Claude Code "
                      "ignores it in a project's settings.")

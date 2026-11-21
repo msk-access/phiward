@@ -135,10 +135,10 @@ def test_a_link_target_inside_the_folder_is_read_only(tree, who):
 def test_a_linked_file_in_an_editor_folder_is_read_only(tree):
     repo = tree / "repo"
     (repo / "conf").mkdir()
-    (repo / "conf" / "tasks.json").write_text("{}\n")
+    (repo / "conf" / "extensions.json").write_text("{}\n")
     (repo / ".vscode").mkdir()
-    os.symlink("../conf/tasks.json", repo / ".vscode" / "tasks.json")
-    t = repo / "conf" / "tasks.json"
+    os.symlink("../conf/extensions.json", repo / ".vscode" / "extensions.json")
+    t = repo / "conf" / "extensions.json"
     _, out = _launch(tree, _tries([str(t)]))
     assert _refused(out, t), out
 
@@ -214,10 +214,16 @@ def test_a_wrapped_server_cannot_write_idea_or_gitmodules(tree):
 
 @pytest.mark.parametrize("rel", ["sub/.idea/x", "sub/.mcp.json", ".ripgreprc", ".cursor/hooks.json",
                                  ".gemini/settings.json", ".codex/config.toml", "a/.vscode/x.json",
-                                 "sub/.claude/settings.json", ".Rprofile", ".Renviron"])
+                                 "sub/.claude/settings.json"])
 def test_the_report_lists_them_as_settings(rel):
     from phiward import carryover
     assert carryover._rank(rel) == 2, rel
+
+
+@pytest.mark.parametrize("rel", [".Rprofile", "lib/.Renviron", "sub/.gitmodules"])
+def test_the_report_lists_the_list_s_other_files_as_files_that_run_later(rel):
+    from phiward import carryover
+    assert carryover._rank(rel) == 1, rel
 
 
 @pytest.mark.parametrize("rel", [".tool-versions", ".envrc", ".devcontainer/devcontainer.json",

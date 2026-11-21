@@ -184,7 +184,8 @@ What `list` may say about a server, and what to do:
 Know that:
 - phiward must be installed with an install record (`uv tool install`), or the server needs
   `PHIWARD_DEV=1`;
-- `launch` makes a `.claude` folder in the project if there is none;
+- `launch` makes `.claude`, `.vscode` and `.idea` if there are none (on macOS only `.claude`),
+  and keeps the files that other tools run later read-only for the server, as for the tool;
 - the `env` keys of the MCP config reach the server only if `[launch] pass_env` lists them, and
   that setting passes them to every `launch` session, the agent's included;
 - on macOS, when Claude Code stops the server, only the launcher gets the signal: a server that

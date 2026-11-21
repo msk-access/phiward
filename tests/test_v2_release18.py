@@ -236,13 +236,13 @@ def test_a_wrapped_server_still_writes_the_project(tree):
 
 
 @needs_confine
-def test_a_plain_launch_still_writes_claude_commands_and_the_index(tree):
+def test_a_plain_launch_still_writes_the_index_but_not_claude_commands(tree):
+    # the tool's profile is the server's now, but for the whole .git folder
     _git_repo(tree)
     r = tree / "repo"
-    targets = [str(r / ".claude" / "commands" / "x.md"), str(r / ".git" / "index")]
-    out = _launch(tree, _tries(targets))
-    for t in targets:
-        assert f"DONE {t}" in out, (t, out)
+    out = _launch(tree, _tries([str(r / ".claude" / "commands" / "x.md"), str(r / ".git" / "index")]))
+    assert f"DONE {r / '.git' / 'index'}" in out, out
+    assert f"REFUSED {r / '.claude' / 'commands' / 'x.md'}" in out, out
 
 
 # --- B: the hidden list (HK-F2, MC-M1, MC-L1, HK-L3, HK-F4) -----------------------------------

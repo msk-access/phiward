@@ -39,6 +39,7 @@ says what it holds. By feature:
 | `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, Markdown, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta |
+| Files that other tools run later (read-only under `launch` for the tool and a wrapped server, at any depth, with link targets; Mode A's nested `.vscode` and `.idea` on macOS; the network limit's exact host list; renv under `launch`, Linux with R) | test_v2_runs_later |
 | A launch inside a session (a wrapped MCP server in Mode B; the Linux seccomp fingerprint) | test_v2_nested_launch, test_v2_w1 |
 | Carry-over | test_v2_carryover, test_v2_s17, test_v2_old_glibc |
 | phiward's own Python (the self-check) | test_v2_selfcheck, test_v2_full_check, test_v2_fault_place, test_v2_one_rule, test_v2_python_reads, test_v2_round7, test_v2_release8, test_v2_release9, test_v2_release10, test_v2_release11, test_v2_release12, test_v2_release13, test_v2_release14, test_v2_release16 |

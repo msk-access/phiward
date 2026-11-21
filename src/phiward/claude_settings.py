@@ -890,12 +890,25 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
 SETTINGS_NAMES = ("settings.json", "settings.local.json")
 CODE_DIRS = ("skills", "agents", "commands", "hooks", "workflows", "plugins", "routines")
 CODE_FILES = ("launch.json", "scheduled_tasks.json")
-# what an editor or a tool runs from a project, wherever it is in the tree: an editor's workspace
-# settings (tasks, an interpreter path, MCP servers) and the files git and ripgrep read for
-# commands. Claude Code's sandbox denies them to the shell; the hook asks before a file tool
-# writes one, and `launch --entry` makes them read-only
-WORKSPACE_CODE_DIRS = (".vscode", ".idea")
-WORKSPACE_CODE_FILES = (".gitmodules", ".ripgreprc")
+# the one list of what an agent tool, an editor, R or git runs from a project later, outside
+# every sandbox, wherever it is in the tree: Claude Code's, Cursor's, Gemini CLI's and Codex's
+# folders, an editor's workspace settings (tasks, an interpreter path, MCP servers), the files git
+# and ripgrep read for commands, and what R runs at start. Under `launch` (the tool and a wrapped
+# server) each is read-only as a whole (wholetool)
+RUNS_LATER_DIRS = (".claude", ".vscode", ".idea", ".cursor", ".gemini", ".codex")
+RUNS_LATER_FILES = (".mcp.json", ".gitmodules", ".ripgreprc", ".Rprofile", ".Renviron")
+# the hook asks before a file tool writes one of these: the list without `.claude` (judged by
+# `claude_place`, so `.claude/worktrees` stays writable) and `.mcp.json` (asked as Claude's own)
+WORKSPACE_CODE_DIRS = tuple(d for d in RUNS_LATER_DIRS if d != ".claude")
+WORKSPACE_CODE_FILES = tuple(f for f in RUNS_LATER_FILES if f != ".mcp.json")
+# Claude Code's sandbox denies the working folder's own `.vscode` and `.idea` to the shell, not
+# a nested one (`sub/.vscode/tasks.json`). On macOS (wildcards from VERSION_PATTERNS) install
+# denies them at any depth under the home folder, the folder itself too (no rename and
+# replace), and the code places and settings of a nested `.claude`
+EDITOR_DIRS = (".vscode", ".idea")
+NESTED_CODE_GLOBS = tuple(f"~/**/{d}{t}" for d in EDITOR_DIRS for t in ("", "/**")) + tuple(
+    f"~/**/.claude/{n}{t}" for n in CODE_DIRS for t in ("", "/**")) + tuple(
+    f"~/**/.claude/{n}" for n in SETTINGS_NAMES)
 # git's control files below any `.git` folder under the home folder (a submodule's config, a
 # worktree's commondir, hooks): git runs what they name, and Claude Code runs git outside its
 # sandbox. Anchored to the control files themselves, so a branch named `config` or `hooks/x`
@@ -912,9 +925,11 @@ def workspace_code(path: str) -> bool:
     """Whether `path` is a file an editor or a tool runs commands from (WORKSPACE_CODE_DIRS,
     WORKSPACE_CODE_FILES), as the file system compares names."""
     from phiward import pathid
+    dirs = {pathid.fold(n) for n in WORKSPACE_CODE_DIRS}
+    files = {pathid.fold(n) for n in WORKSPACE_CODE_FILES}
     for v in (os.path.normpath(path), os.path.realpath(path)):
         parts = pathid.fold(v).split("/")
-        if any(p in WORKSPACE_CODE_DIRS for p in parts[:-1]) or parts[-1] in WORKSPACE_CODE_FILES:
+        if any(p in dirs for p in parts[:-1]) or parts[-1] in files:
             return True
     return False
 

@@ -6,10 +6,13 @@ users see is HELP below; this docstring is for developers.
 
 Writes are denied by default. They are allowed only in the project, this session's own run
 folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
-a link on its path, is not used. Inside the project, files that run code later stay read-only:
-git's control files, `.git`, `.claude` and `.vscode` themselves, Claude Code's and VS Code's
-settings and `.mcp.json`. On Linux, missing settings files are made as read-only `{}`
-placeholders, and the git control files are compared after the session.
+a link on its path, is not used. Inside the project, files that other tools run later stay
+read-only: git's control files and `.git` entries, and the one list
+(`claude_settings.RUNS_LATER_DIRS`, `RUNS_LATER_FILES`) as a whole, at any depth, with the targets
+of the links inside them. The tool and a wrapped MCP server differ only in the whole `.git`
+folder. On Linux, `.claude`, `.vscode` and `.idea` are made at start and `.mcp.json` as a
+read-only `{}` placeholder; nested ones are bound when they exist at start. The git control files
+are compared after the session.
 
 Carry-over (see carryover): each session runs in its own config folder, built from a trusted
 copy and thrown away at exit. Reads of protected data and credentials are denied, and credential
@@ -34,7 +37,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from phiward import carryover, config, confine, pathid, pathmatch, safeio
+from phiward import carryover, claude_settings, config, confine, pathid, pathmatch, safeio
 from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
                             KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
                             _token_paths)
@@ -58,8 +61,8 @@ Options:
                 must be outside every place the session can write (the project, the spool,
                 the temp folder, ~/.phiward); otherwise nothing runs.
   --entry ID    written by `phiward mcp wrap` into a wrapped MCP server's entry: the
-                server's profile (also keeps the project's .git folders, .claude and .vscode
-                read-only). Not for you to type.
+                server's profile (also keeps the project's .git folders read-only as a
+                whole). Not for you to type.
   --            ends the options. PROGRAM and its arguments follow. With --tool generic,
                 PROGRAM is required.
   -h, --help    show this help.
@@ -75,8 +78,14 @@ problem or when no protected paths are configured.
 
 What the session can do:
 - Write: only the project, its own session folder (in ~/.phiward/tools/<tool>/runs/) and the
-  spool. Files in the project that run code later stay read-only: git control files,
-  .claude and .vscode settings, and .mcp.json.
+  spool. Files in the project that other tools run later stay read-only, at any depth: git
+  control files, the .claude, .vscode, .idea, .cursor, .gemini and .codex folders as a whole,
+  .mcp.json, .gitmodules, .ripgreprc, .Rprofile and .Renviron, and what links inside them lead
+  to. So skills, agents, hooks and editor settings are not written inside launch (edit them in a
+  plain terminal, or `phiward carryover add`), Claude Code's --worktree and /loop tasks do not
+  work there, and renv::init() (it writes .Rprofile) runs once outside launch. On Linux, launch
+  makes .claude, .vscode and .idea if there are none, and one made in a subfolder during the
+  session is reported, not read-only.
 - Read: everything except the protected paths and credentials (~/.ssh, ~/.aws, tool logins,
   Kerberos tickets, and similar). Credential variables such as SSH_AUTH_SOCK are removed.
 - Other processes: no keystroke injection, no signals to processes outside, no scripting of
@@ -178,13 +187,18 @@ SESSION_CACHE_ENV = {"XDG_CACHE_HOME": "cache", "npm_config_cache": "cache/npm",
                      "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data"}
 GIT_CONTROL = ("config", "commondir", "gitdir", "hooks", "info", "modules", "worktrees",
                "config.worktree", "shallow", "objects/info/alternates")
-# .claude/settings.local.json can hold hooks too, which run later outside launch: read-only
-#; the tool keeps its permission answers in its own folder
-# a wrapped MCP server's profile: the project's folders that Claude Code, an editor or git runs
-# code from, read-only as a whole (with every `.git` folder and entry in the project)
-SERVER_READ_ONLY = (".claude", ".vscode", ".idea", ".gitmodules", ".ripgreprc")
-PROJECT_SETTINGS = (".mcp.json", ".claude/settings.json", ".claude/settings.local.json",
-                    ".vscode/settings.json", ".vscode/tasks.json", ".vscode/launch.json")
+# what other tools run later from the project: read-only as a whole, for the tool and a wrapped
+# server alike (the server's profile adds every `.git` folder as a whole)
+RUNS_LATER_DIRS = claude_settings.RUNS_LATER_DIRS
+RUNS_LATER_FILES = claude_settings.RUNS_LATER_FILES
+# made at start when missing on Linux, so a bind covers them (a bind needs a folder that exists);
+# on macOS the profile covers a missing one by name, and `.claude` is made there too
+MADE_ON_LINUX = (".claude",) + claude_settings.EDITOR_DIRS
+# a settings file or folder that is already a link would carry the session's writes to a file a
+# later plain run reads: the start refuses
+LINK_REFUSED = RUNS_LATER_DIRS + RUNS_LATER_FILES + (
+    ".claude/settings.json", ".claude/settings.local.json", ".vscode/settings.json",
+    ".vscode/tasks.json", ".vscode/launch.json")
 MACH_ALLOW = (
     "com.apple.SecurityServer", "com.apple.securityd.xpc", "com.apple.trustd",
     "com.apple.trustd.agent", "com.apple.ocspd", "com.apple.SystemConfiguration.configd",
@@ -360,15 +374,19 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     for gd, entry in git_dirs_in(project):
         ro.append(f'(regex #"^{_rx(gd)}/({ctl})(/.*)?$")')
         ro.append(f"(literal {s(entry)})")  # the .git entry itself: no rename or replacement
-    # .claude is made at start (build); a missing .vscode cannot be made, so neither can become a
-    # link to settings elsewhere
-    ro += [f"(literal {s(os.path.join(project, t))})" for t in (".claude", ".vscode")]
-    ro += [f"(literal {s(os.path.join(project, r))})" for r in PROJECT_SETTINGS]
+    # what other tools run later from the project, read-only as a whole at any depth, made before
+    # the session or not (so none can be made, or made a link); and where the links among and
+    # inside them lead, when that is a place the session writes
+    dirs = "|".join(_ci_rx(n) for n in RUNS_LATER_DIRS)
+    files = "|".join(_ci_rx(n) for n in RUNS_LATER_FILES)
+    ro.append(f'(regex #"^{_rx(project)}/(.*/)?({dirs})(/.*)?$")')
+    ro.append(f'(regex #"^{_rx(project)}/(.*/)?({files})$")')
+    linked = runs_later_links(runs_later_in(project), places, _real_home(env))
+    ro += [f"(subpath {s(t)})" for t in confine._spellings(linked)]
     if server:
         # a wrapped MCP server (`--entry`) runs inside a Mode A session that is not confined:
-        # what Claude Code, an editor or git later runs from the project is read-only as a
-        # whole, made before the server starts or not (SERVER_READ_ONLY)
-        ro += [f"(subpath {s(os.path.join(project, t))})" for t in SERVER_READ_ONLY]
+        # every git folder of the project is read-only as a whole too, made before the server
+        # starts or not
         ro += [f"(subpath {s(gd)})" for gd, _entry in git_dirs_in(project)]
         ro.append(f'(regex #"^{_rx(project)}/(.*/)?\\.git(/.*)?$")')
     creds = [f"(subpath {s(c)})" for c in confine._spellings(_credentials(env, cfg))]
@@ -542,49 +560,97 @@ def _gitdir_of(dot_git: str) -> str:
     return os.path.normpath(os.path.join(os.path.dirname(dot_git), line[7:].strip()))
 
 
-def _placeholders(project: str) -> List[str]:
-    """D15: settings files that do not exist yet are made as read-only `{}` placeholders, so
-    bubblewrap can cover them."""
-    made = []
-    rels = [".mcp.json", ".claude/settings.json", ".claude/settings.local.json"]
-    if os.path.isdir(os.path.join(project, ".vscode")):
-        rels += [".vscode/settings.json", ".vscode/tasks.json", ".vscode/launch.json"]
-    nofollow = os.O_NOFOLLOW | os.O_CLOEXEC
-    for rel in rels:
-        sub, name = os.path.split(rel)
-        # by descriptor, never through a link, and a file another launch made meanwhile is
-        # simply there already (two wrapped MCP servers start at once)
+def runs_later_in(project: str, limit: int = 50000) -> List[str]:
+    """Every entry in the project at launch named in the one list (RUNS_LATER_DIRS,
+    RUNS_LATER_FILES), at the top and nested, as names compare case-folded; a link is listed,
+    never followed. Not walked: the inside of a listed folder (it is read-only as a whole) and
+    the folders `git_dirs_in` skips; the walk is bounded as that one is. Entries made during the
+    session are not in it (on Linux a stated limit; macOS covers them by name)."""
+    names = {n.casefold() for n in RUNS_LATER_DIRS + RUNS_LATER_FILES}
+    out: List[str] = []
+    seen = 0
+    stack = [project]
+    skip = {"node_modules", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
+    while stack and seen < limit:
+        d = stack.pop()
         try:
-            top = os.open(project, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+            it = sorted(os.scandir(d), key=lambda e: e.name)
         except OSError:
             continue
-        try:
-            dfd = top
-            if sub:
-                try:
-                    os.mkdir(sub, 0o755, dir_fd=top)
-                except FileExistsError:
-                    pass
-                try:
-                    dfd = os.open(sub, os.O_RDONLY | os.O_DIRECTORY | nofollow, dir_fd=top)
-                except OSError:
-                    continue  # a link or not a folder: not covered here
-            try:
-                fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o644,
-                             dir_fd=dfd)
-            except FileExistsError:
-                continue
-            except OSError:
-                continue
-            finally:
-                if dfd != top:
-                    os.close(dfd)
-            with os.fdopen(fd, "w") as fh:
-                fh.write("{}\n")
-            made.append(rel)
-        finally:
-            os.close(top)
-    return made
+        for e in it:
+            seen += 1
+            if e.name.casefold() in names:
+                out.append(e.path)
+            elif e.is_dir(follow_symlinks=False) and e.name not in skip and e.name != ".git":
+                stack.append(e.path)
+    return out
+
+
+def runs_later_links(entries: Sequence[str], places: Sequence[str], home: str) -> List[str]:
+    """Where the links among and inside `entries` (runs_later_in) really lead, for those that
+    lead into a place the session writes: each is made read-only too, so a write through
+    `.claude/skills -> ../shared/skills` or to `shared/skills` itself fails. A target outside
+    every write place is read-only already. The walk is claude_settings' link walk (each linked
+    tree in turn, bounded by TREE_WALK and LINK_WALK). Raises LaunchError where it cannot decide:
+    a walk past its bound, a target too wide to be code (`/`, the home folder), or one that holds
+    a write place (the project itself)."""
+    starts: List[Tuple[str, Optional[int], str]] = []
+    out: List[str] = []
+
+    def judge(real: str, via: str) -> None:
+        if any(_inside(real, p) for p in places):
+            if real not in out:
+                out.append(real)
+        elif any(_inside(p, real) for p in places):
+            raise LaunchError(f"{via} leads to {real}, which holds a place the session writes, so "
+                              "it cannot be made read-only; replace the link")
+    for e in entries:
+        if os.path.islink(e):
+            real = os.path.realpath(e)
+            if os.path.isdir(real):
+                starts.append((real, None, e))
+            else:
+                judge(real, e)  # a file, or nothing yet
+        elif os.path.isdir(e):
+            starts.append((os.path.realpath(e), None, ""))
+    roots, notes = claude_settings._code_walk(starts, home)
+    for why, real, via in notes:
+        what = {"wide": "leads to a folder too wide to make read-only"}.get(
+            why, f"has more entries than launch walks for links ({claude_settings.TREE_WALK} "
+                 f"in one tree, {claude_settings.LINK_WALK} in all)")
+        raise LaunchError(f"{via or real} {what}: {real}; replace the link or move files out")
+    for real, via in roots:
+        if via:
+            judge(real, via)
+    return out
+
+
+def _ci_rx(name: str) -> str:
+    """`name` as a seatbelt regex that matches it in any letter case (APFS compares names that
+    way, so `.VSCode` is the same folder)."""
+    return "".join(f"[{c.lower()}{c.upper()}]" if c.isalpha() else _rx(c) for c in name)
+
+
+def _placeholders(project: str) -> List[str]:
+    """D15: a missing `.mcp.json` is made as a read-only `{}` placeholder, so bubblewrap can
+    cover it (the folders of the one list are bound as a whole)."""
+    nofollow = os.O_NOFOLLOW | os.O_CLOEXEC
+    # by descriptor, never through a link, and a file another launch made meanwhile is simply
+    # there already (two wrapped MCP servers start at once)
+    try:
+        top = os.open(project, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+    except OSError:
+        return []
+    try:
+        fd = os.open(".mcp.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o644,
+                     dir_fd=top)
+    except OSError:
+        return []
+    finally:
+        os.close(top)
+    with os.fdopen(fd, "w") as fh:
+        fh.write("{}\n")
+    return [".mcp.json"]
 
 
 def _open_no_follow(path: str) -> int:
@@ -944,12 +1010,14 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                          "entries masked; a protected entry made or replaced in them during the "
                          "session is not hidden\n")
     gits = git_dirs_in(project)
+    later = runs_later_in(project)
+    linked = runs_later_links(later, places, _real_home(env))
     guards = confine._spellings(config.guard_files(env))
     # a descriptor for every bind except the view's (those are named, below): the places, the
-    # tool's /tmp, the project's .claude and .vscode, the git control files, the settings files
-    # and the guard files
+    # tool's /tmp, what runs later and where its links lead, the git control files and the
+    # guard files
     _raise_fd_limit(len(places) + 3 + len(gits) * (len(GIT_CONTROL) + 1) +
-                    len(PROJECT_SETTINGS) + len(guards) + 64)
+                    len(later) + len(linked) + len(guards) + 64)
 
     def bind(path: str, ro: bool, dest: Optional[str] = None) -> None:
         try:
@@ -1004,12 +1072,17 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
     for p in places:
         if os.path.isdir(p) and _no_link_on_path(p):
             bind(p, False)
-    # files that run code later, by descriptor: folders as mount points (no rename), control and
-    # settings files read-only
-    for top in (".claude", ".vscode"):
-        q = os.path.join(project, top)
-        if os.path.isdir(q) and _no_link_on_path(q):
-            bind(q, server)  # a wrapped MCP server: read-only as a whole
+    # files that run code later, by descriptor, read-only: what other tools run later, as a whole
+    # (top and nested, as they are at the start; one that is a link is not bound, where it leads
+    # is), and the git control files (a wrapped MCP server: the whole git folder)
+    for q in later:
+        if _no_link_on_path(q):
+            bind(q, True)
+    for t in linked:
+        if not os.path.lexists(t):
+            raise LaunchError(f"a link in the project leads to {t}, which does not exist, so "
+                              "it cannot be made read-only; make it or replace the link")
+        bind(t, True)
     for gd, entry in gits:
         if _no_link_on_path(entry):
             bind(entry, not os.path.isdir(entry) or server)
@@ -1022,10 +1095,6 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             q = os.path.join(gd, c)
             if os.path.lexists(q) and _no_link_on_path(q):
                 bind(q, True)
-    for rel in PROJECT_SETTINGS:
-        q = os.path.join(project, rel)
-        if os.path.lexists(q) and _no_link_on_path(q):
-            bind(q, True)
     for g in guards:
         if os.path.lexists(g) and _no_link_on_path(g):
             bind(g, True)
@@ -1300,17 +1369,21 @@ def already_confined(env: Dict[str, str]) -> bool:
     return True
 
 
-def _make_dot_claude(project: str) -> None:
-    """`.claude` is made before the tool starts (after every check), so the session cannot make
-    it a link."""
-    p = os.path.join(project, ".claude")
-    try:
-        os.mkdir(p, 0o755)
-    except FileExistsError:
-        pass  # there already, or another launch in this project made it just now
-    st = os.lstat(p)
-    if not stat.S_ISDIR(st.st_mode):
-        raise OSError(errno.ENOTDIR, "the project's .claude is not a folder (a link?)", p)
+def _make_folders(project: str, names: Sequence[str]) -> List[str]:
+    """The folders `names` are made before the tool starts (after every check), so the session
+    cannot make one a link, and on Linux a bind covers each. The ones made are returned."""
+    made = []
+    for n in names:
+        p = os.path.join(project, n)
+        try:
+            os.mkdir(p, 0o755)
+            made.append(n)
+        except FileExistsError:
+            pass  # there already, or another launch in this project made it just now
+        st = os.lstat(p)
+        if not stat.S_ISDIR(st.st_mode):
+            raise OSError(errno.ENOTDIR, f"the project's {n} is not a folder (a link?)", p)
+    return made
 
 
 def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
@@ -1336,7 +1409,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                           "project folder")
     # a settings path that is already a link would carry the session's writes to a file a later
     # plain run reads: refused
-    for rel in (".claude", ".vscode") + PROJECT_SETTINGS:
+    for rel in LINK_REFUSED:
         if os.path.islink(os.path.join(project, rel)):
             raise LaunchError(f"{rel} in the project is a link; replace it with a real file or "
                               "folder")
@@ -1402,7 +1475,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if _sandbox_check_self():
             raise LaunchError("this process is inside another sandbox; macOS cannot apply a second "
                               "one (start the tool from a plain terminal)")
-        _make_dot_claude(project)
+        _make_folders(project, [".claude"])
         prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
         return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "0"] + list(argv), child_env, \
             [], project, lambda: None
@@ -1410,7 +1483,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
                               "run phiward setup first")
-        _make_dot_claude(project)
+        made = _make_folders(project, MADE_ON_LINUX)
+        if made:
+            sys.stderr.write("phiward launch: made empty, read-only folders in the project: "
+                             f"{', '.join(made)}\n")
         made = _placeholders(project)
         if made:
             sys.stderr.write("phiward launch: made read-only placeholders in the project: "
@@ -1473,7 +1549,7 @@ def main(argv: List[str]) -> int:
     while rest[:1] in (["--tool"], ["--memory"], ["--report"], ["--entry"]):
         if rest[0] == "--entry" and len(rest) >= 2:
             # the id `phiward mcp wrap` gives an entry: part of this launcher's record, and a
-            # wrapped MCP server's profile (SERVER_READ_ONLY)
+            # wrapped MCP server's profile (the whole `.git` folders read-only too)
             rest, server = rest[2:], True
         elif rest[0] == "--memory":
             memory, rest = True, rest[1:]
