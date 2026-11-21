@@ -341,7 +341,10 @@ def _less(new, old, line, table):
         o = old.first(line, table)
     olds = _kept(o)
     for k in _kept(n):
-        if not any(k in x for x in olds):
+        # text with no letter or digit names no one, nor does punctuation at a kept run's edge
+        # (a `,` a rule used to take with a number)
+        k = re.sub(r"^\W+|\W+$", "", k)
+        if k and not any(k in x for x in olds):
             return (line, n, o)
     return None
 

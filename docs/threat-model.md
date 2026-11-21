@@ -664,14 +664,17 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
   Jane 1970`) is masked whole, after a root, under a pattern (`phi_*` matches `phi_Doe Jane`) and in
   escaped output (`Doe\ Jane`, from `ls -b`); the masked output shows an escaped space as a plain
-  space. Every dash is read as `-` and every decimal digit as ASCII, and the masked output shows
-  them so. A name of 5 or more letters and digits, with a letter, is also masked with its
-  separators (`-`, `_`, `.`, a space) changed or left out; such a name may then mask ordinary
-  text too (`sample_01` masks `sample 01`). A shorter or digits-only name, or one whose
-  separator-free form is a stop word or part of a placeholder (`SAM_PLE`), is masked only as
-  written. Not matched: look-alike letters from other scripts (Cyrillic `А` for Latin `A`), an
-  accent added or left off (`José`, `Jose`), base64, hex and other encodings, a name broken
-  across lines, the separators `:` `+` `~` `,` `'` and `/`, and IDs that are not entry names
+  space. Every dash is read as `-`, and the masked output shows it so; other decimal digits are
+  matched as ASCII digits and shown as written (Python 3.9, with Unicode 13, knows fewer of them
+  than later versions). A name of 5 or more letters and digits, with a letter, is also masked
+  with its separators (`-`, `_`, `.`, a space) changed or left out; such a name may then mask
+  ordinary text too (`sample_01` masks `sample 01`). A shorter or digits-only name, a name with
+  a separator at either end, or one whose separator-free form is a stop word or part of a
+  placeholder (`SAM_PLE`), is masked only as written; so is a whole name whose stem is masked
+  in other spellings (`FAKE_PT_0001.bam` reads `<ENTRY>.bam`, which a file rule may then mask).
+  Not matched: look-alike letters from other scripts (Cyrillic `А` for Latin `A`), an accent
+  added or left off (`José`, `Jose`), base64, hex and other encodings, a name broken across
+  lines, a tab and the separators `:` `+` `~` `,` `'` and `/`, and IDs that are not entry names
   (only rules catch those). The pack rules know only `-` as a separator: `P_9990002_T01_IM6` is
   not an `msk` ID.
 - <a id="known-names-from-files"></a>**`names_from` files** are themselves protected data. Keep them inside a protected root.

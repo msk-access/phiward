@@ -10,11 +10,12 @@ A line is masked in this order (a placeholder is written in angle brackets):
    then, when the inventory is on, the name of every entry under the roots, wherever it
    appears in the line, a long name also with its separators changed or left out
    (inventory.py): <ENTRY>, or the placeholder of a file or identifier rule whose match holds
-   it (so it reads as a name that does not exist would); a hit that runs past a rule's match
-   takes every match it overlaps with it, as <ENTRY>;
+   it (so it reads as a name that does not exist would); a hit that starts inside a rule's
+   match and runs past it takes that match with it, as <ENTRY>; a rule's match takes the whole
+   of a number it starts or ends inside;
    (before step 1, escape sequences and control characters are removed and the line is put in
-   Unicode NFKC form, every dash as `-` and every decimal digit as ASCII, so a name cannot hide
-   behind color codes, look-alike letters, other dashes or other digits);
+   Unicode NFKC form, every dash as `-`, so a name cannot hide behind color codes, look-alike
+   letters or other dashes; names and rules read other decimal digits as ASCII);
 2. the `paths` rules of the packs, then the `identifiers` rules of the packs, then the rules of
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
@@ -40,6 +41,7 @@ usage:
   phiward sanitize [--names-from FILE ...] --check-table FILE ...
 """
 
+import bisect
 import fnmatch
 import os
 import re
@@ -359,11 +361,30 @@ class Sanitizer:
 
     def _apply(self, rules: Sequence[Rule], line: str) -> str:
         for rx, repl in rules:
-            if repl == KEEP_PLACEHOLDER and self.keep_files:
-                line = rx.sub(lambda m, r=repl: m.group(0) if self._kept(m.group(0)) else r, line)
-            else:
-                line = rx.sub(lambda _m, r=repl: r, line)
+            out, pos = [], 0
+            for s, e in self._matches(rx, repl, line):
+                out += [line[pos:s], repl]
+                pos = e
+            out.append(line[pos:])
+            line = "".join(out)
         return line
+
+    def _matches(self, rx: "Pattern[str]", repl: str, line: str) -> List[Tuple[int, int]]:
+        """Where a rule masks `line`: each match (but a file name `keep_files` keeps), widened to
+        the whole of a number it starts or ends inside (`C-PLE123` in `C-PLE12345`, `Donor-1` in
+        `Donor-1,234,567`), so no part of a number is left bare; overlapping ones joined."""
+        forms = [line]
+        if not line.isascii():
+            # also with other decimal digits as ASCII (one character for one: places do not
+            # move): a rule's `[A-Za-z0-9]` then takes `٦`, and its lookbehind still sees
+            # the line as written
+            digits = inventory.ascii_digits(line)
+            if digits != line:
+                forms.append(digits)
+        found = sorted({m.span() for text in forms for m in rx.finditer(text)
+                        if not (repl == KEEP_PLACEHOLDER and self.keep_files
+                                and self._kept(m.group(0)))})
+        return _whole_numbers(line, found)
 
     def _kept(self, token: str) -> bool:
         base = token.rsplit("/", 1)[-1]
@@ -387,7 +408,7 @@ class Sanitizer:
             # spaces; then the mark with the rest of the path (names, now placeholders, and
             # path characters) becomes one placeholder: no part of `Doe Jane/x` is left
             line = self._marked(line)
-        line = self._entries(line)
+        line = self._entries(line, table)
         if self.protected is not None:
             # a mark and the rest of its path; one whose path goes on past the root or the
             # pattern (`<root>/New Person 7`) is followed by `_GOES_ON` for `_tail`
@@ -402,13 +423,17 @@ class Sanitizer:
             line = self._apply(self.pos_rules, line)
         return line
 
-    def _entries(self, line: str) -> str:
+    def _entries(self, line: str, table: bool = False) -> str:
         """Entry names as `<ENTRY>`; but where an entry name lies inside what a file or
         identifier rule matches, that whole match becomes the rule's placeholder, as it would for
-        a name that does not exist. A hit that runs past a rule's match is joined with every
-        match it overlaps (and those with the ones they overlap), as `<ENTRY>`: no part of a
-        match is left bare. The same text is masked as before (or more): only which placeholder
-        it reads as changes."""
+        a name that does not exist. A hit that starts inside a rule's match and runs past it
+        takes that match with it (and so on), as `<ENTRY>`, so the match's start is not left
+        bare; a match that starts inside the hit is left to its rule, which masks it after (it
+        may then cover the placeholder too: `MRN77_<ENTRY>.1.vcf` is one file name). In text
+        mode a hit also takes every `positions` match that starts inside it and runs past it
+        (`ABCDE 12` in `ABCDE 12345`), so the rest of a number is not left; one that starts
+        before the hit is left to its rule. The same text is masked as before (or more): only
+        which placeholder it reads as changes."""
         if self.entries is None:
             return line
         hits = self.entries.spans(line)
@@ -416,10 +441,10 @@ class Sanitizer:
             return line
         spans: List[Tuple[int, int, str]] = []
         for rule, repl in self.path_rules + self.id_rules:
-            spans += [(m.start(), m.end(), repl) for m in rule.finditer(line)
-                      if m.end() > m.start() and _MARK not in m.group(0)
-                      and not (repl == KEEP_PLACEHOLDER and self.keep_files
-                               and self._kept(m.group(0)))]
+            spans += [(s, e, repl) for s, e in self._matches(rule, repl, line)
+                      if e > s and _MARK not in line[s:e]]
+        numbers = [] if table else [m for rule, repl in self.pos_rules
+                                    for m in self._matches(rule, repl, line)]
         parts: List[Tuple[int, int, str]] = []
         for a, b in hits:
             cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
@@ -428,8 +453,11 @@ class Sanitizer:
                 while grown:
                     grown = False
                     for s, e, _r in spans:
-                        if s < b and a < e and (s < a or b < e):
-                            a, b, grown = min(a, s), max(b, e), True
+                        if s < a < e and b > e:
+                            a, grown = s, True
+                    for s, e in numbers:
+                        if a <= s < b < e:
+                            b, grown = e, True
                 cover = (a, b, "<ENTRY>")
             parts.append(cover)
         parts.sort()
@@ -660,6 +688,30 @@ class Columns:
 
 
 _MARK = "\x00"  # never in a line: normalize removes control characters
+# a number: digits, with groups of thousands (`1,234,567`) or joined by `:` (`12:00`, `1:2345`)
+_NUMBER_RUN = re.compile(r"\d+(?:,\d{3}(?!\d)|:\d+)*")
+
+
+def _whole_numbers(line: str, spans: Sequence[Tuple[int, int]]) -> List[Tuple[int, int]]:
+    """`spans` (in order of start), each widened to the whole of a number (`_NUMBER_RUN`) it
+    starts or ends inside, so no part of a number is left bare; overlapping ones joined."""
+    if not spans:
+        return []
+    runs = [(n.start(), n.end()) for n in _NUMBER_RUN.finditer(line)]
+    starts = [ns for ns, _ne in runs]
+
+    def run_at(i: int) -> Optional[Tuple[int, int]]:
+        k = bisect.bisect_right(starts, i) - 1
+        return runs[k] if k >= 0 and runs[k][0] < i < runs[k][1] else None
+    out: List[Tuple[int, int]] = []
+    for s, e in spans:
+        s = (run_at(s) or (s, s))[0]
+        e = (run_at(e) or (e, e))[1]
+        if out and s < out[-1][1]:
+            out[-1] = (min(out[-1][0], s), max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
 _NAME_CHAR = re.compile(r"[\w.\-]")  # a character that would go on with a name
 # after a folder on disk: text that cannot be more of a name (a path goes on, a tab, the end,
 # or after `: ` counts, each with at most one plain unit, to a tab or the end: `: 12 reads, 3

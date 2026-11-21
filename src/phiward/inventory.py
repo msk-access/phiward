@@ -5,8 +5,8 @@ A name gives two strings to mask: the whole name and its stem (the part before t
 A string is kept when it has 4 or more characters (6 or more when it is only digits) and is not a
 stop word. Each one is masked **wherever it appears in a line**, without regard to letter case;
 spaces inside a name are part of it. Names under 4 characters are not masked (a stated limit).
-Lines and names are compared in one form (`normalize`: NFKC, every dash as `-`, every decimal
-digit as ASCII). A string of 5 or more letters and digits, with a letter, is also matched with
+Lines and names are compared in one form (`normalize`: NFKC, every dash as `-`; and, for the
+match only, every decimal digit as ASCII). A string of 5 or more letters and digits, with a letter, is also matched with
 its separators (`-`, `_`, `.`, a space) changed or left out: `FAKE-PT-0001` matches
 `FAKE_PT_0001`, `FAKE PT 0001` and `FAKEPT0001` (`Matcher`). Shorter strings and digits-only
 ones are matched only as written (`20240115` must not match the date `2024-01-15`).
@@ -59,16 +59,17 @@ def normalize(text: str) -> str:
     space (`\\ `) as a plain space, Unicode in NFKC
     form (full-width and other look-alike letters become plain ones, a decomposed accent is
     composed), format characters (zero-width spaces, direction marks) removed, every dash as
-    `-` (`DASHES`: U+2010, U+2013, U+2212...) and every decimal digit as its ASCII digit
-    (`ascii_digits`). Lines and entry names both go through it, so they meet in the same form;
-    the masked line is printed in it too."""
+    `-` (`DASHES`: U+2010, U+2013, U+2212...). Lines and entry names both go through it, so
+    they meet in the same form; the masked line is printed in it too. Other decimal digits stay
+    as they are (the rules' `\\d` matches them, and a rule's `[A-Za-z0-9]` does not): the entry
+    matcher reads them as ASCII (`Matcher`), one character for one, so places do not move."""
     text = _ESCAPES.sub("", text)
     text = text.replace("\\ ", " ")  # `ls -b`, `printf %q`: an escaped space is a space
     if text.isascii():
-        return text  # NFKC and the folds below leave ASCII text as it is
+        return text  # NFKC and the fold below leave ASCII text as it is
     text = unicodedata.normalize("NFKC", text)
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
-    return ascii_digits(text.translate(DASHES))
+    return text.translate(DASHES)
 
 
 def _strings_of(name: str, stop: Set[str]) -> List[str]:
@@ -233,7 +234,10 @@ class Matcher:
         self.glued = glued
 
     def spans(self, line: str) -> List[Tuple[int, int]]:
-        """Every hit in `line`, as (start, end) in `line`, in order of start."""
+        """Every hit in `line`, as (start, end) in `line`, in order of start. The line's
+        decimal digits are read as ASCII (one character for one: places do not move)."""
+        if not line.isascii():
+            line = ascii_digits(line)
         out = _all_starts(self.literal, line) if self.literal is not None else []
         if self.glued is not None:
             hits = _all_starts(self.glued, _SEP_RUN.sub("", line))
@@ -269,11 +273,23 @@ def matcher(strings: Iterable[str], stop: Iterable[str] = (),
     # every piece of 5 or more characters of an `inside` word, so a key is looked up in a set
     pieces = {w[i:j] for w in parts for i in range(len(w)) for j in range(i + 5, len(w) + 1)}
     pieces.update(stops)
+    def key_of(w: str) -> Optional[str]:
+        k = _glued(w)
+        return None if k is None or k.casefold() in pieces else k
+
+    folded = [w if w.isascii() else ascii_digits(w) for w in words]  # as `spans` reads a line
+    present = set(folded)
     literal: List[str] = []
     glued: Set[str] = set()
-    for w in words:
-        k = _glued(w)
-        if k is None or k.casefold() in pieces:
+    for w in folded:
+        k = key_of(w)
+        stem = w.split(".")[0]
+        if k is not None and stem != w and stem in present and key_of(stem) is not None:
+            # the stem is matched in other spellings; the whole name only as written, so its
+            # extension stays for the file rules (`FAKE_PT_0001.bam` reads `<ENTRY>.bam`, which
+            # a file rule then masks with what is around it)
+            k = None
+        if k is None:
             literal.append(w)
         else:
             glued.add(k)

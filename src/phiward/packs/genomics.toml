@@ -22,8 +22,9 @@ identifiers = [
   '(?i)(?<![^\s\x27\x22=,;()\[\]])[^\s\x27\x22=,;()\[\]]+\.(?:bam|cram|bai|crai|csi|sam|fastq|fq|bcf|vcf)(?:\.gz|\.bgz)?\b => <BAMFILE>',
   # read names: Illumina and Casava colon forms (5 or more fields), with /1, #0, _UMI, +UMI tails;
   # a match starts only where a word starts (leading `_ . -` are taken too), so a long word
-  # stays linear
-  '(?<![A-Za-z0-9_.\-])[_.\-]*[A-Za-z0-9](?:[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)*)?(?::[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)*){4,}(?:[/#+][A-Za-z0-9+\-]*)* => <READ>',
+  # stays linear; its first field may hold dots anywhere (`T.out-a`, `x..1.vcf`); a tail never
+  # ends right before the fields of the next read name (`a:b:c:d:e/d-a:b:c:d:e` is two)
+  '(?<![A-Za-z0-9_.\-])[_.\-]*[A-Za-z0-9](?:[A-Za-z0-9_\-]*(?:\.+[A-Za-z0-9_\-]+)*)?(?::[A-Za-z0-9_\-]+(?:\.[A-Za-z0-9_\-]+)*){4,}(?:[/#+][A-Za-z0-9+\-]*(?![A-Za-z0-9+\-])(?!:[A-Za-z0-9_.\-]+(?::[A-Za-z0-9_.\-]+){3}))* => <READ>',
   # PacBio movie names
   '\bm\d{5}[A-Za-z]?_\d{6}_\d{6}/\d+(?:/\w+)? => <READ>',
 ]
