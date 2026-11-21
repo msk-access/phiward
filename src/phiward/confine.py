@@ -307,6 +307,36 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
     return args
 
 
+# `phiward launch` gives the session a network namespace of its own (bwrap --unshare-net)
+NETNS_SYSCTL = "/proc/sys/user/max_net_namespaces"
+
+
+def net_namespace_problem(bwrap: str, sysctl: str = "", run=None, probe: bool = True) -> str:
+    """Why bubblewrap cannot give a session a network namespace of its own here, or "". The
+    sysctl first (0 turns them off), then (with `probe`: doctor) one bwrap with --unshare-net
+    that runs nothing. `launch` reads only the sysctl: any other failure is bwrap's own, at the
+    start, and nothing runs."""
+    path = sysctl or NETNS_SYSCTL
+    try:
+        with open(path, encoding="ascii") as fh:
+            if fh.read().strip() == "0":
+                return f"user.max_net_namespaces is 0 ({path}), so there are none"
+    except (OSError, ValueError):
+        pass
+    if not probe:
+        return ""
+    run = run or subprocess.run
+    try:
+        r = run([bwrap, "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/sh", "-c", ":"],
+                capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"bwrap --unshare-net cannot run ({exc})"
+    if r.returncode != 0:
+        lines = (r.stderr or "").strip().splitlines()
+        return "bwrap --unshare-net fails: " + (lines[-1] if lines else f"exit {r.returncode}")
+    return ""
+
+
 # where the shared connection's socket appears inside a Linux request: a fixed
 # name in a fresh /tmp, so no other socket in /tmp, /var/tmp or the home folder is reachable
 LINUX_SOCKET = "/tmp/phiward-cm"

@@ -65,8 +65,47 @@ phiward launch --tool claude
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
 | Settings that run later | | change `.mcp.json`, `.claude/settings*.json`, `.vscode` settings, or git control files (hooks, config) in the project. On Linux a git control file that is missing at the start (`commondir`) can be made; the report at the end names it. A wrapped MCP server (`--entry`) cannot write the project's `.git` folders, `.claude` or `.vscode`; on macOS also `.idea`, `.gitmodules`, `.ripgreprc` or a new `.git` (on Linux a name missing at the start can be made) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps |
-| Network | open in this release (see Limits) | reach outside unix sockets (the SSH agent, your shared SSH connection, docker) |
+| Network | HTTPS to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker) |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
+
+## The network
+
+The session has no direct network. `launch` runs a proxy outside the profile, and the tool's
+`HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` (and their lowercase forms) name it, with a token for
+this session only; `NO_PROXY` is empty. Claude Code, git, pip, npm and curl use it.
+
+- **Only public addresses.** The proxy looks the name up once, checks every address it gets
+  back, and connects to the address it checked. It refuses this machine (`localhost`,
+  `127.0.0.1` in any spelling, `[::1]`, this machine's names and addresses, which it reads again
+  for each connection), the local link (`169.254.x`, `fe80::`) and the private ranges (`10.x`,
+  `172.16-31.x`, `192.168.x`, `100.64.x`, `fc00::/7`).
+- **Private ranges you need** (an HPC web service, an internal Git server): list them in
+  `[launch] private_networks` in your user config ([configuration.md](configuration.md#launch)).
+  A project's `.phiward.toml` cannot.
+- **HTTPS only** (CONNECT). Plain HTTP through the proxy is refused.
+- **A proxy of your own:** when the terminal you start `launch` from sets `HTTPS_PROXY` (or
+  `ALL_PROXY`) to an `http://` proxy, phiward's proxy goes through it, by the checked address
+  only (`CONNECT <address>:443`). A name that does not resolve on this machine is refused, not
+  sent on. Any other kind of proxy there (`https://`, `socks5://`) stops the start.
+- **At most 64 connections at once.** One more is refused, not queued.
+- `launch` refuses to start when the proxy cannot start.
+
+What this breaks:
+- MCP servers over HTTP on this machine, IDE integrations (the IDE's WebSocket on localhost),
+  and `/login` with a localhost callback (use `CLAUDE_CODE_OAUTH_TOKEN`, above). Stdio MCP
+  servers the session starts work.
+- Tools that ignore the proxy variables (raw sockets, `ssh` to port 22, some Go and Java tools),
+  and all UDP. They fail visibly.
+- Docker over TCP (`DOCKER_HOST=tcp://localhost`); the Docker socket is blocked already.
+- **macOS:** the session cannot reach a server on this machine, also one it started itself: test
+  suites with local HTTP fixtures, dev servers, Jupyter kernels (ZMQ over TCP by default) and Dask
+  local clusters. Use unix sockets in the project or the session's temp folder, or an IPC
+  transport (`jupyter ... --transport ipc`). Name lookups still work.
+- **Linux:** the session has a network of its own, with its own `localhost`: servers it starts
+  itself work. Name lookups inside the session fail (`ping`, `dig`, `ssh` to a name); tools that
+  use the proxy do not need them. `launch` refuses to start where network namespaces are not
+  available: it says so when `user.max_net_namespaces` is 0, and bubblewrap stops the start
+  when it cannot make one for another reason. Nothing runs then; `phiward doctor` checks both.
 
 ## When a session ends
 
@@ -175,7 +214,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
 - **Linux: Claude Code's own sandbox runs inside launch.** phiward turns it off only on macOS.
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
-  runs unconfined).
+  runs unconfined). Bash reaches the network through Claude Code's own proxy, which then goes
+  through phiward's; that a given Claude Code version does this is for the real-tool check to
+  confirm.
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
   keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;
@@ -184,11 +225,13 @@ when in doubt, reinstall: the step names the command for the tool that installed
   profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
 
 Read [threat-model.md](threat-model.md) (Mode B, [limits L1–L10](threat-model.md#l1)). In short:
-- **The network is open.** A session cannot read protected data, so it cannot send it. But it
-  can carry out what it can read: gateway output (masked), the login token, the project.
+- **The network goes only to public addresses, through phiward's proxy** ([above](#the-network)).
+  A session cannot read protected data, so it cannot send it. But it can carry out what it can
+  read, to any public host: gateway output (masked), the login token, the project.
 - **macOS:** a process that leaves the tool's process tree keeps running after the session
-  (L5). It can no longer change what a later session reads, but it can write the project. Close
-  the terminal after a session.
+  (L5). It can no longer change what a later session reads, but it can write the project, and
+  it keeps its session's one allowed port after the proxy is gone. Close the terminal after a
+  session.
 - **macOS:** the Keychain and the per-user temp folder are shared with your own tools.
 - **Masking covers names and identifiers, not content.** Through the gateway, print counts and
   summaries, not records (rule 3 of the agent rules that `phiward init` adds to `AGENTS.md`). Dates can be masked with the `dates` pack.

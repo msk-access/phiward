@@ -129,7 +129,8 @@ def test_7_only_listed_variables_reach_the_tool(tree, var):
     assert "HAS False" in out, out
 
 
-@pytest.mark.parametrize("var", ["HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",
+# the proxy variables are launch's own now (test_v2_launch_network.py, test_4_*)
+@pytest.mark.parametrize("var", ["SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",
                                  "LANG", "TERM", "EDITOR", "ANTHROPIC_API_KEY", "CLAUDE_CODE_USE_BEDROCK"])
 def test_7_ordinary_and_the_tools_own_variables_pass(tree, var):
     _, out = launch(tree, f"import os; print('HAS', {var!r} in os.environ)", env_extra={var: "x"})

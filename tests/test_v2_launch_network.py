@@ -217,7 +217,7 @@ def ask(proxy, authority, token=TOKEN, extra=b"", method="CONNECT", read_more=Fa
         while time.time() < deadline:
             try:
                 d = c.recv(4096)
-            except socket.timeout:
+            except (socket.timeout, ConnectionResetError):  # a reset is a refusal too
                 break
             if not d:
                 break

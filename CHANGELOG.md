@@ -102,6 +102,22 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `phiward launch` routes the tool's network through a proxy that allows only public addresses.
+  The tool has no direct IP network: on macOS its profile allows only the proxy's random port on
+  loopback (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
+  its own, with the proxy's socket bound in and a relay on the session's own 127.0.0.1. The
+  proxy runs in the launcher, outside the profile. It takes HTTPS (CONNECT) only, needs a token
+  for the session, looks a name up once and connects to the address it checked. It refuses this
+  machine, the local link and the private ranges; `[launch] private_networks` in the user config
+  (never a project's) lists private ranges it may reach. A `HTTPS_PROXY` in the terminal is
+  chained by checked address only. The tool's proxy variables all name the session's proxy and
+  `NO_PROXY` is empty. What this breaks is in docs/launch.md (servers on this machine, also on
+  macOS one the session starts; tools that ignore the proxy variables; UDP; on Linux, name
+  lookups inside the session). `launch` refuses to start when the proxy cannot start, and on
+  Linux where network namespaces are not available, which `doctor` reports. On macOS the
+  profile no longer allows the `nsurlsessiond` and `networkd` services. On Linux the Landlock
+  scope for abstract unix sockets is gone: the session's network namespace already keeps them
+  apart, on every kernel.
 - `phiward run --table` is stricter: output without a header line (or with a line before the
   header, a warning on stderr too) is now masked as text, with a note that says so; before, every
   number in it was kept.

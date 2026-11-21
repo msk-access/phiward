@@ -159,7 +159,8 @@ usage: phiward install claude [--user|--project] [--no-hooks] [--block-outside-r
 
 ### phiward doctor
 
-Show the config in force and what may turn the guards off.
+Show the config in force and what may turn the guards off (on Linux, also when `phiward launch`
+cannot start because there are no network namespaces).
 Guide: [Check with doctor](setup.md#7-check-with-doctor).
 
 ```text
