@@ -16,11 +16,12 @@ A line is masked in this order (a placeholder is written in angle brackets):
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
 4. text mode only: the `positions` rules of the packs.
-Then, when the line holds another dash or digit, or (with the inventory on) may hold a name in
-another spelling (`_more`): every entry hit with every dash as `-`, other decimal digits as
-ASCII and a long name with its separators changed or left out (inventory.py), and each rule's
-own matches on the line read so (also with no inventory), each widened to the whole of a
-number it starts or ends inside, are masked too, in the text the steps above left as it was;
+Then, when the line holds another dash or digit, a root or pattern holds another dash, or
+(with the inventory on) the line may hold a name in another spelling (`_more`): every protected
+path with every dash of its root or pattern as `-`, every entry hit with every dash as `-`,
+other decimal digits as ASCII and a long name with its separators changed or left out
+(inventory.py), and each rule's own matches on the line read so (also with no inventory), each
+widened to the whole of a number it starts or ends inside, are masked too, in the text the steps above left as it was;
 their placeholders are not changed. So a line is never masked less than by the steps alone.
 Table mode skips step 4 (a table's numeric cells are program-made numbers). This command and the
 git hook use it per line. `phiward run --table` reads columns instead (`Columns`): a cell under an
@@ -272,6 +273,11 @@ class Sanitizer:
                  known: Iterable[str] = (), roots: Iterable[str] = ()):
         # the protected roots and patterns: their matches in a line (`text_spans`)
         self.protected = protected if protected else None
+        # a root or pattern with another dash: the overlay looks for it written with `-` in
+        # every line (`_paths`)
+        self.dashed_roots = self.protected is not None and any(
+            inventory.normalize(p) != p
+            for p in list(self.protected.roots) + list(self.protected.patterns))
         # the folders a protected pattern matches now, as `_key`s, and their lengths as written
         # (folding can change a length: `ß`), longest first: a protected match that starts with
         # one is marked to its end (`_marked`)
@@ -381,15 +387,18 @@ class Sanitizer:
         return self._more(line, self._steps(line, table), table)
 
     def _more(self, line: str, out: str, table: bool) -> str:
-        """`out`, the steps' output for `line`, with the names in other spellings masked too, and
-        each rule's own matches on the line read as `inventory.fold` writes it; each widened to
+        """`out`, the steps' output for `line`, with the protected paths and names in other
+        spellings masked too (`_paths`, `inventory.matcher`), and each rule's own matches on the line read as `inventory.fold` writes it; each widened to
         the whole of a number it starts or ends inside. Only where `out` still shows the line's
         own characters (`_shown`): what the steps masked stays as they wrote it."""
         folded = inventory.fold(line)
-        if folded == line and (self.entries is None or not self.entries.other(folded)):
+        found = self._paths(folded) if self.protected is not None and (
+            folded != line or self.dashed_roots) else []
+        if folded == line and not found and (self.entries is None
+                                             or not self.entries.other(folded)):
             return out
-        found = [] if self.entries is None else [(s, e, "<ENTRY>", -1)
-                                                 for s, e in self.entries.spans(line)]
+        found += [] if self.entries is None else [(s, e, "<ENTRY>", -1)
+                                                  for s, e in self.entries.spans(line)]
         rules = self.path_rules + self.id_rules + ([] if table else self.pos_rules)
         for k, (rx, repl) in enumerate(rules):
             found += [(m.start(), m.end(), repl, k) for m in rx.finditer(folded)
@@ -503,8 +512,19 @@ class Sanitizer:
         Every match counts, also one inside or across another: overlapping matches are joined."""
         if self.protected is None:
             return line
+        out: List[str] = []
+        pos = 0
+        for start, end in self._marks(line, self.protected.text_spans(line)):
+            out += [line[pos:start], _MARK]
+            pos = end
+        out.append(line[pos:])
+        return "".join(out)
+
+    def _marks(self, line: str, spans: Sequence[Tuple[int, int, bool]]
+               ) -> List[Tuple[int, int]]:
+        """Where `_marked` puts its marks, for the protected matches `spans` in `line`."""
         marks: List[Tuple[int, int]] = []
-        for start, end, open_ in self.protected.text_spans(line):
+        for start, end, open_ in spans:
             for size in self.known_lengths:
                 stop = start + size
                 if stop <= len(line) and _key(line[start:stop]) in self.known and \
@@ -519,13 +539,19 @@ class Sanitizer:
                 marks[-1] = (marks[-1][0], max(marks[-1][1], end))
             else:
                 marks.append((start, end))
-        out: List[str] = []
-        pos = 0
-        for start, end in marks:
-            out += [line[pos:start], _MARK]
-            pos = end
-        out.append(line[pos:])
-        return "".join(out)
+        return marks
+
+    def _paths(self, folded: str) -> List[Tuple[int, int, str, int]]:
+        """The protected paths in `folded` (a line as `inventory.fold` writes it) where a root or
+        pattern is read with every dash as `-`, as the steps would mask them: each mark with
+        the rest of its path, to the next tab or the line's end when the name goes on."""
+        found = []
+        for start, end in self._marks(folded, self.protected.text_spans(folded, dashes=True)):
+            stop = _REST_OF_PATH.match(folded, end).end()
+            if stop > end and not _ENDED.match(folded, stop):
+                stop = _line_end(folded, stop)
+            found.append((start, stop, "<PROTECTED>", -2))
+        return found
 
     def clean(self, line: str, table: bool = False) -> str:
         """The line with its identifiers masked (table mode: identifiers only). Never raises:
@@ -673,7 +699,9 @@ class Columns:
         return True
 
     def _mask(self, line: str) -> str:
-        return self.san._mask(line, table=True)
+        """The line in table mode; the steps' own output is kept in `_base` (`_row`)."""
+        self._base = self.san._steps(line, True)
+        return self.san._more(line, self._base, True)
 
     def _row(self, norm: str, again: bool = False) -> str:
         """The row masked by column; `_Misfit` when it cannot be read so. `again`: the second
@@ -683,11 +711,14 @@ class Columns:
         if '"' in norm or "\\" in norm or _PCT_ESCAPE.search(norm) or norm.count(d) != n:
             raise _Misfit()
         # the masks of today's table mode, on the whole line (an entry name may hold the
-        # delimiter); a mask that ate a delimiter makes a misfit
+        # delimiter); a mask that ate a delimiter makes a misfit. An ID cell takes its form from
+        # the steps alone (`base`), as before the other spellings: `<IDCOL>`, or the placeholder
+        # the steps wrote
         m = self._mask(norm)
-        if m.count(d) != n or (again and m != norm):
+        base = self._base
+        if m.count(d) != n or base.count(d) != n or (again and m != norm):
             raise _Misfit()
-        cells = m.split(d)
+        cells, steps = m.split(d), base.split(d)
         # a row with no plain-number cell (another header, as from `cat a.csv b.csv`, or a row
         # of words) is not read: it may start other columns (on the second pass, an ID cell
         # that was a number is <IDCOL>)
@@ -696,8 +727,10 @@ class Columns:
         for i, c in enumerate(cells):
             core = c.strip()
             if self.is_id[i]:
-                if core and core not in self.known:
+                if steps[i].strip() and steps[i].strip() not in self.known:
                     cells[i] = IDCOL
+                else:
+                    cells[i] = steps[i]
             elif not _NUMBER.fullmatch(core):
                 cells[i] = self.san._apply(self.san.pos_rules, c)
         return d.join(cells)
@@ -712,8 +745,9 @@ def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]]
                    ) -> List[Tuple[int, int, str]]:
     """Each (start, end, placeholder, rank) of `found` widened to the whole of a number
     (`_NUMBER_RUN`) it starts or ends inside, so no part of a number is left bare; overlapping
-    ones joined, with one placeholder: a rule's match that covers the joined span (the first
-    rule), else `<ENTRY>` when a name is in it, else that of the span that starts first."""
+    ones joined, with one placeholder: `<PROTECTED>` when a protected path (rank -2) is in it,
+    else a rule's match that covers the joined span (the first rule), else `<ENTRY>` when a
+    name (rank -1) is in it, else that of the span that starts first."""
     runs = [(n.start(), n.end()) for n in _NUMBER_RUN.finditer(line)]
     starts = [ns for ns, _ne in runs]
 
@@ -735,8 +769,9 @@ def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]]
     for g in groups:
         s, e = g[0][0], max(f[1] for f in g)
         whole = [f for f in g if f[0] == s and f[1] == e and f[3] >= 0]
-        names = [f for f in g if f[3] < 0]
-        r = min(whole, key=lambda f: f[3])[2] if whole else "<ENTRY>" if names else g[0][2]
+        names = [f for f in g if f[3] == -1]
+        r = "<PROTECTED>" if any(f[3] == -2 for f in g) else \
+            min(whole, key=lambda f: f[3])[2] if whole else "<ENTRY>" if names else g[0][2]
         out.append((s, e, r))
     return out
 
@@ -813,6 +848,7 @@ def _line_end(line: str, start: int) -> int:
 def _key(path: str) -> str:
     """A path as the known-folder set holds it: case folded where the volume ignores case."""
     return path.casefold() if paths.FOLD_CASE else path
+_REST_OF_PATH = re.compile(rf"(?:/{paths._PATH_CHAR}*)*")
 _AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<[A-Z][A-Z0-9_]*>|{paths._PATH_CHAR})*)*")
 normalize = inventory.unfolded  # the form masking sees (escapes removed, NFKC)
 

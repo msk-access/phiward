@@ -164,21 +164,23 @@ class ProtectedSet:
                 return True
         return False
 
-    def _text_finder(self) -> "_TextFinder":
-        finder = getattr(self, "_finder", None)
-        if finder is None:
-            finder = self._finder = _TextFinder(self.roots, self.patterns)
-        return finder
+    def _text_finder(self, dashes: bool = False) -> "_TextFinder":
+        finders = self.__dict__.setdefault("_finders", {})
+        if dashes not in finders:
+            finders[dashes] = _TextFinder(self.roots, self.patterns, dashes)
+        return finders[dashes]
 
     def text_search(self, text: str) -> Optional[Tuple[int, int]]:
         """A protected path (inside, not above) written in `text`, as (start, end), or None:
-        the hook's form (`_TextFinder`)."""
-        return self._text_finder().search(text)
+        the hook's form (`_TextFinder`), where a root or pattern also matches with every dash
+        as `-`."""
+        return self._text_finder(dashes=True).search(text)
 
-    def text_spans(self, text: str) -> List[Tuple[int, int, bool]]:
+    def text_spans(self, text: str, dashes: bool = False) -> List[Tuple[int, int, bool]]:
         """Every protected root or pattern match written in `text`, as (start, end, open), in
-        order of start: the sanitizer's form (`_TextFinder`)."""
-        return self._text_finder().spans(text)
+        order of start: the sanitizer's form (`_TextFinder`); `dashes`: also with every dash
+        of a root or pattern as `-`."""
+        return self._text_finder(dashes).spans(text)
 
 
 # ---- protected paths written in free text ------------------------------------------------------
@@ -368,12 +370,13 @@ def _first_separator(text: str, pos: int, lim: int, own: Dict[str, int]) -> int:
 
 
 class _TextFinder:
-    def __init__(self, roots: Sequence[str], patterns: Sequence[str]):
+    def __init__(self, roots: Sequence[str], patterns: Sequence[str], dashes: bool = False):
         literals = list(roots)
         self.patterns: List[_TextPattern] = []
-        # each pattern also with every dash as `-` (`inventory.normalize`), as a line may write it:
-        # its literal part, resolved, may hold another dash or other digits
-        for p in dict.fromkeys(f for q in patterns for f in (q, inventory.normalize(q))):
+        # `dashes`: each pattern and root also with every dash as `-` (`inventory.normalize`), as
+        # a line may write it (the hook's form; the sanitizer's steps use the form without)
+        for p in (dict.fromkeys(f for q in patterns for f in (q, inventory.normalize(q)))
+                  if dashes else patterns):
             comps = pathmatch.parts(p)
             first = next((k for k, c in enumerate(comps) if "*" in c), None)
             if first is None:
@@ -384,14 +387,15 @@ class _TextFinder:
                 _fold_full("/" + "".join(c + "/" for c in comps[:first])),
                 [_fold_full(c).split("*") for c in later],
                 [{s: c.count(s) for s in _SEPARATORS} for c in later]))
-        # every root also with every dash as `-` (`inventory.normalize`: NFKC, as a line may
-        # write it), in NFKC, NFC and NFD: a root written in another form
-        # is found all the same; longer first, so a root inside another one is matched whole
+        # every root also in the Unicode form the sanitizer puts lines in (NFKC), and NFC and
+        # NFD: a root written in another form is found all the same; longer first, so a root
+        # inside another one is matched whole
         # (folded as names are, `ß` as `ss`, and found in the folded text)
         forms: List[str] = []
         for r in literals:
-            for f in (r, inventory.normalize(r), unicodedata.normalize("NFKC", r),
-                      unicodedata.normalize("NFC", r), unicodedata.normalize("NFD", r)):
+            for f in (r, *((inventory.normalize(r),) if dashes else ()),
+                      unicodedata.normalize("NFKC", r), unicodedata.normalize("NFC", r),
+                      unicodedata.normalize("NFD", r)):
                 f = _fold_full(f)
                 if f not in forms:
                     forms.append(f)
