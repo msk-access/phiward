@@ -287,7 +287,7 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
     hidden = [os.path.realpath(h) for h in deny_read]
     for p in allow_read:
         # the resolved file, unless it is hidden, bound at the name. A name that is itself a
-        # link cannot be bound: bwrap refuses a link as the destination (the start stops)
+        # link cannot be bound: bwrap fails to mount at a link (the start stops)
         real = os.path.realpath(p)
         if os.path.isfile(real) and not any(real == h or real.startswith(h + "/") for h in hidden):
             args += ["--ro-bind", real, _mount_point(p)]
@@ -512,7 +512,8 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
                     socket: str = "", allow_read: Sequence[str] = ()) -> Tuple[List[str], List[int]]:
     """`argv` wrapped so that it writes only to `writable` (and pattern matches), with no
     network unless `net`, and the file descriptors that must stay open for it (Linux: the
-    seccomp program). The caller closes the descriptors after the process starts."""
+    seccomp program). The caller closes the descriptors after the process starts. `socket`
+    is a resolved path (remote.shared_socket gives one): a link in it stops the request."""
     b = backend()
     if b == "seatbelt":
         return [SANDBOX_EXEC, "-p", seatbelt_gateway_profile(writable, patterns, net, deny_read,

@@ -91,8 +91,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   folder and file it binds (the write places, a `.claude` folder in one, the ssh config, the
   shared connection's socket) is, inside, the same file it found at that name before the start
   (a link not followed), mounted at that name. Anything it cannot confirm, an error included,
-  stops the request (nothing runs). A hidden path at or above a write place now stops the
-  request too; before, the command ran without writes there.
+  stops the request (nothing runs). Some settings that ran before now stop the request: a
+  hidden path at or above a write place or at its `.claude` (before, the command ran with it
+  masked or without writes there), and a bind listed twice.
 
 ### Changed
 
