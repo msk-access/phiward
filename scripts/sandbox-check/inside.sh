@@ -3,7 +3,8 @@
 # the source is at /repo (read only, a `git archive` of HEAD), results go to /out. It runs
 # check.sh with SBX_BASE=/work, SBX_SRC=/repo and SBX_OUT=/out: check.sh keeps there only the
 # redacted report, streams and facts; the console output goes to /out/console.txt. It exits as
-# check.sh does.
+# check.sh does. --stub runs in a cluster's shape instead: SBX_BASE in a folder below the home
+# folder (~/sbx/run) and SBX_TOOLS next to it (~/sbx/tools/bin).
 # --stub: the stand-in claude. The run must then end exactly as expected (below): Mode A, where
 # nothing confines the stub, FAILs on the kernel probes (the judge sees the holes), Mode B passes
 # (the wrapped MCP server starts in both modes), and the rest
@@ -14,6 +15,11 @@ stub=""
 [ "${1:-}" = --stub ] && stub=--stub
 SBX_LOCKED=$(cat /opt/claude/locked 2>/dev/null || echo unknown)
 export SBX_BASE=/work SBX_SRC=/repo SBX_OUT=/out SBX_LOCKED
+if [ -n "$stub" ]; then
+  SBX_BASE=$HOME/sbx/run SBX_TOOLS=$HOME/sbx/tools/bin
+  mkdir -p -m 755 "$SBX_BASE" "$SBX_TOOLS"
+  export SBX_TOOLS
+fi
 { sh /repo/scripts/sandbox-check/check.sh $stub 2>&1; echo $? > /out/rc; } | (trap '' INT; tee /out/console.txt)  # tee outlives a Ctrl-C, so the output is all there
 code=$(cat /out/rc)
 [ -n "$stub" ] || exit "$code"
@@ -77,7 +83,10 @@ if [ "$kept" = "facts-A.txt facts-B.txt report.txt stream-A.jsonl stream-B.jsonl
 else echo "== WRONG kept files: $kept"; status=1; fi
 if grep -rqs "FAKE-TOKEN-" /out; then echo "== FOUND the made-up token in /out"; status=1
 else echo "== ok    the made-up token is in no kept file"; fi
-if ls -d /work/phiward-sbx-* >/dev/null 2>&1; then echo "== LEFT the check's home in /work"; status=1
+if ls -d "$SBX_BASE"/phiward-sbx-* >/dev/null 2>&1; then echo "== LEFT the check's home in $SBX_BASE"; status=1
 else echo "== ok    the check's home is removed"; fi
+# the base below the home folder was taken, and the tools folder put on the session's PATH
+if grep -qxF "tools: $SBX_TOOLS on the PATH" /out/console.txt; then echo "== ok    SBX_TOOLS on the PATH"
+else echo "== MISSING SBX_TOOLS on the PATH"; status=1; fi
 [ "$status" = 0 ] && echo "PASS stub plumbing" || echo "FAIL stub plumbing"
 exit $status

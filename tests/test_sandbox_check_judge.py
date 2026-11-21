@@ -1061,3 +1061,168 @@ def test_a_second_signal_during_the_cleanup_does_not_cut_it_short(tmp_path):
     p.send_signal(signal.SIGINT)
     p.wait(timeout=30)
     assert not h.exists() and not j.exists()
+
+
+PLACES = JUDGE.parent / "places.sh"
+SRC = Path(__file__).resolve().parents[1] / "src"
+PLACES_DRIVER = '. "$1"; shift; "$@"\n'
+
+
+def _places(tmp_path, *args, env=None):
+    """Run one of places.sh's checks (check.sh sources it) on made-up folders: nothing is built."""
+    import subprocess
+    driver = tmp_path / "places-driver.sh"
+    driver.write_text(PLACES_DRIVER)
+    return subprocess.run(["sh", str(driver), str(PLACES)] + [str(a) for a in args],
+                          capture_output=True, text=True, timeout=60,
+                          env=env or dict(os.environ))
+
+
+def _made_up_home(tmp_path):
+    """A made-up home folder with a base below it (as on a cluster: ~/phiward-sbx/run)."""
+    home = (tmp_path / "home" / "fake-user").resolve()
+    base = home / "phiward-sbx" / "run"
+    base.mkdir(parents=True)
+    return home, base
+
+
+def test_a_base_below_a_clean_home_passes(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", base, f"{home}\n{home}")
+    assert r.returncode == 0, r.stderr
+
+
+def test_the_home_folder_itself_is_refused_as_the_base(tmp_path):
+    home, _base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_base_check", home, str(home))
+    assert r.returncode == 2
+    assert "SBX_BASE may not be your home folder" in r.stderr
+
+
+@pytest.mark.parametrize("name", ["CLAUDE.md", "CLAUDE.local.md", ".claude", ".git", ".mcp.json",
+                                  ".phiward.toml"])
+@pytest.mark.parametrize("where", ["home", "between", "base"])
+def test_a_name_claude_code_or_phiward_picks_up_above_the_base_is_refused(tmp_path, name, where):
+    """Claude Code reads CLAUDE.md, CLAUDE.local.md and .claude/rules from every folder above the
+    session's, and phiward the settings of every .claude or .git above a call: a real one there
+    would be read into the test session."""
+    home, base = _made_up_home(tmp_path)
+    at = {"home": home, "between": base.parent, "base": base}[where]
+    if name in (".claude", ".git"):
+        (at / name).mkdir()
+    else:
+        (at / name).write_text("made up\n")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+    assert f"{at}/{name}" in r.stderr
+
+
+def test_a_link_by_such_a_name_is_refused_too(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    (home / ".claude").symlink_to(tmp_path / "nowhere")
+    r = _places(tmp_path, "sbx_base_check", base, str(home))
+    assert r.returncode == 2
+
+
+@pytest.mark.parametrize("tools", ["relative/bin", "/no/such/folder-FAKE"])
+def test_sbx_tools_must_be_an_existing_absolute_folder(tmp_path, tools):
+    _home, base = _made_up_home(tmp_path)
+    r = _places(tmp_path, "sbx_tools_place", tools, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+@pytest.mark.parametrize("rel", [".", "phiward-sbx-FAKE/bin", ".."])
+def test_sbx_tools_in_or_above_the_base_is_refused(tmp_path, rel):
+    """The check's home and judge's folder are made in SBX_BASE: SBX_TOOLS may not be there, or
+    hold them."""
+    _home, base = _made_up_home(tmp_path)
+    t = base / rel
+    t.mkdir(parents=True, exist_ok=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+def test_sbx_tools_next_to_the_base_is_placed(tmp_path):
+    home, base = _made_up_home(tmp_path)
+    t = home / "phiward-sbx" / "tools" / "bin"
+    t.mkdir(parents=True)
+    r = _places(tmp_path, "sbx_tools_place", t, base)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == str(t)
+
+
+def _phiward_env(tmp_path):
+    """The installed phiward of the check, made up: src on PYTHONPATH, a made-up home."""
+    home = tmp_path / "check-home"
+    (home / "tmp").mkdir(parents=True, exist_ok=True)
+    return home, dict(os.environ, HOME=str(home), TMPDIR=str(home / "tmp"), PYTHONPATH=str(SRC))
+
+
+def _tools_safe(tmp_path, tools):
+    import sys
+    home, env = _phiward_env(tmp_path)
+    return _places(tmp_path, "sbx_tools_safe", sys.executable, tools, env=env)
+
+
+@pytest.fixture
+def outside_temp():
+    """A made-up folder outside every temp folder phiward knows (the tests' own folders are in
+    /tmp, which the session may write): the per-user temp folder of macOS, which the check's
+    run does not count as one (its TMPDIR is the made-up home's). Skipped where there is none."""
+    import shutil
+    import tempfile
+    base = os.environ.get("TMPDIR", "")
+    tmp = os.path.realpath("/tmp")
+    if not base or os.path.realpath(base) == tmp or os.path.realpath(base).startswith(tmp + "/"):
+        pytest.skip("no folder outside /tmp to make one in; the stub run covers Linux")
+    d = Path(tempfile.mkdtemp(prefix="phiward-sbx-tools-", dir=base)).resolve()
+    d.chmod(0o755)
+    yield d
+    for p in [d] + list(d.rglob("*")):
+        if p.is_dir():
+            p.chmod(0o755)
+    shutil.rmtree(d)
+
+
+@pytest.mark.parametrize("bad", ["tools", "parent"])
+def test_sbx_tools_writable_by_group_is_refused(tmp_path, outside_temp, bad):
+    """phiward's own rule for a PATH folder (service.path_entries, selfcheck.safe_path): the
+    folder and every folder above it are the user's or root's, and no group can write them."""
+    t = outside_temp / "share" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    (t if bad == "tools" else t.parent).chmod(0o775)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr and "writable" in r.stderr
+
+
+def test_sbx_tools_in_a_temp_folder_is_refused(tmp_path):
+    """The session may write the temp folders: a program planted there would run as a tool."""
+    home, _env = _phiward_env(tmp_path)
+    t = home / "tmp" / "tools"
+    t.mkdir(parents=True)
+    r = _tools_safe(tmp_path, t.resolve())
+    assert r.returncode == 2
+    assert "SBX_TOOLS" in r.stderr
+
+
+def test_a_safe_sbx_tools_passes(tmp_path, outside_temp):
+    t = outside_temp / "own" / "tools"
+    t.mkdir(parents=True)
+    t.parent.chmod(0o755)
+    t.chmod(0o755)
+    r = _tools_safe(tmp_path, t)
+    assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("tools, want", [
+    ("", "/h/bin:/h/.local/bin:/usr/bin:/bin"),
+    ("/opt/FAKE-tools/bin", "/h/bin:/h/.local/bin:/opt/FAKE-tools/bin:/usr/bin:/bin")])
+def test_the_session_path_puts_sbx_tools_before_the_system_folders(tmp_path, tools, want):
+    r = _places(tmp_path, "session_path", "/h", tools, "/usr/bin:/bin")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == want

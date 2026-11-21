@@ -89,8 +89,10 @@ if [ -n "$SBX_SRC" ]; then
 else
   [ -z "$(git -C "$repo" status --porcelain)" ] || echo "note: uncommitted changes are not in the check (it builds HEAD)"
 fi
-# where the home folder is made: never under the real home (its ~/.ssh and ~/.claude are
-# reachable by passwd), and on Linux never in a shared temp folder
+# where the home folder is made: never a home folder itself, never below a folder that holds a
+# name Claude Code or phiward read from a folder above the session's (places.sh), and never in a
+# shared temp folder
+. "$here/places.sh"
 # the home folder by passwd (what ssh and others use) and by $HOME, both resolved
 homes=$("$python" -c 'import os, pwd; print(os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)); print(os.path.realpath(os.path.expanduser("~")))')
 if [ $os = darwin ]; then
@@ -98,10 +100,10 @@ if [ $os = darwin ]; then
   # there, and the judge's folder must not be writable by it
   if [ -n "$SBX_BASE" ]; then sbx_base=$SBX_BASE
   elif [ -d /Users/Shared ]; then sbx_base=/Users/Shared
-  else echo "sandbox-check: set SBX_BASE to a folder outside /tmp, the temp folder and your home folder" >&2; exit 2
+  else echo "sandbox-check: set SBX_BASE to a folder outside /tmp and the temp folder, not your home folder itself" >&2; exit 2
   fi
 else
-  [ -n "$SBX_BASE" ] || { echo "sandbox-check: on Linux, set SBX_BASE to a folder for the check (not under /tmp, /var/tmp or your home folder; on a cluster, scratch)" >&2; exit 2; }
+  [ -n "$SBX_BASE" ] || { echo "sandbox-check: on Linux, set SBX_BASE to a folder for the check (not under /tmp or /var/tmp, not your home folder itself; docs/releasing.md)" >&2; exit 2; }
   sbx_base=$SBX_BASE
 fi
 sbx_base=$(cd "$sbx_base" && pwd -P) || { echo "sandbox-check: SBX_BASE does not exist" >&2; exit 2; }
@@ -112,10 +114,9 @@ tmp_real=$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P) || tmp_real=""
 if [ -n "$tmp_real" ] && [ "$tmp_real" != / ]; then
   case $sbx_base/ in "$tmp_real"/*) echo "sandbox-check: SBX_BASE may not be under the temp folder ($tmp_real)" >&2; exit 2 ;; esac
 fi
-printf '%s\n' "$homes" | while IFS= read -r real_home; do
-  [ -z "$real_home" ] || [ "$real_home" = / ] && continue
-  case $sbx_base/ in "$real_home"/*) echo "sandbox-check: SBX_BASE may not be under your home folder" >&2; exit 2 ;; esac
-done || exit 2
+sbx_base_check "$sbx_base" "$homes" || exit 2
+sbx_tools=""
+if [ -n "$SBX_TOOLS" ]; then sbx_tools=$(sbx_tools_place "$SBX_TOOLS" "$sbx_base") || exit 2; fi
 if [ -n "$REMOTE" ]; then
   case $REMOTE_DIR in /*) ;; *) echo "sandbox-check: REMOTE needs REMOTE_DIR, an absolute path to a new, empty folder there" >&2; exit 2 ;; esac
   case $REMOTE$REMOTE_DIR${REMOTE_HOSTNAME:-}${REMOTE_USER:-} in *[!A-Za-z0-9._/@-]*) echo "sandbox-check: REMOTE, REMOTE_DIR, REMOTE_HOSTNAME and REMOTE_USER may hold only letters, digits and ._/@-" >&2; exit 2 ;; esac
@@ -164,7 +165,8 @@ pyname=$(basename "$("$python" -c 'import sys, os; print(os.path.realpath(sys.ex
 py="$H/py/bin/$pyname"
 syspath=/usr/bin:/bin:/usr/sbin:/sbin
 [ $os = linux ] && syspath=/usr/local/bin:$syspath
-export HOME="$H" PATH="$H/bin:$H/.local/bin:$syspath" \
+# SBX_TOOLS joins the PATH only once the installed phiward has judged it (below)
+export HOME="$H" PATH="$(session_path "$H" "" "$syspath")" \
   UV_TOOL_DIR="$H/.local/share/uv/tools" UV_TOOL_BIN_DIR="$H/.local/bin" UV_CACHE_DIR="$H/.cache/uv" \
   UV_PYTHON_DOWNLOADS=never TMPDIR="$H/tmp"
 unset PHIWARD_CONFIG PHIWARD_SPOOL XDG_CONFIG_HOME XDG_CACHE_HOME CLAUDE_CONFIG_DIR CLAUDE_PROJECT_DIR
@@ -224,16 +226,24 @@ case " $modes " in
 esac
 launch=$("$H/.local/share/uv/tools/phiward/bin/python" -c 'from phiward import config; print(config.launch_settings_path())')
 [ -f "$launch" ] || fail "the --settings file ($launch)" "$H/wire.out"
-# the judge's folder and SBX_BASE must be outside every folder the installed settings let the
-# session write (the project, the temp folders, the spool, allowWrite, additionalDirectories)
+# the judge's folder, SBX_BASE and SBX_TOOLS must be outside every folder the installed settings
+# let the session write (the project, the temp folders, the spool, allowWrite,
+# additionalDirectories)
 "$H/.local/share/uv/tools/phiward/bin/python" -c '
 import sys
 from phiward import claude_settings as c
 roots = c.agent_writable(sys.argv[1], sys.argv[2]) + [sys.argv[2]]
 bad = [p for p in sys.argv[3:] if c.inside(p, roots)]
 sys.exit("sandbox-check: the session could write here: " + " ".join(bad) +
-         "; set SBX_BASE elsewhere (docs/releasing.md)" if bad else 0)
-' "$H/proj" "$H" "$J" "$sbx_base" || exit 2
+         "; set SBX_BASE or SBX_TOOLS elsewhere (docs/releasing.md)" if bad else 0)
+' "$H/proj" "$H" "$J" "$sbx_base" ${sbx_tools:+"$sbx_tools"} || exit 2
+# SBX_TOOLS (a socat of your own, say) joins the session's PATH before the system folders only
+# when it passes the installed phiward's own rule for a PATH folder (places.sh)
+if [ -n "$sbx_tools" ]; then
+  sbx_tools_safe "$H/.local/share/uv/tools/phiward/bin/python" "$sbx_tools" || exit 2
+  PATH=$(session_path "$H" "$sbx_tools" "$syspath")
+  echo "tools: $sbx_tools on the PATH"
+fi
 
 if [ -n "$REMOTE" ]; then
   mkdir -m 700 "$H/.ssh"
