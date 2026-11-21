@@ -315,3 +315,84 @@ def test_t15_control_a_place_with_an_unusual_name_is_written(places, name):
                                         " 'w').write('x'); print('wrote')", str(p)])
     assert code == 0 and "wrote" in text, (code, text)
     assert (p / "ok.txt").exists()
+
+
+# --- a read-only bind's name changed after the binds were listed, before they were recorded -----
+
+def _refused_by_bwrap_or_helper(code, text):
+    """The destination is the same name as the source, so bwrap itself refuses the link (0.10+:
+    "Can't mount on symlink destination"; 0.9: it cannot mount there); or the helper does."""
+    if text.startswith("bwrap: "):
+        assert code == 1, (code, text)
+    else:
+        _refused(code, text, CHANGED)
+
+
+def _swap_after_args(monkeypatch, name, target):
+    """Seam: right after the binds are listed (bwrap_gateway_args), `name` becomes a link to
+    `target`; the records are taken after this, then bwrap runs."""
+    real = confine.bwrap_gateway_args
+
+    def listed(*a, **k):
+        out = real(*a, **k)
+        os.rename(name, f"{name}.old")
+        os.symlink(target, name)
+        return out
+    monkeypatch.setattr(confine, "bwrap_gateway_args", listed)
+
+
+@linux_confined
+def test_t17_a_socket_turned_into_a_link_after_the_listing_stops_the_start(places, sockets,
+                                                                           monkeypatch):
+    tree, scratch, out, hid = places
+    a, b = sockets
+    _swap_after_args(monkeypatch, a, b)
+    code, text = gateway([scratch], _sh(f"test -S {confine.LINUX_SOCKET} && echo seen"), sock=a)
+    assert "seen" not in text, text
+    _refused(code, text, CHANGED)
+
+
+@linux_confined
+def test_t18_an_allow_read_file_turned_into_a_link_after_the_listing_stops_the_start(
+        places, monkeypatch):
+    # pinning: nothing runs, before and after the fix
+    tree, scratch, out, hid = places
+    conf = tree / "home" / "fake-ssh-config"
+    conf.write_text("FAKE-CONFIG-0001\n")
+    _swap_after_args(monkeypatch, str(conf), str(hid / "id_fake"))
+    code, text = gateway([scratch], _sh(f"cat {conf}; echo ran"), deny_read=[hid],
+                         allow_read=[conf])
+    assert "FAKE-KEY-0001" not in text and "ran" not in text, text
+    _refused_by_bwrap_or_helper(code, text)
+
+
+@linux_confined
+def test_t19_a_claude_folder_turned_into_a_link_after_the_listing_stops_the_start(
+        places, monkeypatch):
+    # pinning, as t18
+    tree, scratch, out, hid = places
+    c = out / ".claude"
+    c.mkdir()
+    _swap_after_args(monkeypatch, str(c), str(hid))
+    code, text = gateway([scratch, out], _sh(f"cat {c}/id_fake; echo ran"), deny_read=[hid])
+    assert "FAKE-KEY-0001" not in text and "ran" not in text, text
+    _refused_by_bwrap_or_helper(code, text)
+
+
+@linux_confined
+def test_t20_a_pattern_match_that_appears_while_the_request_starts_is_not_a_traceback(
+        places, monkeypatch):
+    # the places are listed once: a match made after that is not bound, and nothing raises
+    tree, scratch, out, hid = places
+    calls = []
+    real = confine.gateway_places
+
+    def places_(*a, **k):
+        calls.append(1)
+        got = real(*a, **k)
+        if len(calls) > 1:
+            got = got + [str(tree / "pub")]
+        return got
+    monkeypatch.setattr(confine, "gateway_places", places_)
+    code, text = gateway([scratch, out], _sh("echo ran"))
+    assert code == 0 and "ran" in text and len(calls) == 1, (code, text, calls)
