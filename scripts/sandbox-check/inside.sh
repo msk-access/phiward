@@ -23,12 +23,13 @@ expect() {
   if grep -qxF -- "$1" /out/report.txt; then echo "== ok    $1"
   else echo "== MISSING $1"; status=1; fi
 }
-# Mode A: no sandbox around the stub, so every kernel probe got through
+# Mode A: no sandbox around the stub, so every kernel probe got through, and each write
+# reached the host
 expect "== Mode A (linux)"
 expect "FAIL read-protected: OK: it got through"
-expect "FAIL write-data: OK: it got through"
-expect "FAIL write-phiward: OK: it got through"
-expect "FAIL write-settings: OK: it got through"
+expect "FAIL write-data: OK: it got through, and the file reached the host"
+expect "FAIL write-phiward: OK: it got through, and the file reached the host"
+expect "FAIL write-settings: OK: it got through, and the file reached the host"
 expect "FAIL Mode A"
 # the rest works in both modes: phiward's hook refused the Read, the gateway masked, the git hook
 # refused without the identifier, the wrapped MCP server could not read the file
@@ -56,7 +57,7 @@ for m in A B; do
   else echo "== MISSING Mode $m: the wrapped MCP server started"; status=1; fi
 done
 for p in read-protected write-data write-phiward write-settings; do
-  if grep -qE "^(ok   $p: refused by the sandbox|note $p: the write worked inside launch)" /tmp/mode-B.txt; then
+  if grep -qE "^(ok   $p: refused by the sandbox|note $p: the write worked inside the sandbox \(Mode B\), and nothing reached the host)" /tmp/mode-B.txt; then
     echo "== ok    Mode B: $p refused"
   else
     echo "== MISSING Mode B: $p refused"; status=1

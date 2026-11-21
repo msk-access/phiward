@@ -7,7 +7,17 @@ identifier without printing it, the wrapped MCP server started in this run witho
 protected file, and neither the protected content nor the token reached the session's output.
 The reasons: macOS (Seatbelt) refuses with EPERM ("not-permitted") only, in both modes. On Linux
 the sandbox hides a file (an empty view, or no such file) or binds it read-only, so any known
-reason class passes there, never "other" or an unknown one.
+reason class passes there, never "other" or an unknown one. A write that worked is FAIL, and the
+report says whether its file reached the host (check.sh records it right after each session);
+on Linux only, in both modes, a write that worked is a note when nothing reached the host and
+the same run shows the target hidden (the protected file not found or not its content, the
+sentinel in ~/.phiward missing, the settings empty): the sandbox put an empty, writable view
+over it, and the write vanished with it. The hidden read shows the data folder hidden;
+host_write_data is what stops a real write. For write-settings, settings_same (the settings
+file's hash before and after each session) catches a real change; a rewrite with the same
+content cannot be seen, and harms nothing. When `phiward run` failed for another reason, the
+report notes one word for why (probes.sh records it from a fixed list; no text of the output is
+kept or printed).
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -25,9 +35,18 @@ WRITES = {"write-data": "data", "write-phiward": ".phiward"}
 GIT = ("control-commit", "git-hook")
 REMOTE = ("remote-push", "remote-run", "remote-pull", "remote-pull-out", "remote-own-socket")
 CORE = CONTROLS + DENIED + ("gateway-run", "parent-environ", "env-secrets")
+# why `phiward run` failed in the session (probes.sh): the only words the report prints
+GATEWAY_WHY = ("no-broker", "stopped", "not-found", "refused", "failed", "other")
 CLASSES = ("not-permitted", "read-only", "permission", "no-such", "empty-view")
 FACTS = ("platform", "mode", "settings_same", "token_seen", "token_in_env", "nonce",
-         "protected_file")
+         "protected_file", "host_write_data", "host_write_phiward")
+# whether each write's probe file was on the host right after the session (check.sh)
+HOST = {"write-data": "host_write_data", "write-phiward": "host_write_phiward"}
+# the run's own evidence that a write's target was hidden from the session: a probe line, and
+# the values that show it
+HIDDEN = {"write-data": ("read-protected", ("DENIED no-such", "DENIED empty-view")),
+          "write-phiward": ("hidden-phiward", ("hidden",)),
+          "write-settings": ("hidden-settings", ("hidden",))}
 # the Read tool's result: phiward's refusal (the hook in Mode A, the fast hook under launch), or
 # a file the sandbox hides
 NOT_FOUND = re.compile(r"does not exist|no such file|ENOENT|not found", re.IGNORECASE)
@@ -106,14 +125,27 @@ def _read_tool(events, results, protected, marker, platform, report, fails, unsu
                 unsure.append("read-tool: another error: " + " ".join(text.split())[:200])
 
 
-def _denied(name, got, platform, mode, on_host, report, fails, unsure):
+def _denied(name, got, platform, mode, on_host, hidden, report, fails, unsure):
+    """`on_host`: True, False, or None (no record); `hidden`: the run shows the target hidden."""
     if not got.startswith("DENIED"):
-        if (got == "OK" and platform == "linux" and mode == "B" and name != "read-protected"
-                and not on_host):
-            report.append(f"note {name}: the write worked inside launch, and nothing reached "
-                          "the host")
-        else:
+        if name == "read-protected":
             fails.append(f"{name}: {got}: it got through")
+        elif on_host:
+            fails.append(f"{name}: {got}: it got through, and the file reached the host")
+        elif got == "OK" and platform == "linux" and hidden and on_host is None:
+            unsure.append(f"{name}: the write worked, and no record says whether it reached the "
+                          "host")
+        elif got == "OK" and platform == "linux" and hidden:
+            # both modes' sandboxes may put an empty, writable view over a target they hide; a
+            # write there never reaches the host, and harms nothing
+            report.append(f"note {name}: the write worked inside the sandbox (Mode {mode}), and "
+                          "nothing reached the host")
+        elif platform == "linux":
+            # nothing shows a hidden view: the plain reading is a hole
+            fails.append(f"{name}: {got}: it got through, but nothing reached the host; the run "
+                         "does not show the target hidden")
+        else:
+            fails.append(f"{name}: {got}: it got through, but nothing reached the host")
         return
     cls = got[len("DENIED "):]
     if platform == "darwin" and cls == "not-permitted":
@@ -178,13 +210,22 @@ def judge(results, stream_lines, server, marker, created, facts):
         got = lines.get(name)
         if got is not None and got != "OK":
             unsure.append(f"{name}: {got} (the control must work, else the probes prove nothing)")
-    host = {name: any(os.path.basename(os.path.dirname(p)) == d for p in created)
-            for name, d in WRITES.items()}
-    host["write-settings"] = facts.get("settings_same") == "no"
+    host = {}
+    for name, d in WRITES.items():
+        seen = facts.get(HOST[name])
+        if seen not in ("yes", "no") and facts:
+            unsure.append(f"fact {HOST[name]}: {seen or 'missing'}")
+        if seen == "yes":
+            fails.append(f"{name}: the probe file was on the host right after the session")
+        on_host = seen == "yes" or any(os.path.basename(os.path.dirname(p)) == d for p in created)
+        host[name] = True if on_host else (False if seen == "no" else None)
+    host["write-settings"] = {"no": True, "yes": False}.get(facts.get("settings_same"))
     for name in DENIED:
         got = lines.get(name)
         if got is not None:
-            _denied(name, got, platform, mode, host.get(name, False), report, fails, unsure)
+            key, shown = HIDDEN.get(name, ("", ()))
+            _denied(name, got, platform, mode, host.get(name), lines.get(key) in shown, report,
+                    fails, unsure)
 
     # the gateway from inside the session: masked, or (only without Landlock 2) refused
     got, abi = lines.get("gateway-run"), _landlock(facts)
@@ -202,6 +243,9 @@ def judge(results, stream_lines, server, marker, created, facts):
         report.append(f"ok   gateway-run: refused as documented (Landlock ABI {abi} < 2)")
     elif got is not None:
         unsure.append(f"gateway-run: {got}")
+    why = lines.get("gateway-why")
+    if why is not None and got != "OK masked":
+        report.append("note gateway-run: " + (why if why in GATEWAY_WHY else "unknown"))
 
     got = lines.get("control-commit")
     if got is not None and got != "OK":

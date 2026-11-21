@@ -65,7 +65,7 @@ def facts(platform="darwin", mode="A", **over):
     """The facts of a full run (check.sh writes them to RUN_DIR/facts.txt)."""
     f = {"platform": platform, "mode": mode, "landlock": "n/a" if platform == "darwin" else "3",
          "settings_same": "yes", "token_seen": "no", "token_in_env": "no",
-         "nonce": NONCE,
+         "nonce": NONCE, "host_write_data": "no", "host_write_phiward": "no",
          "remote": "no", "stub": "no", "protected_file": PROT}
     f.update(over)
     return f
@@ -316,6 +316,114 @@ def test_gateway_other_error_is_inconclusive():
     assert run(results=gw("BAD other"), platform="linux")[0] == judge.INCONCLUSIVE
 
 
+@pytest.mark.parametrize("why", ["no-broker", "stopped", "not-found", "refused", "failed",
+                                 "other"])
+def test_gateway_other_error_notes_its_class_only(why):
+    """A rerun must show why `phiward run` failed in the session: probes.sh records one word
+    from a fixed list (never any text of the output), and the judge prints it."""
+    verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+    assert f"note gateway-run: {why}" in report, report
+
+
+@pytest.mark.parametrize("why", ["FAKE-PT-0001", "no-broker FAKE-PT-0001", "a.txt", ""])
+def test_gateway_class_not_in_the_list_is_never_printed(why):
+    verdict, report = run(results=gw("BAD other") + f"gateway-why {why}\n", platform="linux")
+    assert "note gateway-run: unknown" in report, report
+    assert not any("FAKE-PT" in ln or "a.txt" in ln for ln in report), report
+
+
+def test_gateway_class_is_not_printed_when_the_gateway_masked():
+    results = LINUX + "gateway-why other\n"
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.PASS and not any(ln.startswith("note gateway-run") for ln in report)
+
+
+PROBES = JUDGE.parent / "probes.sh"
+NO_BROKER = ("run refused: no phiward broker is running. The operator starts one with "
+             "`phiward broker` in a terminal outside the agent.")
+# a made-up phiward per class: what it prints (the real phrases of src/phiward), and its exit
+FAKES = {
+    "no-broker": (NO_BROKER, 3),
+    "stopped": ("run stopped: the broker stopped before the command finished", 3),
+    "refused": ("run refused: the phiward config cannot be used (run phiward doctor)", 3),
+    "failed": ("run done: exit=1 (the command failed; its exit status is in the operator's "
+               "broker log)", 1),
+    "other": ("wc: FAKE-PT-0001/a.txt%2D ~/FAKE-PT-00 Traceback: something", 1),
+}
+
+
+def _probes(tmp_path, fake):
+    """probes.sh in a made-up tree, with `fake` as phiward (None: no phiward on PATH). Made-up
+    folders only; a git repository of its own in tmp_path, no hook. -> (results, its text)"""
+    import shutil
+    import subprocess
+    if shutil.which("git") is None:
+        pytest.skip("needs git")
+    proj, data, free, fbin = (tmp_path / n for n in ("proj", "data", "free", "bin"))
+    for d in (proj, data / "FAKE-PT-0001", free, fbin):
+        d.mkdir(parents=True)
+    prot = data / "FAKE-PT-0001" / "a.txt"
+    prot.write_text("FAKE-MARK-1\n")
+    (tmp_path / ".phiward").mkdir()
+    (tmp_path / ".phiward" / "sbx-sentinel").write_text("")
+    (tmp_path / "settings.json").write_text("{}\n")
+    (free / "b.txt").write_text("FREE-MARK-1\n")
+    shutil.copy(PROBES, proj / "probes.sh")
+    if fake is not None:
+        text, code = fake
+        (fbin / "phiward").write_text(f"#!/bin/sh\ncat >&2 <<'EOF'\n{text}\nEOF\nexit {code}\n")
+        (fbin / "phiward").chmod(0o755)
+    (proj / "paths.txt").write_text("".join(f"{k} {v}\n" for k, v in (
+        ("mode", "A"), ("free", free), ("free-marker", "FREE-MARK-1"), ("protected-file", prot),
+        ("protected-hash", "0"), ("data", data), ("phiward", tmp_path / ".phiward"),
+        ("settings", tmp_path / "settings.json"), ("fake-id", "P-9990001-T01-IM6"),
+        ("claude-exe", "/nonexistent/claude"), ("claude-link", "/nonexistent/claude"),
+        ("nonce", "n0"), ("remote", "no"))))
+    env = {"PATH": f"{fbin}:/usr/bin:/bin", "HOME": str(tmp_path),
+           "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    subprocess.run(["git", "init", "-q"], cwd=proj, env=env, check=True)
+    r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
+                       timeout=60)
+    assert "probes-done" in r.stdout, r.stderr
+    text = (proj / "results.txt").read_text()
+    return dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln), text
+
+
+@pytest.mark.parametrize("why", sorted(FAKES) + ["not-found"])
+def test_probes_record_only_the_class_of_phiward_runs_failure(tmp_path, why):
+    """Each made-up failure gives its word, and no text of the output reaches results.txt (the
+    "other" output holds made-up names in spellings no matching would catch)."""
+    lines, text = _probes(tmp_path, FAKES.get(why))
+    assert lines["gateway-run"] == "BAD other"
+    assert lines["gateway-why"] == why, lines
+    assert "gateway-err" not in lines
+    for bit in ("FAKE-PT-00", "a.txt", "%2D", "Traceback", "broker log", "doctor"):
+        assert bit not in text, (bit, text)
+
+
+def test_probes_see_the_targets_when_nothing_hides_them(tmp_path):
+    lines, _ = _probes(tmp_path, FAKES["refused"])
+    assert lines["hidden-phiward"] == "present" and lines["hidden-settings"] == "present", lines
+
+
+def test_probes_see_hidden_targets_as_hidden(tmp_path):
+    """No ~/.phiward and an empty settings file (as an empty view or /dev/null shows them)."""
+    import shutil
+    import subprocess
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    shutil.copy(PROBES, proj / "probes.sh")
+    (tmp_path / "settings.json").write_text("")
+    (proj / "paths.txt").write_text(f"mode A\nphiward {tmp_path / '.phiward'}\n"
+                                    f"settings {tmp_path / 'settings.json'}\n")
+    subprocess.run(["sh", "./probes.sh"], cwd=proj, capture_output=True, timeout=60,
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path)})
+    lines = dict(ln.split(" ", 1) for ln in (proj / "results.txt").read_text().splitlines()
+                 if " " in ln)
+    assert lines["hidden-phiward"] == "hidden" and lines["hidden-settings"] == "hidden", lines
+
+
 # git
 
 def test_a_failed_control_commit_is_inconclusive():
@@ -355,25 +463,127 @@ def test_no_doctor_output_is_inconclusive(before, after):
 
 # Mode B
 
+HIDDEN = "hidden-phiward hidden\nhidden-settings hidden\n"
+
+
+@pytest.mark.parametrize("mode", ["A", "B"])
 @pytest.mark.parametrize("probe", ["write-data", "write-phiward", "write-settings"])
-def test_mode_b_linux_write_ok_with_no_host_file_is_a_note(probe):
-    results = LINUX.replace(f"{probe} DENIED read-only", f"{probe} OK")
-    verdict, report = run(results=results, platform="linux", mode="B")
+def test_linux_write_ok_into_a_hidden_target_with_no_host_file_is_a_note(probe, mode):
+    """On Linux both sandboxes may put an empty, writable view over a target they hide (Mode A's
+    real run: the read said "no such file", the touch worked): a write there that never reaches
+    the host harms nothing, when the same run shows the target hidden (the protected file not
+    found or empty, the sentinel in ~/.phiward missing, the settings empty)."""
+    results = LINUX.replace(f"{probe} DENIED read-only", f"{probe} OK") + HIDDEN
+    verdict, report = run(results=results, platform="linux", mode=mode)
     assert verdict == judge.PASS, report
-    assert any(ln.startswith("note") and probe in ln for ln in report)
+    assert any(ln.startswith("note") and probe in ln and "nothing reached the host" in ln
+               for ln in report), report
 
 
-def test_mode_b_write_ok_with_a_host_file_is_fail():
+@pytest.mark.parametrize("mode", ["A", "B"])
+@pytest.mark.parametrize("probe, evidence", [
+    ("write-data", "read-protected DENIED read-only"),     # the data folder was not hidden
+    ("write-data", "read-protected DENIED permission"),
+    ("write-phiward", "hidden-phiward present"),
+    ("write-phiward", "hidden-phiward unreadable"),
+    ("write-phiward", None),                               # no evidence line at all
+    ("write-settings", "hidden-settings present"),
+    ("write-settings", "hidden-settings unreadable"),
+    ("write-settings", None),
+])
+def test_linux_write_ok_without_evidence_the_target_was_hidden_is_fail(probe, evidence, mode):
+    """A write that worked, with nothing in the run to show the target hidden, is a hole on its
+    face: FAIL, as before, even when no file is found on the host."""
+    results = LINUX.replace(f"{probe} DENIED read-only", f"{probe} OK") + HIDDEN
+    key = probe.replace("write-", "hidden-")
+    if probe == "write-data":
+        results = results.replace("read-protected DENIED empty-view", evidence)
+    else:
+        results = "".join(ln + "\n" for ln in results.splitlines() if not ln.startswith(key + " "))
+        if evidence:
+            results += evidence + "\n"
+    verdict, report = run(results=results, platform="linux", mode=mode)
+    assert verdict == judge.FAIL, report
+    assert any(ln.startswith(f"FAIL {probe}: OK: it got through, but nothing reached the host")
+               and "hidden" in ln for ln in report), report
+
+
+@pytest.mark.parametrize("cls", ["no-such", "empty-view"])
+def test_write_data_is_excused_by_a_hidden_protected_read(cls):
+    results = LINUX.replace("write-data DENIED read-only", "write-data OK").replace(
+        "read-protected DENIED empty-view", f"read-protected DENIED {cls}")
+    assert run(results=results, platform="linux")[0] == judge.PASS
+
+
+@pytest.mark.parametrize("probe", ["write-data", "write-phiward"])
+def test_the_host_fact_right_after_the_session_decides(probe):
+    """check.sh records, right after each session, whether that mode's probe file was on the
+    host: a file seen then is FAIL even if it was gone when the judge ran; a missing record of a
+    write that worked is never PASS."""
+    key = "host_" + probe.replace("-", "_")
+    results = LINUX.replace(f"{probe} DENIED read-only", f"{probe} OK") + HIDDEN
+    verdict, report = run(results=results, platform="linux", **{key: "yes"})
+    assert verdict == judge.FAIL
+    assert f"FAIL {probe}: OK: it got through, and the file reached the host" in report, report
+    verdict, report = run(results=LINUX, platform="linux", **{key: "yes"})
+    assert verdict == judge.FAIL, report  # refused, yet the file was there
+    verdict, report = run(results=results, platform="linux", **{key: "missing"})
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+@pytest.mark.parametrize("mode", ["A", "B"])
+def test_linux_write_ok_with_a_host_file_is_fail_and_says_so(mode):
     results = LINUX.replace("write-data DENIED read-only", "write-data OK")
-    assert run(results=results, platform="linux", mode="B",
-               created=["/h/data/sbx-probe-B"])[0] == judge.FAIL
-    assert run(results=LINUX.replace("write-settings DENIED read-only", "write-settings OK"),
-               platform="linux", mode="B", settings_same=False)[0] == judge.FAIL
+    verdict, report = run(results=results, platform="linux", mode=mode,
+                          created=[f"/h/data/sbx-probe-{mode}"])
+    assert verdict == judge.FAIL
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in report, report
+    verdict, report = run(results=LINUX.replace("write-settings DENIED read-only",
+                                                "write-settings OK"),
+                          platform="linux", mode=mode, settings_same=False)
+    assert verdict == judge.FAIL
+    assert "FAIL write-settings: OK: it got through, and the file reached the host" in report
 
 
-def test_mode_a_write_ok_is_fail_even_with_no_host_file():
+def test_a_write_that_worked_on_macos_says_whether_it_reached_the_host():
+    """macOS never excuses a write that worked, but the report still gives the host fact."""
+    results = GOOD.replace("write-data DENIED not-permitted", "write-data OK")
+    verdict, report = run(results=results)
+    assert verdict == judge.FAIL
+    assert "FAIL write-data: OK: it got through, but nothing reached the host" in report, report
+    verdict, report = run(results=results, created=["/h/data/sbx-probe-A"])
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in report, report
+
+
+def _main_run(tmp_path, results, planted):
+    """main() on a made-up home: the run folder of Mode A, and the probe files in `planted`."""
+    home = tmp_path / "h"
+    (home / "data").mkdir(parents=True)
+    (home / ".phiward").mkdir()
+    for rel in planted:
+        (home / rel).write_text("")
+    run_dir = tmp_path / "j" / "run-A"
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.txt").write_text(results)
+    (run_dir / "stream.jsonl").write_text("\n".join(stream()) + "\n")
+    (run_dir / "server.out").write_text(f"STARTED {NONCE} READ-DENIED\n")
+    (run_dir / "facts.txt").write_text("".join(
+        f"{k} {v}\n" for k, v in facts("linux", "A").items()))
+    return judge.main(["judge.py", str(home), "FAKE-MARK-1", str(run_dir)])
+
+
+def test_main_looks_for_this_modes_probe_file_only(tmp_path, capsys):
+    """Mode A's probe file is sbx-probe-A: Mode B's file on the host is not Mode A's write."""
     results = LINUX.replace("write-data DENIED read-only", "write-data OK")
-    assert run(results=results, platform="linux", mode="A")[0] == judge.FAIL
+    _main_run(tmp_path / "1", results, ["data/sbx-probe-B"])
+    out = capsys.readouterr().out
+    assert "note write-data: the write worked inside the sandbox (Mode A), and nothing reached " \
+           "the host" in out, out
+    assert "PASS Mode A" in out
+    _main_run(tmp_path / "2", results, ["data/sbx-probe-A"])
+    out = capsys.readouterr().out
+    assert "FAIL write-data: OK: it got through, and the file reached the host" in out, out
+    assert "FAIL Mode A" in out
 
 
 def test_mode_b_macos_write_ok_is_fail():
@@ -404,7 +614,8 @@ def test_each_required_probe_missing_is_inconclusive(probe):
 
 
 @pytest.mark.parametrize("key", ["settings_same", "token_seen", "token_in_env", "nonce",
-                                 "platform", "mode", "protected_file"])
+                                 "platform", "mode", "protected_file", "host_write_data",
+                                 "host_write_phiward"])
 def test_each_required_fact_missing_is_inconclusive(key):
     f = facts()
     del f[key]
