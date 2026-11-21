@@ -1558,17 +1558,19 @@ def _tools_safe(tmp_path, tools):
 
 @pytest.fixture
 def outside_temp():
-    """A made-up folder outside every temp folder phiward knows (the tests' own folders are in
-    /tmp, which the session may write): the per-user temp folder of macOS, which the check's
-    run does not count as one (its TMPDIR is the made-up home's). Skipped where there is none."""
+    """A made-up folder outside every temp folder phiward knows. The tests' own folders are in
+    /tmp, which every account may write (sticky, mode 1777) and which phiward counts as a temp
+    folder, so a PATH folder or a wheel there is refused for that alone. On macOS: the per-user
+    temp folder, which the check's run does not count as one (its TMPDIR is the made-up home's).
+    Where TMPDIR is /tmp (Linux): a new folder in your home folder. Made 0700, removed after."""
     import shutil
     import tempfile
     base = os.environ.get("TMPDIR", "")
     tmp = os.path.realpath("/tmp")
     if not base or os.path.realpath(base) == tmp or os.path.realpath(base).startswith(tmp + "/"):
-        pytest.skip("no folder outside /tmp to make one in; the stub run covers Linux")
+        base = str(Path.home())
     d = Path(tempfile.mkdtemp(prefix="phiward-sbx-tools-", dir=base)).resolve()
-    d.chmod(0o755)
+    d.chmod(0o700)
     yield d
     for p in [d] + list(d.rglob("*")):
         if p.is_dir():
