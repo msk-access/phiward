@@ -120,16 +120,70 @@ def _flat(text: str) -> str:
     return " ".join(re.sub(r"(?m)^\s*#\s?", "", text).split())
 
 
+def _name_problems(text: str) -> list:
+    """What is wrong with the docs pages and anchors that `text` names."""
+    bad = []
+    for m in _DOC_NAME.finditer(text):
+        page, anchor = ROOT / "docs" / m.group(1), m.group(2)
+        if not page.is_file():
+            bad.append(f"docs/{m.group(1)}: no such file")
+        elif anchor and anchor not in _anchors(page):
+            bad.append(f"docs/{m.group(1)}#{anchor}: no such anchor")
+    return bad
+
+
+def _title_problems(text: str) -> list:
+    """What is wrong with the titles that `text` quotes (`docs/X.md, "Title"`)."""
+    bad = []
+    for m in _QUOTED.finditer(_flat(text)):
+        page = _flat((ROOT / "docs" / m.group(1)).read_text(encoding="utf-8")).replace("**", "")
+        if m.group(2).lower() not in page.lower():
+            bad.append(f"docs/{m.group(1)} has no \"{m.group(2)}\"")
+    return bad
+
+
+# made-up references that must be refused, and ones that must pass
+PLANTED_BAD = [
+    "docs/setup.md#No-Such",                                  # an anchor in another case
+    "docs/Setup.md",                                          # a page name in another case
+    "see threat-model.md#no-such-limit",                      # a bare page name, its anchor
+    "(see nope.md)",                                          # a bare name that is no page
+    "https://msk-access.github.io/phiward/stable/setup/#no-such",  # the site's own URL
+    "https://msk-access.github.io/phiward/no-such-page/",
+    'docs/threat-model.md, "known limits"',                   # a title in another case
+    'docs/threat-model.md, "phiward keeps protected data out"',  # body text, not a title
+]
+PLANTED_GOOD = [
+    "docs/setup.md#5-start-the-broker", "threat-model.md#known-limits", "(threat-model.md)",
+    "AGENTS.md", "CLAUDE.local.md", "https://msk-access.github.io/phiward/stable/setup/#claude-code",
+    'docs/threat-model.md, "Known limits"', 'docs/threat-model.md, "A wildcard gets one verdict"',
+    "https://code.claude.com/docs/en/sandboxing",              # another site's docs/ path
+]
+
+
+@pytest.mark.parametrize("text", PLANTED_BAD)
+def test_a_planted_wrong_reference_is_refused(text):
+    assert _name_problems(text) + _title_problems(text), text
+
+
+@pytest.mark.parametrize("text", PLANTED_GOOD)
+def test_a_planted_right_reference_passes(text):
+    assert not _name_problems(text) + _title_problems(text), text
+
+
+def test_an_html_anchor_in_code_is_no_anchor(tmp_path):
+    page = tmp_path / "page.md"
+    page.write_text('# Limits\n\nWrite `<a id="in-code"></a>` before it.\n\n'
+                    '  ```html\n  <a id="in-a-block"></a>\n  ```\n')
+    assert _anchors(page) == {"limits"}
+
+
 def test_every_doc_the_code_names_exists():
     bad, seen = [], 0
     for p in _namer_files():
-        for m in _DOC_NAME.finditer(p.read_text(encoding="utf-8", errors="replace")):
-            seen += 1
-            page, anchor = ROOT / "docs" / m.group(1), m.group(2)
-            if not page.is_file():
-                bad.append(f"{p.relative_to(ROOT)}: docs/{m.group(1)}: no such file")
-            elif anchor and anchor not in _anchors(page):
-                bad.append(f"{p.relative_to(ROOT)}: docs/{m.group(1)}#{anchor}: no such anchor")
+        text = p.read_text(encoding="utf-8", errors="replace")
+        seen += len(_DOC_NAME.findall(text))
+        bad += [f"{p.relative_to(ROOT)}: {b}" for b in _name_problems(text)]
     assert seen > 30, seen  # the scan finds them (30 or more today)
     assert not bad, bad
 
@@ -137,11 +191,9 @@ def test_every_doc_the_code_names_exists():
 def test_every_title_the_code_quotes_is_in_its_page():
     bad, seen = [], 0
     for p in _namer_files():
-        for m in _QUOTED.finditer(_flat(p.read_text(encoding="utf-8", errors="replace"))):
-            seen += 1
-            text = _flat((ROOT / "docs" / m.group(1)).read_text(encoding="utf-8")).replace("**", "")
-            if m.group(2).lower() not in text.lower():
-                bad.append(f"{p.relative_to(ROOT)}: docs/{m.group(1)} has no \"{m.group(2)}\"")
+        text = p.read_text(encoding="utf-8", errors="replace")
+        seen += len(_QUOTED.findall(_flat(text)))
+        bad += [f"{p.relative_to(ROOT)}: {b}" for b in _title_problems(text)]
     assert seen >= 6, seen
     assert not bad, bad
 
