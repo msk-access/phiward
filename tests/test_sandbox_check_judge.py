@@ -856,6 +856,7 @@ def test_probe_records_own_pid_ns_when_only_shells_and_bwrap_are_above_it(tmp_pa
 @pytest.mark.parametrize("proc", [
     {"self": (7, "sh"), 7: (5, "node"), 5: (1, "bash"), 1: (0, "bwrap")},  # another program above
     {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "tini")},                   # PID 1 is not bwrap
+    {"self": (7, "sh"), 7: (1, "bash"), 1: (0, "sh")},                     # a container's sh init
     {"self": (7, "sh"), 7: (0, "bash")},                                    # the walk never reached 1
     {"self": (7, "sh"), 7: (1, "bash")},                                    # PID 1 cannot be read
 ])

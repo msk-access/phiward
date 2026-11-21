@@ -99,6 +99,23 @@ if [ "$r" = "BAD other" ]; then
     esac
   fi
   echo "gateway-why $why" >> results.txt
+  # its exit code, and one error class matched in its output (the OS's words for an errno, the
+  # gateway's own refusals in confine.py, a Python failure); never any text of the output
+  case $out in
+    *[Ll]andlock*) err=landlock ;;
+    *"bwrap:"*) err=bwrap ;;
+    *"phiward gateway: "*) err=gateway ;;
+    *"Permission denied"*|*EACCES*) err=permission-denied ;;
+    *"Read-only file system"*|*EROFS*) err=read-only ;;
+    *"Operation not permitted"*|*EPERM*) err=not-permitted ;;
+    *"No such file"*|*ENOENT*) err=no-such ;;
+    *"Fatal Python error"*) err=python-fatal ;;
+    *Traceback*) err=traceback ;;
+    *) err=none ;;
+  esac
+  case $code in ''|*[!0-9]*) code=unknown ;; esac
+  echo "gateway-exit $code" >> results.txt
+  echo "gateway-error $err" >> results.txt
 fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the
@@ -125,26 +142,38 @@ rm -f "gh-$mode.txt"
 # the claude process's environment holds the token: can the session read it from /proc? Walk
 # the parents up to the claude process (its program, or the claude path in its command line: a
 # Node install, the stand-in), and record only whether its environ can be read. No environment
-# is written anywhere. Readable is a note; not found is INCONCLUSIVE in a real run.
-if [ -r /proc/self/status ]; then
+# is written anywhere. Readable is a note; not found is INCONCLUSIVE in a real run, except
+# own-pid-ns: the walk reached PID 1, PID 1 is bwrap, and only shells are between, so the shell
+# is in a PID namespace of its own and claude, which started it, is outside (Claude Code's Linux
+# sandbox runs bwrap with --unshare-pid). PROC is /proc (paths.txt may name another, for tests).
+proc=$(p proc)
+[ -n "$proc" ] || proc=/proc
+if [ -r "$proc/self/status" ]; then
   r=not-found
   pid=$$
   want=$(p claude-exe)
   link=$(p claude-link)
+  shells=yes
+  top=""
   while :; do
-    pid=$(sed -n 's/^PPid:[[:space:]]*//p' "/proc/$pid/status" 2>/dev/null)
-    [ -n "$pid" ] && [ "$pid" -gt 0 ] || break
-    args=$(tr '\0' ' ' 2>/dev/null < "/proc/$pid/cmdline")
+    ppid=$(sed -n 's/^PPid:[[:space:]]*//p' "$proc/$pid/status" 2>/dev/null)
+    case $ppid in ''|*[!0-9]*) break ;; esac
+    if [ "$ppid" -eq 0 ]; then top=$pid; break; fi
+    pid=$ppid
+    args=$(tr '\0' ' ' 2>/dev/null < "$proc/$pid/cmdline")
     case " $args " in *" $want "*|*" $link "*) found=1 ;; *) found="" ;; esac
-    if [ "$(readlink "/proc/$pid/exe" 2>/dev/null)" = "$want" ] || [ -n "$found" ]; then
-      if [ "$(head -c 1 "/proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
+    if [ "$(readlink "$proc/$pid/exe" 2>/dev/null)" = "$want" ] || [ -n "$found" ]; then
+      if [ "$(head -c 1 "$proc/$pid/environ" 2>/dev/null | wc -c)" -gt 0 ]; then
         r=readable
       else
         r=unreadable
       fi
       break
     fi
+    comm=$(cat "$proc/$pid/comm" 2>/dev/null)
+    case $pid:$comm in 1:bwrap) ;; 1:*) shells=no ;; *:sh|*:bash|*:dash|*:zsh) ;; *) shells=no ;; esac
   done
+  if [ "$r" = not-found ] && [ "$top" = 1 ] && [ "$shells" = yes ]; then r=own-pid-ns; fi
   echo "parent-environ $r" >> results.txt
 else
   echo "parent-environ n/a" >> results.txt

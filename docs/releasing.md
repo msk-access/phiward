@@ -85,7 +85,12 @@ Then push `main`, `develop` and the tag.
    That evidence shows the target hidden; what stops a real write is the record, right after
    each session, of whether the probe file is on the host (for the settings, their hash before
    and after). When `phiward run` fails in the session for another reason, the report notes one
-   word for why (for example `no-broker` or `refused`); no text of its output is kept.
+   word for why (for example `no-broker` or `refused`), its exit code and an error class (for
+   example `permission-denied` or `traceback`); no text of its output is kept. In Mode A, Claude
+   Code's own refusal of the Read ("denied by your permission settings": the deny rules
+   `install` writes) counts as a refusal. When the session's shell is in a PID namespace of its
+   own (bwrap as its PID 1, only shells between), the claude process cannot be seen from it: a
+   note, not INCONCLUSIVE.
    It ends with a verdict per mode and an overall `PASS`, `FAIL` or `INCONCLUSIVE`.
    With `REMOTE=HOST REMOTE_DIR=/abs/new/empty/folder` (on a real machine), it also pushes,
    runs, and pulls through your shared connection, which you start when it asks; it writes only
