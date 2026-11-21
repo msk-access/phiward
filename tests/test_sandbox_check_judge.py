@@ -29,6 +29,19 @@ control-commit OK
 git-hook DENIED refused
 parent-environ n/a
 env-secrets COUNT 0
+loopback-127 REFUSED not-permitted
+loopback-localhost REFUSED not-permitted
+loopback-v6 REFUSED not-permitted
+loopback-mapped REFUSED not-permitted
+net-api STATUS 404
+runs-later-settings DENIED not-permitted
+runs-later-skill DENIED not-permitted
+runs-later-vscode DENIED not-permitted
+runs-later-sub-vscode DENIED not-permitted
+runs-later-rprofile DENIED not-permitted
+runs-later-node-modules OK
+unix-renamed REFUSED not-permitted
+unix-late REFUSED not-permitted
 """
 REFUSAL = ("PreToolUse:Read hook error: This file tool names a protected path. Use `phiward run "
            "-- CMD` (the whole command) or `phiward copy`.")
@@ -66,7 +79,10 @@ def facts(platform="darwin", mode="A", **over):
     f = {"platform": platform, "mode": mode, "landlock": "n/a" if platform == "darwin" else "3",
          "settings_same": "yes", "token_seen": "no", "token_in_env": "no",
          "nonce": NONCE, "host_write_data": "no", "host_write_phiward": "no",
-         "remote": "no", "stub": "no", "protected_file": PROT}
+         "remote": "no", "stub": "no", "protected_file": PROT,
+         "loopback_127": "yes", "loopback_localhost": "yes", "loopback_v6": "yes",
+         "loopback_mapped": "yes", "unix_renamed": "yes", "unix_late": "yes",
+         "runs_later_made": "none"}
     f.update(over)
     return f
 
@@ -723,7 +739,10 @@ def test_mode_b_namespace_error_is_inconclusive_with_that_reason():
 
 CORE = ["control-write", "control-read", "read-protected", "write-data", "write-phiward",
         "write-settings", "gateway-run", "control-commit", "git-hook", "parent-environ",
-        "env-secrets"]
+        "env-secrets", "loopback-127", "loopback-localhost", "loopback-v6", "loopback-mapped",
+        "net-api", "runs-later-settings", "runs-later-skill", "runs-later-vscode",
+        "runs-later-sub-vscode", "runs-later-rprofile", "runs-later-node-modules",
+        "unix-renamed", "unix-late"]
 
 
 @pytest.mark.parametrize("probe", CORE)
@@ -735,7 +754,9 @@ def test_each_required_probe_missing_is_inconclusive(probe):
 
 @pytest.mark.parametrize("key", ["settings_same", "token_seen", "token_in_env", "nonce",
                                  "platform", "mode", "protected_file", "host_write_data",
-                                 "host_write_phiward"])
+                                 "host_write_phiward", "loopback_127", "loopback_localhost",
+                                 "loopback_v6", "loopback_mapped", "unix_renamed", "unix_late",
+                                 "runs_later_made"])
 def test_each_required_fact_missing_is_inconclusive(key):
     f = facts()
     del f[key]
@@ -1771,3 +1792,332 @@ def test_a_wheel_needs_its_sha256(tmp_path, digest):
     r = _wheel_check(tmp_path, w, digest)
     assert r.returncode == 2
     assert "SBX_WHEEL_SHA256" in r.stderr
+
+
+# --- the new guards: loopback, the network under launch, files that run later, unix sockets ---
+
+LOOPBACK = ["loopback-127", "loopback-localhost", "loopback-v6", "loopback-mapped"]
+RUNS_LATER = ["runs-later-settings", "runs-later-skill", "runs-later-vscode",
+              "runs-later-sub-vscode", "runs-later-rprofile"]
+UNIX = ["unix-renamed", "unix-late"]
+
+
+def _set(results, name, value):
+    """`results` with the line of probe `name` replaced by `name value`."""
+    out = [ln for ln in results.splitlines() if not ln.startswith(name + " ")]
+    return "\n".join(out + [f"{name} {value}"]) + "\n"
+
+
+@pytest.mark.parametrize("platform", ["darwin", "linux"])
+def test_mode_b_with_every_new_guard_holding_is_pass(platform):
+    results = GOOD if platform == "darwin" else LINUX
+    verdict, report = run(results=results, platform=platform, mode="B")
+    assert verdict == judge.PASS, report
+    for name in LOOPBACK + RUNS_LATER + UNIX + ["net-api", "runs-later-node-modules"]:
+        assert any(ln.startswith(f"ok   {name}:") for ln in report), (name, report)
+
+
+@pytest.mark.parametrize("name", LOOPBACK)
+@pytest.mark.parametrize("value", ["RESPONSE 222", "RESPONSE 403", "RESPONSE other"])
+def test_mode_b_any_loopback_response_is_fail(name, value):
+    verdict, report = run(results=_set(GOOD, name, value), mode="B")
+    assert verdict == judge.FAIL, report
+    assert any(ln.startswith(f"FAIL {name}:") for ln in report), report
+
+
+@pytest.mark.parametrize("name", LOOPBACK)
+def test_mode_a_loopback_is_only_noted(name):
+    """Mode A makes no loopback promise (docs): the outcome is recorded, never a verdict."""
+    verdict, report = run(results=_set(GOOD, name, "RESPONSE 222"), mode="A")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith(f"note {name}: RESPONSE 222") for ln in report), report
+
+
+@pytest.mark.parametrize("name", ["loopback-127", "loopback-localhost"])
+def test_mode_b_loopback_refused_but_the_server_did_not_answer_outside_is_inconclusive(name):
+    """A refusal proves nothing when the made-up server did not answer from outside either."""
+    verdict, report = run(mode="B", **{name.replace("-", "_"): "no"})
+    assert verdict == judge.INCONCLUSIVE, report
+
+
+@pytest.mark.parametrize("name", ["loopback-v6", "loopback-mapped"])
+def test_mode_b_no_ipv6_loopback_on_the_machine_is_a_note(name):
+    verdict, report = run(mode="B", **{name.replace("-", "_"): "no"})
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith(f"note {name}:") and "not tested" in ln for ln in report), report
+    # but a response is still a response
+    verdict, _ = run(results=_set(GOOD, name, "RESPONSE 222"), mode="B",
+                     **{name.replace("-", "_"): "no"})
+    assert verdict == judge.FAIL
+
+
+@pytest.mark.parametrize("value", ["REFUSED other", "n/a", "REFUSED FAKE-PT-0001", "OK"])
+def test_mode_b_loopback_unknown_value_is_inconclusive(value):
+    verdict, _ = run(results=_set(GOOD, "loopback-127", value), mode="B")
+    assert verdict == judge.INCONCLUSIVE
+
+
+def test_mode_b_bash_with_no_network_is_inconclusive():
+    """A request to api.anthropic.com must get an HTTP status (any): else launch broke Bash's
+    network, a typical-use break, not a hole."""
+    for value in ("FAILED tunnel", "FAILED refused", "n/a"):
+        verdict, report = run(results=_set(LINUX, "net-api", value), mode="B", platform="linux")
+        assert verdict == judge.INCONCLUSIVE, (value, report)
+    verdict, report = run(results=_set(LINUX, "net-api", "STATUS 401"), mode="B",
+                          platform="linux")
+    assert verdict == judge.PASS, report
+    verdict, report = run(results=_set(GOOD, "net-api", "FAILED tunnel"), mode="A")
+    assert verdict == judge.PASS, report
+    assert any(ln.startswith("note net-api: FAILED tunnel") for ln in report), report
+
+
+@pytest.mark.parametrize("name", RUNS_LATER)
+def test_mode_b_a_file_that_runs_later_written_is_fail(name):
+    verdict, report = run(results=_set(GOOD, name, "OK"), mode="B")
+    assert verdict == judge.FAIL, report
+    assert any(ln.startswith(f"FAIL {name}:") for ln in report), report
+
+
+@pytest.mark.parametrize("name", RUNS_LATER)
+@pytest.mark.parametrize("value", ["DENIED no-such", "DENIED empty-view", "DENIED other", "n/a"])
+def test_mode_b_a_file_that_runs_later_refused_for_another_reason_is_inconclusive(name, value):
+    """The check makes each target's folder first: a missing one proves nothing."""
+    verdict, _ = run(results=_set(LINUX, name, value), mode="B", platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+
+
+def test_mode_b_macos_refuses_files_that_run_later_with_eperm_only():
+    verdict, _ = run(results=_set(GOOD, "runs-later-vscode", "DENIED read-only"), mode="B")
+    assert verdict == judge.INCONCLUSIVE
+
+
+def test_mode_b_installed_trees_stay_writable():
+    verdict, report = run(results=_set(GOOD, "runs-later-node-modules", "DENIED not-permitted"),
+                          mode="B")
+    assert verdict == judge.INCONCLUSIVE, report
+    assert any("runs-later-node-modules" in ln and "typical" in ln for ln in report), report
+
+
+def test_mode_b_a_file_that_runs_later_made_on_the_host_is_fail():
+    """check.sh records which targets were on the host right after the session, though the
+    line says refused."""
+    verdict, report = run(mode="B", runs_later_made="vscode skill")
+    assert verdict == judge.FAIL, report
+    verdict, report = run(mode="A", runs_later_made="vscode skill")
+    assert verdict == judge.PASS, report
+
+
+def test_mode_a_files_that_run_later_are_only_noted():
+    results = GOOD
+    for name in RUNS_LATER:
+        results = _set(results, name, "OK")
+    verdict, report = run(results=results, mode="A")
+    assert verdict == judge.PASS, report
+    assert sum(ln.startswith("note runs-later-") for ln in report) >= len(RUNS_LATER), report
+
+
+@pytest.mark.parametrize("name", UNIX)
+def test_mode_b_a_unix_socket_outside_connected_is_fail(name):
+    verdict, report = run(results=_set(LINUX, name, "CONNECTED"), mode="B", platform="linux")
+    assert verdict == judge.FAIL, report
+    assert any(ln.startswith(f"FAIL {name}:") for ln in report), report
+    verdict, report = run(results=_set(LINUX, name, "CONNECTED"), mode="A", platform="linux")
+    assert verdict == judge.PASS, report
+
+
+@pytest.mark.parametrize("name", UNIX)
+def test_mode_b_unix_refused_but_the_socket_was_not_there_is_inconclusive(name):
+    verdict, _ = run(mode="B", **{name.replace("-", "_"): "no"})
+    assert verdict == judge.INCONCLUSIVE
+
+
+# the made-up servers (netsrv.py) and the probes' client (net.py): real sockets on this
+# machine's loopback and in a short temporary folder, made-up data only
+
+NETSRV = JUDGE.parent / "netsrv.py"
+NET = JUDGE.parent / "net.py"
+
+
+def _short_dir():
+    """A new private folder with a short path (a unix socket's path is at most 104 bytes)."""
+    import tempfile
+    return tempfile.mkdtemp(prefix="sbx", dir="/tmp")
+
+
+@pytest.fixture
+def netsrv():
+    """netsrv.py started as check.sh starts it -> (state dict, sockdir, project, state path)."""
+    import shutil
+    import subprocess
+    import sys
+    import time
+    base = _short_dir()
+    sock, proj = os.path.join(base, "s"), os.path.join(base, "p")
+    os.mkdir(sock, 0o700)
+    os.mkdir(proj)
+    state = os.path.join(base, "state")
+    p = subprocess.Popen([sys.executable, "-I", "-S", str(NETSRV), state, sock, proj],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        for _ in range(100):
+            if os.path.exists(state) and "ready\n" in open(state).read():
+                break
+            time.sleep(0.1)
+        yield _state(state), sock, proj, state
+    finally:
+        p.kill()
+        p.wait(timeout=10)
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def _state(path):
+    with open(path) as fh:
+        return dict(ln.split(" ", 1) for ln in fh.read().splitlines() if " " in ln)
+
+
+def _net(*args):
+    import subprocess
+    import sys
+    r = subprocess.run([sys.executable, "-I", "-S", str(NET)] + [str(a) for a in args],
+                       capture_output=True, text=True, timeout=60,
+                       env={"PATH": "/usr/bin:/bin"})
+    return r.stdout.strip(), r
+
+
+def test_netsrv_answers_on_loopback_and_net_prints_only_the_status(netsrv):
+    state, _sock, _proj, _ = netsrv
+    port = state["port"]
+    for host in ("127.0.0.1", "localhost", "::ffff:127.0.0.1"):
+        out, r = _net("tcp", host, port)
+        assert out == "RESPONSE 222", (host, out, r.stderr)
+        assert "FAKE-PT" not in r.stdout + r.stderr
+    if state["v6"] == "yes":
+        assert _net("tcp", "::1", port)[0] == "RESPONSE 222"
+
+
+def test_net_classes_a_closed_port_and_a_missing_socket():
+    import socket
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    assert _net("tcp", "127.0.0.1", port)[0] == "REFUSED refused"
+    assert _net("unix", "/nonexistent/sbx.sock")[0] == "REFUSED no-such"
+    assert _net("https", f"https://127.0.0.1:{port}/")[0] == "FAILED refused"
+
+
+def test_netsrv_renames_its_socket_and_binds_the_late_one_on_the_ready_file(netsrv):
+    import time
+    state, sock, proj, path = netsrv
+    renamed = state["renamed"]
+    assert renamed == os.path.join(sock, "cm.sock")
+    assert sorted(os.listdir(sock)) == ["cm.sock"]  # bound under another name, then renamed
+    out, r = _net("unix", renamed)
+    assert out == "CONNECTED" and "FAKE-PT" not in r.stdout + r.stderr
+    late = os.path.join(sock, "late-B.sock")
+    assert not os.path.exists(late)
+    open(os.path.join(proj, "unix-ready-B"), "w").close()
+    for _ in range(100):
+        if "late-B" in _state(path):
+            break
+        time.sleep(0.1)
+    assert _state(path)["late-B"] == late
+    assert _net("unix", late)[0] == "CONNECTED"
+    assert not os.path.exists(os.path.join(sock, "late-A.sock"))
+
+
+def test_netsrv_stops_when_its_parent_is_gone():
+    """A `kill -9` of check.sh skips the cleanup: the made-up servers end with it."""
+    import shutil
+    import subprocess
+    import sys
+    import time
+    base = _short_dir()
+    try:
+        os.mkdir(os.path.join(base, "s"), 0o700)
+        os.mkdir(os.path.join(base, "p"))
+        # a parent shell that starts it and exits at once
+        r = subprocess.run(["sh", "-c", f'"{sys.executable}" -I -S "{NETSRV}" "{base}/state" '
+                                        f'"{base}/s" "{base}/p" >/dev/null 2>&1 & echo $!'],
+                           capture_output=True, text=True, timeout=30)
+        pid = int(r.stdout.strip())
+        for _ in range(100):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(pid, 9)
+            pytest.fail("netsrv outlived its parent")
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+def test_probes_record_the_new_probes_with_fixed_words_only(tmp_path, netsrv):
+    """probes.sh against the made-up servers, with nothing confining it: every server answers
+    (as in Mode A with the stand-in), and no byte the servers sent reaches results.txt."""
+    import shutil
+    import subprocess
+    import sys
+    state, sock, proj_s, _ = netsrv
+    proj = Path(proj_s)
+    shutil.copy(PROBES, proj / "probes.sh")
+    shutil.copy(NET, proj / "net.py")
+    for d in (".claude", ".vscode", "sub/.vscode", "node_modules/pkg/.vscode"):
+        (proj / d).mkdir(parents=True)
+    (proj / ".Rprofile").write_text("# made up\n")
+    (proj / "paths.txt").write_text("".join(f"{k} {v}\n" for k, v in (
+        ("mode", "B"), ("python", sys.executable), ("loopback-port", state["port"]),
+        ("net-url", "https://127.0.0.1:1/"), ("unix-renamed", state["renamed"]),
+        ("unix-late", os.path.join(sock, "late-B.sock")))))
+    env = {"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_CONFIG_NOSYSTEM": "1"}
+    r = subprocess.run(["sh", "./probes.sh"], cwd=proj, env=env, capture_output=True, text=True,
+                       timeout=120)
+    assert "probes-done" in r.stdout, r.stderr
+    text = (proj / "results.txt").read_text()
+    lines = dict(ln.split(" ", 1) for ln in text.splitlines() if " " in ln)
+    for name in ("loopback-127", "loopback-localhost", "loopback-mapped"):
+        assert lines[name] == "RESPONSE 222", (name, text)
+    if state["v6"] == "yes":
+        assert lines["loopback-v6"] == "RESPONSE 222", text
+    assert lines["net-api"] == "FAILED refused", text
+    for name in RUNS_LATER + ["runs-later-node-modules"]:
+        assert lines[name] == "OK", (name, text)
+    assert (proj / ".claude" / "skills" / "x" / "SKILL.md").exists()
+    assert lines["unix-renamed"] == "CONNECTED", text
+    assert lines["unix-late"] == "CONNECTED", text
+    assert "FAKE-PT" not in text
+
+
+def test_probes_skip_the_network_probes_they_have_no_target_for(tmp_path):
+    """No target in paths.txt: no line (the judge then says INCONCLUSIVE), and no wait."""
+    lines, _ = _probes(tmp_path, FAKES["refused"])
+    for name in LOOPBACK + UNIX + ["net-api"]:
+        assert name not in lines, lines
+
+
+def test_the_cleanup_stops_the_made_up_servers(tmp_path):
+    """cleanup.sh stops netsrv (its pid in `netsrv`), also when the check fails."""
+    import subprocess
+    import time
+    h, j = tmp_path / "h", tmp_path / "j"
+    h.mkdir()
+    j.mkdir()
+    driver = tmp_path / "driver.sh"
+    driver.write_text('. "$1"\nH=$2; J=$3; lpid=""; broker=""; tty_mode=""\n'
+                      'sleep 300 >/dev/null 2>&1 & netsrv=$!\necho "$netsrv"\ntrap cleanup EXIT\nexit 2\n')
+    r = subprocess.run(["sh", str(driver), str(CLEANUP), str(h), str(j)], capture_output=True,
+                       text=True, timeout=60, env=dict(os.environ, SBX_CLEANUP_WAIT="0"))
+    assert r.returncode == 2
+    pid = int(r.stdout.split()[0])
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            break
+        time.sleep(0.1)
+    else:
+        os.kill(pid, 9)
+        pytest.fail("the made-up servers outlived the cleanup")
