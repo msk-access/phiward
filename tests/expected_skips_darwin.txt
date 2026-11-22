@@ -1,6 +1,8 @@
 # Tests that skip on macOS (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
 # Linux-only tests, two that skip by design, and the tabix check (no tabix on GitHub's macOS
-# runners). Remake with PHIWARD_WRITE_SKIPS=FILE.
+# runners). Remake with PHIWARD_WRITE_SKIPS=FILE. The two mount-and-job tests run on GitHub Actions only.
+tests/test_macos_profile_mount_jobs.py::test_the_gateway_profile_refuses_a_mount_and_a_launchd_job
+tests/test_macos_profile_mount_jobs.py::test_the_tool_profile_refuses_a_mount_and_a_launchd_job
 tests/test_pseudonymize_formats.py::test_tabix_indexes_the_bgzf_copy
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[io_uring_setup]
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[ptrace]
