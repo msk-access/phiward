@@ -244,7 +244,9 @@ def test_a_hit_never_cuts_a_number():
 # --- R9: never less masked than before ------------------------------------------------------------
 # The reference is the code as it was before this change: copies of develop's inventory.py,
 # paths.py and sanitize.py (tests/data), loaded as their own modules, with the packs as they were
-# (tests/data/develop-packs). So no change in this tree can weaken the reference. The line as
+# (tests/data/develop-packs). So no change in this tree can weaken the reference. This tree's
+# code reads the same frozen packs, so the comparison is of the code alone: a change to a shipped
+# pack is pinned by its own tests (test_sanitize.py: MSK_CASES, MSK_INTENDED). The line as
 # written goes to both; the text each keeps is compared after the fold. Where the reference
 # withheld a line (its masked line was not a fixed point), its first masked line is the reference.
 
@@ -287,10 +289,12 @@ def _nfkc_only(text):
     return old_sanitize.normalize(text)
 
 
-def _rules(packs, patterns=(), before=False):
+def _rules(packs, patterns=(), before=False, frozen=False):
+    """The rules of `packs`: the shipped packs, or with `frozen` (and always with `before`) the
+    copies in tests/data/develop-packs, so a comparison of the code is not one of the packs."""
     load, parse = ((old_sanitize.load_pack, old_sanitize.parse_rule) if before
                    else (load_pack, parse_rule))
-    loaded = [load(str(BEFORE_PACKS / f"{p}.toml") if before else p) for p in packs]
+    loaded = [load(str(BEFORE_PACKS / f"{p}.toml") if before or frozen else p) for p in packs]
     ids = [r for p in loaded for r in p.identifiers]
     ids += [parse(v, "[sanitize] patterns") for v in patterns]
     ids = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in ids]
@@ -307,7 +311,7 @@ def _old_strings(names):
 def _pair(names, packs, patterns=(), roots=(), remote=()):
     stop = {w.casefold() for w in STOP_WORDS}
     strings = sorted({s for n in names for s in inventory._strings_of(n, stop)})
-    rules, old = _rules(packs, patterns), _rules(packs, patterns, before=True)
+    rules, old = _rules(packs, patterns, frozen=True), _rules(packs, patterns, before=True)
     if roots:
         rules.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
         old.update(protected=old_paths.ProtectedSet(list(roots), []), roots=roots)
