@@ -52,7 +52,7 @@ reads (a number the command chooses could carry data).
 as an ordinary command: Claude Code's sandbox denies the protected paths to it, and where the
 sandbox does not confine the shell, the hook refuses it.
 
-**Write scripts that print aggregates**: counts, summaries, tables. The sanitizer masks paths,
+**Write scripts that print aggregates**: counts, summaries, tables. Suppress small counts first ([Small counts](#small-counts)). The sanitizer masks paths,
 entry names and identifiers. It does not mask other content. In text mode it also masks long
 numbers (`<NUM>`). `--table` reads CSV or TSV output by column: cells under an identifier header
 (`sample_id`, `MRN`, `Patient ID`, ...) show `<IDCOL>`, and numbers in the other columns are
@@ -87,6 +87,26 @@ that needs one is not one for the gateway. This includes settings files that may
 `~/.Renviron` (R libraries set there are not found), pip and npm settings, `~/.m2/settings.xml`,
 `~/.ipython`, `~/.gnupg`. Pass what a script needs as arguments, or set it in the script. On
 Linux the list is taken when the command starts: a credential made later is not hidden.
+
+## Small counts
+
+Masking hides identifiers, not small counts. A count of 1 or 2 in a rare group can point to one
+person, with every name masked. So can two tables whose difference leaves one person
+(differencing).
+
+The rule, from [OpenSAFELY's rules on disclosure control](https://docs.opensafely.org/sdc/):
+
+- Suppress every count of 7 or fewer. Do this first.
+- Round the other counts to the nearest 5.
+- Recompute totals after you suppress, and check that no two tables of the same people let a
+  reader subtract a hidden cell back out.
+
+The [SDC Handbook](https://securedatagroup.org/guides-and-resources/sdc-handbook/) and the
+[ACRO](http://sacro-tools.org/) tool set similar rules, with thresholds you can configure. In the
+end, the rule is yours and your data agreement's: a local rule may be stricter, so use it.
+
+phiward does not enforce this. It does not see what a count means. The agent writes the script,
+and you read it before it runs ([Run a script the agent wrote](#run-a-script-the-agent-wrote)).
 
 ## Run a script the agent wrote
 

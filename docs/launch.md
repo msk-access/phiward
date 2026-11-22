@@ -263,7 +263,7 @@ Read [threat-model.md](threat-model.md) (Mode B, [limits L1–L10](threat-model.
   the terminal after a session.
 - **macOS:** the Keychain and the per-user temp folder are shared with your own tools.
 - **Masking covers names and identifiers, not content.** Through the gateway, print counts and
-  summaries, not records (rule 3 of the agent rules that `phiward init` adds to `AGENTS.md`). Dates can be masked with the `dates` pack.
+  summaries, not records, and hide small counts ([Small counts](daily-use.md#small-counts)) (rule 3 of the agent rules that `phiward init` adds to `AGENTS.md`). Dates can be masked with the `dates` pack.
 - `tmux`, `script` and other tools that open a new terminal do not work yet.
 - Other tools than Claude Code run under `launch -- PROGRAM` with the boundary, but without a
   per-session config folder (no adapter yet).

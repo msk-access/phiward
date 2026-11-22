@@ -13,7 +13,8 @@ Rules:
    broker is running, stop and ask the operator to start the broker. The broker
    runs the program from the operator's PATH with its own environment, not yours.
 3. Write analysis scripts that print aggregates: counts, summaries, tables. Do not print raw
-   records, sample names or identifiers. The sanitizer masks identifiers. It does not mask
+   records, sample names or identifiers. Suppress counts of 7 or fewer, round the rest to 5,
+   and do not let two tables differ by one small cell. The sanitizer masks identifiers. It does not mask
    other content. Draft a script in the project, then ask the operator to read it and move it
    into their scripts folder; after that, run it by its full path:
    `phiward run -- /full/path/NAME.py ARGS`.

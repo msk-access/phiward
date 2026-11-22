@@ -23,7 +23,7 @@ This page says what is protected, against whom, and where the limits are.
   already runs code on the machine with the user's rights. Some routes such an attacker could
   use are stated as limits below.
 - **Masking hides names and identifiers, not other content.** Gateway commands should print counts
-  and summaries, not records.
+  and summaries, not records, and hide small counts ([Small counts](daily-use.md#small-counts)).
 - **What stops what.** The kernel is the strongest guard:
 
 | What the agent tries | Mode A stops it with | Mode B stops it with | The main limit |
@@ -437,7 +437,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 ## What is not protected
 
 - Data that a gateway command encodes on purpose, or content that is not an identifier, printed
-  through `phiward run`. Write scripts that print aggregates.
+  through `phiward run`. Write scripts that print aggregates, with small counts hidden ([Small counts](daily-use.md#small-counts)).
 - Data a granted write place, the network or a copy remote carries away (see above).
 - On a cluster, what a push puts there is protected only by phiward's masking of remote output
   (`[remote] roots`) and the cluster's own permissions; a link on the cluster can lead a push

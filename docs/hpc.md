@@ -334,7 +334,7 @@ been run on the cluster yet. To run it there, as an interactive job:
 - Until you trust the lists you wrote, read every HPC request the agent proposes before it runs
   (Claude Code asks you before it runs a command, unless you allowed it). This is your habit, not
   a phiward feature: phiward itself never asks at run time; your config decides.
-- Keep `[remote] commands` short. Prefer commands that print counts and states.
+- Keep `[remote] commands` short. Prefer commands that print counts and states, with small counts hidden ([Small counts](daily-use.md#small-counts)).
 - The HPC side's own rules (partitions, job names, where clinical data may be read) still apply.
 - The release check's remote probes (`REMOTE`, `REMOTE_DIR`) use an ssh config of their own that
   can only join the shared connection you start for them (no key, no ticket). Give a new, empty
