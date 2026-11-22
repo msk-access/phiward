@@ -125,7 +125,8 @@ class Adapter:
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
         """The tool's settings in its own folder: its sandbox off on macOS (sandboxes do not
-        nest; this profile replaces it) and the fast hook as a first layer."""
+        nest; this profile replaces it), the fast hook as a first layer, and the prompt scan
+        (the session can remove it: a stated limit)."""
         if self.name != "claude":
             return
         data = _read_json_at(folder_fd, "settings.json")
@@ -141,16 +142,24 @@ class Adapter:
         hooks = data.setdefault("hooks", {})
         if not isinstance(hooks, dict):
             hooks = data["hooks"] = {}
-        pre = hooks.get("PreToolUse") if isinstance(hooks.get("PreToolUse"), list) else []
-        # our entry replaced each time (phiward may have moved; a decoy left by a session
-        # is dropped); other entries kept
-        pre = [g for g in pre if not (isinstance(g, dict) and any(
-            isinstance(h, dict) and "hook claude" in str(h.get("command", ""))
-            and any(n in str(h.get("command", "")) for n in config.PROGRAMS)
-            for h in g.get("hooks", []) if isinstance(g.get("hooks"), list)))]
+        def others(event: str, what: str) -> list:
+            # our entry replaced each time (phiward may have moved; a decoy left by a session
+            # is dropped); other entries kept
+            groups = hooks.get(event) if isinstance(hooks.get(event), list) else []
+            return [g for g in groups if not (isinstance(g, dict) and any(
+                isinstance(h, dict) and what in str(h.get("command", ""))
+                and any(n in str(h.get("command", "")) for n in config.PROGRAMS)
+                for h in g.get("hooks", []) if isinstance(g.get("hooks"), list)))]
+
+        pre = others("PreToolUse", "hook claude")
         pre.append({"matcher": "Read|Grep|Glob|Bash|Edit|Write|NotebookEdit|MultiEdit",
                     "hooks": [{"type": "command", "command": cmd, "timeout": 5}]})
         hooks["PreToolUse"] = pre
+        prompt = others("UserPromptSubmit", "prompt-scan claude")
+        scan = f"{shlex.quote(sys.executable)} -I -S -c {shlex.quote(code)} prompt-scan claude"
+        prompt.append({"hooks": [{"type": "command", "command": scan, "timeout": 10,
+                                  "onFailure": "block"}]})
+        hooks["UserPromptSubmit"] = prompt
         if json.dumps(data, sort_keys=True) != before:
             _write_at(folder_fd, "settings.json", json.dumps(data, indent=2) + "\n")
 
