@@ -151,8 +151,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   session's `PATH` before the start; when there is none, launch says so and exits 127. The tool
   now starts with SIGPIPE at its default. Launch no longer checks at start whether it runs
   inside another sandbox: there `sandbox-exec` cannot apply the profile, and nothing runs. When
-  the tool exits with an error, launch adds a line that points to `phiward doctor`, which names
-  a start inside another sandbox or a profile that does not compile.
+  the tool exits with an error within a few seconds of its start, launch adds a line that
+  points to `phiward doctor`, which names a start inside another sandbox or a profile that
+  does not compile.
 - macOS: a launch inside a session decides from the session's own run folder, which launch
   names in `PHIWARD_RUN`, and from the account's home folder, never `HOME`. With a `HOME` that
   is not the account's, a launch inside a session builds its own profile, and nothing runs.

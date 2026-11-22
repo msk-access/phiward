@@ -1660,6 +1660,9 @@ def already_confined(env: Dict[str, str]) -> bool:
     return _can_make_a_file_in(run)
 
 
+START_WINDOW = 5.0  # seconds: a non-zero exit sooner may be sandbox-exec's own refusal
+
+
 class ToolNotFound(LaunchError):
     pass
 
@@ -1671,10 +1674,10 @@ def _find_tool(word: str, env: Dict[str, str]) -> str:
         found = os.path.abspath(word)
         if os.path.isfile(found) and os.access(found, os.X_OK):
             return found
-    else:
-        found = shutil.which(word, path=env.get("PATH") or os.defpath) or ""
-        if found:
-            return os.path.abspath(found)
+        raise ToolNotFound(f"the tool could not start (no such program: {word})")
+    found = shutil.which(word, path=env.get("PATH") or os.defpath) or ""
+    if found:
+        return os.path.abspath(found)
     raise ToolNotFound(f"the tool could not start ({word}: no such program on the session's "
                        "PATH)")
 
@@ -1988,6 +1991,7 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
         except (carryover.CarryoverError, OSError):
             pass
         return 126
+    started = time.monotonic()
     proc = subprocess.Popen(cmd, env=child_env, pass_fds=fds)
     run.ran = True
     for fd in fds:
@@ -1995,6 +1999,7 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
     old = signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl-C goes to the tool, not to us
     try:
         code = proc.wait()
+        quick = time.monotonic() - started < START_WINDOW
     finally:
         signal.signal(signal.SIGINT, old)
         # no process is ever ended: on Linux the PID namespace ends them with the tool; on
@@ -2015,7 +2020,8 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
                      if git_before.get(k) != git_after.get(k))
     for line in _git_lines(run.git) + WALK_NOTES:
         run.say(line)
-    if code and cmd[:2] == [confine.SANDBOX_EXEC, "-f"]:
+    # sandbox-exec fails at the start; a session that ends with an error later gets no hint
+    if code and quick and cmd[:2] == [confine.SANDBOX_EXEC, "-f"]:
         run.say(f"phiward launch: the tool exited with {code}; if sandbox-exec printed an error "
                 "above, run `phiward doctor`")
     return code

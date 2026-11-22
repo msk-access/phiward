@@ -61,9 +61,9 @@ phiward launch --tool claude
   between. The profile is a new file in `~/.phiward/profiles`, as for the gateway, removed when
   the tool ends. A program name is found on the session's `PATH` first; when there is none,
   `launch` says so and exits 127. Inside another sandbox, `sandbox-exec` cannot apply the
-  profile, and nothing runs. When the tool exits with an error, `launch` adds a line: if
-  `sandbox-exec` printed an error above it, `phiward doctor` names the cause (inside another
-  sandbox, or a profile that does not compile).
+  profile, and nothing runs. When the tool exits with an error within a few seconds of its
+  start, `launch` adds a line: if `sandbox-exec` printed an error above it, `phiward doctor`
+  names the cause (inside another sandbox, or a profile that does not compile).
 
 ## What a session can and cannot do
 
