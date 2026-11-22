@@ -1,0 +1,325 @@
+"""Every place in phiward's source that starts or writes a command with inline code.
+
+The rule (macOS): no interpreter gets its program in argv (`python -c`, `sh -c`, `awk '...'`,
+`perl -e`, ...), `sandbox-exec` only with `-f FILE`, never `-p`, and no `ctypes`. A static scan of
+`src/phiward` and `plugin/` lists each site by file, scope and kind. The set must equal ALLOWED.
+ALLOWED holds the sites that run on Linux only, the listed exceptions, and the macOS sites not yet
+converted, each with the change that removes it. Each later change shrinks the list; a new site
+anywhere fails the test. Static: it starts no process.
+"""
+
+import ast
+import json
+import re
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+SRC = ROOT / "src" / "phiward"
+PLUGIN = ROOT / "plugin"
+
+LINUX = "Linux only"
+EXCEPTION = "a listed exception"
+LATER_LAUNCH = "macOS: until launch runs without its helper"
+LATER_HOOKS = "macOS: until the hooks run from files"
+LATER_COPY = "macOS: until copy runs from files"
+KEPT = "kept: libproc's proc_pidinfo"
+
+# (file, scope, kind): why it is allowed. Scope is the function (Class.method) or the
+# module-level name that holds the site.
+ALLOWED = {
+    # Linux only: bubblewrap's Landlock helper and launch's helper (with its seccomp probe),
+    # Landlock and procfs calls
+    ("src/phiward/confine.py", "gateway_command", "python -c"): LINUX,
+    ("src/phiward/wholetool.py", "build", "python -c"): LINUX,
+    ("src/phiward/wholetool.py", "landlock_abi", "ctypes"): LINUX,
+    ("src/phiward/wholetool.py", "_fingerprint_errno", "ctypes"): LINUX,
+    ("src/phiward/pathid.py", "_on_procfs", "ctypes"): LINUX,
+    # exceptions: the remote shell's command after ssh's `--`; the project hook, committed to
+    # repositories that also run on Linux; a recogniser of the user wiring's older form
+    ("src/phiward/remote.py", "receive_script", "sh -c"): EXCEPTION,
+    ("src/phiward/install.py", "PROJECT_HOOK", "sh -c"): EXCEPTION,
+    ("src/phiward/install.py", "PROJECT_NOTE", "sh -c"): EXCEPTION,
+    ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
+    ("src/phiward/install.py", "_entry_text", "sh -c"): EXCEPTION,
+    ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
+    # macOS, not yet converted
+    ("src/phiward/wholetool.py", "build", "sandbox-exec -p"): LATER_LAUNCH,
+    ("src/phiward/wholetool.py", "_sandbox_check_self", "ctypes"): LATER_LAUNCH,
+    ("src/phiward/wholetool.py", "Adapter.turn_own_sandbox_off", "python -c"): LATER_HOOKS,
+    ("src/phiward/install.py", "isolated_command", "sh -c"): LATER_HOOKS,
+    ("src/phiward/doctor.py", "clean_start_problem", "sh -c"): LATER_HOOKS,
+    ("src/phiward/install.py", "_isolated_import_problem", "python -c"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.PreToolUse", "sh -c"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.PreToolUse", "awk program"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.SessionStart", "sh -c"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.SessionStart", "awk program"): LATER_HOOKS,
+    ("plugin/.mcp.json", "mcpServers.phiward", "sh -c"): LATER_HOOKS,
+    ("src/phiward/copying.py", "execute", "python -c"): LATER_COPY,
+    ("src/phiward/copying.py", "execute", "sh -c"): LATER_COPY,
+    ("src/phiward/copying.py", "_pull", "python -c"): LATER_COPY,
+}
+
+# the inline-code flag of each kind of interpreter
+_SHELLS = {"sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish"}
+_E_PROGRAMS = {"perl", "ruby", "node", "osascript", "awk"}
+
+
+def _kind(word: str):
+    """The kind of interpreter a program word names, or None."""
+    base = word.rsplit("/", 1)[-1]
+    if base == "sandbox-exec":
+        return "sandbox-exec"
+    if base in _SHELLS:
+        return "sh"
+    if re.fullmatch(r"python[0-9.]*", base):
+        return "python"
+    if base in _E_PROGRAMS:
+        return base
+    return None
+
+
+_FLAG = {"sandbox-exec": ("-p", "sandbox-exec -p"), "sh": ("-c", "sh -c"),
+         "python": ("-c", "python -c"), "perl": ("-e", "perl -e"), "ruby": ("-e", "ruby -e"),
+         "node": ("-e", "node -e"), "osascript": ("-e", "osascript -e"),
+         "awk": ("-e", "awk -e")}
+
+
+def _word(node):
+    """A list element as a program word: a string, `sys.executable`, `SANDBOX_EXEC`."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.Attribute) and node.attr == "executable":
+        return "python"
+    if isinstance(node, (ast.Name, ast.Attribute)) and \
+            (getattr(node, "id", "") or getattr(node, "attr", "")) == "SANDBOX_EXEC":
+        return "/usr/bin/sandbox-exec"
+    return None
+
+
+def _argv_kinds(words):
+    """The kinds of inline code in one argv (a list of words, None for an unknown word)."""
+    out = set()
+    interp = None
+    for w in words:
+        if w is None:
+            continue
+        k = _kind(w)
+        if k:
+            interp = k
+            continue
+        if interp and w == _FLAG[interp][0]:
+            out.add(_FLAG[interp][1])
+    return out
+
+
+_TEXT_INLINE = re.compile(
+    r"^\s*(?:\S*/)?(sh|bash|zsh|dash|python[0-9.]*)\s+(?:-[A-Za-z]+\s+)*-c\b")
+_TEXT_E = re.compile(r"^\s*(?:\S*/)?(perl|ruby|node|osascript)\s+(?:-\S+\s+)*-e\b")
+_TEXT_SANDBOX = re.compile(r"sandbox-exec\s+-p\b")
+_TEXT_AWK = re.compile(r"\bawk\s+[\"']")
+
+
+def _text_kinds(text: str):
+    out = set()
+    m = _TEXT_INLINE.search(text)
+    if m:
+        out.add("python -c" if m.group(1).startswith("python") else "sh -c")
+    m = _TEXT_E.search(text)
+    if m:
+        out.add(f"{m.group(1)} -e")
+    if _TEXT_SANDBOX.search(text):
+        out.add("sandbox-exec -p")
+    if _TEXT_AWK.search(text):
+        out.add("awk program")
+    return out
+
+
+def _joined(node) -> str:
+    """The text of a string or an f-string; a part that is not text is `X`,
+    `sys.executable` (also quoted) is `python`."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        return "".join(_joined(v) for v in node.values)
+    if isinstance(node, ast.FormattedValue):
+        return _joined(node.value)
+    if isinstance(node, ast.Call) and node.args and \
+            getattr(node.func, "attr", "") == "quote":
+        return _joined(node.args[0])
+    if isinstance(node, ast.Attribute) and node.attr == "executable":
+        return "python"
+    return "X"
+
+
+class _Scan(ast.NodeVisitor):
+    def __init__(self, rel: str):
+        self.rel = rel
+        self.scope = ["<module>"]
+        self.found = set()
+        self.skip = set()  # docstrings, and lists that are compared (recognisers)
+
+    def _add(self, kind: str) -> None:
+        self.found.add((self.rel, ".".join(self.scope[1:]) or "<module>", kind))
+
+    def _body(self, node, name):
+        body = getattr(node, "body", [])
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            self.skip.add(id(body[0].value))
+        self.scope.append(name)
+        self.generic_visit(node)
+        self.scope.pop()
+
+    def visit_Module(self, node):
+        body = node.body
+        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+            self.skip.add(id(body[0].value))
+        self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        self._body(node, node.name)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
+
+    def visit_ClassDef(self, node):
+        self._body(node, node.name)
+
+    def visit_Assign(self, node):
+        if len(self.scope) == 1 and len(node.targets) == 1 and \
+                isinstance(node.targets[0], ast.Name):
+            self.scope.append(node.targets[0].id)
+            self.generic_visit(node)
+            self.scope.pop()
+        else:
+            self.generic_visit(node)
+
+    def visit_Compare(self, node):
+        for n in [node.left] + list(node.comparators):
+            if isinstance(n, (ast.List, ast.Tuple)):
+                self.skip.add(id(n))
+        self.generic_visit(node)
+
+    def _list(self, node):
+        if id(node) not in self.skip:
+            for k in _argv_kinds([_word(e) for e in node.elts]):
+                self._add(k)
+        self.generic_visit(node)
+
+    visit_List = _list
+    visit_Tuple = _list
+
+    def _text(self, node):
+        if id(node) not in self.skip:
+            for k in _text_kinds(_joined(node)):
+                self._add(k)
+
+    def visit_Constant(self, node):
+        if isinstance(node.value, str):
+            self._text(node)
+
+    def visit_JoinedStr(self, node):
+        self._text(node)  # its parts are not scanned on their own
+
+    def visit_Import(self, node):
+        if any(a.name.split(".")[0] == "ctypes" for a in node.names):
+            self._add("ctypes")
+
+    def visit_ImportFrom(self, node):
+        if (node.module or "").split(".")[0] == "ctypes":
+            self._add("ctypes")
+
+
+def _scan_python(path: Path):
+    s = _Scan(str(path.relative_to(ROOT)))
+    s.visit(ast.parse(path.read_text(), str(path)))
+    return s.found
+
+
+def _scan_json(path: Path):
+    """Each `command` (with its `args`) in a JSON file; the scope is the first two keys."""
+    rel = str(path.relative_to(ROOT))
+    found = set()
+
+    def walk(v, keys):
+        if isinstance(v, dict):
+            cmd = v.get("command")
+            if isinstance(cmd, str):
+                args = v.get("args")
+                words = [cmd] + ([a for a in args if isinstance(a, str)]
+                                 if isinstance(args, list) else [])
+                kinds = _argv_kinds(words)
+                for w in words:
+                    kinds |= _text_kinds(w)
+                for k in kinds:
+                    found.add((rel, ".".join(keys[:2]), k))
+            for key, sub in v.items():
+                walk(sub, keys + [key])
+        elif isinstance(v, list):
+            for sub in v:
+                walk(sub, keys)
+    walk(json.loads(path.read_text()), [])
+    return found
+
+
+def scan():
+    found = set()
+    for p in sorted(SRC.rglob("*.py")):
+        found |= _scan_python(p)
+    for p in sorted(PLUGIN.rglob("*.json")):
+        found |= _scan_json(p)
+    return found
+
+
+def test_the_inline_code_sites_are_exactly_the_listed_ones():
+    found = scan()
+    new = sorted(found - set(ALLOWED))
+    gone = sorted(set(ALLOWED) - found)
+    assert not new, "inline code that is not listed (convert it, or list it with a reason):\n" \
+        + "\n".join(map(str, new))
+    assert not gone, "listed sites that are gone (remove them from ALLOWED):\n" \
+        + "\n".join(map(str, gone))
+
+
+def test_the_scan_finds_each_kind_of_site():
+    """The scan itself: each shape it must see, in made-up code."""
+    code = '''
+import ctypes
+def a():
+    return ["/usr/bin/sandbox-exec", "-p", prof, "true"]
+def b():
+    return [sys.executable, "-I", "-S", "-c", CODE]
+def c():
+    return f"{shlex.quote(sys.executable)} -I -S -c {shlex.quote(x)} hook"
+def d():
+    return "/bin/sh -c " + shlex.quote(inner)
+def e():
+    return 'V=$(/usr/bin/awk "BEGIN{print}")'
+def f():
+    return ["/usr/bin/perl", "-e", "print 1"]
+def g():
+    return [confine.SANDBOX_EXEC, "-f", path, "true"]
+def h():
+    """`sh -c "..."` in a docstring is text."""
+    return words[:2] != ["/bin/sh", "-c"]
+'''
+    tree = ast.parse(code)
+    s = _Scan("x.py")
+    s.visit(tree)
+    assert s.found == {("x.py", "<module>", "ctypes"), ("x.py", "a", "sandbox-exec -p"),
+                       ("x.py", "b", "python -c"), ("x.py", "c", "python -c"),
+                       ("x.py", "d", "sh -c"), ("x.py", "e", "awk program"),
+                       ("x.py", "f", "perl -e")}, s.found
+
+
+# --- launchctl by its full path ----------------------------------------------------------------
+
+def test_the_login_service_runs_launchctl_by_its_full_path(monkeypatch):
+    from phiward import service
+    seen = []
+
+    def runner(cmd, **k):
+        seen.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 1 if cmd[1:2] == ["print"] else 0, "", "")
+    monkeypatch.setattr(service.sys, "platform", "darwin")
+    service.load("/made/up/org.phiward.broker.plist", runner=runner)
+    assert seen and all(c[0] == "/bin/launchctl" for c in seen), seen
