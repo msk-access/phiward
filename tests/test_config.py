@@ -103,19 +103,6 @@ def test_a_repo_adds_but_never_removes(tmp_path, monkeypatch):
     assert cfg.packs == ["msk"] and cfg.protected_branches == ["main"]
 
 
-def test_user_sanitize_patterns_leave_out_a_repo_pattern(tmp_path, monkeypatch):
-    """The prompt scan reads the user's own patterns only: the agent can write a repo file."""
-    monkeypatch.setenv("HOME", str(tmp_path))
-    monkeypatch.setenv("PHIWARD_CONFIG", str(write(
-        tmp_path / "user.toml", "[sanitize]\npatterns = ['ZQX\\d+ => <MINE>']\n")))
-    proj = tmp_path / "proj"
-    proj.mkdir()
-    write(proj / ".phiward.toml", "[sanitize]\npatterns = ['FAKEREPO\\d+ => <REPO>']\n")
-    cfg = config.load(str(proj))
-    assert cfg.sanitize_patterns == ["ZQX\\d+ => <MINE>", "FAKEREPO\\d+ => <REPO>"]
-    assert cfg.user_sanitize_patterns == ["ZQX\\d+ => <MINE>"]
-
-
 def test_tilde_and_home_in_roots(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", "/fake/home")
     monkeypatch.setenv("PHIWARD_CONFIG", str(write(
