@@ -521,8 +521,9 @@ def _profile_name() -> str:
     return secrets.token_hex(16) + ".sb"
 
 
-def profiles_dir() -> str:
-    return os.path.join(os.path.realpath(pathid.home()), ".phiward", "profiles")
+def profiles_dir(env: Optional[Dict[str, str]] = None) -> str:
+    """Where the gateway writes its profiles (and `launch`'s tool profile denies reads)."""
+    return os.path.join(os.path.realpath(pathid.home(env)), ".phiward", "profiles")
 
 
 def _open_folder(parent: int, name: str, shown: str, make: bool) -> int:

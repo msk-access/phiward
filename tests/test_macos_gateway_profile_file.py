@@ -201,7 +201,7 @@ def test_a_file_whose_text_changed_is_refused(tree, seatbelt, monkeypatch):
     def rewrite(fd):
         real(fd)
         os.lseek(fd, 0, os.SEEK_SET)
-        os.write(fd, b"(version 1)(allow default)")
+        os.write(fd, b"(version 1)(allow network*)")  # not the profile's own first bytes
     monkeypatch.setattr(os, "fsync", rewrite)
     with pytest.raises(confine.ConfineError, match="changed after it was written"):
         _argv()

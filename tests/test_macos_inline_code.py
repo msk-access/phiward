@@ -31,6 +31,9 @@ ALLOWED = {
     # Linux only: bubblewrap's Landlock helper and launch's helper (with its seccomp probe),
     # Landlock and procfs calls
     ("src/phiward/confine.py", "gateway_command", "python -c"): LINUX,
+    # `wholetool.build` holds both: the Linux helper below and the macOS `sandbox-exec -p`
+    # (and, on macOS too, the same helper's `-c`) further down; the key is per function, so
+    # its `python -c` stays listed as Linux after launch drops the helper on macOS
     ("src/phiward/wholetool.py", "build", "python -c"): LINUX,
     ("src/phiward/wholetool.py", "landlock_abi", "ctypes"): LINUX,
     ("src/phiward/wholetool.py", "_fingerprint_errno", "ctypes"): LINUX,
