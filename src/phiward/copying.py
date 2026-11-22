@@ -497,6 +497,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
         m = _REMOTE.fullmatch(spec)
         assert m is not None
         scratch = tempfile.mkdtemp(prefix="pull-", dir=cfg.cache_dir)
+        argv: List[str] = []
         try:
             argv, fds = confine.gateway_command(
                 rt.ssh + [host, "--", rmt.send_script(m.group(2))], [os.path.realpath(scratch)],
@@ -557,6 +558,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             run._log(f"pull: exit {raw}")
             code = 0 if raw == 0 else 1  # the agent sees success or failure only
         finally:
+            confine.release_profile(argv)
             safeio.remove_tree(scratch)
     return code
 
