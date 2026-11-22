@@ -1,22 +1,25 @@
 """macOS: every process phiward starts, recorded, meets the rule; the security page lists them.
 
 An audit hook in this test process only (`sys.addaudithook`; phiward's own code has none)
-records each argv that phiward starts (`subprocess.Popen`, `os.exec*`, `os.posix_spawn`,
-`os.spawn*`) while the test drives the real paths: install, a gateway request, a pull and a
-local copy, the Mode A hook and session note, the plugin's hook, launch up to the tool's start
-(and a launch inside a session, whose exec of a wrapped server is stopped here), doctor's and
-setup's checks. The commands phiward writes for Claude Code, launchd or git to start are read
-from what it writes, and the hook scripts' own starts (awk, the exec) from a trace of the
-script (`sh -x`).
+records each argv that phiward starts (`subprocess.Popen`, `os.exec*`, `os.posix_spawn`) while
+the test drives the real paths: install, a gateway request, a local copy, a pull (through the
+shared connection and by the older route), a push, the Mode A hook and session note, the
+launched hook, the plugin's hook, launch up to the tool's start (and a launch inside a session,
+whose exec of a wrapped server is stopped here), doctor's and setup's checks. An
+`os.system`, `os.fork`, `os.forkpty` or `os.spawn*` fails the test. The commands phiward
+writes for Claude Code, launchd or git to start are read from what it writes, and the hook
+scripts' own starts (awk, the exec) from a trace of the script (`sh -x`).
 
 The rule, on phiward's words (the user's words are cut off first): no `-c`, `-e` or `-p` code
 argument and no `sh -c` of phiward's own; `sandbox-exec` only as `/usr/bin/sandbox-exec -f
-<profile>`; awk only with `-f FILE`; word 0 is a system program by its full path, phiward's
-Python with a file in the package (or `-m phiward`), a script in the package, phiward's
-launcher, or the user's own tool. A wrapped MCP server's own `sh -c` passes through unchanged,
-reported as the user's. The project hook's fixed line is the one named exception. Then each
-argv is written as a shape (placeholders in `<>`), and the set equals the block on
-docs/endpoint-security.md, both ways.
+<profile>`; awk only with `-f FILE`; after ssh's `--`, only the host and a named command for
+the remote host (a pull's `tar -c`, a push's receiver); word 0 is a system program by its
+full path, phiward's Python with a file in the package (or `-m phiward`), a script in the
+package, phiward's launcher, or the user's own tool. A wrapped MCP server's own `sh -c`
+passes through unchanged, reported as the user's. The project hook's fixed line is the one
+named exception. Then each argv is written as a shape (placeholders in `<>`): the set equals
+the block on docs/endpoint-security.md, both ways, and each recorded command line matches
+its row's regex.
 
 Nothing real is confined: `sandbox-exec` is a made-up recorder that runs the command, ssh is the
 fake of test_v2_push, the tool is a made-up script. `launchctl`, `claude` and the self-check
@@ -36,8 +39,8 @@ from pathlib import Path
 import pytest
 
 from phiward import (broker, claude_settings, cli, confine, copying, doctor, githooks,
-                     install, mcp_config, selfcheck, service, wholetool)
-from test_docs_endpoint_security import PAGE, all_shapes
+                     install, mcp_config, remote, selfcheck, service, wholetool)
+from test_docs_endpoint_security import PAGE, SAMPLES, all_shapes, shapes
 from test_macos_inline_code import _argv_kinds, _kind
 from test_v2_push import hpc  # noqa: F401 - the fixture: a fake shared connection and ssh
 
@@ -64,7 +67,9 @@ class Stopped(Exception):
     """What the hook raises to stop an exec, which would replace this test process."""
 
 
-_STATE = {"rec": None, "installed": False}
+_STATE = {"rec": None, "installed": False, "bad": []}
+# starts phiward must never use: a shell line, or a fork or spawn outside subprocess
+_FORBIDDEN = ("os.system", "os.fork", "os.forkpty", "os.spawn")
 
 
 def _words(argv):
@@ -83,12 +88,15 @@ def _audit(event, args):
     rec = _STATE["rec"]
     if rec is None:
         return
+    if event in _FORBIDDEN:
+        _STATE["bad"].append((event, repr(args)[:200]))
+        if event == "os.system":
+            raise Stopped(event)  # never run it here
+        return
     if event == "subprocess.Popen":
         words = _words(args[1])
     elif event in ("os.exec", "os.posix_spawn"):
         words = _words(args[1])
-    elif event == "os.spawn":
-        words = _words(args[2])
     else:
         return
     rec.append(words)
@@ -256,11 +264,54 @@ def _record(tree, hpc_home, monkeypatch):  # noqa: C901 - one scenario after ano
                                     "cwd": str(tree / "repo")}, out)
         assert code == 0, out.getvalue()
 
+    # a push through the shared connection, and a pull by the older route (no shared
+    # connection: ssh logs in itself)
+    with monkeypatch.context() as m:
+        m.setenv("HOME", hpc_home)
+        b = broker.Broker(_Spool(), io.StringIO())
+        out = io.StringIO()
+        with _Recording(started):
+            code = b.execute("r4", {"cmd": "copy",
+                                    "args": ["README.md", "hpc-test:/work/me/proj"],
+                                    "cwd": str(tree / "repo")}, out)
+        assert code == 0, out.getvalue()
+        cfgfile = Path(os.environ["PHIWARD_CONFIG"])
+        before = cfgfile.read_text()
+        assert before.count("[remote]\n") == 1
+        cfgfile.write_text(before.replace("[remote]\n",
+                                          "[remote]\nuse_shared_connection = false\n"))
+        try:
+            b = broker.Broker(_Spool(), io.StringIO())
+            out = io.StringIO()
+            with _Recording(started):
+                code = b.execute("r5", {"cmd": "copy",
+                                        "args": ["hpc-test:/work/me/res",
+                                                 str(tree / "phi" / "pulled2")],
+                                        "cwd": str(tree / "repo")}, out)
+            assert code == 0, out.getvalue()
+        finally:
+            cfgfile.write_text(before)
+
     # launch, up to the tool's start, and the hooks it writes for a session
     with monkeypatch.context() as m:
         m.setattr(wholetool, "already_confined", lambda env: False)
         with _Recording(started):
             assert wholetool.main(["--", str(tool)]) == 0
+    # the launched hook, as Claude Code starts it under launch: with its roots, and without
+    for roots in ("", None):
+        with monkeypatch.context() as m:
+            m.setattr(sys, "stdin", io.StringIO(json.dumps(payload["PreToolUse"])))
+            m.setattr(sys, "stdout", io.StringIO())
+            m.setenv("CLAUDE_PROJECT_DIR", str(tree / "repo"))
+            if roots is None:
+                m.delenv("PHIWARD_HOOK_ROOTS", raising=False)
+            else:
+                m.setenv("PHIWARD_HOOK_ROOTS", roots)
+            with _Recording(started):
+                try:
+                    cli.main(["hook", "claude", "--launched"])
+                except SystemExit:
+                    pass
     folder = tree / "made-up-session"
     folder.mkdir()
     fd = os.open(str(folder), os.O_RDONLY)
@@ -296,6 +347,7 @@ def _record(tree, hpc_home, monkeypatch):  # noqa: C901 - one scenario after ano
         assert confine.self_test() is None
         doctor.clean_start_problem()
         REAL_CLAUDE_VERSION()
+    written += _trace([install.CLEAN_EXEC, "phiward", "--help"], dict(os.environ))
     written.append(plist_argv(service.render(str(launcher))))
     plist = os.path.join(home, "Library", "LaunchAgents", service.LABEL + ".plist")
     with monkeypatch.context() as m:
@@ -438,11 +490,55 @@ def breaks(words, label, ctx):
         if not words:
             return out
     if os.path.basename(words[0]) == "ssh" and "--" in words:
-        words = words[:words.index("--") + 2]  # the remote command after `--`: an exception
+        # after `--`: the host, then only a named command for the remote host
+        i = words.index("--")
+        rest = words[i + 1:]
+        if rest[:1] == [ctx["host"]]:  # `ssh -G -F FILE -- HOST`
+            rest = rest[1:]
+        if len(rest) > 1 or (rest and not remote_kind(rest[0])):
+            out.append(f"an unknown command for the remote host: {rest}")
+        words = words[:i]
     return out + _segment_breaks(words, ctx)
 
 
+def remote_kind(word):
+    """The placeholder of a command phiward gives ssh for the remote host, or None: a pull's
+    `tar -c` (remote.send_script) or a push's receiver (remote.receive_script)."""
+    if re.fullmatch(r"tar -c -f - -C [^ ]+ (-- [^ ]+|\.)", word):
+        return "<remote-pull>"
+    if re.fullmatch("sh -c " + re.escape(shlex.quote(remote._RECEIVE)) + r" sh [^ ]+", word):
+        return "<remote-push>"
+    return None
+
+
 # --- the shapes ---------------------------------------------------------------------------------
+
+def kernel_words(words, ctx):
+    """The argv as the kernel shows it: a script's `#!` interpreter first, then its path."""
+    first = ctx["launcher"] if words[0] == "phiward" else words[0]
+    if first.startswith("/") and os.path.isfile(first):
+        with open(first, "rb") as fh:
+            head = fh.readline()
+        if head.startswith(b"#!"):
+            return head[2:].decode().split() + [first] + list(words[1:])
+    return list(words)
+
+
+def command_line(words, ctx):
+    """A recorded argv as one command line, as an installed phiward's would read: the source
+    checkout's places swapped for an install's (made-up values), every other word as
+    recorded."""
+    out = []
+    for w in kernel_words(_as_real(words, ctx), ctx):
+        if w == sys.executable:
+            w = SAMPLES["<python>"]
+        elif w.startswith(PKG + "/"):
+            w = SAMPLES["<PKG>"] + w[len(PKG):]
+        elif w == ctx["launcher"]:
+            w = SAMPLES["<launcher>"]
+        out.append(w)
+    return " ".join(out)
+
 
 def shape(words, label, ctx):
     """`words` as a shape: the command line the kernel shows (a script's `#!` interpreter first),
@@ -450,12 +546,7 @@ def shape(words, label, ctx):
     words = _as_real(words, ctx)
     if label:
         words = words[:-_N[label]] + [label]
-    first = ctx["launcher"] if words[0] == "phiward" else words[0]
-    if first.startswith("/") and os.path.isfile(first):
-        with open(first, "rb") as fh:
-            head = fh.readline()
-        if head.startswith(b"#!"):
-            words = head[2:].decode().split() + [first] + words[1:]
+    words = kernel_words(words, ctx)
     texts = {shlex.split(install.PROJECT_HOOK)[2]: "<project-hook>",
              shlex.split(install.PROJECT_PROMPT_HOOK)[2]: "<project-prompt-hook>",
              shlex.split(install.PROJECT_NOTE)[2]: "<project-note>"}
@@ -486,8 +577,8 @@ def shape(words, label, ctx):
             out.append("<socket>")
         elif w == ctx["host"]:
             out.append("<host>")
-        elif ssh and after_dashes:
-            out.append("<remote>")
+        elif ssh and after_dashes and remote_kind(w):
+            out.append(remote_kind(w))
         elif prev == "--entry":
             out.append("<entry>")
         elif w == ctx["record"]:
@@ -531,6 +622,7 @@ def test_every_process_phiward_starts_meets_the_rule(tree, hpc, monkeypatch):  #
         elif why:
             bad.append((words, why))
     assert not bad, "argv that break the rule:\n" + "\n".join(f"{w}: {y}" for w, y in bad)
+    assert not _STATE["bad"], f"a shell line, fork or spawn outside subprocess: {_STATE['bad']}"
     # a wrapped server's own `sh -c` is started unchanged, as the user's
     assert ["/bin/sh", "-c", "echo made-up-server"] in users, users
 
@@ -542,3 +634,12 @@ def test_the_page_lists_exactly_the_shapes_phiward_starts(tree, hpc, monkeypatch
     assert recorded == page, ("recorded, not on the page:\n" + "\n".join(sorted(recorded - page))
                               + "\n\non the page, not recorded:\n"
                               + "\n".join(sorted(page - recorded)))
+    # each recorded command line matches the regex of its row
+    by_shape = {a: e["regex"] for e in shapes().values() for a in e["argv"]}
+    missed = []
+    for w, label in got:
+        rx = by_shape[shape(w, label, ctx)]
+        line = command_line(w, ctx)
+        if rx is not None and not re.search(rx, line):
+            missed.append((rx, line))
+    assert not missed, "\n".join(f"{rx}\n  does not match: {line}" for rx, line in missed)

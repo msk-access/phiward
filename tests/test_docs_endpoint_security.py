@@ -78,7 +78,8 @@ SAMPLES = {
     "<ssh-config>": "/Users/me/.ssh/phiward-config",
     "<socket>": "/Users/me/.ssh/cm-hpc",
     "<host>": "hpc-login",
-    "<remote>": "tar -c -f - -C /work/me -- res",
+    "<remote-pull>": "tar -c -f - -C /work/me -- res",
+    "<remote-push>": "",  # filled from remote.receive_script
     "<record>": "/Users/me/.local/share/uv/tools/phiward/lib/python3.12/site-packages/"
                 "phiward-0.2.0.dist-info/RECORD",
     "<claude>": "/Users/me/.local/bin/claude",
@@ -93,7 +94,10 @@ SAMPLES = {
 
 def sample(shape: str) -> str:
     """The shape as one command line, its placeholders filled in."""
-    fill = dict(SAMPLES, **_project_texts(), **{"<awk-program>": _awk_program()})
+    from phiward import remote
+    fill = dict(SAMPLES, **_project_texts(), **{"<awk-program>": _awk_program(),
+                                                "<remote-push>": remote.receive_script(
+                                                    "/work/me/proj")})
     return re.sub("|".join(re.escape(k) for k in sorted(fill, key=len, reverse=True)),
                   lambda m: fill[m.group(0)], shape)
 
@@ -140,3 +144,18 @@ def test_no_regex_matches_inline_code():
             continue
         for line in inline:
             assert not re.search(e["regex"], line), (i, e["regex"], line)
+
+
+FIXED_TEXTS = ("<project-hook>", "<project-prompt-hook>", "<project-note>", "<awk-program>",
+               "<remote-push>")
+
+
+def test_a_line_with_fixed_code_in_it_gets_no_prefix_regex():
+    """A regex for a command line that carries fixed code (the project hook, its awk program, a
+    push's receiver) would also admit that code with more after it; the full text does not fit
+    in 256 characters. So such a row has no regex (`-`), and the page says how to match it."""
+    for i, e in shapes().items():
+        if any(t in s for s in e["argv"] for t in FIXED_TEXTS):
+            assert e["regex"] is None, (i, e["regex"])
+    text = PAGE.read_text(encoding="utf-8")
+    assert "exact" in text and "hash" in text, "the page says how to match those lines"
