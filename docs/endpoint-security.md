@@ -39,9 +39,13 @@ All of it is in the user's home folder, written by the user's own account:
 ## Every process phiward starts on macOS
 
 Each row is one kind of process. The ID points to its command lines and its regex in the
-[list below](#the-command-lines). phiward starts no process whose command line holds code:
-no `python -c`, no `sh -c` of its own, no `awk` program, no `sandbox-exec -p`. The one
-exception is the project hook's fixed line (R1, R2), which a repository commits.
+[list below](#the-command-lines). phiward puts no code in a local command line: no
+`python -c`, no `sh -c` of its own, no `awk` program, no `sandbox-exec -p`. There are two
+exceptions:
+
+- the command that ssh carries to the remote host (C3, C7, C8), which runs there, not on the
+  Mac. A push's (C7) is a fixed `sh -c` script with the destination path;
+- the project hook's fixed line (R1, R2), which a repository commits.
 
 | ID | Parent | Image | How often | What it does |
 |---|---|---|---|---|
@@ -49,7 +53,9 @@ exception is the project hook's fixed line (R1, R2), which a repository commits.
 | G2 | `phiward doctor` | `/usr/bin/sandbox-exec` | each `doctor` | the gateway's self-test: `/usr/bin/true` in the profile |
 | C1 | the broker | `/usr/bin/sandbox-exec` | each local `phiward copy` | makes the destination folder (`/bin/mkdir`) |
 | C2 | the broker | `/usr/bin/sandbox-exec` | each local `phiward copy` | copies the files (`/usr/bin/rsync`) |
-| C3 | the broker | `/usr/bin/sandbox-exec` | each copy from a remote host | runs `/usr/bin/ssh` through the user's shared connection |
+| C3 | the broker | `/usr/bin/sandbox-exec` | each copy from a remote host | runs `/usr/bin/ssh` through the user's shared connection; the remote host runs `tar -c` |
+| C7 | the broker | `/usr/bin/sandbox-exec` | each copy to a remote host | runs `/usr/bin/ssh` through the shared connection; the remote host runs a fixed script that makes the folder and unpacks with `tar -x` |
+| C8 | the broker | `/usr/bin/sandbox-exec` | each copy from a remote host, with `[remote] use_shared_connection = false` | as C3, but ssh logs in itself |
 | C4 | the broker | `/usr/bin/sandbox-exec` | each copy from a remote host | unpacks what ssh receives, with a file in the package |
 | C5 | the broker | `/usr/bin/ssh` | each request to a remote host | reads the ssh config (no network) |
 | C6 | the broker | `/usr/bin/ssh` | each request to a remote host | checks that the shared connection is up |
@@ -71,6 +77,7 @@ exception is the project hook's fixed line (R1, R2), which a repository commits.
 | S2 | `phiward setup`, `phiward broker --service --write` | `/bin/launchctl` | when the user sets up the login service | loads or restarts the broker's service |
 | D1 | `phiward install` | the Python | each `install --write` | checks that the isolated Python finds phiward |
 | D2 | `phiward doctor` | `/bin/sh` | each `doctor` | runs the H1 script once, with `phiward --help` |
+| D3 | the D2 script (exec) | the Python | with each D2 | `phiward --help`, through the launcher |
 | R1 | Claude Code | `/bin/sh` | each tool call, prompt and session start, in a repository with `install --project` | the project hook: one fixed line |
 | R2 | the R1 line | `/usr/bin/awk` | with each R1 | lists the variables to clear (its program is in the fixed line) |
 | R3 | git | `/bin/sh` | each commit and push, in a repository with `phiward init` | the git hooks phiward writes |
@@ -86,8 +93,14 @@ The user also starts phiward in a terminal (`phiward launch -- claude`, `phiward
 
 Rarer forms, not in the list: a local copy without rsync runs `/bin/cp -R -n -- SOURCE...
 DEST`; a dry run runs `/usr/bin/true`; a git hook without `phiward` on `PATH` runs `python3 -m
-phiward git-hook NAME`; `phiward run --remote` runs `/usr/bin/ssh ... HOST -- WORDS`, where
-WORDS are the agent's own.
+phiward git-hook NAME`; `phiward run --remote` runs `/usr/bin/sandbox-exec -f <profile>
+/usr/bin/ssh ... HOST -- WORDS` (the C3 or C8 ssh words), where WORDS are the agent's own,
+quoted for the remote shell.
+
+G1 and L1 match any command under any file in `~/.phiward/profiles`. The account that runs
+phiward can write that folder, so a process of that account could start `sandbox-exec` there
+with a profile of its own, `(allow default)` included. An exception for G1 or L1 trusts every
+process of that account to that extent.
 
 ### The command lines
 
@@ -101,7 +114,10 @@ Each entry gives the command line as the kernel shows it (`argv`), and a regex f
 - `<home>`: the home folder; `<uid>`: the user's id; `<entry>`: 16 hex digits;
 - `<path>`, `<source>`, `<dest>`: paths the request names;
 - `<ssh-config>`, `<socket>`, `<host>`: the user's ssh config file, the shared connection's
-  socket and the host; `<remote>`: the command for the remote host (`tar -c -f - -C DIR -- NAME`);
+  socket and the host;
+- `<remote-pull>`: the command for the remote host on a pull, `tar -c -f - -C DIR -- NAME` (or
+  `-C DIR .`); `<remote-push>`: on a push, `sh -c SCRIPT sh DIR`, where SCRIPT is the fixed text
+  `_RECEIVE` in `remote.py`;
 - `<record>`: the package's install record; `<claude>`: Claude Code's program;
 - `<command> ...`, `<tool> ...`, `<server> ...`, `<arguments>`: the user's or the agent's own
   words;
@@ -123,8 +139,12 @@ C1 argv  /usr/bin/sandbox-exec -f <profile> /bin/mkdir -p -- <path>
 C1 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /bin/mkdir -p -- /
 C2 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/rsync -rt --ignore-existing --exclude=.claude/ -- <source> ... <dest>
 C2 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/rsync -rt --ignore-existing --exclude=\.claude/ -- [^ ]
-C3 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S <socket> <host> -- <remote>
-C3 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/ssh -F [^ ]+ -o BatchMode=yes -o ProxyCommand=none .* -o ControlMaster=no -S [^ ]+ [^ ]+ -- tar -c -f - -C [^ ]
+C3 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S <socket> <host> -- <remote-pull>
+C3 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/ssh -F [^ ]+ (-o [A-Za-z0-9]+=(yes|no|none) )+-T -o ControlMaster=no -S [^ ]+ [^ ]+ -- tar -c -f - -C [^ ]+ (-- [^ ]+|\.)$
+C7 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S <socket> <host> -- <remote-push>
+C7 regex -
+C8 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T <host> -- <remote-pull>
+C8 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/ssh -F [^ ]+ (-o [A-Za-z0-9]+=(yes|no|none) )+-T [^ ]+ -- tar -c -f - -C [^ ]+ (-- [^ ]+|\.)$
 C4 argv  /usr/bin/sandbox-exec -f <profile> <python> -I <PKG>/phiward/tar_extract.py <path>
 C4 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb [^ ]+/bin/python[0-9.]* -I [^ ]+/site-packages/phiward/tar_extract\.py /
 C5 argv  /usr/bin/ssh -G -F <ssh-config> -- <host>
@@ -179,12 +199,14 @@ D1 argv  <python> -I -m phiward --version
 D1 regex ^[^ ]+/bin/python[0-9.]* -I -m phiward --version$
 D2 argv  /bin/sh <PKG>/phiward/data/clean-exec.sh phiward --help
 D2 regex ^/bin/sh [^ ]+/site-packages/phiward/data/clean-exec\.sh phiward --help$
+D3 argv  <python> <launcher> --help
+D3 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward --help$
 R1 argv  /bin/sh -c <project-hook>
 R1 argv  /bin/sh -c <project-prompt-hook>
 R1 argv  /bin/sh -c <project-note>
-R1 regex ^/bin/sh -c command -v phiward >/dev/null 2>&1 \|\| [^ ]
+R1 regex -
 R2 argv  /usr/bin/awk <awk-program>
-R2 regex ^/usr/bin/awk BEGIN\{for\(k in ENVIRON\)
+R2 regex -
 R3 argv  /bin/sh <repo>/.git/hooks/pre-commit
 R3 argv  /bin/sh <repo>/.git/hooks/pre-push
 R3 regex ^/bin/sh [^ ]+/\.git/hooks/pre-(commit|push)$
@@ -236,7 +258,13 @@ gateway's profile, and says what is missing. It starts G2, D2, L4 and L5.
 - The commands the agent runs (G1, L1) have their own shapes, and your tool may judge what they
   do. phiward cannot change that.
 - The project hook (R1, R2) is one fixed line with code in it. A repository commits it, and the
-  same line runs on Linux.
+  same line runs on Linux. A push's remote command (C7) is fixed code too, carried to the
+  remote host.
+- R1, R2 and C7 have no regex. Their full text is longer than 256 characters, and a regex for
+  its first part would also admit that text with any command after it. If you need an
+  exception for them, match the exact command line instead: R1 and R2 are the same on every
+  Mac (a hash of the command line works), and C7 is the fixed text with the user's paths
+  (`receive_script` in `remote.py` builds it).
 - This page lists macOS only.
 
 ## Linux

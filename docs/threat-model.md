@@ -144,9 +144,10 @@ reading it; under `launch` the tool's own profile denies reading it. A request i
 `~/.phiward` is a link, another account's, or writable by other accounts, or when `profiles` is a
 link or another account's; `profiles` is made 0700.
 
-On macOS phiward starts no process whose command line holds code: no `python -c`, no `sh -c` of
-its own, no awk program and no `sandbox-exec -p`. Its hooks run files of the package (exec form),
-and the pull's extractor is a file too. The one exception is the project hook's fixed line
+On macOS phiward puts no code in a local command line: no `python -c`, no `sh -c` of its own, no
+awk program and no `sandbox-exec -p`. Its hooks run files of the package (exec form), and the
+pull's extractor is a file too. Two exceptions: the command that ssh carries to the remote host,
+which runs there (a push's is a fixed `sh -c` script), and the project hook's fixed line
 (`install --project`). Words that the agent or the user chose (a gateway command, a wrapped
 server's command) keep their own shape. [endpoint-security.md](endpoint-security.md) lists every
 process and its command line; `tests/test_macos_processes.py` records them and checks the list.
