@@ -12,14 +12,17 @@ import io
 import os
 import re
 import stat
+import subprocess
+import sys
 import time
 from pathlib import Path
 
 import pytest
 
 import helpers
-from phiward import config, confine, doctor, hidden, install, run
+from phiward import config, confine, copying, doctor, hidden, install, run, wholetool
 from phiward.sanitize import Sanitizer
+from test_v2_push import hpc  # noqa: F401 - the fixture: a fake shared connection and ssh
 
 NAME = re.compile(r"[0-9a-f]{32}\.sb")
 
@@ -175,6 +178,36 @@ def test_a_planted_name_is_refused_not_used(tree, seatbelt, monkeypatch, plant):
         assert at.read_text() == "(version 1)(allow default)\n"
 
 
+def test_a_file_changed_after_it_was_written_is_refused(tree, seatbelt, monkeypatch):
+    """The read-back: the file at the name must be the one written, with its text."""
+    real = os.fsync
+
+    def swap(fd):
+        real(fd)
+        for name in os.listdir(_folder(tree)):  # replaced by another file with other text
+            os.unlink(_folder(tree) / name)
+            (_folder(tree) / name).write_text("(version 1)(allow default)\n")
+            (_folder(tree) / name).chmod(0o600)
+    monkeypatch.setattr(os, "fsync", swap)
+    with pytest.raises(confine.ConfineError, match="changed after it was written"):
+        _argv()
+    assert os.listdir(_folder(tree)) == []
+
+
+def test_a_file_whose_text_changed_is_refused(tree, seatbelt, monkeypatch):
+    """The same file, its text rewritten after the write."""
+    real = os.fsync
+
+    def rewrite(fd):
+        real(fd)
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.write(fd, b"(version 1)(allow default)")
+    monkeypatch.setattr(os, "fsync", rewrite)
+    with pytest.raises(confine.ConfineError, match="changed after it was written"):
+        _argv()
+    assert os.listdir(_folder(tree)) == []
+
+
 # --- removed when the request ends -------------------------------------------------------------
 
 def test_the_file_is_gone_after_a_request(tree, recorder):
@@ -201,6 +234,24 @@ def test_the_self_test_removes_its_file(tree, recorder):
     assert confine.self_test() is None
     assert recorder.exists()
     assert os.listdir(_folder(tree)) == []
+
+
+def test_a_pull_removes_its_ssh_profile(tree, hpc, monkeypatch, seatbelt):  # noqa: F811
+    """A copy from a remote runs ssh in its own gateway profile: that file goes too."""
+    fake = tree / "bin-fake" / "sandbox-exec"
+    fake.parent.mkdir()
+    fake.write_text('#!/bin/sh\n[ "$1" = -f ] || exit 99\n[ -f "$2" ] || exit 98\n'
+                    'shift 2\nexec "$@"\n')
+    fake.chmod(0o755)
+    monkeypatch.setattr(confine, "SANDBOX_EXEC", str(fake))
+    out = io.StringIO()
+    code = copying.execute(["hpc-test:/work/me/res", str(tree / "phi" / "pulled")],
+                           str(tree / "repo"), dict(os.environ), out)
+    assert code == 0, out.getvalue()
+    assert (tree / "phi" / "pulled" / "res" / "summary.tsv").read_text() == "count\t3\n"
+    folder = Path(confine.profiles_dir())
+    assert folder.parent.parent == Path(os.path.realpath(hpc["home"]))
+    assert os.listdir(folder) == []
 
 
 def test_release_removes_only_a_profile_it_names(tree, seatbelt):
@@ -234,6 +285,39 @@ def test_old_files_are_pruned(tree, seatbelt):
 def test_prune_without_the_folder_does_nothing(tree, seatbelt):
     confine.prune_profiles()
     assert not (tree / "home" / ".phiward").exists()
+
+
+# --- not readable under launch -----------------------------------------------------------------
+
+def _tool_profile(tree):
+    return wholetool.seatbelt_tool_profile(
+        config.load(str(tree / "repo")), [str(tree / "repo")], str(tree / "repo"),
+        dict(os.environ), str(tree / "home" / ".phiward" / "tools" / "claude"),
+        str(tree / "canary"))
+
+
+def test_the_tool_profile_denies_reading_the_folder_the_gateway_writes(tree, seatbelt):
+    argv, _ = _argv()
+    written = os.path.dirname(argv[2])
+    assert written == confine.profiles_dir()
+    prof = _tool_profile(tree)
+    for sp in confine._spellings([written]):
+        assert f"(deny file-read* (subpath {confine._sb_str(sp)}))" in prof, sp
+
+
+@pytest.mark.skipif(sys.platform != "darwin" or not os.environ.get("GITHUB_ACTIONS"),
+                    reason="macOS on GitHub Actions only: no sandbox is started on a "
+                           "maintainer's machine")
+def test_a_launch_session_cannot_read_a_pending_profile(tree, seatbelt):
+    argv, _ = _argv()
+    prof = _tool_profile(tree)
+    r = subprocess.run([confine.SANDBOX_EXEC, "-p", prof, "/bin/cat", argv[2]],
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode != 0 and "(version 1)" not in r.stdout, r.stdout + r.stderr
+    r = subprocess.run([confine.SANDBOX_EXEC, "-p", prof, "/bin/cat",
+                        str(tree / "repo" / "README.md")], capture_output=True, text=True,
+                       timeout=60)
+    assert r.returncode == 0 and r.stdout == "readme\n", r.stderr  # the control
 
 
 # --- hidden from every session and gateway command ---------------------------------------------
