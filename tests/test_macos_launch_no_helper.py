@@ -361,12 +361,25 @@ def test_ci_doctor_names_a_start_inside_another_sandbox(tmp_path):
     assert "inside another sandbox" in r.stdout, r.stdout + r.stderr
 
 
+# `yes` writes into a pipe that `head` has closed: at SIGPIPE's default it is killed by the
+# signal (bash reports 141); with SIGPIPE ignored it gets EPIPE and exits 1 with "Broken pipe"
+PIPE_STATUS = ["/bin/bash", "-c", 'yes | head -n1 >/dev/null; echo "PIPE-${PIPESTATUS[0]}"']
+
+
+def _ignore_sigpipe():
+    import signal
+    signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+
+
 @ci_macos
 def test_ci_the_tool_starts_with_sigpipe_at_its_default(tree):
     env = dict(os.environ, PYTHONPATH=str(SRC))
-    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--", "/bin/sh", "-c",
-                        "ps -o sigignore= -p $$"], cwd=str(tree / "repo"), capture_output=True,
-                       text=True, env=env, timeout=120, stdin=subprocess.DEVNULL)
-    words = [w for w in r.stdout.split() if re.fullmatch(r"[0-9a-fA-F]+", w)]
-    assert r.returncode == 0 and words, r.stdout + r.stderr
-    assert int(words[-1], 16) & (1 << 12) == 0, r.stdout  # SIGPIPE (13) is not ignored
+    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--"] + PIPE_STATUS,
+                       cwd=str(tree / "repo"), capture_output=True, text=True, env=env,
+                       timeout=120, stdin=subprocess.DEVNULL)
+    assert r.returncode == 0 and "PIPE-141" in r.stdout, r.stdout + r.stderr
+    # control, outside launch: what a tool that inherits an ignored SIGPIPE (as from the old
+    # Python helper) gives
+    c = subprocess.run(PIPE_STATUS, capture_output=True, text=True, timeout=60,
+                       preexec_fn=_ignore_sigpipe, stdin=subprocess.DEVNULL)
+    assert "PIPE-" in c.stdout and "PIPE-141" not in c.stdout, c.stdout + c.stderr
