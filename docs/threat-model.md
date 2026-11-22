@@ -440,6 +440,17 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 
 ## Known limits
 
+- <a id="known-file-mentions"></a>**`@` mentions and the IDE's context.** With mentions on,
+  Claude Code puts a mentioned file's text into the prompt without a tool call, so no hook sees
+  it. `install --user` turns mentions off (`CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, Claude Code
+  v2.1.299+, ignored in a project's settings); a mention is then a Read that the hook and the
+  deny rules judge. `doctor` reports a missing value and an older Claude Code. Not covered: the
+  IDE's open file and selection, which Claude Code adds to the prompt (only its best-effort
+  `Read` deny rules apply; set `claudeCode.attachSelection` and `claudeCode.attachOpenFile` to
+  false in VS Code); a session whose own launch environment sets the variable (the Desktop app,
+  a runner); and any Claude Code older than v2.1.299. A prompt a person types or pastes is not
+  scanned.
+
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
   removes its scratch folder. A process that leaves the group (`setsid`, a daemon) keeps running on

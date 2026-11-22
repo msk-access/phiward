@@ -49,7 +49,11 @@ def _doctor(tree, monkeypatch, capsys, data, version=None):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tree / "repo"))
     monkeypatch.chdir(tree / "repo")
     monkeypatch.setattr(claude_settings, "claude_version", lambda: version)
-    user_settings(tree, data)
+    # wired as install writes it, with `data`'s env entry in place of the wiring's own
+    wired = install.wiring(config.load(str(tree / "repo")))
+    wired["env"].pop(NAME)
+    wired["env"].update(data.get("env", {}))
+    user_settings(tree, wired)
     doctor.main([])
     return capsys.readouterr().out
 

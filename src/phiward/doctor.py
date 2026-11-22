@@ -632,7 +632,7 @@ def _after_install(project: str, home: str, cfg: config.Config,
 _FOLDED = ("  WARNING: no Claude Code settings file runs phiward", "  mode: none:",
            "  hidden list in the sandbox:", "  permission rules for the hidden list:",
            "  WARNING: sandbox confines the shell: NO", "  NOTE: Claude Code's shell is not pinned",
-           "  NOTE: no `--settings` file yet")
+           "  NOTE: no `--settings` file yet", "  WARNING: env.CLAUDE_CODE_DISABLE_FILE_MENTIONS is not")
 
 
 def main(argv: List[str]) -> int:
@@ -882,6 +882,8 @@ def main(argv: List[str]) -> int:
         say(line)
     for line in launch_settings_report():
         say(line)
+    for line in mentions_report(project, home):
+        say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
             say(line)
@@ -1125,12 +1127,43 @@ def launch_settings_report() -> List[str]:
         data = None
     sb = data.get("sandbox") if isinstance(data, dict) else None
     want = install.LAUNCH_SETTINGS["sandbox"]
-    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()):
+    env = data.get("env") if isinstance(data, dict) else None
+    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()) or \
+            not isinstance(env, dict) or env.get(install.MENTIONS_OFF) != "1":
         return [f"  WARNING: {path} does not set " + ", ".join(
-            f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()) +
+            [f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()] +
+            [f"env.{install.MENTIONS_OFF}: \"1\""]) +
             ". Run `(cd ~ && phiward install claude --user --write)` again."]
     return [f"  --settings file: {path}. Start Claude Code with `claude --settings {path}`; "
             "doctor cannot tell whether this session was started with it."]
+
+
+# Claude Code knows the setting from 2.1.299; below 2.1.295 it also has no `onFailure` for hooks
+MENTIONS_MIN_VERSION = (2, 1, 299)
+MENTIONS_PROBLEM_BELOW = (2, 1, 295)
+
+
+def mentions_report(project: Optional[str], home: str) -> List[str]:
+    """`@path` mentions: with them on, a mention puts a file's text into the prompt without a
+    tool call phiward's hook sees. The user (or managed) settings turn them off with
+    `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` (Claude Code v2.1.299+, and ignored in a project's
+    settings, so a project's value is not read)."""
+    trusted = [lv for lv in claude_settings.levels(project, home) if lv[0] in ("managed", "user")]
+    value = claude_settings._first(trusted, "env", install.MENTIONS_OFF)
+    out: List[str] = []
+    if value != "1":
+        out.append(f"  WARNING: env.{install.MENTIONS_OFF} is not \"1\" in your user settings: an "
+                   "@-mention puts a file's text into the prompt without a tool call the hook "
+                   "sees. Run `(cd ~ && phiward install claude --user --write)`.")
+    version = claude_settings.claude_version()
+    if version is not None and version < MENTIONS_MIN_VERSION:
+        word = "PROBLEM" if version < MENTIONS_PROBLEM_BELOW else "WARNING"
+        out.append(f"  {word}: Claude Code {claude_settings.version_text(version)} does not know "
+                   f"env.{install.MENTIONS_OFF} (from "
+                   f"{claude_settings.version_text(MENTIONS_MIN_VERSION)} on): an @-mention still "
+                   "puts a file's text into the prompt without a tool call the hook sees. Update "
+                   "Claude Code.")
+    return out
 
 
 def network_report(project: Optional[str], home: str, cfg: config.Config) -> List[str]:

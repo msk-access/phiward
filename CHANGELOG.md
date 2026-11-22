@@ -120,6 +120,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `@path` mentions are turned off in the user settings and the `--settings` file
+  (`env.CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`; Claude Code v2.1.299+; ignored in project
+  settings, so none is written there). A mention would put a file's text into the prompt without
+  a tool call the hook sees; now it is a Read. Cost: `@` completion no longer inserts file
+  contents; the agent reads the file with Read. The IDE's open-file and selection context is not
+  covered. `doctor` reports a missing value and a Claude Code older than v2.1.299 (a problem
+  below 2.1.295). Re-run `(cd ~ && phiward install claude --user --write)`.
 - Linux: `launch` no longer masks host unix sockets by name; the kernel limits them. From
   Landlock ABI 9 (Linux 7.1) the session reaches only the unix sockets it made itself (and the
   name-service ones), and a helper that cannot apply this stops the start. Below ABI 9,

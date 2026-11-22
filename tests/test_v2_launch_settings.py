@@ -14,7 +14,8 @@ from helpers import confinement
 
 def test_the_file_sets_the_three_switches():
     assert install.LAUNCH_SETTINGS == {"sandbox": {
-        "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False}}
+        "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False},
+        "env": {"CLAUDE_CODE_DISABLE_FILE_MENTIONS": "1"}}
 
 
 def test_the_file_lives_with_the_user_config_and_is_guarded(tree):
