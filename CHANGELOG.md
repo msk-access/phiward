@@ -88,6 +88,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
+  systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
   `install claude --help`, `git-hook install --help`); before, it printed the usage as an error
   or refused without a terminal. Every command's help lists its options.
