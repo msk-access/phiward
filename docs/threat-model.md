@@ -135,7 +135,9 @@ confined, with its output sanitized). Keep tools out of folders a project opens.
 
 On macOS the broker writes each request's profile to a new file in `~/.phiward/profiles` (a
 random name, made only if no file has that name, mode 0600, read back before use) and runs
-`/usr/bin/sandbox-exec -f` on it; the file is removed when the command ends. No session can write
+`/usr/bin/sandbox-exec -f` on it; the file is removed when the command ends. `phiward launch`
+writes the tool's profile there the same way and runs `/usr/bin/sandbox-exec -f FILE TOOL`, with
+no program in between; the file is removed when the tool ends. No session can write
 that folder (Claude Code's sandbox denies `~/.phiward`; under `launch` it is not a write place),
 and the hidden list keeps the session's shell, its file tools and every gateway command from
 reading it; under `launch` the tool's own profile denies reading it. A request is refused when
@@ -1053,7 +1055,8 @@ and the hook keeps that server bare. It is not made writable: a record the sessi
 can forge. This matters only for an MCP tool with a shell-like name under a `*` matcher: the hook
 that `launch` writes matches the file tools and Bash only, and the kernel profile confines the
 server. A launch inside the session runs its command directly, under the session's profile (on
-Linux it knows it is inside from the session's seccomp filter); that profile is wider than a
+Linux it knows it is inside from the session's seccomp filter; on macOS from the session's own
+run folder, found from the account's home folder, never `HOME`); that profile is wider than a
 server's own (`SERVER_READ_ONLY`), as on macOS. Any launch inside a session runs so, also for
 another project: that project's repo config (`.phiward.toml`) is not applied. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
 

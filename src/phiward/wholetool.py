@@ -16,16 +16,20 @@ are compared after the session.
 
 Carry-over (see carryover): each session runs in its own config folder, built from a trusted
 copy and thrown away at exit. Reads of protected data and credentials are denied, and credential
-variables are removed. The launcher runs the tool through a helper that closes every descriptor
-it holds, writes the tool's settings without following links, and runs "launch inside launch"
-directly only when the session's own profile is found: on macOS a canary that only this profile
-denies is denied with EPERM; on Linux the tool's seccomp filter gives its fingerprint errno.
+variables are removed. On Linux the launcher runs the tool through a helper inside bubblewrap
+that checks the session's view and closes every descriptor it holds; on macOS it runs
+`sandbox-exec -f FILE TOOL` with nothing in between (the profile is a file, as the gateway's).
+"Launch inside launch" runs directly only when the session's own profile is found: on macOS a
+canary at the account's home that only this profile denies is denied with EPERM, and a file can
+be made in the session's own run folder (`PHIWARD_RUN`); on Linux the tool's seccomp filter
+gives its fingerprint errno.
 """
 
 import errno
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import stat
@@ -422,8 +426,8 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # (sessions cannot read each other or the trusted copy's neighbours)
     own = [q for q in places if q.startswith(os.path.join(folder, "runs") + os.sep)]
     p += f"(deny file-read* (subpath {s(folder)}))"
-    # the gateway's pending profiles (confine.write_profile): not readable in the session (not
-    # a write place either, so not writable)
+    # the profile files (confine.write_profile), the gateway's and this session's own: not
+    # readable in the session (not a write place either, so not writable)
     p += "".join(f"(deny file-read* (subpath {s(d)}))"
                  for d in confine._spellings([confine.profiles_dir(env)]))
     p += "".join(f"(allow file-read* (subpath {s(q)}))" for q in own)
@@ -462,20 +466,6 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     if own:
         p += "(allow file-read* file-write* " + " ".join(f"(literal {s(t)})" for t in own) + ")"
     return p
-
-
-def _sandbox_check_self() -> bool:
-    """macOS: whether this process is already in any sandbox."""
-    import ctypes
-    for lib in ("/usr/lib/libSystem.B.dylib", "/usr/lib/system/libsystem_sandbox.dylib"):
-        try:
-            fn = ctypes.CDLL(lib).sandbox_check
-        except (OSError, AttributeError):
-            continue
-        fn.restype = ctypes.c_int
-        fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
-        return bool(fn(os.getpid(), None, 0))
-    return True  # cannot tell: refuse (fail closed)
 
 
 # -- Linux -------------------------------------------------------------------------------------
@@ -1573,24 +1563,86 @@ def _fingerprint_errno() -> int:
     return ctypes.get_errno()
 
 
+def _account_home() -> str:
+    """The account's home folder (the password database, never `HOME`), with the links above
+    it resolved; "" when it cannot be found."""
+    import pwd
+    try:
+        return os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)
+    except (KeyError, OSError):
+        return ""
+
+
+RUN_NAME = re.compile(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}")  # build's run folder names
+
+
+def _own_run_folder(env: Dict[str, str], home: str) -> str:
+    """`PHIWARD_RUN` when it is exactly `<home>/.phiward/tools/<adapter>/runs/<id>` and each
+    part below the home is a real folder of this account (no link on the way); else ""."""
+    run = env.get("PHIWARD_RUN") or ""
+    parts = [".phiward", "tools"]
+    rest = run[len(home):].split("/") if home and run.startswith(home + "/") else []
+    if len(rest) != 6 or rest[1:3] != parts or rest[3] not in ADAPTERS or rest[4] != "runs" \
+            or not RUN_NAME.fullmatch(rest[5]):
+        return ""
+    p = home
+    for name in rest[1:]:
+        p = os.path.join(p, name)
+        try:
+            st = os.lstat(p)
+        except OSError:
+            return ""
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            return ""
+    return run
+
+
+def _can_make_a_file_in(folder: str) -> bool:
+    """A new file can be made in `folder` (O_EXCL, no link followed), then removed."""
+    try:
+        dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
+        return False
+    try:
+        st, now = os.lstat(folder), os.fstat(dfd)
+        if (st.st_dev, st.st_ino) != (now.st_dev, now.st_ino):
+            return False
+        name = f".phiward-probe-{secrets.token_hex(8)}"
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     0o600, dir_fd=dfd)
+        os.close(fd)
+        os.unlink(name, dir_fd=dfd)
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(dfd)
+
+
 def already_confined(env: Dict[str, str]) -> bool:
-    """macOS: True only when the canary that only this profile denies is denied with EPERM
-    (ordinary permissions give EACCES and do not count). Linux: True only when the fingerprint
-    syscall fails with exactly FINGERPRINT_ERRNO; no filter (ENOSYS), another filter (EPERM or
-    any other errno), or a filter set later inside the session that answers it too, all build
-    the full profile."""
+    """macOS: True only when both facts hold: the canary at the account's home folder (never
+    `HOME`), which only the session's profile denies, is denied with EPERM (ordinary
+    permissions give EACCES and do not count); and a new file can be made in this session's own
+    run folder (`PHIWARD_RUN`, of one exact shape under the account's home). Linux: True only
+    when the fingerprint syscall fails with exactly FINGERPRINT_ERRNO; no filter (ENOSYS),
+    another filter (EPERM or any other errno), or a filter set later inside the session that
+    answers it too, all build the full profile."""
     if sys.platform.startswith("linux"):
         return confine._machine() in confine._AUDIT_ARCH and \
             _fingerprint_errno() == FINGERPRINT_ERRNO
     if sys.platform != "darwin":
         return False
-    # both must hold: this process is in a sandbox at all, and the canary that only phiward's
-    # profile denies is denied. A canary replaced by a link into a folder macOS guards (privacy
-    # folders give EPERM too), or another sandbox that denies ~/.phiward, must not let launch
-    # skip its own profile
-    if not _sandbox_check_self():
+    # Only a phiward session can write a run folder: Claude Code's sandbox denies every write to
+    # ~/.phiward, and the gateway cannot write there. So a sandbox that only tightens (one that
+    # also denies the canary) fails the second fact, and a process in no sandbox fails the first.
+    # The run folder's shape is checked first, so nothing is opened for a launch outside one
+    home = _account_home()
+    run = _own_run_folder(env, home)
+    if not run:
         return False
-    canary = _canary_path(env)
+    # a canary replaced by a link into a folder macOS guards (privacy folders give EPERM too)
+    # does not count
+    canary = os.path.join(home, ".phiward", CANARY)
     try:
         st = os.lstat(canary)
         if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
@@ -1605,14 +1657,29 @@ def already_confined(env: Dict[str, str]) -> bool:
     except OSError as exc:
         if exc.errno != errno.EPERM:
             return False
-    # and the spool, a write place of phiward's own profile, is readable: another sandbox that
-    # denies all of ~/.phiward does not pass for phiward's
-    try:
-        fd = os.open(config.spool_dir(env), os.O_RDONLY | os.O_DIRECTORY)
-        os.close(fd)
-    except OSError:
-        return False
-    return True
+    return _can_make_a_file_in(run)
+
+
+START_WINDOW = 5.0  # seconds: a non-zero exit sooner may be sandbox-exec's own refusal
+
+
+class ToolNotFound(LaunchError):
+    pass
+
+
+def _find_tool(word: str, env: Dict[str, str]) -> str:
+    """The program `word` names, as execvp would find it with the session's PATH, by its full
+    path; ToolNotFound when there is none."""
+    if "/" in word:
+        found = os.path.abspath(word)
+        if os.path.isfile(found) and os.access(found, os.X_OK):
+            return found
+        raise ToolNotFound(f"the tool could not start (no such program: {word})")
+    found = shutil.which(word, path=env.get("PATH") or os.defpath) or ""
+    if found:
+        return os.path.abspath(found)
+    raise ToolNotFound(f"the tool could not start ({word}: no such program on the session's "
+                       "PATH)")
 
 
 def _make_folders(project: str, names: Sequence[str]) -> List[str]:
@@ -1718,13 +1785,17 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     backend = confine.backend()
     helper = [sys.executable, "-I", "-S", "-c", HELPER]
     if backend == "seatbelt":
-        if _sandbox_check_self():
-            raise LaunchError("this process is inside another sandbox; macOS cannot apply a second "
-                              "one (start the tool from a plain terminal)")
+        # no helper: `sandbox-exec -f FILE TOOL ARGS...`, the tool by its full path, found on the
+        # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
+        # Inside another sandbox sandbox-exec refuses to apply the profile, and nothing runs
+        tool = _find_tool(argv[0], child_env)
+        # the session's own run folder: a launch inside the session checks it (already_confined)
+        child_env["PHIWARD_RUN"] = run
         _make_folders(project, [".claude"])
-        prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["-1", "none", "0"] + list(argv), \
-            child_env, \
+        confine.prune_profiles()
+        path = confine.write_profile(seatbelt_tool_profile(cfg, places, project, env, folder,
+                                                           canary, server))
+        return [confine.SANDBOX_EXEC, "-f", path, tool] + list(argv[1:]), child_env, \
             [], project, lambda: None
     if backend == "bwrap":
         if not os.path.isfile(config.user_config_path(env)):
@@ -1894,7 +1965,15 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
                 store.end(folder)
             except (carryover.CarryoverError, OSError):
                 pass
-        return 126
+        return 127 if isinstance(exc, ToolNotFound) else 126
+    try:
+        return _run_tool(cmd, child_env, fds, project, ready, store, folder, run)
+    finally:
+        confine.release_profile(cmd)  # macOS: the profile's file, once the tool has ended
+
+
+def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project: str,
+              ready: Callable[[], None], store: carryover.Store, folder: str, run: _Run) -> int:
     # wait for the tool; then carry-over: the session's instruction changes to
     # quarantine and its folder discarded, the project's changes reported, and on Linux git
     # control files outside the project compared too
@@ -1912,6 +1991,7 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
         except (carryover.CarryoverError, OSError):
             pass
         return 126
+    started = time.monotonic()
     proc = subprocess.Popen(cmd, env=child_env, pass_fds=fds)
     run.ran = True
     for fd in fds:
@@ -1919,6 +1999,7 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     old = signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl-C goes to the tool, not to us
     try:
         code = proc.wait()
+        quick = time.monotonic() - started < START_WINDOW
     finally:
         signal.signal(signal.SIGINT, old)
         # no process is ever ended: on Linux the PID namespace ends them with the tool; on
@@ -1939,6 +2020,10 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
                      if git_before.get(k) != git_after.get(k))
     for line in _git_lines(run.git) + WALK_NOTES:
         run.say(line)
+    # sandbox-exec fails at the start; a session that ends with an error later gets no hint
+    if code and quick and cmd[:2] == [confine.SANDBOX_EXEC, "-f"]:
+        run.say(f"phiward launch: the tool exited with {code}; if sandbox-exec printed an error "
+                "above, run `phiward doctor`")
     return code
 
 

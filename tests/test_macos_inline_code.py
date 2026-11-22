@@ -22,7 +22,6 @@ PLUGIN = ROOT / "plugin"
 
 LINUX = "Linux only"
 EXCEPTION = "a listed exception"
-LATER_LAUNCH = "macOS: until launch runs without its helper"
 LATER_HOOKS = "macOS: until the hooks run from files"
 LATER_COPY = "macOS: until copy runs from files"
 KEPT = "kept: libproc's proc_pidinfo"
@@ -34,9 +33,8 @@ ALLOWED = {
     # Linux only: bubblewrap's Landlock helper and launch's helper (with its seccomp probe),
     # Landlock and procfs calls
     ("src/phiward/confine.py", "gateway_command", "python -c"): LINUX,
-    # `wholetool.build` holds both: the Linux helper below and the macOS `sandbox-exec -p`
-    # (and, on macOS too, the same helper's `-c`) further down; the key is per function, so
-    # its `python -c` stays listed as Linux after launch drops the helper on macOS
+    # `wholetool.build`: the helper's `-c` runs inside bubblewrap only; on macOS launch runs
+    # `sandbox-exec -f FILE TOOL` with no helper
     ("src/phiward/wholetool.py", "build", "python -c"): LINUX,
     ("src/phiward/wholetool.py", "landlock_abi", "ctypes"): LINUX,
     ("src/phiward/wholetool.py", "_fingerprint_errno", "ctypes"): LINUX,
@@ -52,8 +50,6 @@ ALLOWED = {
     ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
     ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
     # macOS, not yet converted
-    ("src/phiward/wholetool.py", "build", "sandbox-exec -p"): LATER_LAUNCH,
-    ("src/phiward/wholetool.py", "_sandbox_check_self", "ctypes"): LATER_LAUNCH,
     ("src/phiward/wholetool.py", "Adapter.turn_own_sandbox_off", "python -c"): LATER_HOOKS,
     ("src/phiward/install.py", "isolated_command", "sh -c"): LATER_HOOKS,
     ("src/phiward/doctor.py", "clean_start_problem", "sh -c"): LATER_HOOKS,
