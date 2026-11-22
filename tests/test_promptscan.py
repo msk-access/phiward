@@ -238,3 +238,63 @@ def test_the_tool_hooks_refuse_a_prompt_event(place, monkeypatch):
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
         {"toolName": "bash", "toolArgs": {"command": "ls"}, "cwd": str(place.repo)})))
     assert fasthook.main() == 0
+
+
+# --- Mode A wiring ------------------------------------------------------------------------------
+
+def _prompt_entries(w):
+    return [h for g in w["hooks"]["UserPromptSubmit"] for h in g["hooks"]]
+
+
+def test_the_wiring_has_the_prompt_entry(tree):
+    from phiward import install
+    cfg = config.load(str(tree / "repo"))
+    user = _prompt_entries(install.wiring(cfg))
+    assert len(user) == 1 and user[0]["timeout"] == 10 and user[0]["onFailure"] == "block"
+    assert user[0]["command"] == install.isolated_command(sys.executable, "prompt-scan")
+    assert install.isolated_python(user[0]["command"], "prompt-scan") == sys.executable
+    proj = _prompt_entries(install.wiring(cfg, project=True, project_dir=str(tree / "repo")))
+    assert proj == [{"type": "command", "command": install.PROJECT_PROMPT_HOOK, "timeout": 10,
+                     "onFailure": "block"}]
+
+
+def test_merge_keeps_the_operators_prompt_hooks_and_replaces_older_forms(tree):
+    from phiward import install
+    w = install.wiring(config.load(str(tree / "repo")))
+    mine = {"type": "command", "command": "/opt/tools/my-prompt-log"}
+    old = {"type": "command", "command": "/usr/local/bin/phiward prompt-scan claude"}
+    current = {"hooks": {"UserPromptSubmit": [{"hooks": [mine]}, {"hooks": [old]}]}}
+    m = install.merge(current, w)
+    got = _prompt_entries(m)
+    assert mine in got and old not in got
+    assert sum(1 for h in got if "prompt-scan" in h["command"]) == 1
+    assert install.merge(m, w) == m
+
+
+def test_the_plugin_hooks_are_the_project_wiring_for_every_event(tree):
+    from phiward import install
+    root = Path(__file__).resolve().parents[1]
+    plugin = json.loads((root / "plugin" / "hooks" / "hooks.json").read_text())
+    want = install.wiring(config.load(str(tree / "repo")), project=True,
+                          project_dir=str(tree / "repo"))["hooks"]
+    assert plugin["hooks"] == want
+    assert "prompt" in plugin["description"]
+
+
+@pytest.mark.parametrize("broken", ["phiward", "awk"])
+def test_the_project_prompt_hook_blocks_with_json_when_it_cannot_run(tmp_path, broken):
+    from phiward import install
+    cmd = install.PROJECT_PROMPT_HOOK
+    env = {"PATH": str(tmp_path)}  # no phiward on PATH
+    if broken == "awk":
+        # a phiward on PATH, and an awk that cannot start
+        (tmp_path / "phiward").write_text("#!/bin/sh\nexit 0\n")
+        (tmp_path / "phiward").chmod(0o755)
+        cmd = cmd.replace("/usr/bin/awk", str(tmp_path / "no-awk"))
+        env["PATH"] = f"{tmp_path}:/usr/bin:/bin"
+    r = subprocess.run(cmd, shell=True, input="{}", capture_output=True, text=True, env=env,
+                       timeout=30)
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    reply = json.loads(r.stdout)
+    assert reply["decision"] == "block" and "every prompt" in reply["reason"]
+    assert reply["hookSpecificOutput"]["suppressOriginalPrompt"] is True
