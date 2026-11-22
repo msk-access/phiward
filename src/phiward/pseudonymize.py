@@ -202,9 +202,8 @@ SURROGATE = re.compile("[\ud800-\udfff]")  # a lone surrogate: no UTF-8 form
 MD_ALIGN = re.compile(r":?-+:?")  # a cell of a pipe table's alignment row
 MD_MARKS = re.compile(r"[*_~]")  # the marks of emphasis and strike-through
 # every dash (Unicode category Pd) and the look-alikes outside it, as `-`: for the scan and the
-# twin rule only
-DASHES = {c: "-" for c in range(sys.maxunicode + 1)
-          if unicodedata.category(chr(c)) == "Pd" or c in (0x2212, 0x2043, 0x02D7, 0x30FC)}
+# twin rule only (one table with the sanitizer's form, `inventory.normalize`)
+DASHES = inventory.DASHES
 ROUNDS = 4  # rounds of normalizing and decoding escapes, at most
 MD_MARKUP = re.compile(r"[*~]|(?<![0-9A-Za-z])_|_(?![0-9A-Za-z])")  # emphasis: not in a header
 
@@ -744,10 +743,7 @@ def _long(norm_id: str) -> bool:
     return len(norm_id) >= 5 and not norm_id.isdigit()
 
 
-def _ascii_digits(text: str) -> str:
-    """Every Unicode decimal digit as its ASCII digit (`٩` -> `9`): for the scan only."""
-    return "".join(str(unicodedata.decimal(ch)) if ch > "\x7f" and
-                   unicodedata.category(ch) == "Nd" else ch for ch in text)
+_ascii_digits = inventory.ascii_digits  # `٩` -> `9`: for the scan only
 
 
 def _plain(text: str) -> str:
