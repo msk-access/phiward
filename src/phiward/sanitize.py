@@ -413,7 +413,7 @@ class Sanitizer:
         # spans and pieces are both in line order and do not overlap among themselves: one walk
         cuts: List[Tuple[int, int, str]] = []
         j = 0
-        for s, e, r in _whole_numbers(line, found):
+        for s, e, r in _whole_numbers(line, found, table):
             while j < len(places) and places[j][1] + places[j][2] <= s:
                 j += 1
             k = j
@@ -640,6 +640,7 @@ class Columns:
         self.is_id: List[bool] = []
         self.headers = 0  # header lines found (0 or 1)
         self.rows = 0  # rows read by column
+        self._plain = ""  # the last row as the steps alone show it (`_row`)
 
     def reset(self) -> None:
         """Text mode to the end (after a line too long to read)."""
@@ -663,13 +664,21 @@ class Columns:
                 except _Misfit:
                     self.state = "none"
                     return self.san.clean(text)
-                # the second pass: the shown row read again gives itself, else it is withheld
-                try:
-                    if normalize(out) != out or self._row(out, again=True) != out:
-                        self.state = "none"
-                        return WITHHELD
-                except _Misfit:
+                # the second pass: the shown row read again gives itself, else it is withheld.
+                # The table ends where it ended before: when the row as the steps alone show it
+                # (`_plain`) fails its own second pass. A row that fails only by a mask in
+                # another spelling (it can leave a root right before a placeholder) is
+                # withheld, and the table goes on
+                plain = self._plain
+                why = self._check(out)
+                if plain != out:
+                    before = self._check(plain, plain=True)
+                else:
+                    before = None if why in (None, "more") else why
+                if before is not None:
                     self.state = "none"
+                    return WITHHELD
+                if why is not None:
                     return WITHHELD
                 self.rows += 1
                 return out
@@ -699,26 +708,34 @@ class Columns:
         return True
 
     def _mask(self, line: str) -> str:
-        """The line in table mode; the steps' own output is kept in `_base` (`_row`)."""
-        self._base = self.san._steps(line, True)
-        return self.san._more(line, self._base, True)
+        """The line as the steps mask it in table mode (`_row` reads the columns in it)."""
+        return self.san._steps(line, True)
 
-    def _row(self, norm: str, again: bool = False) -> str:
+    def _check(self, out: str, plain: bool = False) -> Optional[str]:
+        """None when the shown row `out`, read again, gives itself; else "more" when only a mask
+        in another spelling changed it, or "steps"."""
+        try:
+            if normalize(out) == out and self._row(out, again=True, plain=plain) == out:
+                return None
+            return "steps"
+        except _Misfit as exc:
+            return exc.args[0] if exc.args else "steps"
+
+    def _row(self, norm: str, again: bool = False, plain: bool = False) -> str:
         """The row masked by column; `_Misfit` when it cannot be read so. `again`: the second
-        pass, where the masks of the whole line must change nothing."""
+        pass, where the masks of the whole line must change nothing. `plain`: the row as it was
+        read before the masks in other spellings. The first pass also keeps that row in
+        `_plain`."""
         d, n = self.delim, self.width - 1
         # a quoted CSV row is not parsed; and an escape has no form by column
         if '"' in norm or "\\" in norm or _PCT_ESCAPE.search(norm) or norm.count(d) != n:
             raise _Misfit()
         # the masks of today's table mode, on the whole line (an entry name may hold the
-        # delimiter); a mask that ate a delimiter makes a misfit. An ID cell takes its form from
-        # the steps alone (`base`), as before the other spellings: `<IDCOL>`, or the placeholder
-        # the steps wrote
+        # delimiter); a mask that ate a delimiter makes a misfit
         m = self._mask(norm)
-        base = self._base
-        if m.count(d) != n or base.count(d) != n or (again and m != norm):
+        if m.count(d) != n or (again and m != norm):
             raise _Misfit()
-        cells, steps = m.split(d), base.split(d)
+        cells = m.split(d)
         # a row with no plain-number cell (another header, as from `cat a.csv b.csv`, or a row
         # of words) is not read: it may start other columns (on the second pass, an ID cell
         # that was a number is <IDCOL>)
@@ -727,28 +744,40 @@ class Columns:
         for i, c in enumerate(cells):
             core = c.strip()
             if self.is_id[i]:
-                if steps[i].strip() and steps[i].strip() not in self.known:
+                if core and core not in self.known:
                     cells[i] = IDCOL
-                else:
-                    cells[i] = steps[i]
             elif not _NUMBER.fullmatch(core):
                 cells[i] = self.san._apply(self.san.pos_rules, c)
+        if not plain:
+            # then the masks in other spellings, in each cell but an ID cell on its own (`_more`,
+            # on the cell as just masked): they never cross a delimiter, nor change a mask
+            if not again:
+                self._plain = d.join(cells)
+            more = [c if self.is_id[i] else self.san._more(a, c, True)
+                    for i, (a, c) in enumerate(zip(norm.split(d), cells))]
+            if again and more != cells:
+                raise _Misfit("more")
+            cells = more
         return d.join(cells)
 
 
 _MARK = "\x00"  # never in a line: normalize removes control characters
-# a number: digits, with groups of thousands (`1,234,567`) or joined by `:` (`12:00`, `1:2345`)
-_NUMBER_RUN = re.compile(r"\d+(?:,\d{3}(?!\d)|:\d+)*")
+# a number: digits joined by `:` (`12:00`, `1:2345`); in text mode also a number of a million or
+# more in groups of thousands (`1,234,567`), as the `genomics` number rule reads one. Otherwise a
+# comma is a separator (a CSV row: `0001,123` is two cells), so a mask never takes one in
+_NUMBER_RUN = re.compile(r"\d+(?::\d+)*")
+_NUMBER_RUN_TEXT = re.compile(r"(?<![\d,])\d{1,3}(?:,\d{3}){2,}(?![\d,])|\d+(?::\d+)*")
 
 
-def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]]
+def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]], table: bool
                    ) -> List[Tuple[int, int, str]]:
     """Each (start, end, placeholder, rank) of `found` widened to the whole of a number
-    (`_NUMBER_RUN`) it starts or ends inside, so no part of a number is left bare; overlapping
-    ones joined, with one placeholder: `<PROTECTED>` when a protected path (rank -2) is in it,
+    (`_NUMBER_RUN`; in text mode `_NUMBER_RUN_TEXT`) it starts or ends inside, so no part of a
+    number is left bare; overlapping ones joined, with one placeholder: `<PROTECTED>` when a protected path (rank -2) is in it,
     else a rule's match that covers the joined span (the first rule), else `<ENTRY>` when a
     name (rank -1) is in it, else that of the span that starts first."""
-    runs = [(n.start(), n.end()) for n in _NUMBER_RUN.finditer(line)]
+    runs = [(n.start(), n.end())
+            for n in (_NUMBER_RUN if table else _NUMBER_RUN_TEXT).finditer(line)]
     starts = [ns for ns, _ne in runs]
 
     def run_at(i: int) -> Optional[Tuple[int, int]]:
