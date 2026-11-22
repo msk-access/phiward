@@ -1385,6 +1385,11 @@ the user config (<a href="../configuration/#who-may-set-what">configuration.md</
 </ol>
 <p>Under <code>phiward launch</code> (Mode B) the kernel decides. The hook there is a quick first layer
 (<code>fasthook.py</code>).</p>
+<p>A prompt goes through another hook, before Claude Code sends it: <code>phiward prompt-scan claude</code>
+(<code>promptscan.py</code>). It builds the sanitizer from the user config's packs and patterns, without
+the detail rules, positions, names and entries (<code>Sanitizer.from_config(identifiers_only=True)</code>),
+and refuses the prompt when the sanitizer would change a line of it, or the absolute form of a
+path-like word in it. <code>hook claude</code> and <code>fasthook</code> refuse any event but <code>PreToolUse</code>.</p>
 <h2 id="one-gateway-request">One gateway request<a class="headerlink" href="#one-gateway-request" title="Permanent link">&para;</a></h2>
 <p><code>phiward run -- CMD</code> is a client only. The broker runs the command, outside the agent.</p>
 <pre class="mermaid"><code>flowchart TD

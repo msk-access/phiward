@@ -1997,8 +1997,48 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   IDE's open file and selection, which Claude Code adds to the prompt (only its best-effort
   <code>Read</code> deny rules apply; set <code>claudeCode.attachSelection</code> and <code>claudeCode.attachOpenFile</code> to
   false in VS Code); a session whose own launch environment sets the variable (the Desktop app,
-  a runner); and any Claude Code older than v2.1.299. A prompt a person types or pastes is not
-  scanned.</p>
+  a runner); and any Claude Code older than v2.1.299. What a person types or pastes into Claude
+  Code is checked by <a href="#known-prompt-scan">the prompt scan</a>; in another tool that runs the same
+  hooks, it may not be.</p>
+</li>
+<li>
+<p><a id="known-prompt-scan"></a><strong>The prompt scan is a tripwire for honest pasting, not a
+  boundary.</strong> phiward's <code>UserPromptSubmit</code> hook (<code>phiward prompt-scan claude</code>, in both modes)
+  refuses a prompt that the sanitizer would change: a match of the user config's packs or
+  <code>[sanitize] patterns</code> (built-in <code>detail</code> rules left out), or a path below a protected root or
+  a <code>[remote] roots</code> entry (<a href="../configuration/#sanitize">configuration.md</a>). The message names
+  the kind, never the value. A config or pack file it cannot use, a prompt over 1 MiB, or an
+  error refuses the prompt. What it does not stop:</p>
+</li>
+<li>It protects Claude Code only. Other tools that run the hooks of <code>.claude/settings.json</code> may
+    ignore a prompt hook's answer (GitHub Copilot in VS Code does), so there the prompt is sent.</li>
+<li>Other prompt hooks (<code>UserPromptSubmit</code>, <code>UserPromptExpansion</code>) run in parallel with
+    phiward's, at any settings level or in a plugin, so phiward's block does not keep the prompt
+    from them. <code>doctor</code> warns of each one; nothing removes them.</li>
+<li>A session can add a prompt hook to settings it can write. Under <code>phiward launch</code> the entry
+    is in the session's own <code>settings.json</code>, which the session can edit: it can remove phiward's
+    prompt entry. A settings <code>env</code> that sets <code>PHIWARD_CONFIG</code> changes the config the scan reads
+    (doctor names it in a project's settings; under launch, the session's own settings can set
+    it).</li>
+<li>It does not see pasted images, the clipboard or other programs, the IDE's selection and
+    open file (only the best-effort <code>Read</code> deny rules apply), or what a skill, a custom command,
+    a <code>!</code> command or an MCP prompt expands to: it sees the prompt as typed.</li>
+<li>Entry names under the roots are not checked: <code>FAKE-PT-0001</code> typed alone is sent; a path
+    below a root is not. Nor are relative paths with no <code>/</code>, paths with spaces and no quotes, or
+    a link spelling of a root whose target does not exist. The derived protected folders (a
+    work tree's <code>.git</code>, the cache folder) do not count.</li>
+<li>What the packs do not catch is not caught: an ID glued to letters (<code>patientFAKE-PT-0001</code>;
+    the rules start at a word edge), and free text that is not an identifier. With <code>genomics</code>
+    alone, file names, read names, positions and numbers are details and are sent.</li>
+<li>The hook also runs on automatic turns (<code>/loop</code>, scheduled tasks, a background subagent's
+    report, a message from another session); a blocked one stalls the loop, and the user sees
+    the reason.</li>
+<li>A blocked prompt stays in the local transcript and the prompt history, which are not
+    guarded paths in Mode A.</li>
+<li>
+<p>Under <code>phiward launch</code>, a user pack file inside a protected root cannot be read, so every
+    prompt is refused (<code>doctor</code> warns). Below Claude Code 2.1.295 the hook fails open (no
+    <code>onFailure</code>).</p>
 </li>
 <li>
 <p><a id="known-leftover-processes"></a><strong>A gateway command's leftover processes (macOS).</strong> A request ends when its command ends, and the

@@ -899,6 +899,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#phiward-prompt-scan-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward prompt-scan claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#phiward-mcp" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1580,6 +1591,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#phiward-prompt-scan-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward prompt-scan claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#phiward-mcp" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2196,6 +2218,27 @@ Detail: <a href="../setup/#claude-code">setup.md</a>.</p>
 <tr>
 <td><code>-h</code>, <code>--help</code></td>
 <td>Show the help (<code>phiward session-note --help</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-prompt-scan-claude">phiward prompt-scan claude<a class="headerlink" href="#phiward-prompt-scan-claude" title="Permanent link">&para;</a></h3>
+<p>The check of each prompt before Claude Code sends it, run as a UserPromptSubmit hook. A prompt
+that holds a match of the user config's packs or <code>[sanitize] patterns</code>, or a path below a
+protected root, is not sent; the reply names the kind, never the value.
+Detail: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward prompt-scan claude   (reads the hook payload on stdin)
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help (<code>phiward prompt-scan --help</code>).</td>
 </tr>
 </tbody>
 </table>

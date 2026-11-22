@@ -1236,6 +1236,11 @@ only its login files (<code>.credentials.json</code>, <code>~/.claude.json</code
 <td>the gateway</td>
 </tr>
 <tr>
+<td>Prompts</td>
+<td>checked before they are sent: one with an identifier of your packs or a path below a root is not sent (<a href="../threat-model/#known-prompt-scan">threat-model.md</a>)</td>
+<td>the same check, written beside the fast hook in the session's own settings (the session can remove it)</td>
+</tr>
+<tr>
 <td>Use it for</td>
 <td>day-to-day work, every protected step through the gateway</td>
 <td>long sessions close to protected data, or untrusted input (web pages, other people's repositories)</td>

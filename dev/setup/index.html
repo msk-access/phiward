@@ -2001,7 +2001,7 @@ contributor (it can be committed) and puts the personal part into <code>.claude/
   gives <code>--yes</code>, before your config exists. After that, do not give <code>--yes</code> to an agent: read
   the diff yourself.</li>
 </ul>
-<p>The block has four parts.</p>
+<p>The block has five parts.</p>
 <ol>
 <li>One <code>PreToolUse</code> hook entry with the matcher <code>*</code> (every tool). It sets <code>"onFailure": "block"</code>: without it, Claude
    Code lets a tool call go on when the hook fails. The command is
@@ -2018,6 +2018,11 @@ contributor (it can be committed) and puts the personal part into <code>.claude/
    <code>... -I -m phiward ...</code>).</li>
 <li>A <code>SessionStart</code> hook (<code>phiward session-note claude</code>): every session starts with a short note
    on the rules (the gateway is the intended route). It names no protected path.</li>
+<li>A <code>UserPromptSubmit</code> hook (<code>phiward prompt-scan claude</code>, <code>"onFailure": "block"</code>, the same
+   command form as the first). It checks each prompt before Claude Code sends it. A prompt
+   that the sanitizer would change is not sent: a match of the user config's packs or
+   <code>[sanitize] patterns</code>, or a path below a protected root. The message names the kind, never
+   the value. What it does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</li>
 <li><code>permissions.deny</code>: <code>Read(...)</code> and <code>Edit(...)</code> rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
    tools, inside Claude Code.</li>

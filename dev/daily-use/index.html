@@ -564,6 +564,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-prompt-that-was-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A prompt that was not sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#messages-from-run-and-copy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1302,6 +1313,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#a-prompt-that-was-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A prompt that was not sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#messages-from-run-and-copy" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1684,6 +1706,16 @@ or to remove a guard. If it does, say no: that sends the data to the model provi
 no tool may read, list, search or print a protected path; use <code>phiward run -- CMD</code> as the
 whole command, or <code>phiward copy</code>. Once a config exists, it also refuses <code>phiward setup</code>,
 <code>broker</code>, <code>pin</code> and <code>carryover</code>: those are for the operator only.</p>
+<h3 id="a-prompt-that-was-not-sent">A prompt that was not sent<a class="headerlink" href="#a-prompt-that-was-not-sent" title="Permanent link">&para;</a></h3>
+<p>Before Claude Code sends a prompt, phiward checks it. A prompt that holds an identifier of
+your packs or <code>[sanitize] patterns</code>, or a path below a protected root, is not sent:
+<code>phiward: this prompt was not sent: it holds &lt;SAMPLEID&gt; (masked by your packs or [sanitize]
+patterns). ...</code>. The message names the kind, never the value, and the prompt does not reach
+the model. To go on, send it again without that part: use the masked form (<code>&lt;SAMPLEID&gt;</code>), a
+pseudonymized ID (<code>phiward pseudonymize</code>), or let the agent reach the data through the gateway
+(<code>phiward run -- CMD</code>). A message that ends "run <code>phiward doctor</code>" means the check itself
+could not run (a config or pack file it cannot use): every prompt is refused until it is fixed.
+What the check does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
 <h3 id="messages-from-run-and-copy">Messages from <code>run</code> and <code>copy</code><a class="headerlink" href="#messages-from-run-and-copy" title="Permanent link">&para;</a></h3>
 <p>Messages start with <code>run</code> or <code>copy</code> (the table shows <code>run</code>; <code>copy</code> says the same), and the real
 text goes on with more detail. Four come from the broker itself and start with <code>refused:</code>

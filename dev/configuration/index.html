@@ -1925,7 +1925,13 @@ listed in the
   own (user config only). A pack file has the lists <code>paths</code>, <code>identifiers</code>,
   <code>positions</code> and <code>keep_files</code>; the format is at the top of
   <code>phiward/packs/genomics.toml</code> in the installed package. A pack file must be a regular
-  file, not a link.</li>
+  file, not a link. A built-in pack may also list <code>detail</code>: placeholders of its own <code>paths</code> and
+  <code>identifiers</code> rules that are details, not identifiers (<code>genomics</code>: <code>&lt;BAMFILE&gt;</code> and <code>&lt;READ&gt;</code>).
+  The prompt scan leaves them out; output masking does not. In a pack file of your own the key
+  is checked and has no effect: every rule of your pack files counts as an identifier. With
+  <code>msk</code> on, a prompt that names <code>donor</code> (<code>donor_id</code>, <code>DonorSearch</code>), a <code>C-…</code> string
+  (<code>C-string</code>, <code>c-header</code>), or a folder called <code>clinical</code> or <code>inputs/patient</code> is not sent,
+  until the pack's rules are tightened (a follow-up).</li>
 <li><strong><code>names_from</code></strong> (list of files). Index files: each line is tab-separated fields; in each field
   that holds a <code>/</code>, every path part of 4 or more characters, the part before its first dot, and
   its <code>-</code>/<code>_</code>/<code>.</code> pieces are masked as <code>&lt;NAME&gt;</code> (never a stop word or a bare number). A file
@@ -1967,6 +1973,19 @@ listed in the
 </ul>
 <p>Built-in packs: <code>genomics</code> (the default), <code>msk</code>, and <code>dates</code> (v0.2, off by default: dates and
 times become <code>&lt;DATE&gt;</code>, for example the dates <code>ls -l</code> prints).</p>
+<p><strong>These keys also block prompts.</strong> Before Claude Code sends a prompt, the prompt scan asks
+whether the sanitizer would change it; if so, the prompt is not sent. Three groups count:
+- every rule of <code>[sanitize] patterns</code>, and every rule of a pack file named in <code>packs</code>;
+- the rules of the built-in packs in the user config's <code>packs</code> (the default <code>genomics</code> when it
+  names none), except those a pack lists as <code>detail</code>. So <code>msk</code> IDs block, and with the <code>dates</code>
+  pack on, a date blocks too (<code>the 2026-11-22 release</code>). With <code>genomics</code> alone, file names,
+  read names, positions and numbers do not block;
+- a path at or below a protected root or pattern (also <code>~/...</code>, <code>$HOME/...</code> and a relative path
+  with a <code>/</code>, read from the session's folder), and below a <code>[remote] roots</code> entry.</p>
+<p>What does not count: entry names under the roots (<code>FAKE-PT-0001</code> typed alone is sent),
+<code>names_from</code>, a repo config's packs (<code>patterns</code> and pack files are user config only anyway),
+and the derived protected folders. Details and limits:
+<a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
 <h3 id="copy"><code>[copy]</code><a class="headerlink" href="#copy" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>remotes</code></strong> (list of <code>host:/absolute/prefix</code>). <code>phiward copy</code> may use a place under one
