@@ -27,7 +27,6 @@ SCRIPT = PKG / "data" / "clean-exec.sh"
 AWK = PKG / "data" / "clean-env.awk"
 PLUGIN = ROOT / "plugin"
 EVENTS = {"PreToolUse": "hook", "SessionStart": "session-note", "UserPromptSubmit": "prompt-scan"}
-OLD_CLAUDE = "2.1.200 (Claude Code)"
 
 
 def _entries(hooks):
@@ -240,30 +239,109 @@ def _fake(path: Path, text: str) -> str:
     return str(path)
 
 
+def _npm(folder: Path, version: str, marker: Path, name: str = "@anthropic-ai/claude-code",
+         text: str = "") -> str:
+    """A made-up npm build: a script that leaves `marker` if it is ever started, and its
+    package's package.json beside it."""
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "package.json").write_text(
+        text or json.dumps({"name": name, "version": version, "bin": {"claude": "claude"}}))
+    return _fake(folder / "claude", f"#!/bin/sh\ntouch {marker}\necho '{version} (Claude Code)'\n")
+
+
 def test_the_claude_code_floor(tmp_path):
     from phiward import wholetool
     places = [str(tmp_path / "project")]
-    old = _fake(tmp_path / "a" / "claude", f"#!/bin/sh\necho '{OLD_CLAUDE}'\n")
+    ran = tmp_path / "RAN"
+    old = _npm(tmp_path / "a", "2.1.200", ran)
     assert "2.1.295" in wholetool.claude_version_problem(old, places)
-    new = _fake(tmp_path / "b" / "claude",
-                "#!/bin/sh\n[ \"$*\" = --version ] && echo '2.1.330 (Claude Code)'\n")
+    new = _npm(tmp_path / "b", "2.1.330", ran)
     assert wholetool.claude_version_problem(new, places) == ""
+    # a link to the script (npm's bin/claude) finds the package the same way
+    os.symlink(new, tmp_path / "claude-link")
+    assert wholetool.claude_version_problem(str(tmp_path / "claude-link"), places) == ""
+    assert not ran.exists()  # a script is read, never started
     # no version, whatever the program's name: refused, with the way on
     for name, text in (("claude", "exit 1"), ("claude", "echo"),
                        ("made-up-agent", "echo 'made-up 1.0'"),
                        ("my-claude", f"exec {new} --verbose \"$@\"")):  # a wrapper
-        p = _fake(tmp_path / "c" / name, f"#!/bin/sh\n{text}\n")
+        p = _fake(tmp_path / "c" / name, f"#!/bin/sh\ntouch {ran}\n{text}\n")
         why = wholetool.claude_version_problem(p, places)
         assert "directly" in why and "--tool generic" in why, (name, why)
+    assert not ran.exists()
+
+
+@pytest.mark.parametrize("bad", ["another-name", "not json", "too big", "no version", "a list"])
+def test_a_script_whose_package_json_is_not_claude_codes_is_refused(tmp_path, bad):
+    from phiward import wholetool
+    ran = tmp_path / "RAN"
+    text = {"not json": "{2.1.330", "a list": "[\"2.1.330\"]",
+            "too big": json.dumps({"name": "@anthropic-ai/claude-code", "version": "2.1.330",
+                                   "x": "y" * 200_000}),
+            "no version": json.dumps({"name": "@anthropic-ai/claude-code"})}.get(bad, "")
+    p = _npm(tmp_path / "pkg", "2.1.330", ran, name="made-up-claude", text=text)
+    why = wholetool.claude_version_problem(p, [str(tmp_path / "project")])
+    assert "directly" in why and "--tool generic" in why, why
+    assert not ran.exists()
+
+
+def test_a_script_with_no_package_json_is_refused_unstarted(tmp_path, monkeypatch):
+    # a mise or asdf shim, or an npm build whose PATH puts a project folder ahead of node: the
+    # interpreter it names could be the session's, so it is never started to ask a version
+    from phiward import wholetool
+    ran = tmp_path / "RAN"
+    shim = _fake(tmp_path / "shims" / "claude", "#!/usr/bin/env node\n")
+    node = _fake(tmp_path / "project" / "bin" / "node", f"#!/bin/sh\ntouch {ran}\n")
+    monkeypatch.setenv("PATH", f"{os.path.dirname(node)}:/usr/bin:/bin")
+    why = wholetool.claude_version_problem(shim, [str(tmp_path / "project")], dict(os.environ))
+    assert why and not ran.exists(), why
+
+
+def test_a_native_build_is_asked_from_the_root_folder(tmp_path, monkeypatch):
+    from phiward import wholetool
+    native = tmp_path / "opt" / "claude"
+    native.parent.mkdir()
+    native.write_bytes(b"\x7fELF\x02\x01\x01" + b"\0" * 64)
+    native.chmod(0o755)
+    seen = {}
+
+    def run(cmd, **kw):
+        seen.update(kw, cmd=cmd)
+        return subprocess.CompletedProcess(cmd, 0, "2.1.330 (Claude Code)\n", "")
+    monkeypatch.setattr(wholetool.subprocess, "run", run)
+    assert wholetool.claude_version_problem(str(native), [str(tmp_path / "project")]) == ""
+    assert seen["cmd"] == [str(native), "--version"] and seen.get("cwd") == "/", seen
 
 
 def test_the_floor_never_starts_a_claude_the_session_can_write(tmp_path):
     from phiward import wholetool
     marker = tmp_path / "RAN"
+    places = [str(tmp_path / "project")]
     inside = _fake(tmp_path / "project" / "bin" / "claude",
                    f"#!/bin/sh\ntouch {marker}\necho '2.1.330 (Claude Code)'\n")
-    why = wholetool.claude_version_problem(inside, [str(tmp_path / "project")])
+    why = wholetool.claude_version_problem(inside, places)
     assert why and "write" in why and not marker.exists(), why
+    # nor through a link from outside to a file inside
+    os.symlink(inside, tmp_path / "claude")
+    why = wholetool.claude_version_problem(str(tmp_path / "claude"), places)
+    assert why and "write" in why and not marker.exists(), why
+    # nor with a package.json that links into a write place
+    pkg = tmp_path / "pkg"
+    _npm(pkg, "2.1.330", marker)
+    (tmp_path / "project" / "package.json").write_text((pkg / "package.json").read_text())
+    (pkg / "package.json").unlink()
+    os.symlink(tmp_path / "project" / "package.json", pkg / "package.json")
+    why = wholetool.claude_version_problem(str(pkg / "claude"), places)
+    assert why and not marker.exists(), why
+
+
+@pytest.mark.timeout(30)
+def test_a_fifo_named_as_claude_is_refused_without_a_hang(tmp_path):
+    from phiward import wholetool
+    fifo = tmp_path / "bin" / "claude"
+    fifo.parent.mkdir()
+    os.mkfifo(fifo)
+    assert wholetool.claude_version_problem(str(fifo), [str(tmp_path / "project")])
 
 
 @pytest.mark.parametrize("backend", ["seatbelt", "bwrap"])
@@ -273,7 +351,7 @@ def test_launch_refuses_a_claude_code_below_the_floor(tree, monkeypatch, backend
     monkeypatch.setattr(selfcheck, "check_isolated", lambda *a, **k: (False, []))
     # on this Mac the test's folder is in the per-user temp folder, a write place
     monkeypatch.setattr(wholetool, "_darwin_user_dir", lambda name: "")
-    old = _fake(tree / "made-up-bin" / "claude", f"#!/bin/sh\necho '{OLD_CLAUDE}'\n")
+    old = _npm(tree / "made-up-bin", "2.1.200", tree / "RAN")
     with pytest.raises(wholetool.LaunchError, match="2.1.295"):
         wholetool.build([old], str(tree / "repo"), dict(os.environ), wholetool.ADAPTERS["claude"])
 
