@@ -100,20 +100,6 @@ MSK_INTENDED = [
     ("x C-FAKE01 y", "x <CMOID> y"), ("x C-ABCDEF y", "x <CMOID> y"),
     ("x C-ABCDEF-L001 y", "x <CMOID> y"), ("x C-ABC123_P001_d y", "x <CMOID> y"),
     ("x s_C_FAKE01_P001_d y", "x <CMOID> y"), ("x bam_C-FAKE02-N001 y", "x bam_<CMOID> y"),
-    # <CLINICALPATH>: a path on the share (absolute, any depth), or one with a number past it
-    ("x /clinical/FakeStudy/Doe_Jane/notes.txt y", "x <CLINICALPATH> y"),
-    ("x /clinical/fakeshare/study_00/A/FAKE0001-T.bam y", "x <CLINICALPATH> y"),
-    ("x /mnt/data/clinical/FakeStudy/x.bam y", "x <CLINICALPATH> y"),
-    ("x ~/clinical/FakeStudy/a.txt y", "x <CLINICALPATH> y"),
-    ("x host:/clinical/FakeStudy/a.txt y", "x <CLINICALPATH> y"),
-    ("x --in=/clinical/FakeStudy/a.txt y", "x --in=<CLINICALPATH> y"),
-    ("x '/clinical/FakeStudy/a.txt' y", "x '<CLINICALPATH>' y"),
-    ("x data/clinical/FAKE-PT-0001.bam y", "x <CLINICALPATH> y"),
-    # <PATIENTPATH>: a path with something past inputs/patient
-    ("x S:/tmp/work/inputs/patient/edge/12/slice.bam y", "x <PATIENTPATH> y"),
-    ("x inputs/patient/FAKE-PT-0001.bam y", "x <PATIENTPATH> y"),
-    ("x tests/inputs/patients/FakeCase y", "x <PATIENTPATH> y"),
-    ("x inputs/patient_FAKE1.bam y", "x <PATIENTPATH> y"),
 ]
 
 
@@ -126,6 +112,7 @@ def test_msk_rules_keep_masking_what_they_are_for(msk_only_packs, src, want):
 MSK_ORDINARY = [
     "the donor_id column", "rename donors to participants", "the DonorSearch class",
     "donor-derived cells", "a Donor", "how a C-string differs", "add a c-header",
+    "move src/clinical/report.py", "under tests/inputs/patient/ here",
 ]
 
 

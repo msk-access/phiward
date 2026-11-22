@@ -169,16 +169,15 @@ listed in the
 [threat model](threat-model.md#known-sanitizer-short-names).
 
 - **`packs`** (list). Built-in packs are `genomics` (the default) and `msk` (one institution's
-  identifiers; an example, not a default). A name with `/` is the path of a pack file of your
-  own (user config only). A pack file has the lists `paths`, `identifiers`,
+  identifiers; an example, not a default). No pack masks a folder layout: list your clinical
+  folders in `[protected_paths]`, or add a `[sanitize] patterns` rule for a custom path shape.
+  A name with `/` is the path of a pack file of your own (user config only). A pack file has the lists `paths`, `identifiers`,
   `positions` and `keep_files`; the format is at the top of
   `phiward/packs/genomics.toml` in the installed package. A pack file must be a regular
   file, not a link. A built-in pack may also list `detail`: placeholders of its own `paths` and
   `identifiers` rules that are details, not identifiers (`genomics`: `<BAMFILE>` and `<READ>`).
   The prompt scan leaves them out; output masking does not. In a pack file of your own the key
-  is checked and has no effect: every rule of your pack files counts as an identifier. With
-  `msk` on, a prompt that names a folder called `clinical` or `inputs/patient` is not sent
-  (the pack's example path rules).
+  is checked and has no effect: every rule of your pack files counts as an identifier.
 - **`names_from`** (list of files). Index files: each line is tab-separated fields; in each field
   that holds a `/`, every path part of 4 or more characters, the part before its first dot, and
   its `-`/`_`/`.` pieces are masked as `<NAME>` (never a stop word or a bare number). A file

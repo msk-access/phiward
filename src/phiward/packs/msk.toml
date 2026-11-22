@@ -1,24 +1,13 @@
-# EXAMPLE sanitizer pack: the identifier forms of one institution (MSK) and an example path
-# layout. It is not a default; choose it in `phiward setup` (option 2 of the identifier
-# question), or name it in the config:
+# EXAMPLE sanitizer pack: the identifier forms of one institution (MSK). It is not a default;
+# choose it in `phiward setup` (option 2 of the identifier question), or name it in the config:
 #   [sanitize]
 #   packs = ["genomics", "msk"]
 # Copy it and change the rules for another institution. The format is described at the top of
 # genomics.toml.
 #
-# Two rules are examples of a project's folder layout, not facts about any institution:
-#   <PATIENTPATH>  any path token holding inputs/patient
-#   <CLINICALPATH> any path token under /clinical/ (a made-up share of clinical data; change
-#                  the prefix to your own)
-# They run first (the `paths` list), so a clinical path is masked as a whole before a file-name
-# rule sees it.
+# Clinical folders are not a pack's business: list them in `[protected_paths]`.
 [pack]
 name = "msk"
-
-paths = [
-  '[^\s\x27\x22=,;()\[\]]*inputs/patient[^\s\x27\x22=,;()\[\]]* => <PATIENTPATH>',
-  '[^\s\x27\x22=,;()\[\]]*/clinical/[^\s\x27\x22=,;()\[\]]* => <CLINICALPATH>',
-]
 
 identifiers = [
   # (every identifier rule is applied in any letter case; `(?<![A-Za-z0-9])` lets an ID follow `_`)
