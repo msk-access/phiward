@@ -240,6 +240,7 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
     given, writes the command's input from the broker (a push's tar stream) in a thread."""
     os.makedirs(cfg.cache_dir, mode=0o700, exist_ok=True)
     scratch = tempfile.mkdtemp(prefix="run-", dir=cfg.cache_dir)
+    argv: List[str] = []
     try:
         # the gateway writes only its scratch folder and the places granted for this request
         # (`write_to`, or a copy's destination): never a protected root or pattern match as
@@ -404,6 +405,7 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                   + "\n")
         return seen
     finally:
+        confine.release_profile(argv)
         safeio.remove_tree(scratch)
 
 

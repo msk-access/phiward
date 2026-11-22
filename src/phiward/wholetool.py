@@ -422,6 +422,10 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # (sessions cannot read each other or the trusted copy's neighbours)
     own = [q for q in places if q.startswith(os.path.join(folder, "runs") + os.sep)]
     p += f"(deny file-read* (subpath {s(folder)}))"
+    # the gateway's pending profiles (confine.write_profile): not readable in the session (not
+    # a write place either, so not writable)
+    p += "".join(f"(deny file-read* (subpath {s(d)}))"
+                 for d in confine._spellings([confine.profiles_dir(env)]))
     p += "".join(f"(allow file-read* (subpath {s(q)}))" for q in own)
     # the folders above the run folder may be looked at (not listed), or path resolution fails
     # (Node's realpath, a shell's cd)

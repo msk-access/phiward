@@ -133,6 +133,15 @@ not know a project's own settings. So a project whose settings open a `PATH` fol
 writes (allowWrite `~/bin`) lets the agent put a program there, and a gateway call may run it (still
 confined, with its output sanitized). Keep tools out of folders a project opens.
 
+On macOS the broker writes each request's profile to a new file in `~/.phiward/profiles` (a
+random name, made only if no file has that name, mode 0600, read back before use) and runs
+`/usr/bin/sandbox-exec -f` on it; the file is removed when the command ends. No session can write
+that folder (Claude Code's sandbox denies `~/.phiward`; under `launch` it is not a write place),
+and the hidden list keeps the session's shell, its file tools and every gateway command from
+reading it; under `launch` the tool's own profile denies reading it. A request is refused when
+`~/.phiward` is a link, another account's, or writable by other accounts, or when `profiles` is a
+link or another account's; `profiles` is made 0700.
+
 "Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
 processes. macOS denies Mach services, and both macOS profiles also deny mounting file
 systems and creating launchd jobs; Linux uses seccomp, Landlock and new IPC and PID namespaces.

@@ -5,6 +5,7 @@
 # namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
 # The sandbox check's letter-case tests need a volume that ignores letter case (macOS).
 tests/test_confinement.py::test_gateway_network_grant
+tests/test_macos_gateway_profile_file.py::test_a_launch_session_cannot_read_a_pending_profile
 tests/test_macos_profile_mount_jobs.py::test_the_gateway_profile_refuses_a_mount_and_a_launchd_job
 tests/test_macos_profile_mount_jobs.py::test_the_tool_profile_refuses_a_mount_and_a_launchd_job
 tests/test_protected_paths.py::test_case_folding_on_macos

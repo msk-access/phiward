@@ -162,7 +162,9 @@ def test_bug1_the_profile_holds_the_resolved_place_only(tree):
     real = tree / "pub" / "real"
     real.mkdir()
     argv = _gateway_argv(["true"], [str(real)], [], False)
-    assert str(real) in argv[2] and "(subpath" in argv[2]
+    prof = open(argv[2]).read()  # the profile's file (sandbox-exec -f)
+    confine.release_profile(argv)
+    assert str(real) in prof and "(subpath" in prof
 
 
 # --- bug 2: a pattern match that is a link is not a write place --------------------------------

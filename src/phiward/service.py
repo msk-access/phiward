@@ -218,10 +218,10 @@ def load(path: str, runner=None) -> bool:
     uid = os.getuid()
     if sys.platform == "darwin":
         target = f"gui/{uid}/{LABEL}"
-        if run(["launchctl", "print", target], **q).returncode == 0:
-            steps = [["launchctl", "kickstart", "-k", target]]
+        if run(["/bin/launchctl", "print", target], **q).returncode == 0:
+            steps = [["/bin/launchctl", "kickstart", "-k", target]]
         else:
-            steps = [["launchctl", "bootstrap", f"gui/{uid}", path]]
+            steps = [["/bin/launchctl", "bootstrap", f"gui/{uid}", path]]
     else:
         unit = "phiward-broker.service"
         steps = [["systemctl", "--user", "daemon-reload"]]
