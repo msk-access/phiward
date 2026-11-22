@@ -77,6 +77,70 @@ def _program_there(h: Dict[str, Any]) -> bool:
     return shutil.which(first) is not None
 
 
+PROMPT_EVENTS = ("UserPromptSubmit", "UserPromptExpansion")
+HOOK_TYPES = ("command", "prompt", "agent", "http", "mcp_tool")
+
+
+def is_prompt_scan(h: Dict[str, Any]) -> bool:
+    """Whether a hook entry is phiward's prompt check, by its exact shape: the user form
+    (`install.isolated_command`), the project form and the plugin's (PROJECT_PROMPT_HOOK), or
+    an absolute `.../phiward prompt-scan claude`."""
+    if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash") \
+            or h.get("args"):
+        return False
+    command = str(h.get("command", ""))
+    if command == install.PROJECT_PROMPT_HOOK or install.isolated_python(command, "prompt-scan"):
+        return True
+    words = _hook_words(h)
+    return len(words) == 3 and words[0].startswith("/") and \
+        words[1:] == ["prompt-scan", "claude"] and os.path.basename(words[0]) in config.PROGRAMS
+
+
+def prompt_hooks(data: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    """(event, entry) for each UserPromptSubmit and UserPromptExpansion hook in a settings
+    object or a plugin's hooks.json."""
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return []
+    return [(ev, h) for ev in PROMPT_EVENTS
+            for g in (hooks.get(ev) if isinstance(hooks.get(ev), list) else [])
+            if isinstance(g, dict) and isinstance(g.get("hooks"), list)
+            for h in g["hooks"] if isinstance(h, dict)]
+
+
+def _hook_type(h: Dict[str, Any]) -> str:
+    t = h.get("type", "command")
+    return t if t in HOOK_TYPES else "unknown"
+
+
+def _other_prompt_hook(where: str, ev: str, h: Dict[str, Any]) -> str:
+    return (f"  WARNING: {where} has a {ev} hook of type `{_hook_type(h)}`: it runs beside "
+            "phiward's prompt check, and may send the prompt on (the check is a tripwire, not a "
+            "boundary)")
+
+
+def plugin_prompt_lines(project: str, home: str) -> List[str]:
+    """The WARNINGs for the prompt hooks of each enabled plugin other than phiward's (its
+    hooks/hooks.json in each installed copy that applies here)."""
+    from phiward import claude_settings, mcp_config
+    enabled: Dict[str, bool] = {}
+    for _lvl, _p, data in claude_settings.levels(project, home):
+        plugins = data.get("enabledPlugins") if isinstance(data, dict) else None
+        if isinstance(plugins, dict):
+            for k, v in plugins.items():
+                if isinstance(k, str) and k not in enabled:
+                    enabled[k] = v is True  # the highest level that names it wins
+    out: List[str] = []
+    for key in sorted(k for k, on in enabled.items() if on and k != "phiward@phiward"):
+        roots = (mcp_config._plugin_roots(home, dict(os.environ), project,
+                                          key.split("@", 1)[0]) or {}).get(key, [])
+        for root in roots:
+            data, _err = claude_settings.read_settings(os.path.join(root, "hooks", "hooks.json"))
+            for ev, h in prompt_hooks(data):
+                out.append(_other_prompt_hook(f"the enabled plugin {key}", ev, h))
+    return out
+
+
 @dataclass
 class Wiring:
     """What Claude Code's settings files say about phiward's hook, for `doctor` and its
@@ -109,6 +173,20 @@ def wiring_state(project: str, home: str) -> Wiring:
         mine = [(g, h, form) for g in (data.get("hooks", {}) or {}).get("PreToolUse", []) or []
                 if isinstance(g, dict) for h in g.get("hooks", []) or [] if isinstance(h, dict)
                 for form in [hook_form(h)] if form]
+        prompts = prompt_hooks(data)
+        scans = [h for ev, h in prompts if ev == "UserPromptSubmit" and is_prompt_scan(h)]
+        w.lines += [_other_prompt_hook(f"the {level} settings", ev, h) for ev, h in prompts
+                    if not (ev == "UserPromptSubmit" and is_prompt_scan(h))]
+        if mine and not scans:
+            w.problems.append(f"the {level} settings run phiward's hook but not its prompt "
+                              "check (a UserPromptSubmit entry): run `(cd ~ && phiward install "
+                              "claude --user --write)`")
+        for h in scans:
+            if h.get("onFailure") != "block" or h.get("async") or h.get("asyncRewake") \
+                    or "if" in h:
+                w.problems.append(f"phiward's prompt check in the {level} settings has no "
+                                  "onFailure: block, or has `async` or `if`, so a prompt can be "
+                                  "sent unchecked")
         if mine:
             wired_levels.append(level)
             blocks = all(h.get("onFailure") == "block" for _g, h, _f in mine)
@@ -151,6 +229,7 @@ def wiring_state(project: str, home: str) -> Wiring:
             w.problems.append(f"disableAllHooks is true at the {disable[0]} level")
     if managed_only and "managed" not in wired_levels:
         w.problems.append("managed settings allow only managed hooks, and they do not run phiward")
+    w.lines += plugin_prompt_lines(project, home)
     on, level, off, path = install.plugin_state(project, home)
     if on:
         w.lines.append(f"  the phiward plugin is enabled ({level} settings): it carries hooks")
@@ -184,6 +263,17 @@ def wiring_state(project: str, home: str) -> Wiring:
                            "folder (a parent folder, another checkout) has no protection. Wire "
                            "your user settings too: `(cd ~ && phiward install claude --user --write)`.")
     return w
+
+
+def pack_lines(cfg: config.Config) -> List[str]:
+    """A WARNING for each user pack file inside a protected path: under `phiward launch` the
+    prompt check cannot read it, so every prompt is refused."""
+    from phiward import paths
+    pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
+    return [f"WARNING: a pack file of the user config ({p}) is inside a protected path: under "
+            "`phiward launch` the prompt check cannot read it, and refuses every prompt. Move it "
+            "out of the root." for p in cfg.user_packs
+            if "/" in p and pset.relation(os.path.expanduser(p)) == paths.INSIDE]
 
 
 def claude_report(project: str, home: str) -> List[str]:
@@ -698,6 +788,8 @@ def main(argv: List[str]) -> int:
     try:
         Sanitizer.from_config(cfg)
         print(f"sanitizer: ok (packs: {', '.join(cfg.packs) or 'default'})")
+        for line in pack_lines(cfg):
+            print(line)
     except SanitizerError as exc:
         print(f"PROBLEM: the sanitizer cannot start: {exc}")
         return 1
