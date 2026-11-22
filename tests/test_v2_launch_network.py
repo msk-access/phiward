@@ -18,6 +18,7 @@ import errno
 import json
 import os
 import socket
+import stat
 import subprocess
 import sys
 import threading
@@ -26,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import needs_confine, tool_py
+from helpers import landlock_abi, needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -809,7 +810,12 @@ def test_1_2_the_session_cannot_reach_this_machines_loopback(tree, server, how):
     elif how == "entry":
         _, out = launch(tree, probe, extra=("--entry", ID))
     else:
-        _, out = launch(tree, _inner(["--", PY, "-c", probe]))
+        # macOS: a launch inside a session knows it by the account's home folder, never HOME
+        home = {}
+        if sys.platform == "darwin":
+            import pwd
+            home = {"HOME": pwd.getpwuid(os.getuid()).pw_dir}
+        _, out = launch(tree, _inner(["--", PY, "-c", probe]), env_extra=home)
     got = _direct(out)
     assert not any(v.startswith("REACHED") for v in got.values()), got
     if sys.platform == "darwin":  # the profile refuses: EPERM, not a missing listener
@@ -1118,9 +1124,10 @@ def test_17_the_tool_reaches_a_made_up_upstream_through_the_proxy(tree, tool):
     assert any(h.startswith(b"CONNECT 8.8.4.4:443 ") for h in heads), heads
 
 
-# every mount in the session's view, and every entry of its /tmp: none is a socket
+# every mount in the session's view, and every entry of its /tmp, that is a socket, and what a
+# connect to it gets
 NO_SOCKET_PATH = r"""
-import os, stat
+import json, os, socket, stat
 found = []
 with open('/proc/self/mountinfo') as fh:
     points = [ln.split()[4] for ln in fh]
@@ -1137,16 +1144,44 @@ for root, dirs, files in os.walk('/tmp'):
                 found.append(os.path.join(root, n))
         except OSError:
             pass
-print('SOCKETS', sorted(set(found)))
+got = {}
+for p in sorted(set(found)):
+    try:
+        s = socket.socket(socket.AF_UNIX)
+        s.settimeout(5)
+        s.connect(p)
+        got[p] = 'REACHED'
+        s.close()
+    except OSError as e:
+        got[p] = 'REFUSED %s' % e.errno
+print('SOCKETS', json.dumps(got))
 """
+
+
+def _host_socket(path):
+    try:
+        return stat.S_ISSOCK(os.stat(path).st_mode)
+    except OSError:
+        return False
 
 
 @linux
 @needs_confine
 @pytest.mark.parametrize("tool", ["generic", "claude"])
 def test_17_no_socket_with_a_path_leads_to_the_proxy_in_the_session(tree, tool):
+    """The proxy has no path (the relay gets each connection on a socket pair), so a socket in
+    the view is either in the session's own /tmp (none may be) or a host service's, bound in
+    with its folder (GitHub's runners have snapd's and acpid's in /run): the session cannot
+    reach it (the rule of test_v2_launch_sockets: the tool itself, for --tool claude, only with
+    Landlock ABI 9; below it Claude Code's own sandbox holds them for Bash, a stated limit)."""
     _, out = _launch_tool(tree, tool, NO_SOCKET_PATH)
-    assert "SOCKETS []" in out, out
+    line = [ln for ln in out.splitlines() if ln.startswith("SOCKETS ")]
+    assert line, out
+    got = json.loads(line[0][8:])
+    ours = [p for p in got if p == "/tmp" or p.startswith("/tmp/") or not _host_socket(p)]
+    assert ours == [], got
+    if tool == "generic" or landlock_abi() >= 9:
+        assert not [p for p, v in got.items() if v == "REACHED"], got
 
 
 def test_17_the_proxy_for_a_relay_listens_on_no_path():
