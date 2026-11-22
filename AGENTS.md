@@ -33,7 +33,7 @@ simplicity, surgical changes, verifiable goals):
 
 - Run the suite from the repository root as [tests/README.md](tests/README.md) says:
   `uv run --with pytest --with pytest-timeout python -m pytest --timeout=300
-  --basetemp="$HOME/.cache/phiward-pt"`.
+  --basetemp=/tmp/phiward-pt`.
 - On Linux, the confinement tests need bubblewrap (`bwrap`); CI sets
   `PHIWARD_REQUIRE_CONFINE=1`, so there a missing backend fails the run.
 - Experiments that plant git commands, hooks or other files that run later belong in a Linux

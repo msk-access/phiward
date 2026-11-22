@@ -13,7 +13,7 @@ exits with `tail`'s code). Redirect to a log, then test `$?`.
 ```bash
 uvx ruff check;                                      echo "ruff rc=$?"
 uv run --quiet --with pytest --with pytest-timeout python -m pytest --timeout=300 -q \
-  -p no:cacheprovider --basetemp="$HOME/.cache/phiward-pt" > /tmp/phiward-suite.log 2>&1; echo "suite rc=$?"; tail -3 /tmp/phiward-suite.log
+  -p no:cacheprovider --basetemp=/tmp/phiward-pt > /tmp/phiward-suite.log 2>&1; echo "suite rc=$?"; tail -3 /tmp/phiward-suite.log
 ```
 
 - A test that skips must be listed in `tests/expected_skips_<platform>.txt`; CI fails on any
