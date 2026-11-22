@@ -144,10 +144,10 @@ is first masked on the whole line as in table mode (protected paths, entry names
 rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
 shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
 `12.5`, `1e-05`, `1,234,567`); any other text in it gets the position rules (`chr1:1234567` is
-`<LOCUS>`). The first line that is not such a row ends column mode: it and every later line are
+`<LOCUS>`). Then names and rule matches in other spellings (another dash, other digits, other separators) are masked inside each cell on its own: never in an ID cell, and never across a delimiter. The first line that is not such a row ends column mode: it and every later line are
 masked as text. Such a line is an empty line, a row with another field count, a quote, a
 backslash or a `%XX` escape, a row with no plain-number cell (another header, as from `cat
-a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. Output
+a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. A row that fails the second pass only because of the masks in other spellings is withheld, and column mode goes on. Output
 without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under `chrom` and `pos`, `chr1` and `1234567` are both
@@ -159,7 +159,13 @@ table mode (identifiers only; numbers and positions are kept).
 
 An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
 one that is a common word of the built-in stop list (for example `patient`, `normal`, `tumour`,
-`bam`, `runs`, `test`).
+`bam`, `runs`, `test`). Lines and names are compared with every dash read as `-` and every
+decimal digit as ASCII. A name of 5 or more letters and digits, with a letter, is also masked
+with its separators (`-`, `_`, `.`, a space; not a tab) changed or left out: `FAKE-PT-0001`
+masks `FAKE_PT_0001`, `FAKE PT 0001` and `FAKEPT0001`. Shorter and digits-only names, and
+names with a separator at either end, are masked only as written. What is not matched is
+listed in the
+[threat model](threat-model.md#known-sanitizer-short-names).
 
 - **`packs`** (list). Built-in packs are `genomics` (the default) and `msk` (one institution's
   identifiers; an example, not a default). A name with `/` is the path of a pack file of your
