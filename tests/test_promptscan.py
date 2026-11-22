@@ -2,7 +2,12 @@
 made up (FAKE-PT-0001, P-9990001-T01-IM6); the user config is a tmp file named by
 PHIWARD_CONFIG, with HOME in a tmp folder."""
 
+import io
+import json
 import os
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -169,3 +174,67 @@ def test_kinds_and_why_never_hold_input_text(place, text, user):
     assert v.blocked
     said = v.why + " ".join(v.kinds)
     assert not any(s in said for s in SECRETS) and str(place.data) not in said
+
+
+# --- the Claude Code adapter: `phiward prompt-scan claude` --------------------------------------
+
+def _scan(place, payload, user=""):
+    cfg_file = place.home.parent / "user.toml"
+    cfg_file.write_text(f'[protected_paths]\nroots = ["{place.data}"]\n' + user)
+    env = {"HOME": str(place.home), "PHIWARD_CONFIG": str(cfg_file), "PATH": os.environ["PATH"],
+           "PYTHONPATH": str(Path(promptscan.__file__).parents[1]), "PHIWARD_DEV": "1"}
+    data = payload if isinstance(payload, str) else json.dumps(payload)
+    return subprocess.run([sys.executable, "-m", "phiward", "prompt-scan", "claude"],
+                          input=data, capture_output=True, text=True, env=env,
+                          cwd=str(place.repo), timeout=60)
+
+
+def _prompt(place, text):
+    return {"hook_event_name": "UserPromptSubmit", "prompt": text, "cwd": str(place.repo),
+            "session_id": "s", "transcript_path": "/dev/null", "permission_mode": "default"}
+
+
+def _blocked_json(r):
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    reply = json.loads(r.stdout)
+    assert reply["decision"] == "block" and reply["reason"]
+    assert reply["hookSpecificOutput"] == {"hookEventName": "UserPromptSubmit",
+                                           "suppressOriginalPrompt": True}
+    assert r.stderr.strip() == reply["reason"]
+    return reply
+
+
+def test_prompt_scan_blocks_with_json_and_names_the_kind_only(place):
+    r = _scan(place, _prompt(place, "check P-9990001-T01-IM6"), MSK)
+    reply = _blocked_json(r)
+    assert "<SAMPLEID>" in reply["reason"] and "9990001" not in r.stdout + r.stderr
+
+
+def test_prompt_scan_clears_with_silence(place):
+    r = _scan(place, _prompt(place, "fix the failing test in src/main.py"))
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+@pytest.mark.parametrize("payload", [
+    "not json", "[1, 2]", {"hook_event_name": "UserPromptSubmit", "cwd": "/"},
+    {"hook_event_name": "UserPromptSubmit", "prompt": 7, "cwd": "/"},
+    {"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": {"file_path": "/x"},
+     "prompt": "hi", "cwd": "/"},
+])
+def test_prompt_scan_blocks_what_it_cannot_read(place, payload):
+    _blocked_json(_scan(place, payload))
+
+
+def test_the_tool_hooks_refuse_a_prompt_event(place, monkeypatch):
+    from phiward import fasthook
+    from phiward.adapters import claude
+    payload = json.dumps(_prompt(place, "hello"))
+    out, err = io.StringIO(), io.StringIO()
+    assert claude.main(io.StringIO(payload), out, err) == 2 and err.getvalue()
+    monkeypatch.setattr(sys, "stdin", io.StringIO(payload))
+    monkeypatch.setenv("PHIWARD_HOOK_ROOTS", json.dumps([str(place.data)]))
+    assert fasthook.main() == 2
+    # a payload with no event name (Copilot's form) still goes the old way
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(
+        {"toolName": "bash", "toolArgs": {"command": "ls"}, "cwd": str(place.repo)})))
+    assert fasthook.main() == 0
