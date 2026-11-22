@@ -134,6 +134,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- Docs: why.md and threat-model.md say whom phiward is built against: an honest user, and an
+  agent that text it reads can mislead; not a determined attacker who already runs code on the
+  machine.
 - `@path` mentions are turned off in the user settings and the `--settings` file
   (`env.CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`; Claude Code v2.1.299+; ignored in project
   settings, so none is written there). A mention would put a file's text into the prompt without
