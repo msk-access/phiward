@@ -26,7 +26,8 @@ What each layer covers, and what no layer covers, is in
 - `pathid.py`, `fsinfo.py`, `safeio.py`, `procinfo.py`: path identity, file-system facts, writes
   that never follow a link, process facts.
 - `core.py`: the `Action` every guard judges. `cli.py`: the commands. `fasthook.py`: the hook
-  under `phiward launch`, a quick first layer before the kernel. `session_note.py`: the note at the start of a session. `githooks.py`: the git hooks
+  under `phiward launch`, a quick first layer before the kernel. `session_note.py`: the note at the start of a session. `promptscan.py`: the
+  check of each prompt before it is sent (`prompt-scan claude`, a UserPromptSubmit hook). `githooks.py`: the git hooks
   `init` installs in users' repositories. `_toml.py`: the config file reader (Python 3.9 has no
 TOML reader). `names.py`: phiward's own program and module names (`agent-guards` stays an alias
 during the beta).

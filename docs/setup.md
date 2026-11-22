@@ -352,7 +352,7 @@ The block has five parts.
    command form as the first). It checks each prompt before Claude Code sends it. A prompt
    that the sanitizer would change is not sent: a match of the user config's packs or
    `[sanitize] patterns`, or a path below a protected root. The message names the kind, never
-   the value. What it does not see: [threat-model.md](threat-model.md#the-prompt-scan).
+   the value. What it does not see: [threat-model.md](threat-model.md#known-prompt-scan).
 4. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
    tools, inside Claude Code.

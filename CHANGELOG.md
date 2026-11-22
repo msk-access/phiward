@@ -85,6 +85,18 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   so the check warns: paste the token when `check.sh` asks for it.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
+- The prompt scan: a `UserPromptSubmit` hook (`phiward prompt-scan claude`, `onFailure:
+  block`) that `install` writes in the user and project wiring and the plugin, and `launch`
+  writes beside the fast hook. A prompt that the sanitizer would change is not sent: a match of
+  the user config's packs or `[sanitize] patterns`, or a path below a protected root or a
+  `[remote] roots` entry (also as `~/...`, `$HOME/...` or a relative path). The message names
+  the kind, never the value. Built-in packs label rules that are details (`detail`; genomics:
+  file and read names), and the scan leaves those and the positions out; with the `dates`
+  pack on, a date blocks. Entry names, `names_from` and derived roots do not count. It fails
+  closed. `doctor` reports a missing or weak prompt entry, warns of other prompt hooks and of a
+  user pack file inside a root. It is a tripwire for honest pasting, not a boundary: the limits
+  are in [docs/threat-model.md](docs/threat-model.md#known-prompt-scan). `hook claude` and
+  the fast hook now refuse a payload of any event but `PreToolUse`.
 
 ### Fixed
 
