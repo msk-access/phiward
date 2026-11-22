@@ -1317,6 +1317,13 @@ were refused, and the gateway returned masked output. Mode B is for the terminal
   folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder.</li>
 <li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
   threat model).</li>
+<li>On macOS the tool starts as <code>/usr/bin/sandbox-exec -f FILE TOOL ARGS...</code>, with nothing in
+  between. The profile is a new file in <code>~/.phiward/profiles</code>, as for the gateway, removed when
+  the tool ends. A program name is found on the session's <code>PATH</code> first; when there is none,
+  <code>launch</code> says so and exits 127. Inside another sandbox, <code>sandbox-exec</code> cannot apply the
+  profile, and nothing runs. When the tool exits with an error within a few seconds of its
+  start, <code>launch</code> adds a line: if <code>sandbox-exec</code> printed an error above it, <code>phiward doctor</code>
+  names the cause (inside another sandbox, or a profile that does not compile).</li>
 </ul>
 <h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
 <table>
@@ -1515,7 +1522,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
     make unix sockets at all, also its own (socketpairs and pipes work).</li>
 <li><strong>A launch inside a session</strong> (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
-  keeps more of the project read-only), and not another project's <code>.phiward.toml</code>. On macOS a file only that profile denies tells <code>launch</code> it is inside;
+  keeps more of the project read-only), and not another project's <code>.phiward.toml</code>. On macOS it decides from the session's own folder, found
+  from your account's home folder (not <code>HOME</code>): a file there that only that profile denies, and
+  a new file that only the session can make in its own run folder (<code>PHIWARD_RUN</code>, which <code>launch</code>
+  sets);
   on Linux the session's seccomp filter answers one unused system call with an error number
   nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
   profile; where <code>~/.phiward</code> cannot be written, that launch refuses and nothing runs.</li>

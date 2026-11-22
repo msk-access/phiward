@@ -1693,7 +1693,9 @@ writes (allowWrite <code>~/bin</code>) lets the agent put a program there, and a
 confined, with its output sanitized). Keep tools out of folders a project opens.</p>
 <p>On macOS the broker writes each request's profile to a new file in <code>~/.phiward/profiles</code> (a
 random name, made only if no file has that name, mode 0600, read back before use) and runs
-<code>/usr/bin/sandbox-exec -f</code> on it; the file is removed when the command ends. No session can write
+<code>/usr/bin/sandbox-exec -f</code> on it; the file is removed when the command ends. <code>phiward launch</code>
+writes the tool's profile there the same way and runs <code>/usr/bin/sandbox-exec -f FILE TOOL</code>, with
+no program in between; the file is removed when the tool ends. No session can write
 that folder (Claude Code's sandbox denies <code>~/.phiward</code>; under <code>launch</code> it is not a write place),
 and the hidden list keeps the session's shell, its file tools and every gateway command from
 reading it; under <code>launch</code> the tool's own profile denies reading it. A request is refused when
@@ -2588,7 +2590,8 @@ and the hook keeps that server bare. It is not made writable: a record the sessi
 can forge. This matters only for an MCP tool with a shell-like name under a <code>*</code> matcher: the hook
 that <code>launch</code> writes matches the file tools and Bash only, and the kernel profile confines the
 server. A launch inside the session runs its command directly, under the session's profile (on
-Linux it knows it is inside from the session's seccomp filter); that profile is wider than a
+Linux it knows it is inside from the session's seccomp filter; on macOS from the session's own
+run folder, found from the account's home folder, never <code>HOME</code>); that profile is wider than a
 server's own (<code>SERVER_READ_ONLY</code>), as on macOS. Any launch inside a session runs so, also for
 another project: that project's repo config (<code>.phiward.toml</code>) is not applied. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip <code>launch</code> anyway.</p>
 <p><strong>Plugins and configured servers.</strong> A launcher also notes a hash of its <code>CLAUDE_PLUGIN_ROOT</code>, which
