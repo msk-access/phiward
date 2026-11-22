@@ -136,7 +136,15 @@ def test_w1_shared_tmp_is_not_a_write_place(tree):
     assert "/.phiward/tools/" in out, out
 
 
-def test_w1_launch_inside_launch_runs_directly(tree):
+# macOS: the launch inside looks for the session's run folder under the account's home folder,
+# never HOME, so the test runs there with HOME set to it: on GitHub Actions only
+@pytest.mark.skipif(sys.platform == "darwin" and not os.environ.get("GITHUB_ACTIONS"),
+                    reason="macOS on GitHub Actions only: a launch inside a session uses the "
+                           "account's home")
+def test_w1_launch_inside_launch_runs_directly(tree, monkeypatch):
+    if sys.platform == "darwin":
+        import pwd
+        monkeypatch.setenv("HOME", pwd.getpwuid(os.getuid()).pw_dir)
     inner = (f"import subprocess, os; r = subprocess.run([{PY!r}, '-m', 'phiward', 'launch', '--', "
              f"{PY!r}, '-c', 'print(\"INNER-RAN\")'], capture_output=True, text=True, env=dict(os.environ, "
              f"PYTHONPATH={SRC!r})); print(r.stdout + r.stderr)")
