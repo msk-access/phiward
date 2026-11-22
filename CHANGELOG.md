@@ -175,6 +175,28 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   around a name under a root, the name reads as that rule's placeholder, as a name that does not
   exist would; nothing is masked less than before. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
   hook refuses them as identifiers.
+- Entry names now match across dashes, digits and separators. The sanitizer reads every dash
+  (U+2010, U+2013, U+2212, ...) as `-`, in lines and names alike, to find names in other
+  spellings; pack rules written with `-` match those spellings too, also with no inventory. Other
+  decimal digits (Arabic-Indic `٠١`, ...) are matched as ASCII digits, by entry names and by pack
+  rules (Python 3.9 knows fewer of them than later versions). The masked line is printed as
+  written. A name of 5 or more letters and digits, with a letter, is also masked with its
+  separators (`-`, `_`, `.`, a space) changed or left out: `FAKE-PT-0001` masks `FAKE_PT_0001`,
+  `FAKE PT 0001` and `FAKEPT0001`. Shorter names, digits-only names and names with a separator at
+  either end are matched as written only; a name whose stem is matched that way
+  (`FAKE-PT-0001.bam`) is matched whole as written only, so its extension stays for the file
+  rules. The sanitizer masks a line as before, then masks the names in other spellings, and each
+  rule's matches on the line read that way, in the text it left; its placeholders stay as they
+  are, so a line is never masked less than before. Such a mask takes the whole of a number it
+  starts or ends inside (`SAM_PLE12:00`; across a comma only a number of a million or more, and
+  only in text mode), and overlapping ones become one placeholder: `<PROTECTED>` when a protected
+  path is in it, else a rule's match that covers them all, else `<ENTRY>` when a name is in it,
+  else that of the first. In a table read by column (`--table`), the row is masked as before, then
+  these masks are made in each cell but an ID cell on its own; the table ends only where it ended
+  before (a row that only these masks keep from its second pass is withheld). A root whose name
+  holds another dash also matches a path written with `-`, so the hook and the git hooks refuse
+  that spelling too. Generic names under a root (`sample_01`) now also mask text such as
+  `sample 01`.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 
