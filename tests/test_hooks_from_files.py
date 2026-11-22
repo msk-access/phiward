@@ -137,7 +137,10 @@ def test_the_script_clears_the_python_and_loader_variables(tmp_path):
     (evil / "awk").write_text("#!/bin/sh\nexit 0\n")
     (evil / "awk").chmod(0o755)
     env = {"PATH": f"{evil}:/usr/bin:/bin", "PYTHONPATH": "/evil", "PYTHONWHATEVER": "1",
-           "LD_PRELOAD": "/evil.so", "DYLD_INSERT_LIBRARIES": "/evil.dylib",
+           # a loader variable that does not stop /bin/sh itself when it is wrong: where SIP is
+           # off (GitHub's macOS runners), DYLD_INSERT_LIBRARIES acts on the shell before the
+           # script's first line, which no script can clear; the awk list covers every DYLD_ name
+           "LD_PRELOAD": "/evil.so", "DYLD_LIBRARY_PATH": "/evil", "DYLD_FALLBACK_LIBRARY_PATH": "/evil",
            "__PYVENV_LAUNCHER__": "/evil/python", "OPENSSL_CONF": "/evil.cnf",
            "MallocStackLogging": "1", "GCONV_PATH": "/evil", "TZ": ":/evil/zone",
            "KEEP_ME": "FAKE-PT-0001", "XDG_CONFIG_HOME": "/kept"}
