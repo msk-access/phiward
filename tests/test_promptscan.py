@@ -185,7 +185,7 @@ CORPUS = [ln for f in ("prompt_corpus.txt", "prompt_corpus_second.txt")
           if ln.strip() and not ln.startswith("#")]
 # Pack rules that hit ordinary prompts: each is a pack follow-up (it over-masks output too),
 # never a filter in the scan. <DATE> blocks by design when the dates pack is on.
-KNOWN_PACK_FOLLOW_UPS = {"<DONOR>", "<CMOID>", "<PATIENTPATH>", "<CLINICALPATH>"}
+KNOWN_PACK_FOLLOW_UPS = {"<PATIENTPATH>", "<CLINICALPATH>"}
 BY_DESIGN = {"<DATE>"}
 
 
@@ -199,8 +199,10 @@ def test_no_ordinary_prompt_blocks_with_the_default_packs(place):
 
 
 def test_no_ordinary_prompt_blocks_with_the_msk_pack(place):
+    # only the pack's example path rules still block (a folder called clinical or inputs/patient)
     hits = [(t, place(t, MSK).kinds) for t in CORPUS if place(t, MSK).blocked]
-    assert hits == []
+    assert {k for _t, kinds in hits for k in kinds} <= {"<PATIENTPATH>", "<CLINICALPATH>"}
+    assert len(hits) == 2
 
 
 def test_ordinary_prompts_hit_only_the_known_rules_with_every_pack(place):

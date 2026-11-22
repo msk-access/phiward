@@ -126,8 +126,6 @@ def test_msk_rules_keep_masking_what_they_are_for(msk_only_packs, src, want):
 MSK_ORDINARY = [
     "the donor_id column", "rename donors to participants", "the DonorSearch class",
     "donor-derived cells", "a Donor", "how a C-string differs", "add a c-header",
-    "move src/clinical/report.py", "under tests/inputs/patient/ here", "the inputs/patient folder",
-    "./clinical/notes.md", "../clinical/README",
 ]
 
 

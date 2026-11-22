@@ -24,11 +24,13 @@ identifiers = [
   # (every identifier rule is applied in any letter case; `(?<![A-Za-z0-9])` lets an ID follow `_`)
   # sample and patient IDs: P-0000000-T01-IM6 and forms like it
   '(?<![A-Za-z0-9])P-\d{4,}(?:-[A-Za-z]\d{1,3})?(?:[-_][A-Za-z0-9]+)* => <SAMPLEID>',
-  # CMO IDs: C-ABC123-L001-d, s_C_ABC123_P001_d
-  '(?<![A-Za-z0-9])C-\w{6}(?:[-_]\w+)* => <CMOID>',
+  # CMO IDs: C-ABC123-L001-d, C-ABCDEF, s_C_ABC123_P001_d. A digit in the ID, or six capitals
+  # (`(?-i:...)` keeps their case), so `C-string` and `c-header` are words, not IDs
+  '(?<![A-Za-z0-9])C-(?=[\w-]*\d|(?-i:[A-Z]{6}))\w{6}(?:[-_]\w+)* => <CMOID>',
   '(?<![A-Za-z0-9])s_C_\w+ => <CMOID>',
   # anonymized BAM stems: AB123456-T
   '(?<![A-Za-z0-9])[A-Z]{2}\d{6}-[A-Z](?![A-Za-z0-9]) => <BAMID>',
-  # donor names
-  '(?<![A-Za-z0-9])Donor[\w\-]+ => <DONOR>',
+  # donor names: DonorFake-7, DONOR_X1. A digit in the name, so `donor_id`, `donors` and
+  # `DonorSearch` are words, not names
+  '(?<![A-Za-z0-9])Donor(?=[\w\-]*\d)[\w\-]+ => <DONOR>',
 ]

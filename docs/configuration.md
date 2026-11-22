@@ -177,9 +177,8 @@ listed in the
   `identifiers` rules that are details, not identifiers (`genomics`: `<BAMFILE>` and `<READ>`).
   The prompt scan leaves them out; output masking does not. In a pack file of your own the key
   is checked and has no effect: every rule of your pack files counts as an identifier. With
-  `msk` on, a prompt that names `donor` (`donor_id`, `DonorSearch`), a `C-…` string
-  (`C-string`, `c-header`), or a folder called `clinical` or `inputs/patient` is not sent,
-  until the pack's rules are tightened (a follow-up).
+  `msk` on, a prompt that names a folder called `clinical` or `inputs/patient` is not sent
+  (the pack's example path rules).
 - **`names_from`** (list of files). Index files: each line is tab-separated fields; in each field
   that holds a `/`, every path part of 4 or more characters, the part before its first dot, and
   its `-`/`_`/`.` pieces are masked as `<NAME>` (never a stop word or a bare number). A file
@@ -205,9 +204,9 @@ listed in the
   `hn`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
-  So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git
-  hook refuses a commit that holds them as it would an identifier, and `phiward sanitize
-  --check` counts them. To check that your rules match your data, run a command over it: the
+  So a word in an ID's shape is masked too (with the `msk` pack, `C-STRING` or `donor_v2`), the
+  git hook refuses a commit that holds it as it would an identifier, and `phiward sanitize
+  --check` counts it. To check that your rules match your data, run a command over it: the
   note at the end of `phiward run` counts the placeholders shown and says when no identifier
   placeholder was shown.
 - **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
