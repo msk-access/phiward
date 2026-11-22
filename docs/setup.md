@@ -24,7 +24,8 @@ Later: [change the setup](#change-the-setup),
 
 - Python 3.9 or newer.
 - macOS: `/usr/bin/sandbox-exec` (part of macOS; Apple marks it as deprecated, Claude Code uses
-  it too).
+  it too). On a Mac with an endpoint tool, your IT or security team may want the list of every
+  process phiward starts: [endpoint-security.md](endpoint-security.md).
 - Linux:
   - bubblewrap (`bwrap`) on the `PATH`;
   - Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The

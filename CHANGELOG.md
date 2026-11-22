@@ -100,6 +100,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- macOS: `doctor`'s gateway self-test runs `/usr/bin/true` by its full path, not `true`
+  from `PATH`.
 - macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
   systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
@@ -133,6 +135,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   masked or without writes there), and a bind listed twice.
 
 ### Docs
+
+- `docs/endpoint-security.md`, for IT and security teams: what phiward installs and writes,
+  and every process it starts on macOS, with its parent, image, how often it runs, its exact
+  command line and a command-line regex of at most 256 characters. A test records what phiward
+  starts and checks the page's list both ways. setup.md, launch.md, the troubleshooting list and
+  the threat model link to it.
 
 - A "Small counts" section in `docs/daily-use.md`: masking hides identifiers, not small counts;
   suppress counts of 7 or fewer, round the rest to 5, and watch for differencing (after

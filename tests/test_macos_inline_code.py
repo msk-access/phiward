@@ -5,9 +5,9 @@ The rule (macOS): no interpreter gets its program in argv (`python -c`, `sh -c`,
 `os.system`, `os.popen`), and no `ctypes`. A `-c`, `-e` or `-p` (also joined, `-Ic`) in a list
 whose program is not a known one, or added to an argv later, is a site too. A static scan of
 `src/phiward` and `plugin/` lists each site by file, scope and kind. The set must equal ALLOWED.
-ALLOWED holds the sites that run on Linux only, the listed exceptions, and the macOS sites not yet
-converted, each with the change that removes it. Each later change shrinks the list; a new site
-anywhere fails the test. Static: it starts no process.
+ALLOWED holds the sites that run on Linux only and the listed exceptions (each named on
+docs/endpoint-security.md); no macOS site is left to convert. A new site anywhere fails the test.
+Static: it starts no process; test_macos_processes.py records what phiward starts.
 """
 
 import ast

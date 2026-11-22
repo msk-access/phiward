@@ -43,6 +43,11 @@ flowchart TD
 3. The broker must run (for `run` and `copy`): best as a login service
    ([setup.md](setup.md#5-start-the-broker)), or `phiward broker` in a terminal of its own.
 
+On a Mac with an endpoint tool: a session starts `/usr/bin/sandbox-exec -f <profile>` with the
+tool's full path, and Claude Code then starts phiward's hook on each tool call.
+[endpoint-security.md](endpoint-security.md) lists each command line, for your IT or security
+team.
+
 ## Every session
 
 From the project folder:
