@@ -122,6 +122,16 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- macOS: the gateway's kernel profile is a file, run with `/usr/bin/sandbox-exec -f FILE`,
+  instead of the profile's text in the command line. The file is new for each request, in
+  `~/.phiward/profiles` (made 0700; the file 0600, removed when the request ends; files older
+  than a day are removed when the broker starts). A request is refused, with a message, when
+  `~/.phiward` is a link, another account's or writable by other accounts, or when `profiles`
+  is a link or another account's. `~/.phiward/profiles` is on the hidden list: Claude Code's
+  sandbox, the permission rules and the hook keep sessions from reading or writing it, and
+  gateway commands cannot read it. Run `phiward install claude --user --write` again to add it
+  to an existing wiring; `doctor` warns until then.
+- macOS: the login service runs `/bin/launchctl` by its full path, not from `PATH`.
 - `@path` mentions are turned off in the user settings and the `--settings` file
   (`env.CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`; Claude Code v2.1.299+; ignored in project
   settings, so none is written there). A mention would put a file's text into the prompt without

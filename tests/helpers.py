@@ -14,9 +14,29 @@ from phiward.guards import protected_paths
 
 
 # Whether the gateway's confinement works here (None) or why not: one sandboxed `true`, at
-# import (not inside a test, whose HOME and PATH are made up). With PHIWARD_REQUIRE_CONFINE=1
-# (CI) a missing backend fails the run instead of skipping the tests that need it.
-CONFINE_WHY = confine.self_test()
+# import (not inside a test, whose PATH is made up). With PHIWARD_REQUIRE_CONFINE=1 (CI) a
+# missing backend fails the run instead of skipping the tests that need it. HOME is a made-up
+# folder for the call: on macOS the profile is written to ~/.phiward/profiles, never the
+# operator's own.
+
+
+def _self_test():
+    import shutil
+    import tempfile
+    home = tempfile.mkdtemp(prefix="phiward-selftest-home-")
+    before = os.environ.get("HOME")
+    os.environ["HOME"] = os.path.realpath(home)
+    try:
+        return confine.self_test()
+    finally:
+        if before is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = before
+        shutil.rmtree(home, ignore_errors=True)
+
+
+CONFINE_WHY = _self_test()
 if CONFINE_WHY and os.environ.get("PHIWARD_REQUIRE_CONFINE") == "1":
     raise RuntimeError(f"confinement is required here but does not work: {CONFINE_WHY}")
 needs_confine = pytest.mark.skipif(CONFINE_WHY is not None,
