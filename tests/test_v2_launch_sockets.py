@@ -236,7 +236,8 @@ def test_a_javascript_claude_is_refused(tree, where):
     prog.chmod(0o755)
     code, out = launch(tree, "", "claude", program=["--", str(prog)])
     assert code == 126 and "STUB" not in out, out
-    assert "native build" in out, out
+    # in the project, the write-place refusal comes first: the file is not even read
+    assert ("folder the session can write" if where == "project" else "native build") in out, out
 
 
 @below9
@@ -354,22 +355,28 @@ def test_a_claude_subcommand_is_refused(tree, sub, word):
 
 
 @below9
-@pytest.mark.parametrize("how", ["versioned", "wrapper"])
-def test_claude_gets_the_settings_whatever_its_path(tree, how):
+def test_claude_gets_the_settings_whatever_its_path(tree):
     import json
     real = fake_native_claude(tree / "home" / ".local" / "share" / "claude" / "versions" /
                               "2.1.330")
-    if how == "versioned":
-        prog = real
-    else:
-        prog = tree / "bin" / "my-claude"
-        prog.parent.mkdir(exist_ok=True)
-        prog.write_text(f'#!/bin/sh\nexec "{real}" "$@"\n')
-        prog.chmod(0o755)
-    code, out = launch(tree, "", "claude", program=["--", str(prog), "-p", "hello"])
+    code, out = launch(tree, "", "claude", program=["--", str(real), "-p", "hello"])
     argv = argv_of(out)
     assert argv[:2] == ["-p", "hello"], argv
     assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
+
+
+@below9
+def test_a_wrapper_around_claude_is_refused_unstarted(tree):
+    # a script with no Claude Code package.json gives no version, and is never started to ask
+    real = fake_native_claude(tree / "home" / ".local" / "share" / "claude" / "versions" /
+                              "2.1.330")
+    prog = tree / "bin" / "my-claude"
+    prog.parent.mkdir(exist_ok=True)
+    prog.write_text(f'#!/bin/sh\nexec "{real}" "$@"\n')
+    prog.chmod(0o755)
+    code, out = launch(tree, "", "claude", program=["--", str(prog), "-p", "hello"])
+    assert code == 126 and "ARGV" not in out, out
+    assert "directly" in out, out
 
 
 @below9
