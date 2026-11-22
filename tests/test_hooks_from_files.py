@@ -245,7 +245,8 @@ def test_the_claude_code_floor(tmp_path):
     places = [str(tmp_path / "project")]
     old = _fake(tmp_path / "a" / "claude", f"#!/bin/sh\necho '{OLD_CLAUDE}'\n")
     assert "2.1.295" in wholetool.claude_version_problem(old, places)
-    new = _fake(tmp_path / "b" / "claude", "#!/bin/sh\necho '2.1.330 (Claude Code)'\n")
+    new = _fake(tmp_path / "b" / "claude",
+                "#!/bin/sh\n[ \"$*\" = --version ] && echo '2.1.330 (Claude Code)'\n")
     assert wholetool.claude_version_problem(new, places) == ""
     # no version, whatever the program's name: refused, with the way on
     for name, text in (("claude", "exit 1"), ("claude", "echo"),

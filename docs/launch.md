@@ -66,8 +66,11 @@ phiward launch --tool claude
   names the cause (inside another sandbox, or a profile that does not compile).
 - The hooks `launch` writes into the session's settings (the fast hook and the prompt check)
   run from a file in phiward's package, `<python> -I -S <package>/phiward/entry.py ...`, with
-  `onFailure: "block"`. On macOS `launch` refuses a Claude Code older than 2.1.295 (asked with
-  `claude --version`): an older one would run that Python without its arguments.
+  `onFailure: "block"`. So `launch --tool claude` refuses, on macOS and Linux, a Claude Code
+  older than 2.1.295, which would not honour them. It asks `TOOL --version` before the start,
+  never of a program inside the project or the session's folders. A tool that gives no Claude
+  Code version (another program, a wrapper) is refused too: run the Claude Code binary
+  directly, or use `--tool generic` for another tool.
 
 ## What a session can and cannot do
 

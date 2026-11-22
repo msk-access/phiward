@@ -142,8 +142,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `<python> -I -S <package>/phiward/entry.py ...`, now with `onFailure: "block"` on the fast
   hook too. Each failure still blocks: a script that is not there cannot start, a Python or
   `phiward` that is not there, an awk list that cannot be read, or a start without the
-  arguments exits 2, and `entry.py` exits 2 when phiward's code cannot be loaded. On macOS
-  `launch` refuses a Claude Code older than 2.1.295. `install --project` keeps its one
+  arguments exits 2, and `entry.py` exits 2 when phiward's code cannot be loaded.
+  `launch --tool claude` refuses, on macOS and Linux, a Claude Code older than 2.1.295, or a
+  tool that gives no Claude Code version (run the binary directly, or use `--tool generic`);
+  it never asks the version of a program inside the project or the session's folders.
+  `install --project` keeps its one
   `/bin/sh` line. **Re-install:** run `(cd ~ && phiward install claude --user --write)` once;
   it replaces the old entries in place, and until then `doctor` warns that they are in the
   older form. After an upgrade that moves phiward's Python, every tool call is refused until

@@ -704,8 +704,8 @@ BASH = "/bin/bash"
 VERSION_PATTERNS = (2, 1, 236)  # macOS: a wildcard denyRead holds under a wider allowRead
 VERSION_BLOCK_READS = (2, 1, 257)  # permissions.blockReadsOutsideWorkingDirectories
 VERSION_DENY_PROMPTS = (2, 1, 319)  # permissions.denyInsteadOfPrompting
-# a hook's `args` (exec form, 2.1.139) and `onFailure` (2.1.295): `launch` on macOS refuses an
-# older Claude Code, which would run the launched hook's Python alone
+# a hook's `onFailure` (2.1.295), and `args` (exec form, older than that): `launch` refuses an
+# older Claude Code, on every platform
 VERSION_HOOK_ARGS = (2, 1, 295)
 
 

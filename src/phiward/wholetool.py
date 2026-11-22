@@ -102,9 +102,11 @@ What the session can do:
   program that runs blocks unix sockets in the session (run Claude Code's native binary
   itself, which carries it; a JavaScript build is refused); hooks, MCP servers and Claude Code itself are outside that
   sandbox. Any other tool cannot make unix sockets at all.
-- --tool claude on macOS: Claude Code 2.1.295 or newer (`claude --version`). The hooks launch
-  writes into the session's settings run phiward's entry.py file with arguments, which an
-  older one would drop.
+- --tool claude: Claude Code 2.1.295 or newer, asked with `TOOL --version` before the start
+  (never of a program inside the project or the session's folders). The hooks launch writes
+  into the session's settings run phiward's entry.py file with arguments and onFailure, which
+  an older one would not honour. No Claude Code version (another program, a wrapper) is
+  refused: run the Claude Code binary directly, or use --tool generic.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -144,7 +146,7 @@ class Adapter:
                 sb["enabled"] = False
         # exec form, from a file in the package (entry.py): no inline code. A Claude Code that
         # ignores `args` would run the Python alone, so launch refuses one older than
-        # VERSION_HOOK_ARGS on macOS (claude_version_problem)
+        # VERSION_HOOK_ARGS on every platform (claude_version_problem)
         entry = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.py")
 
         def launched(words: List[str], timeout: int) -> Dict[str, Any]:
@@ -1693,23 +1695,30 @@ def _find_tool(word: str, env: Dict[str, str]) -> str:
                        "PATH)")
 
 
-def claude_version_problem(tool: str, env: Optional[Dict[str, str]] = None) -> str:
-    """Why `tool`, as Claude Code, is too old for the launched hooks, or "". They are in exec
-    form (`args`), and a Claude Code older than VERSION_HOOK_ARGS would run their Python alone,
-    so the hooks would not run. Judged by `tool --version`: a program that does not say it is
-    Claude Code is not judged, unless it is named `claude` (then no version is a refusal)."""
+def claude_version_problem(tool: str, places: Sequence[str],
+                           env: Optional[Dict[str, str]] = None) -> str:
+    """Why `tool` cannot run under `--tool claude`, or "": it is not a Claude Code of
+    VERSION_HOOK_ARGS or newer. The launched hooks are in exec form (`args`) with `onFailure`,
+    and an older one would run their Python alone. Judged by `tool --version`, which runs
+    outside the profile: so never for a program inside one of the session's write `places`
+    (the session could have put it there). No Claude Code version (another program, a wrapper)
+    is a refusal too."""
     need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
+    real = os.path.realpath(tool)
+    for p in places:
+        if pathid.inside(real, os.path.realpath(p)):
+            return (f"Claude Code ({real}) is in a folder the session can write; install it "
+                    "outside the project and the session's folders")
     try:
-        out = subprocess.run([tool, "--version"], stdin=subprocess.DEVNULL, capture_output=True,
+        out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL, capture_output=True,
                              text=True, timeout=20, env=env).stdout
     except (OSError, subprocess.SubprocessError, ValueError):
         out = ""
     m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
     if not m:
-        if os.path.basename(tool) != "claude":
-            return ""
-        return (f"`{tool} --version` gives no Claude Code version; launch needs Claude Code "
-                f"{need} or newer")
+        return (f"`{tool} --version` gives no Claude Code version, and --tool claude needs "
+                f"Claude Code {need} or newer: run the Claude Code binary directly (not a "
+                "wrapper or another program), or use --tool generic for another tool")
     version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
     if version < claude_settings.VERSION_HOOK_ARGS:
         return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
@@ -1818,6 +1827,12 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     if problems:
         raise LaunchError(selfcheck.refusal(problems) + "; " +
                           selfcheck.fix_text(problems, selfcheck._running_package()))
+    if adapter.name == "claude":
+        # the Claude Code floor, on every platform: the hooks written into the session's
+        # settings need it (claude_version_problem)
+        why = claude_version_problem(_find_tool(argv[0], child_env), places, child_env)
+        if why:
+            raise LaunchError(why)
     backend = confine.backend()
     helper = [sys.executable, "-I", "-S", "-c", HELPER]
     if backend == "seatbelt":
@@ -1825,9 +1840,6 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
         # Inside another sandbox sandbox-exec refuses to apply the profile, and nothing runs
         tool = _find_tool(argv[0], child_env)
-        why = claude_version_problem(tool, child_env) if adapter.name == "claude" else ""
-        if why:
-            raise LaunchError(why)
         # the session's own run folder: a launch inside the session checks it (already_confined)
         child_env["PHIWARD_RUN"] = run
         _make_folders(project, [".claude"])

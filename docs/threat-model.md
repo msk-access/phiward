@@ -395,12 +395,16 @@ What phiward does with a project's `env`:
   project's `env`.
 - The user wiring's and the plugin's hooks are in Claude Code's exec form (`args`, no shell
   between Claude Code and the script). Their command is the script itself: a Claude Code that
-  ignores `args` (older than 2.1.139) runs it with no arguments, and it refuses (exit 2). It
-  reads no input. Under `phiward launch` the hooks run `<python> -I -S <package>/phiward/entry.py
-  ...`; on macOS `launch` refuses a Claude Code older than 2.1.295, which would run that Python
-  alone. On Linux it does not check: there an older Claude Code would skip the launched hooks,
-  and the kernel profile still holds. The project hook stays one `/bin/sh` line, because a
-  committed file names no path of this machine.
+  ignores `args` runs it with no arguments, and it refuses (exit 2). It reads no input. That
+  holds only when the script's path has no space or other character a shell splits on: an
+  older Claude Code runs the command through `sh -c`, so such a path does not start, and with
+  no `onFailure` (older than 2.1.295) a hook that does not start lets the call go on. phiward
+  needs Claude Code 2.1.295 or newer for that reason. Under `phiward launch` the hooks run
+  `<python> -I -S <package>/phiward/entry.py ...`, and `launch` refuses, on every platform, a
+  Claude Code older than 2.1.295 or one that gives no version. It asks `TOOL --version`
+  outside the profile, so it never asks a program inside the project or the session's
+  folders. The project hook stays one `/bin/sh` line, because a committed file names no path
+  of this machine.
 
 **Masking never trades a name for a count.** A folder a protected pattern matches now is masked as a
 whole path, spaces and all. That includes `'`, `(` and `&`, which a pattern's wildcard at its end
