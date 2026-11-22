@@ -33,6 +33,10 @@ before you choose; they change fast.
 phiward is for **work beside protected data**: the agent helps with the analysis, and the data
 does not reach the model provider.
 
+It is built for an honest user, and for an agent that is honest but can be misled by text it
+reads (prompt injection). It is not built to stop a determined attacker who already runs code on
+the machine ([threat model](threat-model.md#for-reviewers-the-summary)).
+
 1. **Protected data by folder, for the whole tool.** You name the folders that hold protected
    data once. phiward writes that into Claude Code's sandbox and permission rules (Mode A), or
    runs the whole tool in its own kernel profile (Mode B), together with a list of credential
