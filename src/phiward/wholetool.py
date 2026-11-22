@@ -1705,6 +1705,18 @@ def claude_version_problem(tool: str, places: Sequence[str],
     is a refusal too."""
     need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
     real = os.path.realpath(tool)
+    try:  # read, never started
+        with open(real, "rb") as fh:
+            head = fh.read(256).split(b"\n")[0]
+    except OSError:
+        head = b""
+    if sys.platform != "darwin" and (real.endswith((".js", ".mjs", ".cjs")) or (
+            head.startswith(b"#!") and b"node" in head)):
+        # Linux needs the native build (its seccomp filter): the refusal the start gives there,
+        # before a JavaScript program would be started to ask its version
+        return (f"{real} is a JavaScript program, not Claude Code's native build; update Claude "
+                "Code to the native build: `claude install`, or `npm install -g "
+                "@anthropic-ai/claude-code@latest`")
     for p in places:
         if pathid.inside(real, os.path.realpath(p)):
             return (f"Claude Code ({real}) is in a folder the session can write; install it "
