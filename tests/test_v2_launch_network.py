@@ -3,8 +3,10 @@ proxy that the launcher runs outside the profile, and that proxy allows only pub
 
 - macOS: the profile denies every IP connection except the proxy's random port on loopback; the
   launcher binds that port on both 127.0.0.1 and [::1] before the tool starts.
-- Linux: the session has a network namespace of its own; the proxy's unix socket is bound in, and
-  a relay in the session's helper listens on the namespace's own 127.0.0.1.
+- Linux: the session has a network namespace of its own; a relay in the session's helper listens
+  on the namespace's own 127.0.0.1 and gets each connection to the proxy as one end of a new
+  socket pair, passed over a socket pair it holds from the start. No socket with a path leads to
+  the proxy.
 - The proxy: a per-session token, one lookup, only the addresses it returns are judged (embedded
   IPv4 unwrapped first), this host's addresses read again for each connection, private ranges only
   from the user's config, an upstream proxy only by checked address, limits and timeouts.
@@ -24,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import needs_confine
+from helpers import needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -1057,6 +1059,183 @@ def test_15_launch_refuses_without_network_namespaces(tree, monkeypatch, tmp_pat
                              dict(os.environ), run, "")
     assert code != 0 and not run.ran and any("max_net_namespaces" in n for n in run.notes), \
         run.notes
+
+
+# --- 17: Linux: the relay reaches the proxy by a socket pair, never by a socket with a path -------
+
+def _launch_tool(tree, tool, code, env_extra=None):
+    env = dict(os.environ, PYTHONPATH=SRC)
+    env.update(env_extra or {})
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", tool, "--", tool_py(tree, tool),
+                        "-c", code], cwd=str(tree / "repo"), capture_output=True, text=True,
+                       env=env, timeout=120, stdin=subprocess.DEVNULL)
+    return r.returncode, r.stdout + r.stderr
+
+
+CONNECT_UP = r"""
+import base64, os, socket
+url = os.environ.get('HTTPS_PROXY', '')
+cred, _, where = url[7:].rstrip('/').rpartition('@')
+h, _, p = where.rpartition(':')
+try:
+    s = socket.create_connection((h, int(p)), timeout=10)
+    s.sendall(('CONNECT 8.8.4.4:443 HTTP/1.1\r\nProxy-Authorization: Basic %s\r\n\r\n'
+               % base64.b64encode(cred.encode()).decode()).encode())
+    s.settimeout(10)
+    got = b''
+    while b'FAKE-PT-0001' not in got:
+        d = s.recv(4096)
+        if not d:
+            break
+        got += d
+    print('GOT', got.split(b'\r\n')[0].decode(), b'FAKE-PT-0001' in got)
+except OSError as e:
+    print('FAILED', e)
+"""
+
+
+# below Landlock ABI 9, generic is the mode where the tool cannot make unix sockets at all and
+# claude the one where Claude Code's filter holds Bash; from ABI 9 both are Landlock's
+@linux
+@needs_confine
+@pytest.mark.parametrize("tool", ["generic", "claude"])
+def test_17_the_tool_reaches_a_made_up_upstream_through_the_proxy(tree, tool):
+    up = FakeUpstream()
+    try:
+        _, out = _launch_tool(tree, tool, CONNECT_UP,
+                              {"HTTPS_PROXY": f"http://127.0.0.1:{up.port}"})
+        heads = list(up.heads)
+    finally:
+        up.close()
+    assert "GOT HTTP/1.1 200" in out and "True" in out, out
+    assert any(h.startswith(b"CONNECT 8.8.4.4:443 ") for h in heads), heads
+
+
+# every mount in the session's view, and every entry of its /tmp: none is a socket
+NO_SOCKET_PATH = r"""
+import os, stat
+found = []
+with open('/proc/self/mountinfo') as fh:
+    points = [ln.split()[4] for ln in fh]
+for p in points:
+    try:
+        if stat.S_ISSOCK(os.stat(p).st_mode):
+            found.append(p)
+    except OSError:
+        pass
+for root, dirs, files in os.walk('/tmp'):
+    for n in dirs + files:
+        try:
+            if stat.S_ISSOCK(os.lstat(os.path.join(root, n)).st_mode):
+                found.append(os.path.join(root, n))
+        except OSError:
+            pass
+print('SOCKETS', sorted(set(found)))
+"""
+
+
+@linux
+@needs_confine
+@pytest.mark.parametrize("tool", ["generic", "claude"])
+def test_17_no_socket_with_a_path_leads_to_the_proxy_in_the_session(tree, tool):
+    _, out = _launch_tool(tree, tool, NO_SOCKET_PATH)
+    assert "SOCKETS []" in out, out
+
+
+def test_17_the_proxy_for_a_relay_listens_on_no_path():
+    np = _np()
+    p = np.start({}, pair=True)
+    try:
+        assert p.listeners == [] and p.port == 0, p.listeners
+        end = p.session_end
+        assert end.family == socket.AF_UNIX and end.getsockname() in ("", b""), end
+    finally:
+        p.close()
+
+
+def _ask_pair(end):
+    end.sendall(b"c")
+    msg, fds, _flags, _addr = socket.recv_fds(end, 1, 4)
+    return msg, [socket.socket(fileno=f) for f in fds]
+
+
+def test_17_each_request_on_the_pair_gets_a_connection_to_the_proxy(monkeypatch):
+    np = _np()
+    p = np.start({}, pair=True)
+    try:
+        msg, socks = _ask_pair(p.session_end)
+        assert msg == b"y" and len(socks) == 1, (msg, socks)
+        c = socks[0]
+        c.settimeout(10)
+        c.sendall(b"CONNECT pub.example:443 HTTP/1.1\r\n\r\n")  # no token: the proxy's 407
+        assert c.recv(200).startswith(b"HTTP/1.1 407")
+        c.close()
+    finally:
+        p.close()
+
+
+def test_17_a_pair_that_cannot_be_made_refuses_the_connection(monkeypatch):
+    np = _np()
+
+    def fail():
+        raise OSError(errno.EMFILE, "made-up: too many open files")
+    p = np.start({}, pair=True)
+    monkeypatch.setattr(np, "_pair", fail)
+    try:
+        msg, socks = _ask_pair(p.session_end)
+        assert msg == b"n" and socks == [], (msg, socks)
+    finally:
+        p.close()
+
+
+RELAY_PROBE = r"""
+import base64, os, socket
+url = os.environ['HTTPS_PROXY']
+h, _, p = url.rpartition('@')[2].rpartition(':')
+try:
+    s = socket.create_connection((h, int(p)), timeout=10)
+    s.settimeout(10)
+    s.sendall(b'CONNECT 127.0.0.1:%d HTTP/1.1\r\n\r\n' % int(os.environ['DIRECT']))
+    print('RELAY', repr(s.recv(200)))
+except OSError as e:
+    print('RELAY-FAILED', e.errno)
+"""
+
+
+@linux
+def test_17_a_failed_fd_pass_refuses_the_connection_and_dials_nothing(server):
+    """The helper's relay on its own (outside bwrap): the launcher's end answers `n` without a
+    descriptor; the tool's connection is closed unanswered and nothing is dialled directly."""
+    from phiward import netproxy, wholetool
+    mine, theirs = socket.socketpair()
+    port = netproxy.random_port()
+    answered = []
+
+    def launcher():
+        try:
+            while True:
+                b = mine.recv(1)
+                if not b:
+                    return
+                answered.append(b)
+                mine.sendall(b"n")
+        except OSError:
+            pass
+    threading.Thread(target=launcher, daemon=True).start()
+    env = dict(os.environ, PHIWARD_PROXY_RELAY=f"{port}:{theirs.fileno()}",
+               HTTPS_PROXY=f"http://phiward:{TOKEN}@127.0.0.1:{port}", DIRECT=str(server.port))
+    code = f"import time; time.sleep(0.5)\n{RELAY_PROBE}"
+    try:
+        r = subprocess.run([PY, "-I", "-S", "-c", wholetool.HELPER_LINUX, "-1", "none", "0", PY,
+                            "-c", code], pass_fds=[theirs.fileno()], env=env,
+                           capture_output=True, text=True, timeout=60)
+    finally:
+        theirs.close()
+        mine.close()
+    out = r.stdout + r.stderr
+    assert "RELAY b''" in out or "RELAY-FAILED" in out, out
+    assert answered == [b"c"], answered
+    assert server.got == [], server.got
 
 
 # --- 16: macOS: no Mach service that makes connections outside the profile ----------------------
