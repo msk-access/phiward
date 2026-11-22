@@ -331,7 +331,7 @@ Notes:
   gives `--yes`, before your config exists. After that, do not give `--yes` to an agent: read
   the diff yourself.
 
-The block has four parts.
+The block has five parts.
 
 1. One `PreToolUse` hook entry with the matcher `*` (every tool). It sets `"onFailure": "block"`: without it, Claude
    Code lets a tool call go on when the hook fails. The command is
@@ -348,10 +348,15 @@ The block has four parts.
    `... -I -m phiward ...`).
 2. A `SessionStart` hook (`phiward session-note claude`): every session starts with a short note
    on the rules (the gateway is the intended route). It names no protected path.
-3. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
+3. A `UserPromptSubmit` hook (`phiward prompt-scan claude`, `"onFailure": "block"`, the same
+   command form as the first). It checks each prompt before Claude Code sends it. A prompt
+   that the sanitizer would change is not sent: a match of the user config's packs or
+   `[sanitize] patterns`, or a path below a protected root. The message names the kind, never
+   the value. What it does not see: [threat-model.md](threat-model.md#the-prompt-scan).
+4. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
    tools, inside Claude Code.
-4. The sandbox block (shortened here; the real one also lists the hidden list):
+5. The sandbox block (shortened here; the real one also lists the hidden list):
 
 ```json
 {
