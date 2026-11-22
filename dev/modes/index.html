@@ -1251,6 +1251,11 @@ only its login files (<code>.credentials.json</code>, <code>~/.claude.json</code
   app, load the user settings (<code>settingSources: ["user", "project", "local"]</code>), pass
   <code>phiward install claude --json</code> as its <code>settings</code>, or run the whole program under
   <code>phiward launch</code>. See <a href="../unattended/">unattended.md</a>.</li>
+<li><strong><code>@path</code> mentions are turned off</strong> (<code>CLAUDE_CODE_DISABLE_FILE_MENTIONS=1</code>, written by
+  <code>install --user</code>; Claude Code v2.1.299+): a mention would put a file's text into the prompt
+  without a tool call phiward sees. Now it is a Read, which the hook judges. <code>@</code> completion no
+  longer inserts contents. The IDE's open-file and selection context is not covered
+  (<a href="../setup/">setup.md</a>).</li>
 <li>The file tools are refused inside Claude Code, not by the kernel. A path spelling that both the
   permission rules and the hook miss reads the file. The hook resolves links and spellings, and
   Claude Code's deny rules also match a link's target, so this needs a gap in both.</li>

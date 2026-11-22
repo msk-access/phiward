@@ -2082,7 +2082,7 @@ wildcard path, so the entries are an extra layer, the shell does not count as co
 hook refuses shell commands other than gateway calls. Protect plain folders (roots) on Linux.</p>
 <p><strong>The <code>--settings</code> file.</strong> <code>install --user --write</code> also writes
 <code>~/.config/phiward/claude-settings.json</code>, which sets <code>sandbox.enabled</code>, <code>failIfUnavailable</code> and
-<code>allowUnsandboxedCommands: false</code>. Start Claude Code with <code>claude --settings
+<code>allowUnsandboxedCommands: false</code>, and turns <code>@</code> mentions off (below). Start Claude Code with <code>claude --settings
 ~/.config/phiward/claude-settings.json</code> (an alias in your shell startup file does it): a <code>false</code>
 given with <code>--settings</code> makes the sandbox admin-required, as managed settings would, so a
 repository's <code>.claude/settings.json</code> cannot turn the sandbox off, add excluded commands or
@@ -2098,6 +2098,18 @@ and the hook refuses shell commands (<code>doctor</code> says so).</p>
 the hook reads commands as bash does. A project's settings that
 set <code>CLAUDE_CODE_SHELL</code> or <code>CLAUDE_CODE_SHELL_PREFIX</code> make the hook refuse every call (a
 project's value wins over yours in Claude Code).</p>
+<p><strong><code>@</code> mentions are turned off.</strong> <code>install --user</code> sets <code>env.CLAUDE_CODE_DISABLE_FILE_MENTIONS</code> to
+<code>1</code> (also in the <code>--settings</code> file). Why: with mentions on, <code>@path</code> in a prompt puts the file's
+text into the prompt without a tool call phiward's hook sees. With them off, Claude Code passes
+the path and the agent reads the file with Read, which the hook and the deny rules judge like
+any read. The cost: <code>@</code> completion of files no longer inserts their contents; the agent reads
+them with one more tool call. Claude Code ignores the setting in a project's settings, so
+<code>install --project</code> does not write it, and it needs Claude Code v2.1.299 or later (older ones
+do not know it). <code>doctor</code> reports a missing or different value, and a Claude Code older than
+v2.1.299. It does not cover what an IDE adds to the prompt (the open file and the selection): set
+<code>claudeCode.attachSelection</code> and <code>claudeCode.attachOpenFile</code> to false in the VS Code settings
+when protected files are open in the editor; <code>doctor</code> cannot see them. A session started by the
+Desktop app or a runner whose own environment sets the variable takes that value instead.</p>
 <p>An older phiward offered <code>--shell-prefix</code>, which ran every shell command through its own kernel
 profile. It is gone: Claude Code's sandbox confines the shell. If you used it, run
 <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again; it removes the prefix setting (<code>doctor</code> warns
