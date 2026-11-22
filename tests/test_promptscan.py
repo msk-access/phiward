@@ -403,6 +403,19 @@ def test_the_project_prompt_hook_blocks_with_json_when_it_cannot_run(tmp_path, b
     assert reply["hookSpecificOutput"]["suppressOriginalPrompt"] is True
 
 
+def test_the_user_prompt_hook_blocks_with_json_when_awk_cannot_run(tmp_path):
+    from phiward import install
+    cmd = install.isolated_command(sys.executable, "prompt-scan")
+    assert install.isolated_python(cmd, "prompt-scan") == sys.executable
+    cmd = cmd.replace("/usr/bin/awk", str(tmp_path / "no-awk"))
+    r = subprocess.run(cmd, shell=True, input="{}", capture_output=True, text=True,
+                       env={"PATH": "/usr/bin:/bin"}, timeout=30)
+    assert r.returncode == 2, (r.stdout, r.stderr)
+    reply = json.loads(r.stdout)
+    assert reply["decision"] == "block" and "every prompt" in reply["reason"]
+    assert reply["hookSpecificOutput"]["suppressOriginalPrompt"] is True
+
+
 # --- Mode B: the entry beside the fast hook in the session's own settings -----------------------
 
 def _launch_settings(folder, data=None):
@@ -500,6 +513,11 @@ def test_doctor_wants_the_prompt_entry_where_phiward_is_wired(tree):
         entry = {k: v for k, v in entry.items() if v is not None}
         data = dict(w, hooks=dict(w["hooks"], UserPromptSubmit=[{"hooks": [entry]}]))
         assert any("prompt" in p for p in _state(tree, data).problems), bad
+    # a decoy at any path named phiward is not phiward's prompt check
+    decoy = {"type": "command", "command": f"{tree}/pub/phiward prompt-scan claude",
+             "timeout": 10, "onFailure": "block"}
+    data = dict(w, hooks=dict(w["hooks"], UserPromptSubmit=[{"hooks": [decoy]}]))
+    assert any("not its prompt check" in p for p in _state(tree, data).problems)
 
 
 @pytest.mark.parametrize("event,kind", [("UserPromptSubmit", "prompt"),
