@@ -539,16 +539,28 @@ def _open_folder(parent: int, name: str, shown: str, make: bool) -> int:
             os.mkdir(name, 0o700, dir_fd=parent)
         except FileExistsError:
             pass
-        except OSError:
-            raise ConfineError(f"{shown} cannot be made; nothing runs") from None
-        return _open_folder(parent, name, shown, False)
-    except OSError:
-        raise ConfineError(f"{shown} is a link or not a folder; nothing runs") from None
+        except OSError as exc:
+            raise ConfineError(f"{shown} cannot be made ({_errname(exc)}); nothing "
+                               "runs") from None
+        try:
+            return _open_folder(parent, name, shown, False)
+        except FileNotFoundError:
+            raise ConfineError(f"{shown} was removed while it was opened; nothing "
+                               "runs") from None
+    except OSError as exc:
+        # ELOOP or ENOTDIR: a link or a file at the name; else what the system said
+        raise ConfineError(f"{shown} cannot be opened ({_errname(exc)}: a link, not a folder, "
+                           "or no access); nothing runs") from None
     st = os.fstat(fd)
     if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
         os.close(fd)
         raise ConfineError(f"{shown} belongs to another account; nothing runs")
     return fd
+
+
+def _errname(exc: OSError) -> str:
+    import errno
+    return errno.errorcode.get(exc.errno or 0, "an error")
 
 
 def _profiles_fd(make: bool) -> int:
@@ -600,7 +612,6 @@ def write_profile(text: str) -> str:
                 view = memoryview(data)
                 while view:
                     view = view[os.write(fd, view):]
-                os.fsync(fd)
                 made = os.fstat(fd)
             finally:
                 os.close(fd)

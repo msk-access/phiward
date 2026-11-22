@@ -129,8 +129,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `~/.phiward` is a link, another account's or writable by other accounts, or when `profiles`
   is a link or another account's. `~/.phiward/profiles` is on the hidden list: Claude Code's
   sandbox, the permission rules and the hook keep sessions from reading or writing it, and
-  gateway commands cannot read it. Under `phiward launch` the tool's profile denies reading it. Run `phiward install claude --user --write` again to add it
-  to an existing wiring; `doctor` warns until then.
+  gateway commands cannot read it. Under `phiward launch` the tool's profile denies reading
+  it. Run `phiward install claude --user --write` again to add it to an existing wiring;
+  `doctor` warns until then.
 - macOS: the login service runs `/bin/launchctl` by its full path, not from `PATH`.
 - `@path` mentions are turned off in the user settings and the `--settings` file
   (`env.CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`; Claude Code v2.1.299+; ignored in project

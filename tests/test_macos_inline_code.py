@@ -1,7 +1,9 @@
 """Every place in phiward's source that starts or writes a command with inline code.
 
 The rule (macOS): no interpreter gets its program in argv (`python -c`, `sh -c`, `awk '...'`,
-`perl -e`, ...), `sandbox-exec` only with `-f FILE`, never `-p`, and no `ctypes`. A static scan of
+`perl -e`, ...), `sandbox-exec` only with `-f FILE`, never `-p`, no shell (`shell=True`,
+`os.system`, `os.popen`), and no `ctypes`. A `-c`, `-e` or `-p` (also joined, `-Ic`) in a list
+whose program is not a known one, or added to an argv later, is a site too. A static scan of
 `src/phiward` and `plugin/` lists each site by file, scope and kind. The set must equal ALLOWED.
 ALLOWED holds the sites that run on Linux only, the listed exceptions, and the macOS sites not yet
 converted, each with the change that removes it. Each later change shrinks the list; a new site
@@ -24,6 +26,7 @@ LATER_LAUNCH = "macOS: until launch runs without its helper"
 LATER_HOOKS = "macOS: until the hooks run from files"
 LATER_COPY = "macOS: until copy runs from files"
 KEPT = "kept: libproc's proc_pidinfo"
+MESSAGE = "a refusal's text (it shows the agent `phiward run -- sh -c ...`); nothing runs it"
 
 # (file, scope, kind): why it is allowed. Scope is the function (Class.method) or the
 # module-level name that holds the site.
@@ -46,6 +49,7 @@ ALLOWED = {
     ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
     ("src/phiward/install.py", "_entry_text", "sh -c"): EXCEPTION,
     ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
+    ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
     # macOS, not yet converted
     ("src/phiward/wholetool.py", "build", "sandbox-exec -p"): LATER_LAUNCH,
     ("src/phiward/wholetool.py", "_sandbox_check_self", "ctypes"): LATER_LAUNCH,
@@ -100,24 +104,50 @@ def _word(node):
     return None
 
 
-def _argv_kinds(words):
-    """The kinds of inline code in one argv (a list of words, None for an unknown word)."""
+_INLINE_FLAGS = ("c", "e", "p")
+
+
+def _flag_letter(w: str):
+    """The inline-code letter a short option word ends in (`-c`, `-Ic`, `-Sc`), or None."""
+    m = re.fullmatch(r"-([A-Za-z]*)([cep])", w)
+    return m.group(2) if m else None
+
+
+# program words that take `-c`, `-e` or `-p` as an ordinary option (no code)
+_SAFE_PROGRAMS = {"tar", "ssh", "cp", "rsync", "mkdir", "git", "getconf", "launchctl",
+                  "systemctl", "id", "tabix", "bwrap"}
+
+
+def _safe_program(w) -> bool:
+    return isinstance(w, str) and w.rsplit("/", 1)[-1] in _SAFE_PROGRAMS
+
+
+def _argv_kinds(words, whole_list: bool = True):
+    """The kinds of inline code in one argv (a list of words, None for an unknown word). With
+    `whole_list`, a list whose first word is not a known program and that holds an inline-code
+    flag is a site too (its program is chosen elsewhere)."""
     out = set()
     interp = None
+    seen_interp = False
     for w in words:
         if w is None:
             continue
         k = _kind(w)
         if k:
             interp = k
+            seen_interp = True
             continue
-        if interp and w == _FLAG[interp][0]:
+        if interp and _flag_letter(w) == _FLAG[interp][0][1]:
             out.add(_FLAG[interp][1])
+    if whole_list and not seen_interp and words and not _safe_program(words[0]) and \
+            any(isinstance(w, str) and _flag_letter(w) for w in words):
+        out.add("flag, program unknown")
     return out
 
 
 _TEXT_INLINE = re.compile(
-    r"^\s*(?:\S*/)?(sh|bash|zsh|dash|python[0-9.]*)\s+(?:-[A-Za-z]+\s+)*-c\b")
+    r"^\s*(?:\S*/)?(sh|bash|zsh|dash|python[0-9.]*)\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c\b")
+_TEXT_SH_ANYWHERE = re.compile(r"(?:^|[^\w-])(?:\S*/)?(?:sh|bash)\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*c\b")
 _TEXT_E = re.compile(r"^\s*(?:\S*/)?(perl|ruby|node|osascript)\s+(?:-\S+\s+)*-e\b")
 _TEXT_SANDBOX = re.compile(r"sandbox-exec\s+-p\b")
 _TEXT_AWK = re.compile(r"\bawk\s+[\"']")
@@ -128,6 +158,8 @@ def _text_kinds(text: str):
     m = _TEXT_INLINE.search(text)
     if m:
         out.add("python -c" if m.group(1).startswith("python") else "sh -c")
+    elif _TEXT_SH_ANYWHERE.search(text):
+        out.add("sh -c")
     m = _TEXT_E.search(text)
     if m:
         out.add(f"{m.group(1)} -e")
@@ -222,6 +254,38 @@ class _Scan(ast.NodeVisitor):
 
     def visit_JoinedStr(self, node):
         self._text(node)  # its parts are not scanned on their own
+
+    def visit_AugAssign(self, node):
+        # `argv += ["-c", code]`
+        if isinstance(node.op, ast.Add) and isinstance(node.value, (ast.List, ast.Tuple)):
+            self.skip.add(id(node.value))
+            if any(isinstance(w, str) and _flag_letter(w)
+                   for w in (_word(e) for e in node.value.elts)):
+                self._add("flag added to an argv")
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        f = node.func
+        name = getattr(f, "attr", "") or getattr(f, "id", "")
+        if name in ("append", "extend", "insert"):
+            words = []
+            for a in node.args:
+                if isinstance(a, (ast.List, ast.Tuple)):
+                    self.skip.add(id(a))
+                    words += [_word(e) for e in a.elts]
+                else:
+                    words.append(_word(a))
+            if any(isinstance(w, str) and _flag_letter(w) for w in words):
+                self._add("flag added to an argv")
+        if any(k.arg == "shell" and not (isinstance(k.value, ast.Constant) and
+                                         k.value.value is False) for k in node.keywords):
+            self._add("shell=True")
+        if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and \
+                (f.value.id, f.attr) in (("os", "system"), ("os", "popen"),
+                                         ("subprocess", "getoutput"),
+                                         ("subprocess", "getstatusoutput")):
+            self._add(f"{f.value.id}.{f.attr}")
+        self.generic_visit(node)
 
     def visit_Import(self, node):
         if any(a.name.split(".")[0] == "ctypes" for a in node.names):
