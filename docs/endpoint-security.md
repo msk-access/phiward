@@ -140,11 +140,11 @@ C1 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /bi
 C2 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/rsync -rt --ignore-existing --exclude=.claude/ -- <source> ... <dest>
 C2 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/rsync -rt --ignore-existing --exclude=\.claude/ -- [^ ]
 C3 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S <socket> <host> -- <remote-pull>
-C3 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/ssh -F [^ ]+ (-o [A-Za-z0-9]+=(yes|no|none) )+-T -o ControlMaster=no -S [^ ]+ [^ ]+ -- tar -c -f - -C [^ ]+ (-- [^ ]+|\.)$
+C3 regex -
 C7 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S <socket> <host> -- <remote-push>
 C7 regex -
 C8 argv  /usr/bin/sandbox-exec -f <profile> /usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T <host> -- <remote-pull>
-C8 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/ssh -F [^ ]+ (-o [A-Za-z0-9]+=(yes|no|none) )+-T [^ ]+ -- tar -c -f - -C [^ ]+ (-- [^ ]+|\.)$
+C8 regex -
 C4 argv  /usr/bin/sandbox-exec -f <profile> <python> -I <PKG>/phiward/tar_extract.py <path>
 C4 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb [^ ]+/bin/python[0-9.]* -I [^ ]+/site-packages/phiward/tar_extract\.py /
 C5 argv  /usr/bin/ssh -G -F <ssh-config> -- <host>
@@ -260,6 +260,11 @@ gateway's profile, and says what is missing. It starts G2, D2, L4 and L5.
 - The project hook (R1, R2) is one fixed line with code in it. A repository commits it, and the
   same line runs on Linux. A push's remote command (C7) is fixed code too, carried to the
   remote host.
+- C3, C7 and C8 have no regex either. phiward's fixed ssh options do not fit in 256
+  characters, and a regex that loops over options would admit one that weakens them (ssh takes
+  the first value it sees). Match these rows on the image path `/usr/bin/ssh` with its parent
+  `/usr/bin/sandbox-exec`, and on the fixed options exactly, in the order the shape gives them;
+  the profile file, the ssh config, the socket, the host and the paths vary.
 - R1, R2 and C7 have no regex. Their full text is longer than 256 characters, and a regex for
   its first part would also admit that text with any command after it. If you need an
   exception for them, match the exact command line instead: R1 and R2 are the same on every

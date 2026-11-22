@@ -159,3 +159,18 @@ def test_a_line_with_fixed_code_in_it_gets_no_prefix_regex():
             assert e["regex"] is None, (i, e["regex"])
     text = PAGE.read_text(encoding="utf-8")
     assert "exact" in text and "hash" in text, "the page says how to match those lines"
+
+
+SSH_FIXED = "/usr/bin/ssh -F <ssh-config> -o BatchMode=yes -o ProxyCommand=none"
+
+
+def test_a_line_with_phiwards_fixed_ssh_options_gets_no_regex():
+    """phiward's fixed ssh options do not fit in a regex of 256 characters, and a looser one
+    admits an option that weakens them (`-o ControlMaster=yes` first): such rows have none."""
+    from phiward import remote
+    rows = [i for i, e in shapes().items() if any(SSH_FIXED in s for s in e["argv"])]
+    assert sorted(rows) == ["C3", "C7", "C8"], rows
+    for i in rows:
+        assert shapes()[i]["regex"] is None, i
+        for s in shapes()[i]["argv"]:  # the shape spells out every fixed option, in order
+            assert " ".join(remote.SSH_OPTIONS) in s, (i, s)

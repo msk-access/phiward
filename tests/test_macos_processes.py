@@ -504,7 +504,7 @@ def breaks(words, label, ctx):
 def remote_kind(word):
     """The placeholder of a command phiward gives ssh for the remote host, or None: a pull's
     `tar -c` (remote.send_script) or a push's receiver (remote.receive_script)."""
-    if re.fullmatch(r"tar -c -f - -C [^ ]+ (-- [^ ]+|\.)", word):
+    if re.fullmatch(r"tar -c -f - -C [A-Za-z0-9_./~-]+ (-- [A-Za-z0-9_./~-]+|\.)", word):
         return "<remote-pull>"
     if re.fullmatch("sh -c " + re.escape(shlex.quote(remote._RECEIVE)) + r" sh [^ ]+", word):
         return "<remote-push>"
