@@ -1492,7 +1492,7 @@
   already runs code on the machine with the user's rights. Some routes such an attacker could
   use are stated as limits below.</li>
 <li><strong>Masking hides names and identifiers, not other content.</strong> Gateway commands should print counts
-  and summaries, not records.</li>
+  and summaries, not records, and hide small counts (<a href="../daily-use/#small-counts">Small counts</a>).</li>
 <li><strong>What stops what.</strong> The kernel is the strongest guard:</li>
 </ul>
 <table>
@@ -1971,7 +1971,7 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
 <h2 id="what-is-not-protected">What is not protected<a class="headerlink" href="#what-is-not-protected" title="Permanent link">&para;</a></h2>
 <ul>
 <li>Data that a gateway command encodes on purpose, or content that is not an identifier, printed
-  through <code>phiward run</code>. Write scripts that print aggregates.</li>
+  through <code>phiward run</code>. Write scripts that print aggregates, with small counts hidden (<a href="../daily-use/#small-counts">Small counts</a>).</li>
 <li>Data a granted write place, the network or a copy remote carries away (see above).</li>
 <li>On a cluster, what a push puts there is protected only by phiward's masking of remote output
   (<code>[remote] roots</code>) and the cluster's own permissions; a link on the cluster can lead a push

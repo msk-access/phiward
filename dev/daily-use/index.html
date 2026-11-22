@@ -486,6 +486,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#small-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small counts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-a-script-the-agent-wrote" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1235,6 +1246,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#small-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small counts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#run-a-script-the-agent-wrote" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1417,7 +1439,7 @@ reads (a number the command chooses could carry data).</p>
 <code>$(...)</code>. The shell may expand globs, braces and <code>~</code>. A gateway call in any other form is checked
 as an ordinary command: Claude Code's sandbox denies the protected paths to it, and where the
 sandbox does not confine the shell, the hook refuses it.</p>
-<p><strong>Write scripts that print aggregates</strong>: counts, summaries, tables. The sanitizer masks paths,
+<p><strong>Write scripts that print aggregates</strong>: counts, summaries, tables. Suppress small counts first (<a href="#small-counts">Small counts</a>). The sanitizer masks paths,
 entry names and identifiers. It does not mask other content. In text mode it also masks long
 numbers (<code>&lt;NUM&gt;</code>). <code>--table</code> reads CSV or TSV output by column: cells under an identifier header
 (<code>sample_id</code>, <code>MRN</code>, <code>Patient ID</code>, ...) show <code>&lt;IDCOL&gt;</code>, and numbers in the other columns are
@@ -1467,6 +1489,22 @@ that needs one is not one for the gateway. This includes settings files that may
 <code>~/.Renviron</code> (R libraries set there are not found), pip and npm settings, <code>~/.m2/settings.xml</code>,
 <code>~/.ipython</code>, <code>~/.gnupg</code>. Pass what a script needs as arguments, or set it in the script. On
 Linux the list is taken when the command starts: a credential made later is not hidden.</p>
+<h2 id="small-counts">Small counts<a class="headerlink" href="#small-counts" title="Permanent link">&para;</a></h2>
+<p>Masking hides identifiers, not small counts. A count of 1 or 2 in a rare group can point to one
+person, with every name masked. So can two tables whose difference leaves one person
+(differencing).</p>
+<p>The rule, from <a href="https://docs.opensafely.org/sdc/">OpenSAFELY's rules on disclosure control</a>:</p>
+<ul>
+<li>Suppress every count of 7 or fewer. Do this first.</li>
+<li>Round the other counts to the nearest 5.</li>
+<li>Recompute totals after you suppress, and check that no two tables of the same people let a
+  reader subtract a hidden cell back out.</li>
+</ul>
+<p>The <a href="https://securedatagroup.org/guides-and-resources/sdc-handbook/">SDC Handbook</a> and the
+<a href="http://sacro-tools.org/">ACRO</a> tool set similar rules, with thresholds you can configure. In the
+end, the rule is yours and your data agreement's: a local rule may be stricter, so use it.</p>
+<p>phiward does not enforce this. It does not see what a count means. The agent writes the script,
+and you read it before it runs (<a href="#run-a-script-the-agent-wrote">Run a script the agent wrote</a>).</p>
 <h2 id="run-a-script-the-agent-wrote">Run a script the agent wrote<a class="headerlink" href="#run-a-script-the-agent-wrote" title="Permanent link">&para;</a></h2>
 <p>With choice 1 of <code>phiward setup</code>, gateway commands run only the listed programs: the
 <code>@genomics</code> tools, and the scripts in your scripts folder (the entry that ends in <code>/</code> in

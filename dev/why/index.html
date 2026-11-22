@@ -1281,7 +1281,7 @@ the machine (<a href="../threat-model/#for-reviewers-the-summary">threat model</
    <strong>gateway</strong> (<code>phiward run</code>, <code>phiward copy</code>). Your <strong>broker</strong> runs the command outside the
    agent, as you, and masks the output: protected paths, the names of files under them, and
    identifier patterns become placeholders. Ask for counts and summaries: masking hides names and
-   identifiers, not other content.</li>
+   identifiers, not other content, and not small counts (<a href="../daily-use/#small-counts">Small counts</a>).</li>
 <li><strong>HPC without giving the agent your login.</strong> <code>phiward run --remote</code> and <code>phiward copy</code> go
    through your own shared SSH connection. No request reads your key or Kerberos ticket, and only
    the hosts and programs you list are allowed.</li>
