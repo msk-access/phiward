@@ -1893,10 +1893,10 @@ is first masked on the whole line as in table mode (protected paths, entry names
 rules, names). Then a cell under an identifier header (the built-in list or <code>id_columns</code>, below)
 shows <code>&lt;IDCOL&gt;</code>, whatever its shape. A cell of another column keeps a plain number (<code>7654321</code>,
 <code>12.5</code>, <code>1e-05</code>, <code>1,234,567</code>); any other text in it gets the position rules (<code>chr1:1234567</code> is
-<code>&lt;LOCUS&gt;</code>). The first line that is not such a row ends column mode: it and every later line are
+<code>&lt;LOCUS&gt;</code>). Then names and rule matches in other spellings (another dash, other digits, other separators) are masked inside each cell on its own: never in an ID cell, and never across a delimiter. The first line that is not such a row ends column mode: it and every later line are
 masked as text. Such a line is an empty line, a row with another field count, a quote, a
 backslash or a <code>%XX</code> escape, a row with no plain-number cell (another header, as from <code>cat
-a.csv b.csv</code>, or a row of words such as <code>TP53,BRCA1</code>), and a line too long to read. Output
+a.csv b.csv</code>, or a row of words such as <code>TP53,BRCA1</code>), and a line too long to read. A row that fails the second pass only because of the masks in other spellings is withheld, and column mode goes on. Output
 without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under <code>chrom</code> and <code>pos</code>, <code>chr1</code> and <code>1234567</code> are both
@@ -1907,7 +1907,13 @@ rule. <code>phiward sanitize --table</code> and the git hooks read no columns: t
 table mode (identifiers only; numbers and positions are kept).</p>
 <p>An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
 one that is a common word of the built-in stop list (for example <code>patient</code>, <code>normal</code>, <code>tumour</code>,
-<code>bam</code>, <code>runs</code>, <code>test</code>).</p>
+<code>bam</code>, <code>runs</code>, <code>test</code>). Lines and names are compared with every dash read as <code>-</code> and every
+decimal digit as ASCII. A name of 5 or more letters and digits, with a letter, is also masked
+with its separators (<code>-</code>, <code>_</code>, <code>.</code>, a space; not a tab) changed or left out: <code>FAKE-PT-0001</code>
+masks <code>FAKE_PT_0001</code>, <code>FAKE PT 0001</code> and <code>FAKEPT0001</code>. Shorter and digits-only names, and
+names with a separator at either end, are masked only as written. What is not matched is
+listed in the
+<a href="../threat-model/#known-sanitizer-short-names">threat model</a>.</p>
 <ul>
 <li><strong><code>packs</code></strong> (list). Built-in packs are <code>genomics</code> (the default) and <code>msk</code> (one institution's
   identifiers; an example, not a default). A name with <code>/</code> is the path of a pack file of your

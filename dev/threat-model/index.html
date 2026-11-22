@@ -2111,8 +2111,8 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   many names in one request. Where a file or identifier rule (a pack, <code>[sanitize] patterns</code>)
   matches the text around a name, the name reads as that rule's placeholder, as a name that does
   not exist would. Elsewhere it reads <code>&lt;ENTRY&gt;</code>: plain names, names with a plain part, names
-  written where the rule does not match (inside a longer word, or joined to a plain name), and
-  <code>names_from</code> names can be
+  written where the rule does not match (inside a longer word, joined to a plain name, in
+  another spelling, or overlapping the rule's match), and <code>names_from</code> names can be
   tested. Masking hides names; it does not keep a name the agent already holds a secret.</li>
 <li><a id="known-encoded-output"></a><strong>Code the agent writes can print protected data encoded.</strong> Masking hides names and identifiers,
   not other content. Without <code>[broker] commands</code>, a gateway command may be a script the agent wrote,
@@ -2211,7 +2211,19 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   (fails closed) when the roots hold more entries than <code>inventory_limit</code>. A name with spaces (<code>Doe
   Jane 1970</code>) is masked whole, after a root, under a pattern (<code>phi_*</code> matches <code>phi_Doe Jane</code>) and in
   escaped output (<code>Doe\ Jane</code>, from <code>ls -b</code>); the masked output shows an escaped space as a plain
-  space.</li>
+  space. Every dash is read as <code>-</code>, and other decimal digits as ASCII digits, to match names and
+  rules; the masked output shows both as written (Python 3.9, with Unicode 13, knows fewer digits
+  than later versions). A name of 5 or more letters and digits, with a letter, is also masked
+  with its separators (<code>-</code>, <code>_</code>, <code>.</code>, a space) changed or left out; such a name may then mask
+  ordinary text too (<code>sample_01</code> masks <code>sample 01</code>). A shorter or digits-only name, a name with
+  a separator at either end, or one whose separator-free form is a stop word or part of a
+  placeholder (<code>SAM_PLE</code>), is masked only as written; so is a whole name whose stem is masked
+  in other spellings (<code>FAKE_PT_0001.bam</code> reads <code>&lt;ENTRY&gt;.bam</code>, which a file rule may then mask).
+  Not matched: look-alike letters from other scripts (Cyrillic <code>А</code> for Latin <code>A</code>), an accent
+  added or left off (<code>José</code>, <code>Jose</code>), base64, hex and other encodings, a name broken across
+  lines, a tab and the separators <code>:</code> <code>+</code> <code>~</code> <code>,</code> <code>'</code> and <code>/</code>, and IDs that are not entry names
+  (only rules catch those). The pack rules know only <code>-</code> as a separator: <code>P_9990002_T01_IM6</code> is
+  not an <code>msk</code> ID.</li>
 <li><a id="known-names-from-files"></a><strong><code>names_from</code> files</strong> are themselves protected data. Keep them inside a protected root.</li>
 <li><a id="known-git-work-tree-root"></a><strong>A git work tree that holds a root</strong> is closed to the agent's git.</li>
 <li><a id="known-claude-settings-in-write-place"></a><strong>Claude Code settings in a write place.</strong> The gateway may not write a <code>.claude</code> folder: on macOS
