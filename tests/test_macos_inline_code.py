@@ -22,7 +22,6 @@ PLUGIN = ROOT / "plugin"
 
 LINUX = "Linux only"
 EXCEPTION = "a listed exception"
-LATER_HOOKS = "macOS: until the hooks run from files"
 KEPT = "kept: libproc's proc_pidinfo"
 MESSAGE = "a refusal's text (it shows the agent `phiward run -- sh -c ...`); nothing runs it"
 
@@ -39,27 +38,14 @@ ALLOWED = {
     ("src/phiward/wholetool.py", "_fingerprint_errno", "ctypes"): LINUX,
     ("src/phiward/pathid.py", "_on_procfs", "ctypes"): LINUX,
     # exceptions: the remote shell's command after ssh's `--`; the project hook, committed to
-    # repositories that also run on Linux; a recogniser of the user wiring's older form
+    # repositories that also run on Linux (its clean-up of the variables, CLEAN_ENV, with it)
     ("src/phiward/remote.py", "receive_script", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "PROJECT_HOOK", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "PROJECT_PROMPT_HOOK", "sh -c"): EXCEPTION,  # the same form as PROJECT_HOOK
     ("src/phiward/install.py", "PROJECT_NOTE", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
-    ("src/phiward/install.py", "_entry_text", "sh -c"): EXCEPTION,
     ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
     ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
-    # macOS, not yet converted
-    ("src/phiward/wholetool.py", "Adapter.turn_own_sandbox_off", "python -c"): LATER_HOOKS,
-    ("src/phiward/install.py", "isolated_command", "sh -c"): LATER_HOOKS,
-    ("src/phiward/doctor.py", "clean_start_problem", "sh -c"): LATER_HOOKS,
-    ("src/phiward/install.py", "_isolated_import_problem", "python -c"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.PreToolUse", "sh -c"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.PreToolUse", "awk program"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.SessionStart", "sh -c"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.SessionStart", "awk program"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "sh -c"): LATER_HOOKS,
-    ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "awk program"): LATER_HOOKS,
-    ("plugin/.mcp.json", "mcpServers.phiward", "sh -c"): LATER_HOOKS,
 }
 
 # the inline-code flag of each kind of interpreter

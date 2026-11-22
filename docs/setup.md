@@ -334,18 +334,29 @@ Notes:
 The block has five parts.
 
 1. One `PreToolUse` hook entry with the matcher `*` (every tool). It sets `"onFailure": "block"`: without it, Claude
-   Code lets a tool call go on when the hook fails. The command is
-   `/bin/sh -c 'V=$(/usr/bin/awk ...) || { ...; exit 2; }; IFS=" "; unset $V; exec /path/to/python -I -m phiward hook claude'`:
-   every `PYTHON*`, `LD_*` and `DYLD_*` variable is unset (a project's settings could set them to
-   load other code; if `/usr/bin/awk` cannot list them, the hook refuses every call), then
-   phiward's own Python runs isolated (`-I`: no user site folder). Before it writes, `install`
-   checks that this Python finds phiward with `-I` (an install in the user site folder is not
-   seen there) and that `/usr/bin/awk` exists. The plugin's hooks and `install --project` run
-   `phiward` by name after the same unset; a project's `env.PATH` would choose that `phiward`, so
-   the hook refuses every call while a project sets it, and you should wire your user settings
-   too. `install`
-   replaces every earlier form of its own hook entries (`.../bin/phiward hook claude`,
-   `... -I -m phiward ...`).
+   Code lets a tool call go on when the hook fails. The hook runs from files in phiward's
+   package, with no inline code (Claude Code's exec form, `command` and `args`):
+   `"command": "<package>/phiward/data/clean-exec.sh"`,
+   `"args": ["/path/to/python", "-I", "-m", "phiward", "hook", "claude"]`. The script unsets
+   every `PYTHON*`, `LD_*` and `DYLD_*` variable (a project's settings could set them to load
+   other code; the list is `clean-env.awk` beside it, run by `/usr/bin/awk`; if awk cannot list
+   them, the hook refuses every call), then phiward's own Python runs isolated (`-I`: no user
+   site folder). Each failure blocks the call: a script that is not there cannot start
+   (`onFailure: "block"`), and a Python that is not there, or a start without the arguments (a
+   Claude Code that ignores `args`), exits 2. Before it writes, `install` checks that this
+   Python finds phiward with `-I` (an install in the user site folder is not seen there) and
+   that `/usr/bin/awk` exists. The plugin runs its own copy of the script with `phiward` by
+   name; `install --project` runs `phiward` by name after the same unset, in one `/bin/sh`
+   line (a committed file names no path of this machine). A project's `env.PATH` would choose
+   that `phiward`, so the hook refuses every call while a project sets it, and you should wire
+   your user settings too. `install` replaces every earlier form of its own hook entries
+   (`.../bin/phiward hook claude`, `... -I -m phiward ...`, the one `/bin/sh` line an earlier
+   release wrote) in place.
+
+   **After an upgrade that moves phiward's Python** (`uv tool upgrade --python ...`, or another
+   Python version), the script's path in the settings is gone, and every tool call is refused
+   until you run `(cd ~ && phiward install claude --user --write)` again. `doctor` names the
+   cause.
 2. A `SessionStart` hook (`phiward session-note claude`): every session starts with a short note
    on the rules (the gateway is the intended route). It names no protected path.
 3. A `UserPromptSubmit` hook (`phiward prompt-scan claude`, `"onFailure": "block"`, the same

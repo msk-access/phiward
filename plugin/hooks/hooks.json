@@ -7,7 +7,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"phiward is not installed or not on PATH: install it (step 1 of its quickstart), then start Claude Code again; every tool call is refused until then\" >&2; exit 2; }; V=$(/usr/bin/awk \"BEGIN{for(k in ENVIRON)if(k~/^(PYTHON|LD_|DYLD_|OPENSSL_|MALLOC_|Malloc)[A-Za-z0-9_]*\\$/||k~/^(__PYVENV_LAUNCHER__|GCONV_PATH|LOCPATH|NLSPATH|GLIBC_TUNABLES|HOSTALIASES|LOCALDOMAIN|RES_OPTIONS|RESOLV_HOST_CONF|NIS_PATH|TZDIR|GETCONF_DIR)\\$/||(k==\\\"TZ\\\"&&(ENVIRON[k]~/^:?\\//||ENVIRON[k]~/\\.\\./)))printf \\\"%s \\\",k}\") || { echo \"phiward: /usr/bin/awk could not list the Python and loader variables to clear; every tool call is refused\" >&2; exit 2; }; IFS=\" \"; unset $V; exec phiward hook claude'",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/clean-exec.sh",
+            "args": ["phiward", "hook", "claude"],
             "timeout": 10,
             "onFailure": "block"
           }
@@ -19,7 +20,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"phiward is not installed: its guards refuse every tool call until it is; ask the operator\"; exit 0; }; V=$(/usr/bin/awk \"BEGIN{for(k in ENVIRON)if(k~/^(PYTHON|LD_|DYLD_|OPENSSL_|MALLOC_|Malloc)[A-Za-z0-9_]*\\$/||k~/^(__PYVENV_LAUNCHER__|GCONV_PATH|LOCPATH|NLSPATH|GLIBC_TUNABLES|HOSTALIASES|LOCALDOMAIN|RES_OPTIONS|RESOLV_HOST_CONF|NIS_PATH|TZDIR|GETCONF_DIR)\\$/||(k==\\\"TZ\\\"&&(ENVIRON[k]~/^:?\\//||ENVIRON[k]~/\\.\\./)))printf \\\"%s \\\",k}\") || { echo \"phiward: /usr/bin/awk could not list the Python and loader variables to clear; every tool call is refused\" >&2; exit 2; }; IFS=\" \"; unset $V; exec phiward session-note claude'",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/clean-exec.sh",
+            "args": ["phiward", "session-note", "claude"],
             "timeout": 10
           }
         ]
@@ -30,7 +32,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"{\\\"decision\\\": \\\"block\\\", \\\"reason\\\": \\\"phiward is not installed or not on PATH: install it (step 1 of its quickstart), then start Claude Code again; every prompt and tool call is refused until then\\\", \\\"hookSpecificOutput\\\": {\\\"hookEventName\\\": \\\"UserPromptSubmit\\\", \\\"suppressOriginalPrompt\\\": true}}\"; echo \"phiward is not installed or not on PATH: install it (step 1 of its quickstart), then start Claude Code again; every prompt and tool call is refused until then\" >&2; exit 2; }; V=$(/usr/bin/awk \"BEGIN{for(k in ENVIRON)if(k~/^(PYTHON|LD_|DYLD_|OPENSSL_|MALLOC_|Malloc)[A-Za-z0-9_]*\\$/||k~/^(__PYVENV_LAUNCHER__|GCONV_PATH|LOCPATH|NLSPATH|GLIBC_TUNABLES|HOSTALIASES|LOCALDOMAIN|RES_OPTIONS|RESOLV_HOST_CONF|NIS_PATH|TZDIR|GETCONF_DIR)\\$/||(k==\\\"TZ\\\"&&(ENVIRON[k]~/^:?\\//||ENVIRON[k]~/\\.\\./)))printf \\\"%s \\\",k}\") || { echo \"{\\\"decision\\\": \\\"block\\\", \\\"reason\\\": \\\"phiward: /usr/bin/awk could not list the Python and loader variables to clear; every prompt and tool call is refused\\\", \\\"hookSpecificOutput\\\": {\\\"hookEventName\\\": \\\"UserPromptSubmit\\\", \\\"suppressOriginalPrompt\\\": true}}\"; echo \"phiward: /usr/bin/awk could not list the Python and loader variables to clear; every prompt and tool call is refused\" >&2; exit 2; }; IFS=\" \"; unset $V; exec phiward prompt-scan claude'",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/clean-exec.sh",
+            "args": ["phiward", "prompt-scan", "claude"],
             "timeout": 10,
             "onFailure": "block"
           }

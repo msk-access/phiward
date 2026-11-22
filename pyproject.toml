@@ -50,7 +50,7 @@ version = {attr = "phiward.__version__"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-phiward = ["packs/*.toml", "data/*.md"]
+phiward = ["packs/*.toml", "data/*.md", "data/*.sh", "data/*.awk"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

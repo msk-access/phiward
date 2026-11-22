@@ -55,10 +55,10 @@ jobs:
           PHIWARD_REQUIRE_CONFINE: "1"  # a missing backend fails the run instead of skipping tests
           PHIWARD_CHECK_SKIPS: "1"  # a skip not in tests/expected_skips_<platform>.txt fails
         run: |
-          # on Linux the made-up trees go outside /tmp: a session replaces /tmp, and tests that
-          # need their tree inside the session would skip
-          extra=""
-          if [ "$RUNNER_OS" = "Linux" ]; then extra="--basetemp=$RUNNER_TEMP/pt"; fi
-          python -m pytest -q -rs --timeout=300 $extra
+          # the made-up trees go outside the temp folder: on Linux a session replaces /tmp, and
+          # tests that need their tree inside the session would skip; on macOS the per-user
+          # temp folder is a session's write place, so `launch --tool claude` would not ask the
+          # made-up Claude Code its version there
+          python -m pytest -q -rs --timeout=300 --basetemp="$RUNNER_TEMP/pt"
       - name: Sanitizer self-test
         run: python -m phiward sanitize --selftest

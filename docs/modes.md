@@ -48,6 +48,7 @@ only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
 | Your `~/.claude` (skills, rules, MCP config) | used as it is | each session starts from a trusted copy (`carryover add`); changes go to quarantine |
 | Work on protected data | the gateway | the gateway |
 | Prompts | checked before they are sent: one with an identifier of your packs or a path below a root is not sent ([threat-model.md](threat-model.md#known-prompt-scan)) | the same check, written beside the fast hook in the session's own settings (the session can remove it) |
+| How phiward's hooks start | from files in phiward's package, no inline code: a script that clears the Python and loader variables, then phiward's own Python ([setup.md](setup.md)) | from a file in phiward's package (`entry.py`); Claude Code 2.1.295 or newer, on macOS and Linux |
 | Use it for | day-to-day work, every protected step through the gateway | long sessions close to protected data, or untrusted input (web pages, other people's repositories) |
 
 ## What Mode A does not do

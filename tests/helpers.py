@@ -267,6 +267,7 @@ def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HE
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(f"#!{sys.executable} -IS\nimport json, os, sys\n"
                  f"a = sys.argv[1:]\nbad = {dict(bad or {})!r}\n"
+                 "if a == ['--version']:\n    print('2.1.330 (Claude Code)')\n    sys.exit(0)\n"
                  "if a[-1:] == ['--help'] and len(a) <= 2:\n"
                  "    w = a[0] if len(a) == 2 else ''\n"
                  "    if bad.get(w) == 'hang':\n        import time; time.sleep(600)\n"
@@ -284,6 +285,9 @@ def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HE
                  ("os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n" if python else
                   "print('ARGV', json.dumps(sys.argv[1:]))\n"))
     os.chmod(p, 0o755)
+    # a script, so launch reads its version from its package's package.json and never starts it
+    (p.parent / "package.json").write_text(
+        '{"name": "@anthropic-ai/claude-code", "version": "2.1.330"}\n')
     return p
 
 

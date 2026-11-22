@@ -91,9 +91,9 @@ def test_a_tz_with_a_relative_path_is_cleared(tree):
     fake = tree / "fakepython"
     fake.write_text("#!/bin/sh\n/usr/bin/env\n")
     fake.chmod(0o755)
-    cmd = install.isolated_command(str(fake), "hook")
+    h = install.hook_entry(str(fake), "hook")
     for tz in ("../../../tmp/x/Fake", ":../../tmp/x/Fake", "a/../../x"):
-        out = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+        out = subprocess.run([h["command"]] + h["args"], capture_output=True, text=True,
                              env={"PATH": "/usr/bin:/bin", "TZ": tz}).stdout
         assert "TZ=" not in out, (tz, out)
         assert install.cleared("TZ", tz), tz

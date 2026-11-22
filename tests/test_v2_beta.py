@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from phiward import inventory
-from helpers import needs_confine
+from helpers import needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -103,10 +103,13 @@ def test_b1_a_planted_memory_link_does_not_mount_a_root(tree):
     (folder / "projects").mkdir(parents=True)
     os.symlink(os.path.relpath(tree / "phi", folder / "projects"), folder / "projects" / "evil")
     env = dict(os.environ, PYTHONPATH=SRC)
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--memory", "--", PY, "-c",
-                        f"import os\nprint(os.listdir({str(tree / 'phi')!r}))"], cwd=str(tree / "repo"),
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--memory", "--",
+                        tool_py(tree), "-c",
+                        f"import os\ntry:\n    print(os.listdir({str(tree / 'phi')!r}))\n"
+                        "except OSError:\n    pass\nprint('TOOL-RAN')"], cwd=str(tree / "repo"),
                        capture_output=True, text=True, env=env, timeout=120)
     assert "FAKE-PT" not in r.stdout, r.stdout + r.stderr
+    assert "TOOL-RAN" in r.stdout, r.stdout + r.stderr  # a refused start cannot pass
 
 
 # --- HPC variables, settings.local.json, .claude/.vscode ----------------------------------------

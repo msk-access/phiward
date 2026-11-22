@@ -64,6 +64,16 @@ phiward launch --tool claude
   profile, and nothing runs. When the tool exits with an error within a few seconds of its
   start, `launch` adds a line: if `sandbox-exec` printed an error above it, `phiward doctor`
   names the cause (inside another sandbox, or a profile that does not compile).
+- The hooks `launch` writes into the session's settings (the fast hook and the prompt check)
+  run from a file in phiward's package, `<python> -I -S <package>/phiward/entry.py ...`, with
+  `onFailure: "block"`. So `launch --tool claude` refuses, on macOS and Linux, a Claude Code
+  older than 2.1.295, which would not honour them. It never starts a program inside the
+  project or the session's folders to learn the version. It asks the native binary
+  `TOOL --version`, from `/`. It never starts a script (the npm build): the script's
+  interpreter, or a shim's config, could be the session's. It reads the version from the
+  `package.json` of the script's npm package (`@anthropic-ai/claude-code`). A tool that gives
+  no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
+  start Claude Code's own program directly, or use `--tool generic` for another tool.
 
 ## What a session can and cannot do
 

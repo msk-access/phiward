@@ -704,6 +704,9 @@ BASH = "/bin/bash"
 VERSION_PATTERNS = (2, 1, 236)  # macOS: a wildcard denyRead holds under a wider allowRead
 VERSION_BLOCK_READS = (2, 1, 257)  # permissions.blockReadsOutsideWorkingDirectories
 VERSION_DENY_PROMPTS = (2, 1, 319)  # permissions.denyInsteadOfPrompting
+# a hook's `onFailure` (2.1.295), and `args` (exec form, older than that): `launch` refuses an
+# older Claude Code, on every platform
+VERSION_HOOK_ARGS = (2, 1, 295)
 
 
 def version_text(version: Tuple[int, int, int]) -> str:
