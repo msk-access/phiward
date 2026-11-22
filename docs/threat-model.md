@@ -351,7 +351,9 @@ server's tool is not checked for it.
 
 What phiward does with a project's `env`:
 
-- Its hooks start `/bin/sh` by absolute path. They unset the variables that make Python or a library
+- Its hooks start a shell script from phiward's package (the user wiring and the plugin, in exec
+  form: no inline code), or `/bin/sh` by absolute path (`install --project`). They unset the
+  variables that make Python or a library
   load other code or read a file they name. These are: every `PYTHON*`, `LD_*`, `DYLD_*`,
   `OPENSSL_*`, `MALLOC_*` and macOS `Malloc*` variable; `__PYVENV_LAUNCHER__` (macOS framework,
   conda and Homebrew Pythons read it even with `-I`); `GCONV_PATH`, `LOCPATH`, `NLSPATH`,
@@ -391,9 +393,14 @@ What phiward does with a project's `env`:
   check below.
 - Claude Code itself ignores `HOME`, `TMPDIR`, the `XDG_*` family and `CLAUDE_CONFIG_DIR` in a
   project's `env`.
-- Later: hooks in Claude Code's exec form (`args`, no shell) would remove the shell; a Claude Code
-  older than May 2026 ignores `args` and would run the hook's program without them, so phiward does
-  not write that form yet.
+- The user wiring's and the plugin's hooks are in Claude Code's exec form (`args`, no shell
+  between Claude Code and the script). Their command is the script itself: a Claude Code that
+  ignores `args` (older than 2.1.139) runs it with no arguments, and it refuses (exit 2). It
+  reads no input. Under `phiward launch` the hooks run `<python> -I -S <package>/phiward/entry.py
+  ...`; on macOS `launch` refuses a Claude Code older than 2.1.295, which would run that Python
+  alone. On Linux it does not check: there an older Claude Code would skip the launched hooks,
+  and the kernel profile still holds. The project hook stays one `/bin/sh` line, because a
+  committed file names no path of this machine.
 
 **Masking never trades a name for a count.** A folder a protected pattern matches now is masked as a
 whole path, spaces and all. That includes `'`, `(` and `&`, which a pattern's wildcard at its end

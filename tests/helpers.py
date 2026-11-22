@@ -267,6 +267,7 @@ def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HE
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(f"#!{sys.executable} -IS\nimport json, os, sys\n"
                  f"a = sys.argv[1:]\nbad = {dict(bad or {})!r}\n"
+                 "if a == ['--version']:\n    print('2.1.330 (Claude Code)')\n    sys.exit(0)\n"
                  "if a[-1:] == ['--help'] and len(a) <= 2:\n"
                  "    w = a[0] if len(a) == 2 else ''\n"
                  "    if bad.get(w) == 'hang':\n        import time; time.sleep(600)\n"

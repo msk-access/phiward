@@ -27,20 +27,26 @@ _PYTHON_NAME = re.compile(r"python(?:3(?:\.\d+)?t?)?")
 
 def hook_form(h: Dict[str, Any]) -> str:
     """Which phiward hook an entry is, by its exact shape only: "isolated" (what
-    `install --user` writes: `install.isolated_command`), "launcher" (an older user form: an
-    absolute `.../phiward hook claude`, or a Python with `-I` and no clean-up of the loader
-    variables), "project" (`install --project` and the plugin: phiward by name), or "" (not
+    `install --user` writes: `install.hook_entry`, or the one `/bin/sh` line an earlier phiward
+    wrote, with this install's own Python), "launcher" (an older user form: an absolute
+    `.../phiward hook claude`, a Python with `-I` and no clean-up of the loader variables, or
+    another environment's Python), "project" (`install --project`: phiward by name), or "" (not
     phiward's guard, whatever it mentions; not a command hook; not run by sh)."""
     if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash"):
         return ""
+    py = install.hook_python(h)
+    if py:
+        if not _PYTHON_NAME.fullmatch(os.path.basename(py)):
+            return ""
+        return "isolated" if _same_folder(py, sys.executable) else "launcher"
     if h.get("args"):
         # the exec form an older phiward wrote with its shell prefix: the same isolated command
-        py = install.isolated_python(install._entry_text(h))
+        py = install.shell_form_python(install._entry_text(h))
         return "isolated" if py and _PYTHON_NAME.fullmatch(os.path.basename(py)) else ""
     command = str(h.get("command", ""))
     if command == install.PROJECT_HOOK or command in install.OLD_PROJECT_HOOKS:
         return "project"
-    py = install.isolated_python(command)
+    py = install.shell_form_python(command)
     if py:
         if not _PYTHON_NAME.fullmatch(os.path.basename(py)):
             return ""
@@ -69,7 +75,11 @@ def _same_folder(a: str, b: str) -> bool:
 
 def _program_there(h: Dict[str, Any]) -> bool:
     import shutil
-    first = install.isolated_python(str(h.get("command", ""))) or (_hook_words(h) or [""])[0]
+    py = install.hook_python(h)
+    if py:  # the script and the Python it runs
+        return all(os.path.isfile(p) and os.access(p, os.X_OK)
+                   for p in (str(h["command"]), py))
+    first = install.shell_form_python(str(h.get("command", ""))) or (_hook_words(h) or [""])[0]
     if h.get("command") in (install.PROJECT_HOOK, install.PROJECT_NOTE) + install.OLD_PROJECT_HOOKS:
         first = "phiward"  # the project hook: phiward by name
     if "/" in first:
@@ -83,14 +93,17 @@ HOOK_TYPES = ("command", "prompt", "agent", "http", "mcp_tool")
 
 def is_prompt_scan(h: Dict[str, Any]) -> bool:
     """Whether a hook entry is phiward's prompt check, by its exact shape: the user form
-    (`install.isolated_command`), or the project form and the plugin's (PROJECT_PROMPT_HOOK).
-    A program at any other path, whatever its name, is not."""
-    if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash") \
-            or h.get("args"):
+    (`install.hook_entry`, or the `/bin/sh` line an earlier phiward wrote), or the project form
+    (PROJECT_PROMPT_HOOK). A program at any other path, whatever its name, is not."""
+    if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash"):
+        return False
+    if install.hook_python(h, "prompt-scan"):
+        return True
+    if h.get("args"):
         return False
     command = str(h.get("command", ""))
     return command == install.PROJECT_PROMPT_HOOK or \
-        bool(install.isolated_python(command, "prompt-scan"))
+        bool(install.shell_form_python(command, "prompt-scan"))
 
 
 def prompt_hooks(data: Any) -> List[Tuple[str, Dict[str, Any]]]:
@@ -191,8 +204,19 @@ def wiring_state(project: str, home: str) -> Wiring:
             if not blocks:
                 w.problems.append(f"a phiward hook entry in the {level} settings has no "
                                   "onFailure: block (a hook that fails lets the tool run)")
+            if any(install.is_old_form(h) for _g, h, _f in mine) or \
+                    any(install.is_old_form(h) for h in scans):
+                w.lines.append(f"  WARNING: the {level} settings run phiward's hooks in the form "
+                               "an older phiward wrote (one inline shell line): run `(cd ~ && "
+                               "phiward install claude --user --write)` again; it replaces them "
+                               "with hooks that run from phiward's own files")
             for _g, h, form in mine:
-                if not _program_there(h):
+                if not _program_there(h) and install.hook_python(h):
+                    w.problems.append(f"the hook's file in the {level} settings is gone: "
+                                      "phiward's Python moved (an upgrade, or another Python "
+                                      "version); every tool call is refused until you run "
+                                      "`(cd ~ && phiward install claude --user --write)` again")
+                elif not _program_there(h):
                     w.problems.append(f"a phiward hook in the {level} settings names a program "
                                       "that is not there")
                 if h.get("async") or h.get("asyncRewake") or "if" in h:
@@ -1033,16 +1057,16 @@ def main(argv: List[str]) -> int:
 
 
 def clean_start_problem() -> Optional[str]:
-    """Why `phiward`, started by name as the plugin and project hooks start it (after
-    CLEAN_ENV), does not start, or None (also when it is not on PATH: that is reported on its
-    own). A phiward whose Python needs PYTHONPATH or LD_LIBRARY_PATH (a module Python, a
-    checkout) stops there, and every tool call is refused."""
+    """Why `phiward`, started by name as the plugin and project hooks start it (after the
+    variables are cleared: the package's `clean-exec.sh`), does not start, or None (also when it
+    is not on PATH: that is reported on its own). A phiward whose Python needs PYTHONPATH or
+    LD_LIBRARY_PATH (a module Python, a checkout) stops there, and every tool call is refused."""
     import shutil
     import subprocess
-    if not shutil.which("phiward") or not os.access("/bin/sh", os.X_OK):
+    if not shutil.which("phiward") or not os.access(install.CLEAN_EXEC, os.X_OK):
         return None
     try:
-        r = subprocess.run(["/bin/sh", "-c", install.CLEAN_ENV + "exec phiward --help >/dev/null"],
+        r = subprocess.run([install.CLEAN_EXEC, "phiward", "--help"],
                            capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"phiward could not be started the way the hooks start it ({type(exc).__name__})"

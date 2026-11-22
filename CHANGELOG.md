@@ -134,6 +134,20 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- The hooks phiward writes run from files in its package, with no inline code. The user
+  wiring's hooks are in Claude Code's exec form: the command is `data/clean-exec.sh` (it clears
+  the Python and loader variables, listed in `data/clean-env.awk`), and phiward's own Python
+  with `-I -m phiward ...` are its arguments. The plugin runs its own copy of the script, and
+  its MCP server is `phiward mcp` with no shell. The hooks under `launch` run
+  `<python> -I -S <package>/phiward/entry.py ...`, now with `onFailure: "block"` on the fast
+  hook too. Each failure still blocks: a script that is not there cannot start, a Python or
+  `phiward` that is not there, an awk list that cannot be read, or a start without the
+  arguments exits 2, and `entry.py` exits 2 when phiward's code cannot be loaded. On macOS
+  `launch` refuses a Claude Code older than 2.1.295. `install --project` keeps its one
+  `/bin/sh` line. **Re-install:** run `(cd ~ && phiward install claude --user --write)` once;
+  it replaces the old entries in place, and until then `doctor` warns that they are in the
+  older form. After an upgrade that moves phiward's Python, every tool call is refused until
+  you run it again; `doctor` names the cause.
 - The `msk` example pack no longer has path rules: `<PATIENTPATH>` (a path holding
   `inputs/patient`) and `<CLINICALPATH>` (a path under `/clinical/`) are gone. They were
   examples of one folder layout, not facts about any institution. A user who relied on them

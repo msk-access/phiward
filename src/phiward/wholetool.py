@@ -39,7 +39,7 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from phiward import carryover, claude_settings, config, confine, pathid, pathmatch, safeio
 from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
@@ -102,6 +102,9 @@ What the session can do:
   program that runs blocks unix sockets in the session (run Claude Code's native binary
   itself, which carries it; a JavaScript build is refused); hooks, MCP servers and Claude Code itself are outside that
   sandbox. Any other tool cannot make unix sockets at all.
+- --tool claude on macOS: Claude Code 2.1.295 or newer (`claude --version`). The hooks launch
+  writes into the session's settings run phiward's entry.py file with arguments, which an
+  older one would drop.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -139,30 +142,38 @@ class Adapter:
             sb = data.setdefault("sandbox", {})
             if isinstance(sb, dict):
                 sb["enabled"] = False
-        import shlex
-        pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        code = f"import sys; sys.path.insert(0, {pkg!r}); from phiward.cli import main; sys.exit(main())"
-        cmd = f"{shlex.quote(sys.executable)} -I -S -c {shlex.quote(code)} hook claude --launched"
+        # exec form, from a file in the package (entry.py): no inline code. A Claude Code that
+        # ignores `args` would run the Python alone, so launch refuses one older than
+        # VERSION_HOOK_ARGS on macOS (claude_version_problem)
+        entry = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.py")
+
+        def launched(words: List[str], timeout: int) -> Dict[str, Any]:
+            return {"type": "command", "command": sys.executable,
+                    "args": ["-I", "-S", entry] + words, "timeout": timeout,
+                    "onFailure": "block"}
         hooks = data.setdefault("hooks", {})
         if not isinstance(hooks, dict):
             hooks = data["hooks"] = {}
+
+        def text(h: Dict[str, Any]) -> str:
+            args = h.get("args") if isinstance(h.get("args"), list) else []
+            return " ".join([str(h.get("command", ""))] + [str(a) for a in args])
+
         def others(event: str, what: str) -> list:
             # our entry replaced each time (phiward may have moved; a decoy left by a session
             # is dropped); other entries kept
             groups = hooks.get(event) if isinstance(hooks.get(event), list) else []
             return [g for g in groups if not (isinstance(g, dict) and any(
-                isinstance(h, dict) and what in str(h.get("command", ""))
-                and any(n in str(h.get("command", "")) for n in config.PROGRAMS)
+                isinstance(h, dict) and what in text(h)
+                and any(n in text(h) for n in config.PROGRAMS)
                 for h in g.get("hooks", []) if isinstance(g.get("hooks"), list)))]
 
         pre = others("PreToolUse", "hook claude")
         pre.append({"matcher": "Read|Grep|Glob|Bash|Edit|Write|NotebookEdit|MultiEdit",
-                    "hooks": [{"type": "command", "command": cmd, "timeout": 5}]})
+                    "hooks": [launched(["hook", "claude", "--launched"], 5)]})
         hooks["PreToolUse"] = pre
         prompt = others("UserPromptSubmit", "prompt-scan claude")
-        scan = f"{shlex.quote(sys.executable)} -I -S -c {shlex.quote(code)} prompt-scan claude"
-        prompt.append({"hooks": [{"type": "command", "command": scan, "timeout": 10,
-                                  "onFailure": "block"}]})
+        prompt.append({"hooks": [launched(["prompt-scan", "claude"], 10)]})
         hooks["UserPromptSubmit"] = prompt
         if json.dumps(data, sort_keys=True) != before:
             _write_at(folder_fd, "settings.json", json.dumps(data, indent=2) + "\n")
@@ -1682,6 +1693,31 @@ def _find_tool(word: str, env: Dict[str, str]) -> str:
                        "PATH)")
 
 
+def claude_version_problem(tool: str, env: Optional[Dict[str, str]] = None) -> str:
+    """Why `tool`, as Claude Code, is too old for the launched hooks, or "". They are in exec
+    form (`args`), and a Claude Code older than VERSION_HOOK_ARGS would run their Python alone,
+    so the hooks would not run. Judged by `tool --version`: a program that does not say it is
+    Claude Code is not judged, unless it is named `claude` (then no version is a refusal)."""
+    need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
+    try:
+        out = subprocess.run([tool, "--version"], stdin=subprocess.DEVNULL, capture_output=True,
+                             text=True, timeout=20, env=env).stdout
+    except (OSError, subprocess.SubprocessError, ValueError):
+        out = ""
+    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
+    if not m:
+        if os.path.basename(tool) != "claude":
+            return ""
+        return (f"`{tool} --version` gives no Claude Code version; launch needs Claude Code "
+                f"{need} or newer")
+    version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    if version < claude_settings.VERSION_HOOK_ARGS:
+        return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
+                "which launch needs (an older one would not run phiward's hooks); update "
+                "Claude Code")
+    return ""
+
+
 def _make_folders(project: str, names: Sequence[str]) -> List[str]:
     """The folders `names` are made before the tool starts (after every check), so the session
     cannot make one a link, and on Linux a bind covers each. The ones made are returned."""
@@ -1789,6 +1825,9 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
         # Inside another sandbox sandbox-exec refuses to apply the profile, and nothing runs
         tool = _find_tool(argv[0], child_env)
+        why = claude_version_problem(tool, child_env) if adapter.name == "claude" else ""
+        if why:
+            raise LaunchError(why)
         # the session's own run folder: a launch inside the session checks it (already_confined)
         child_env["PHIWARD_RUN"] = run
         _make_folders(project, [".claude"])

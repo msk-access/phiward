@@ -63,7 +63,8 @@ def test_a_reinstall_drops_the_old_prefix_and_exec_form_hooks(tree):
     new = install.merge(old, install.wiring(cfg))
     assert "CLAUDE_CODE_SHELL_PREFIX" not in new["env"] and new["env"]["FOO"] == "1"
     hooks = [h for g in new["hooks"]["PreToolUse"] for h in g["hooks"]]
-    assert hooks and all("args" not in h for h in hooks)
+    want = install.wiring(cfg)["hooks"]["PreToolUse"][0]["hooks"][0]
+    assert hooks == [want] and all(h["command"] != "/bin/sh" for h in hooks), hooks
 
 
 def test_install_has_no_shell_prefix_option():

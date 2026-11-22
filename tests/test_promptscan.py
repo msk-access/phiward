@@ -371,8 +371,9 @@ def test_the_wiring_has_the_prompt_entry(tree):
     cfg = config.load(str(tree / "repo"))
     user = _prompt_entries(install.wiring(cfg))
     assert len(user) == 1 and user[0]["timeout"] == 10 and user[0]["onFailure"] == "block"
-    assert user[0]["command"] == install.isolated_command(sys.executable, "prompt-scan")
-    assert install.isolated_python(user[0]["command"], "prompt-scan") == sys.executable
+    assert {k: user[0][k] for k in ("command", "args")} == \
+        install.hook_entry(sys.executable, "prompt-scan")
+    assert install.hook_python(user[0], "prompt-scan") == sys.executable
     proj = _prompt_entries(install.wiring(cfg, project=True, project_dir=str(tree / "repo")))
     assert proj == [{"type": "command", "command": install.PROJECT_PROMPT_HOOK, "timeout": 10,
                      "onFailure": "block"}]
@@ -387,17 +388,27 @@ def test_merge_keeps_the_operators_prompt_hooks_and_replaces_older_forms(tree):
     m = install.merge(current, w)
     got = _prompt_entries(m)
     assert mine in got and old not in got
-    assert sum(1 for h in got if "prompt-scan" in h["command"]) == 1
+    assert sum(1 for h in got if "prompt-scan" in " ".join([h["command"]] + h.get("args", []))) == 1
     assert install.merge(m, w) == m
 
 
-def test_the_plugin_hooks_are_the_project_wiring_for_every_event(tree):
+def test_the_plugin_hooks_match_the_project_wiring_for_every_event(tree):
+    # the same events, matchers, timeouts and onFailure as the project wiring; the plugin runs
+    # its own script with phiward by name (test_hooks_from_files checks the command)
     from phiward import install
     root = Path(__file__).resolve().parents[1]
     plugin = json.loads((root / "plugin" / "hooks" / "hooks.json").read_text())
     want = install.wiring(config.load(str(tree / "repo")), project=True,
                           project_dir=str(tree / "repo"))["hooks"]
-    assert plugin["hooks"] == want
+    what = {"PreToolUse": "hook", "SessionStart": "session-note", "UserPromptSubmit": "prompt-scan"}
+
+    def shape(hooks, words):
+        return {ev: [dict(g, hooks=[dict({k: v for k, v in h.items() if k not in
+                                          ("command", "args")}, run=words(ev, h))
+                                    for h in g["hooks"]]) for g in groups]
+                for ev, groups in hooks.items()}
+    assert shape(plugin["hooks"], lambda ev, h: h["args"]) == \
+        shape(want, lambda ev, h: ["phiward", what[ev], "claude"])
     assert "prompt" in plugin["description"]
 
 
@@ -421,11 +432,12 @@ def test_the_project_prompt_hook_blocks_with_json_when_it_cannot_run(tmp_path, b
 
 
 def test_the_user_prompt_hook_blocks_with_json_when_awk_cannot_run(tmp_path):
+    import shutil
     from phiward import install
-    cmd = install.isolated_command(sys.executable, "prompt-scan")
-    assert install.isolated_python(cmd, "prompt-scan") == sys.executable
-    cmd = cmd.replace("/usr/bin/awk", str(tmp_path / "no-awk"))
-    r = subprocess.run(cmd, shell=True, input="{}", capture_output=True, text=True,
+    h = install.hook_entry(sys.executable, "prompt-scan")
+    copy = tmp_path / "clean-exec.sh"  # the script without the awk list beside it
+    shutil.copy2(h["command"], copy)
+    r = subprocess.run([str(copy)] + h["args"], input="{}", capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin"}, timeout=30)
     assert r.returncode == 2, (r.stdout, r.stderr)
     reply = json.loads(r.stdout)
@@ -453,10 +465,10 @@ def test_launch_writes_the_prompt_entry_and_replaces_its_own(tmp_path):
     s = _launch_settings(tmp_path, {"hooks": {"UserPromptSubmit": [{"hooks": [mine]},
                                                                    {"hooks": [decoy]}]}})
     got = _prompt_entries(s)
-    ours = [h for h in got if "prompt-scan claude" in h["command"]]
+    ours = [h for h in got if h.get("args", [])[-2:] == ["prompt-scan", "claude"]]
     assert mine in got and decoy not in got and len(ours) == 1
     assert ours[0]["timeout"] == 10 and ours[0]["onFailure"] == "block"
-    assert " -I -S -c " in ours[0]["command"]
+    assert ours[0]["args"][:2] == ["-I", "-S"] and ours[0]["args"][2].endswith("/entry.py")
     assert _launch_settings(tmp_path) == s  # once, however often it runs
 
 
@@ -465,11 +477,11 @@ def test_launch_writes_the_prompt_entry_and_replaces_its_own(tmp_path):
 LAUNCHED_SCAN = """
 import json, os, subprocess, sys
 s = json.load(open(os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "settings.json")))
-cmd = [h["command"] for g in s["hooks"]["UserPromptSubmit"] for h in g["hooks"]
-       if "prompt-scan claude" in h["command"]]
+cmd = [[h["command"]] + h["args"] for g in s["hooks"]["UserPromptSubmit"] for h in g["hooks"]
+       if h.get("args", [])[-2:] == ["prompt-scan", "claude"]]
 for text in TEXTS:
     p = {"hook_event_name": "UserPromptSubmit", "prompt": text, "cwd": os.getcwd()}
-    r = subprocess.run(cmd[0], shell=True, input=json.dumps(p), capture_output=True, text=True)
+    r = subprocess.run(cmd[0], input=json.dumps(p), capture_output=True, text=True)
     print("RESULT", json.dumps([r.returncode, r.stdout]))
 """
 

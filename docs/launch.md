@@ -64,6 +64,10 @@ phiward launch --tool claude
   profile, and nothing runs. When the tool exits with an error within a few seconds of its
   start, `launch` adds a line: if `sandbox-exec` printed an error above it, `phiward doctor`
   names the cause (inside another sandbox, or a profile that does not compile).
+- The hooks `launch` writes into the session's settings (the fast hook and the prompt check)
+  run from a file in phiward's package, `<python> -I -S <package>/phiward/entry.py ...`, with
+  `onFailure: "block"`. On macOS `launch` refuses a Claude Code older than 2.1.295 (asked with
+  `claude --version`): an older one would run that Python without its arguments.
 
 ## What a session can and cannot do
 

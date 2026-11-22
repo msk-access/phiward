@@ -35,6 +35,7 @@ says what it holds. By feature:
 | Globs | test_v2_glob_cases |
 | Credentials and other hidden places | test_v2_hidden, test_v2_modes |
 | Claude Code's sandbox settings and confinement | test_install_and_sandbox, test_v2_part2, test_v2_part3, test_v2_part6, test_v2_sandbox_boundary, test_v2_reason_steps, test_v2_steps_match_install, test_v2_records_place, test_v2_launch_settings, test_v2_old_settings, test_v2_network, test_v2_file_mentions |
+| The hooks phiward writes, run from files in the package (the script, its variable list, `entry.py`, the plugin's copies, old entries replaced, doctor's notes, launch's Claude Code floor on macOS) | test_hooks_from_files |
 | Tools other than Bash (MCP tools, Copilot) | test_v2_tool_rule, test_v2_shell_names, test_v2_refusal_words, test_v2_mcp_source |
 | MCP: wrap, list, launch records, launcher | test_v2_mcp_wrap, test_v2_mcp_wrap_cmd, test_v2_wrap_shared, test_v2_backups, test_v2_entry_id, test_v2_one_answer, test_v2_one_wrapped, test_v2_twin_count, test_v2_launch_records, test_v2_launcher_identity, test_v2_launcher_owner, test_v2_launcher_path, test_v2_path_risk, test_v2_attacks, test_v2_review_round3, test_v2_review_round4 |
 | The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review, test_v2_placeholder_counts, test_v2_gateway_places, test_macos_gateway_profile_file, test_macos_inline_code |
