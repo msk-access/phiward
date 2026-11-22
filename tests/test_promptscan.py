@@ -180,7 +180,7 @@ def test_kinds_and_why_never_hold_input_text(place, text, user):
 # --- the corpus: ordinary prompts clear, made-up identifiers and paths block ---------------------
 
 DATA = Path(__file__).with_name("data")
-CORPUS = [ln for f in ("prompt_corpus.txt", "prompt_corpus_holdout.txt")
+CORPUS = [ln for f in ("prompt_corpus.txt", "prompt_corpus_second.txt")
           for ln in (DATA / f).read_text(encoding="utf-8").splitlines()
           if ln.strip() and not ln.startswith("#")]
 # Pack rules that hit ordinary prompts: each is a pack follow-up (it over-masks output too),

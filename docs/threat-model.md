@@ -449,8 +449,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   IDE's open file and selection, which Claude Code adds to the prompt (only its best-effort
   `Read` deny rules apply; set `claudeCode.attachSelection` and `claudeCode.attachOpenFile` to
   false in VS Code); a session whose own launch environment sets the variable (the Desktop app,
-  a runner); and any Claude Code older than v2.1.299. What a person types or pastes is checked
-  by [the prompt scan](#known-prompt-scan).
+  a runner); and any Claude Code older than v2.1.299. What a person types or pastes into Claude
+  Code is checked by [the prompt scan](#known-prompt-scan); in another tool that runs the same
+  hooks, it may not be.
 
 - <a id="known-prompt-scan"></a>**The prompt scan is a tripwire for honest pasting, not a
   boundary.** phiward's `UserPromptSubmit` hook (`phiward prompt-scan claude`, in both modes)
@@ -459,6 +460,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   a `[remote] roots` entry ([configuration.md](configuration.md#sanitize)). The message names
   the kind, never the value. A config or pack file it cannot use, a prompt over 1 MiB, or an
   error refuses the prompt. What it does not stop:
+  - It protects Claude Code only. Other tools that run the hooks of `.claude/settings.json` may
+    ignore a prompt hook's answer (GitHub Copilot in VS Code does), so there the prompt is sent.
   - Other prompt hooks (`UserPromptSubmit`, `UserPromptExpansion`) run in parallel with
     phiward's, at any settings level or in a plugin, so phiward's block does not keep the prompt
     from them. `doctor` warns of each one; nothing removes them.

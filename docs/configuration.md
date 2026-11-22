@@ -175,7 +175,10 @@ listed in the
   file, not a link. A built-in pack may also list `detail`: placeholders of its own `paths` and
   `identifiers` rules that are details, not identifiers (`genomics`: `<BAMFILE>` and `<READ>`).
   The prompt scan leaves them out; output masking does not. In a pack file of your own the key
-  is checked and has no effect: every rule of your pack files counts as an identifier.
+  is checked and has no effect: every rule of your pack files counts as an identifier. With
+  `msk` on, a prompt that names `donor` (`donor_id`, `DonorSearch`), a `C-…` string
+  (`C-string`, `c-header`), or a folder called `clinical` or `inputs/patient` is not sent,
+  until the pack's rules are tightened (a follow-up).
 - **`names_from`** (list of files). Index files: each line is tab-separated fields; in each field
   that holds a `/`, every path part of 4 or more characters, the part before its first dot, and
   its `-`/`_`/`.` pieces are masked as `<NAME>` (never a stop word or a bare number). A file

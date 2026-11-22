@@ -1,6 +1,6 @@
 # Made-up ordinary coding prompts, one per line (tests/test_promptscan.py). Written before any
 # pack change. None names a person, a patient or a sample; with the default packs none may block.
-# The second half of the corpus is in prompt_corpus_holdout.txt.
+# A second set, written separately, is in prompt_corpus_second.txt.
 Add a --verbose flag to the CLI and update the tests
 Why does pytest fail on test_parse with a KeyError?
 Rename the function load_config to read_config everywhere

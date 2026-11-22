@@ -1,5 +1,5 @@
-# Made-up ordinary coding prompts: the held-out half of the corpus (prompt_corpus.txt has the
-# rest). Written before any pack change, with the words of a genomics group's daily work.
+# Made-up ordinary coding prompts: a second set, written separately from prompt_corpus.txt
+# before any pack change, with the words of a genomics group's daily work.
 why does Sample7.sorted.bam fail at chr1:1234567 in the pileup step?
 The run printed 12345678 reads but the summary says 1,234,567
 Index tumor_normal.bam and check the .bai is newer than the BAM
