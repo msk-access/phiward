@@ -5,6 +5,7 @@ changed or left out, with other dashes (U+2010, U+2013, U+2212...) and with othe
 with its separators changed or left out. A hit that runs past a rule's match takes that match
 with it. Made-up names only (FAKE-PT-0001, Doe_Jane_FAKE, P-9990001-T01-IM6)."""
 
+import gc
 import importlib.util
 import random
 import re
@@ -588,34 +589,56 @@ def _made_up_lines(n):
     return out
 
 
+def _fresh():
+    """No cache from an earlier build: the matchers, and the patterns `re` keeps compiled."""
+    inventory._MATCHER.clear()
+    old_inventory._MATCHER.clear()
+    re.purge()
+
+
+def _best_of(runs, sides):
+    """The best time of each side (name: (setup, work)) over `runs` rounds, the order turned
+    round each round; garbage collected before each timing, and off during it."""
+    best, got = {}, {}
+    names = list(sides)
+    for k in range(runs):
+        for name in names if k % 2 == 0 else names[::-1]:
+            setup, work = sides[name]
+            setup()
+            gc.collect()
+            gc.disable()
+            try:
+                t = time.perf_counter()
+                got[name] = work()
+                took = time.perf_counter() - t
+            finally:
+                gc.enable()
+            best[name] = min(best.get(name, took), took)
+    return best, got
+
+
 @pytest.mark.slow
 def test_speed_within_the_targets():
     """200,000 made-up names: building the matcher and masking a line each cost at most 1.5x
-    what they did before this change (the targets of the change)."""
+    what they did before this change (the targets of the change). Each side's best of 3, in
+    turn."""
     stop = {w.casefold() for w in STOP_WORDS}
     strings = sorted({s for i in range(200000)
                       for s in inventory._strings_of(f"FAKE-SPEED-{i:06d}.bam", stop)})
-    inventory._MATCHER.clear()
-    re.purge()  # `re` keeps compiled patterns: each build compiles its own
-    t = time.perf_counter()
-    new = Sanitizer(entries=strings)
-    t_new = time.perf_counter() - t
     old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(200000))
-    old_inventory._MATCHER.clear()
-    re.purge()
-    t = time.perf_counter()
-    old = _Before(entries=old_strings)
-    t_old = time.perf_counter() - t
+    build, made = _best_of(3, {"new": (_fresh, lambda: Sanitizer(entries=strings)),
+                               "old": (_fresh, lambda: _Before(entries=old_strings))})
     lines = _made_up_lines(400000)
     size = sum(len(x) + 1 for x in lines)
-    t = time.perf_counter()
-    for x in lines:
-        new.clean(x)
-    l_new = time.perf_counter() - t
-    t = time.perf_counter()
-    for x in lines:
-        old.clean(x)
-    l_old = time.perf_counter() - t
+
+    def mask(s):
+        def work():
+            for x in lines:
+                s.clean(x)
+        return work
+    run, _ = _best_of(3, {"new": (lambda: None, mask(made["new"])),
+                          "old": (lambda: None, mask(made["old"]))})
+    t_new, t_old, l_new, l_old = build["new"], build["old"], run["new"], run["old"]
     print(f"\nR10: build {t_new:.2f}s (before {t_old:.2f}s); {size / 1e6:.1f} MB masked in "
           f"{l_new:.2f}s (before {l_old:.2f}s)")
     assert t_new <= 1.5 * t_old + 0.2, (t_new, t_old)
