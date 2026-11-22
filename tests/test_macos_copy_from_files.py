@@ -59,8 +59,9 @@ def _recorder(seen, fail=None):
 
 
 def _no_inline(cmd):
-    return not any(w in ("-c", "-e", "-p") for w in cmd) and \
-        not any(os.path.basename(w) in ("sh", "bash") for w in cmd)
+    """A local copy's step starts a system program that takes no code: no shell, no Python."""
+    return os.path.basename(cmd[0]) in ("mkdir", "rsync", "cp", "true") and \
+        os.path.dirname(cmd[0]) in copying.SYSTEM_DIRS
 
 
 @pytest.fixture()
@@ -131,8 +132,7 @@ def test_a_local_copy_makes_its_folder_with_mkdir_then_copies(tree, monkeypatch)
     assert code == 0, out
     assert len(seen) == 2, seen
     mkdir, copy = seen
-    assert mkdir["cmd"] == [copying.system_program("mkdir"), "-p", "--", str(folder) + "/"]
-    assert os.path.dirname(mkdir["cmd"][0]) in copying.SYSTEM_DIRS
+    assert mkdir["cmd"] == ["/bin/mkdir", "-p", "--", str(folder) + "/"]
     assert os.path.basename(copy["cmd"][0]) in ("rsync", "cp"), copy
     # the same profile: the same write place, no network, the same hidden list
     assert mkdir["write_to"] == copy["write_to"] and mkdir["deny_read"] == copy["deny_read"]

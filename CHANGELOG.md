@@ -155,6 +155,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   it. Run `phiward install claude --user --write` again to add it to an existing wiring;
   `doctor` warns until then.
 - macOS: the login service runs `/bin/launchctl` by its full path, not from `PATH`.
+- `phiward copy` puts no code in a command line. A pull unpacks with `phiward/tar_extract.py`,
+  a file of the installed package, run as `<python> -I FILE DEST`; a missing file fails the
+  pull, and nothing is written. A local copy makes its destination folder with `/bin/mkdir -p`
+  as its own step, in the same profile and write place as the copy, and copies only when that
+  step succeeded (its output adds a line `copy (make the folder) done: exit=0`). A dry run
+  without rsync runs the system `true`. The remote side of a push and a pull is unchanged.
 - macOS: `phiward launch` starts the tool as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with
   no Python helper in between. The tool's profile is a file in `~/.phiward/profiles`, under the
   same rules as the gateway's, removed when the tool ends. A program name is found on the
