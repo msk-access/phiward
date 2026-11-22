@@ -41,6 +41,7 @@ Work with protected data:
 Called by tools (you rarely run these yourself):
   hook claude        read a hook payload on stdin and reply as Claude Code expects
   session-note claude  the start-of-session note (a SessionStart hook)
+  prompt-scan claude   the check of each prompt before it is sent (a UserPromptSubmit hook)
   mcp                an MCP server with the gateway as tools
   git-hook NAME      run a git hook (pre-commit, pre-push), or install them
 """
@@ -76,6 +77,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "session-note":
         from phiward import session_note
         return session_note.main(rest)
+    if cmd == "prompt-scan":
+        from phiward import promptscan
+        return promptscan.main(rest)
     if cmd == "check":
         from phiward.adapters import run_check
         return run_check(rest)

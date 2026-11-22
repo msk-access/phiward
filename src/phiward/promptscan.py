@@ -17,8 +17,10 @@ prompt text.
 """
 
 import dataclasses
+import json
 import os
 import re
+import sys
 from collections import Counter
 from typing import List, NamedTuple, Tuple
 
@@ -128,3 +130,49 @@ def prompt_verdict(text: str, cfg: config.Config, cwd: str) -> Verdict:
     except Exception:  # noqa: BLE001 - fail closed on anything
         return Verdict(True, (), "phiward: this prompt was not sent: the check could not run; "
                        + DOCTOR)
+
+
+# ---- the Claude Code adapter: `phiward prompt-scan claude` -------------------------------------
+
+HELP = """usage: phiward prompt-scan claude   (reads the hook payload on stdin)
+
+Options:
+  -h, --help   show this help
+
+Claude Code runs it as a UserPromptSubmit hook, before each prompt is sent; `phiward install
+claude` writes the wiring. A prompt the sanitizer would change (a pack or [sanitize] patterns
+match of the user config, or a path below a protected root) is not sent: the reply names the
+kind, never the value. A clear prompt gets no output. Anything it cannot read is blocked.
+"""
+_UNREAD = ("phiward: this prompt was not sent: the hook payload could not be read; " + DOCTOR)
+
+
+def _claude_verdict(raw: str) -> Verdict:
+    payload = json.loads(raw)
+    if not isinstance(payload, dict) or payload.get("hook_event_name") != "UserPromptSubmit" \
+            or not isinstance(payload.get("prompt"), str) \
+            or not isinstance(payload.get("cwd"), str) or not payload["cwd"].startswith("/"):
+        return Verdict(True, (), _UNREAD)
+    cwd = payload["cwd"]
+    return prompt_verdict(payload["prompt"], config.load(cwd), cwd)
+
+
+def main(argv: List[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        sys.stdout.write(HELP)
+        return 0
+    try:
+        if argv != ["claude"]:
+            v = Verdict(True, (), "phiward: usage: phiward prompt-scan claude; every prompt is "
+                        "refused until the wiring is fixed (`phiward install claude`).")
+        else:
+            v = _claude_verdict(sys.stdin.read())
+    except Exception:  # noqa: BLE001 - fail closed on anything
+        v = Verdict(True, (), _UNREAD)
+    if not v.blocked:
+        return 0
+    # stdout is never empty on a block: an exit 2 with an empty stdout from a plugin is no block
+    sys.stdout.write(json.dumps({"decision": "block", "reason": v.why, "hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit", "suppressOriginalPrompt": True}}) + "\n")
+    sys.stderr.write(v.why + "\n")
+    return 2
