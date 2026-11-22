@@ -137,6 +137,26 @@ def test_a_failed_start_points_to_doctor(tree, recorder, monkeypatch):
     assert any("phiward doctor" in n for n in run.notes), run.notes
 
 
+def test_a_late_failure_does_not_point_to_doctor(tree, recorder, monkeypatch):
+    """sandbox-exec fails at the start; a tool that ends with an error later (a long session
+    ended by Ctrl-C, failing tests) gets no hint."""
+    monkeypatch.setattr(wholetool, "already_confined", lambda env: False)
+    monkeypatch.chdir(tree / "repo")
+    monkeypatch.setattr(wholetool, "START_WINDOW", 0.0, raising=False)
+    run = wholetool._Run()
+    code = wholetool._launch("generic", False, ["--", "/usr/bin/false"], dict(os.environ), run,
+                             "")
+    assert code != 0
+    assert not any("phiward doctor" in n for n in run.notes), run.notes
+
+
+def test_a_missing_path_is_named_as_a_path(tree):
+    with pytest.raises(wholetool.ToolNotFound) as e:
+        wholetool._find_tool("./no-such-FAKE-PT-0001", {"PATH": "/usr/bin:/bin"})
+    assert "no such program: ./no-such-FAKE-PT-0001" in str(e.value), e.value
+    assert "PATH" not in str(e.value), e.value
+
+
 def test_no_private_sandbox_function_in_the_source():
     hits = [str(p.relative_to(ROOT)) for p in sorted((SRC / "phiward").rglob("*.py"))
             if "sandbox_check" in p.read_text()]
