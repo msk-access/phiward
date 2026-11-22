@@ -547,6 +547,9 @@ class Broker:
         from phiward import run as run_mod
         if run_mod.sweep_scratch(config.cache_dir()):
             self.say("removed scratch folders an earlier broker left")
+        from phiward import confine
+        if confine.prune_profiles():
+            self.say("removed profile files an earlier broker left")
         status = write_status()
         for _ in range(self.max_jobs):
             threading.Thread(target=self.worker, daemon=True).start()

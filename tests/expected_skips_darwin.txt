@@ -1,6 +1,15 @@
 # Tests that skip on macOS (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
 # Linux-only tests, two that skip by design, and the tabix check (no tabix on GitHub's macOS
-# runners). Remake with PHIWARD_WRITE_SKIPS=FILE.
+# runners). Remake with PHIWARD_WRITE_SKIPS=FILE. On GitHub Actions only: the two mount-and-job
+# tests, the profile-read test, the three launch tests with a real sandbox
+# (test_macos_launch_no_helper) and the four launch-inside-a-session tests
+# (test_v2_nested_launch, test_v2_w1, test_v2_launch_network).
+tests/test_macos_gateway_profile_file.py::test_a_launch_session_cannot_read_a_pending_profile
+tests/test_macos_launch_no_helper.py::test_ci_a_sandbox_that_only_tightens_is_not_a_session
+tests/test_macos_launch_no_helper.py::test_ci_doctor_names_a_start_inside_another_sandbox
+tests/test_macos_launch_no_helper.py::test_ci_the_tool_starts_with_sigpipe_at_its_default
+tests/test_macos_profile_mount_jobs.py::test_the_gateway_profile_refuses_a_mount_and_a_launchd_job
+tests/test_macos_profile_mount_jobs.py::test_the_tool_profile_refuses_a_mount_and_a_launchd_job
 tests/test_pseudonymize_formats.py::test_tabix_indexes_the_bgzf_copy
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[io_uring_setup]
 tests/test_round2.py::test_c_linux_gateway_filter_blocks[ptrace]
@@ -48,6 +57,7 @@ tests/test_v2_launch_network.py::test_17_no_socket_with_a_path_leads_to_the_prox
 tests/test_v2_launch_network.py::test_17_no_socket_with_a_path_leads_to_the_proxy_in_the_session[generic]
 tests/test_v2_launch_network.py::test_17_the_tool_reaches_a_made_up_upstream_through_the_proxy[claude]
 tests/test_v2_launch_network.py::test_17_the_tool_reaches_a_made_up_upstream_through_the_proxy[generic]
+tests/test_v2_launch_network.py::test_1_2_the_session_cannot_reach_this_machines_loopback[nested]
 tests/test_v2_launch_network.py::test_5_the_session_settings_keep_bash_inside_the_inner_sandbox
 tests/test_v2_launch_races.py::test_r13_a_name_that_is_not_utf8_is_compared_as_bytes
 tests/test_v2_launch_races.py::test_r14_an_entry_named_in_no_encoding_is_checked_end_to_end
@@ -62,6 +72,8 @@ tests/test_v2_launch_races.py::test_r8_the_view_names_its_entries_and_lets_bwrap
 tests/test_v2_launch_races.py::test_r9_a_split_folder_replaced_by_a_link_before_the_check_never_shows_its_target
 tests/test_v2_launch_sockets.py::*
 tests/test_v2_nested_launch.py::test_a_launch_in_a_mode_a_shaped_bubblewrap_still_builds_the_profile
+tests/test_v2_nested_launch.py::test_a_report_inside_a_session_is_handled_as_on_macos
+tests/test_v2_nested_launch.py::test_a_wrapped_server_inside_a_session_runs_directly
 tests/test_v2_nested_launch.py::test_another_filter_that_denies_keyctl_does_not_count
 tests/test_v2_nested_launch.py::test_only_the_exact_errno_counts[1-False]
 tests/test_v2_nested_launch.py::test_only_the_exact_errno_counts[38-False]
@@ -96,6 +108,7 @@ tests/test_v2_round8.py::test_launch_refuses_a_command_line_bwrap_cannot_take
 tests/test_v2_runs_later.py::test_renv_restore_and_r_run_under_launch
 tests/test_v2_view.py::test_changes_on_the_host_after_the_start_stay_out_of_the_view
 tests/test_v2_view.py::test_launch_starts_next_to_thousands_of_entries_and_hides_the_root
+tests/test_v2_w1.py::test_w1_launch_inside_launch_runs_directly
 tests/test_v2_w1b.py::test_c1_a_path_socket_outside_is_not_reachable
 tests/test_v2_w1b.py::test_c1_an_abstract_socket_outside_is_not_reachable
 tests/test_v2_w1b.py::test_c2_a_kerberos_ticket_in_tmp_is_hidden

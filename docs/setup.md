@@ -331,7 +331,7 @@ Notes:
   gives `--yes`, before your config exists. After that, do not give `--yes` to an agent: read
   the diff yourself.
 
-The block has four parts.
+The block has five parts.
 
 1. One `PreToolUse` hook entry with the matcher `*` (every tool). It sets `"onFailure": "block"`: without it, Claude
    Code lets a tool call go on when the hook fails. The command is
@@ -348,10 +348,15 @@ The block has four parts.
    `... -I -m phiward ...`).
 2. A `SessionStart` hook (`phiward session-note claude`): every session starts with a short note
    on the rules (the gateway is the intended route). It names no protected path.
-3. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
+3. A `UserPromptSubmit` hook (`phiward prompt-scan claude`, `"onFailure": "block"`, the same
+   command form as the first). It checks each prompt before Claude Code sends it. A prompt
+   that the sanitizer would change is not sent: a match of the user config's packs or
+   `[sanitize] patterns`, or a path below a protected root. The message names the kind, never
+   the value. What it does not see: [threat-model.md](threat-model.md#known-prompt-scan).
+4. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
    tools, inside Claude Code.
-4. The sandbox block (shortened here; the real one also lists the hidden list):
+5. The sandbox block (shortened here; the real one also lists the hidden list):
 
 ```json
 {
@@ -390,7 +395,7 @@ hook refuses shell commands other than gateway calls. Protect plain folders (roo
 
 **The `--settings` file.** `install --user --write` also writes
 `~/.config/phiward/claude-settings.json`, which sets `sandbox.enabled`, `failIfUnavailable` and
-`allowUnsandboxedCommands: false`. Start Claude Code with `claude --settings
+`allowUnsandboxedCommands: false`, and turns `@` mentions off (below). Start Claude Code with `claude --settings
 ~/.config/phiward/claude-settings.json` (an alias in your shell startup file does it): a `false`
 given with `--settings` makes the sandbox admin-required, as managed settings would, so a
 repository's `.claude/settings.json` cannot turn the sandbox off, add excluded commands or
@@ -408,6 +413,19 @@ and the hook refuses shell commands (`doctor` says so).
 the hook reads commands as bash does. A project's settings that
 set `CLAUDE_CODE_SHELL` or `CLAUDE_CODE_SHELL_PREFIX` make the hook refuse every call (a
 project's value wins over yours in Claude Code).
+
+**`@` mentions are turned off.** `install --user` sets `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` to
+`1` (also in the `--settings` file). Why: with mentions on, `@path` in a prompt puts the file's
+text into the prompt without a tool call phiward's hook sees. With them off, Claude Code passes
+the path and the agent reads the file with Read, which the hook and the deny rules judge like
+any read. The cost: `@` completion of files no longer inserts their contents; the agent reads
+them with one more tool call. Claude Code ignores the setting in a project's settings, so
+`install --project` does not write it, and it needs Claude Code v2.1.299 or later (older ones
+do not know it). `doctor` reports a missing or different value, and a Claude Code older than
+v2.1.299. It does not cover what an IDE adds to the prompt (the open file and the selection): set
+`claudeCode.attachSelection` and `claudeCode.attachOpenFile` to false in the VS Code settings
+when protected files are open in the editor; `doctor` cannot see them. A session started by the
+Desktop app or a runner whose own environment sets the variable takes that value instead.
 
 An older phiward offered `--shell-prefix`, which ran every shell command through its own kernel
 profile. It is gone: Claude Code's sandbox confines the shell. If you used it, run

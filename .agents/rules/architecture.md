@@ -15,7 +15,7 @@ What each layer covers, and what no layer covers, is in
 | The gateway | `phiward run` and `phiward copy`: a broker outside the agent runs the command in a kernel profile and masks the output | `broker.py`, `run.py`, `copying.py`, `confine.py`, `sanitize.py`, `inventory.py`, `gateway.py` |
 | `phiward launch` (Mode B) | The whole agent tool in a kernel profile, with carry-over of its settings | `wholetool.py`, `carryover.py` |
 | MCP servers | `phiward mcp wrap` runs a server under `launch`; the hook trusts a wrapped server only while its launcher runs | `mcp_config.py`, `mcp.py` |
-| HPC | Remote runs and copies through the operator's own SSH connection | `remote.py` |
+| HPC | Remote runs and copies through the operator's own SSH connection | `remote.py`, `tar_extract.py` (a pull's extractor, run by path) |
 | Pseudonymized tables | `phiward pseudonymize`, the operator's: a copy of one table (TSV, CSV, `.txt`, MAF, VCF, JSON, Markdown tables, each also gzip or BGZF) with its ID columns coded, the key in `~/.phiward/backups/keys` | `pseudonymize.py` |
 | phiward's own install | The self-check of phiward's Python and files; `doctor`, `setup`, `init`, `pin`, the login service | `selfcheck.py`, `doctor.py`, `setup_cmd.py`, `init.py`, `pin.py`, `service.py` |
 
@@ -26,7 +26,8 @@ What each layer covers, and what no layer covers, is in
 - `pathid.py`, `fsinfo.py`, `safeio.py`, `procinfo.py`: path identity, file-system facts, writes
   that never follow a link, process facts.
 - `core.py`: the `Action` every guard judges. `cli.py`: the commands. `fasthook.py`: the hook
-  under `phiward launch`, a quick first layer before the kernel. `session_note.py`: the note at the start of a session. `githooks.py`: the git hooks
+  under `phiward launch`, a quick first layer before the kernel. `session_note.py`: the note at the start of a session. `promptscan.py`: the
+  check of each prompt before it is sent (`prompt-scan claude`, a UserPromptSubmit hook). `githooks.py`: the git hooks
   `init` installs in users' repositories. `_toml.py`: the config file reader (Python 3.9 has no
 TOML reader). `names.py`: phiward's own program and module names (`agent-guards` stays an alias
 during the beta).

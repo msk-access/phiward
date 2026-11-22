@@ -5,6 +5,12 @@
 # namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
 # The sandbox check's letter-case tests need a volume that ignores letter case (macOS).
 tests/test_confinement.py::test_gateway_network_grant
+tests/test_macos_gateway_profile_file.py::test_a_launch_session_cannot_read_a_pending_profile
+tests/test_macos_launch_no_helper.py::test_ci_a_sandbox_that_only_tightens_is_not_a_session
+tests/test_macos_launch_no_helper.py::test_ci_doctor_names_a_start_inside_another_sandbox
+tests/test_macos_launch_no_helper.py::test_ci_the_tool_starts_with_sigpipe_at_its_default
+tests/test_macos_profile_mount_jobs.py::test_the_gateway_profile_refuses_a_mount_and_a_launchd_job
+tests/test_macos_profile_mount_jobs.py::test_the_tool_profile_refuses_a_mount_and_a_launchd_job
 tests/test_protected_paths.py::test_case_folding_on_macos
 tests/test_round2.py::test_c_no_clipboard
 tests/test_round2.py::test_c_no_notification_state
@@ -95,7 +101,6 @@ tests/test_v2_unattended.py::test_launch_report_refuses_the_project_in_another_c
 tests/test_v2_w1.py::test_w1_the_tool_cannot_reach_a_unix_socket_peer
 tests/test_v2_w1b.py::test_a2_a_write_place_replaced_by_a_link_does_not_widen_the_next_session
 tests/test_v2_w1b.py::test_a4_ordinary_permissions_are_not_taken_for_the_sandbox
-tests/test_v2_w1b.py::test_a4_the_foreign_sandbox_check_works
 tests/test_v2_w1b.py::test_b3_preference_writes_are_denied
 tests/test_v2_w1b.py::test_c3_processes_outside_cannot_be_signalled
 tests/test_v2_w1b.py::test_o3_apple_developer_tools_run

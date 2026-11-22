@@ -229,6 +229,12 @@ def paths(env: Optional[Dict[str, str]] = None, cfg: Optional[config.Config] = N
     tools = os.path.join(home, ".phiward", "tools")
     if tools not in out:
         out.append(tools)
+    # the gateway's and launch's profile files (confine.write_profile): no session or gateway
+    # command reads them, and no file tool writes them (the sandbox already denies writes to
+    # ~/.phiward)
+    profiles = os.path.join(home, ".phiward", "profiles")
+    if profiles not in out:
+        out.append(profiles)
     return out
 
 

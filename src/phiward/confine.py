@@ -15,13 +15,17 @@ ConfineError. Callers fail closed.
 
 import os
 import platform
+import re
+import secrets
 import shutil
+import stat
 import struct
 import subprocess
 import sys
+import time
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from phiward import pathmatch
+from phiward import pathid, pathmatch
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 
@@ -169,6 +173,7 @@ def seatbelt_gateway_profile(writable: Sequence[str], patterns: Sequence[str], n
     # Seatbelt matches the resolved path (/tmp is /private/tmp): every spelling of the socket
     profile += "(deny mach-lookup)(deny ipc-posix*)(deny ipc-sysv*)"
     profile += "(deny darwin-notification-post)(deny distributed-notification-post)"
+    profile += "(deny file-mount)(deny job-creation)"
     profile += "(deny signal (require-not (target same-sandbox)))"
     profile += "(deny process-info* (require-not (target same-sandbox)))"
     if socket:
@@ -327,7 +332,7 @@ def net_namespace_problem(bwrap: str, sysctl: str = "", run=None, probe: bool = 
         return ""
     run = run or subprocess.run
     try:
-        r = run([bwrap, "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/sh", "-c", ":"],
+        r = run([bwrap, "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/true"],
                 capture_output=True, text=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as exc:
         return f"bwrap --unshare-net cannot run ({exc})"
@@ -531,6 +536,196 @@ except OSError:
 _GATEWAY_DEVICES = ("/dev/null", "/dev/zero")  # no /dev/tty: the gateway has no terminal
 
 
+# -- the profile's file (macOS) ----------------------------------------------------------------
+# `sandbox-exec -f FILE`, never `-p TEXT`: no generated text in argv. The file is in
+# ~/.phiward/profiles, which no session can write (Claude Code's sandbox denies all of
+# ~/.phiward; it is not a write place under launch) or read (the hidden list). sandbox-exec
+# opens it by path after phiward wrote it, so what keeps it from being swapped is that folder;
+# the checks below refuse a folder that is not the operator's own and private.
+
+PROFILE_NAME = re.compile(r"[0-9a-f]{32}\.sb")
+PROFILE_MAX_AGE = 86400  # a file older than this is one a stopped broker left
+
+
+def _profile_name() -> str:
+    return secrets.token_hex(16) + ".sb"
+
+
+def profiles_dir(env: Optional[Dict[str, str]] = None) -> str:
+    """Where the gateway and `launch` write their profiles (and the tool profile denies
+    reads)."""
+    return os.path.join(os.path.realpath(pathid.home(env)), ".phiward", "profiles")
+
+
+def _open_folder(parent: int, name: str, shown: str, make: bool) -> int:
+    """`name` in the folder `parent`, opened with no link followed (made 0700 when missing and
+    `make`); refused when it is not a folder of this account."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(name, flags, dir_fd=parent)
+    except FileNotFoundError:
+        if not make:
+            raise
+        try:
+            os.mkdir(name, 0o700, dir_fd=parent)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise ConfineError(f"{shown} cannot be made ({_errname(exc)}); nothing "
+                               "runs") from None
+        try:
+            return _open_folder(parent, name, shown, False)
+        except FileNotFoundError:
+            raise ConfineError(f"{shown} was removed while it was opened; nothing "
+                               "runs") from None
+    except OSError as exc:
+        # ELOOP or ENOTDIR: a link or a file at the name; else what the system said
+        raise ConfineError(f"{shown} cannot be opened ({_errname(exc)}: a link, not a folder, "
+                           "or no access); nothing runs") from None
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+        os.close(fd)
+        raise ConfineError(f"{shown} belongs to another account; nothing runs")
+    return fd
+
+
+def _errname(exc: OSError) -> str:
+    import errno
+    return errno.errorcode.get(exc.errno or 0, "an error")
+
+
+def _profiles_fd(make: bool) -> int:
+    """~/.phiward/profiles, opened part by part with no link followed. Refused when ~/.phiward
+    is a link, another account's or writable by other accounts (its read bits are fine: older
+    installs made it 0755; it is left as it is); profiles is set to 0700 by its descriptor."""
+    home = os.path.realpath(pathid.home())
+    try:
+        hfd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        raise ConfineError("the home folder cannot be opened; nothing runs") from None
+    try:
+        base = _open_folder(hfd, ".phiward", "~/.phiward", make)
+    finally:
+        os.close(hfd)
+    try:
+        if os.fstat(base).st_mode & 0o022:
+            raise ConfineError("other accounts can write ~/.phiward; nothing runs. Run "
+                               "`chmod go-w ~/.phiward`")
+        fd = _open_folder(base, "profiles", "~/.phiward/profiles", make)
+    finally:
+        os.close(base)
+    try:
+        if stat.S_IMODE(os.fstat(fd).st_mode) != 0o700:
+            os.fchmod(fd, 0o700)
+    except OSError:
+        os.close(fd)
+        raise ConfineError("~/.phiward/profiles cannot be made private; nothing runs") from None
+    return fd
+
+
+def write_profile(text: str) -> str:
+    """Write a profile to a new file in ~/.phiward/profiles and return its path: a fresh name,
+    O_EXCL and O_NOFOLLOW (a name planted there is refused, never used), mode 0600, read back
+    before it is used. Any error raises ConfineError: nothing runs."""
+    data = text.encode("utf-8")
+    dfd = _profiles_fd(make=True)
+    try:
+        name = _profile_name()
+        try:
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW |
+                         getattr(os, "O_CLOEXEC", 0), 0o600, dir_fd=dfd)
+        except OSError:
+            raise ConfineError("the profile file cannot be made; nothing runs") from None
+        try:
+            try:
+                os.fchmod(fd, 0o600)
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+                made = os.fstat(fd)
+            finally:
+                os.close(fd)
+            if _read_back(dfd, name, made) != data:
+                raise ConfineError("the profile file changed after it was written; nothing "
+                                   "runs")
+        except BaseException as exc:
+            try:
+                os.unlink(name, dir_fd=dfd)
+            except OSError:
+                pass
+            if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
+                raise
+            raise ConfineError("the profile file cannot be written; nothing runs") from None
+        return os.path.join(profiles_dir(), name)
+    finally:
+        os.close(dfd)
+
+
+def _read_back(dfd: int, name: str, made: os.stat_result) -> bytes:
+    """The file at `name`, when it is still the one written (same file, one link, ours, 0600)."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), dir_fd=dfd)
+    try:
+        st = os.fstat(fd)
+        if (st.st_dev, st.st_ino) != (made.st_dev, made.st_ino) or not stat.S_ISREG(st.st_mode) \
+                or st.st_nlink != 1 or st.st_uid != os.getuid() or \
+                stat.S_IMODE(st.st_mode) != 0o600:
+            return b""
+        chunks = []
+        while True:
+            b = os.read(fd, 1 << 16)
+            if not b:
+                return b"".join(chunks)
+            chunks.append(b)
+    finally:
+        os.close(fd)
+
+
+def release_profile(argv: Sequence[str]) -> None:
+    """Remove the profile file a `gateway_command` argv names, once its process has ended. Only
+    a profile's name in ~/.phiward/profiles; an error leaves it for `prune_profiles`."""
+    if len(argv) < 3 or argv[0] != SANDBOX_EXEC or argv[1] != "-f":
+        return
+    folder, name = os.path.split(argv[2])
+    if folder != profiles_dir() or not PROFILE_NAME.fullmatch(name):
+        return
+    try:
+        dfd = _profiles_fd(make=False)
+    except (OSError, ConfineError):
+        return
+    try:
+        os.unlink(name, dir_fd=dfd)
+    except OSError:
+        pass
+    finally:
+        os.close(dfd)
+
+
+def prune_profiles(max_age: int = PROFILE_MAX_AGE) -> int:
+    """At the broker's start: remove profile files older than `max_age` seconds (left by a
+    broker that was stopped). Plain files with a profile's name only, by the folder's
+    descriptor. How many were removed."""
+    try:
+        dfd = _profiles_fd(make=False)
+    except (OSError, ConfineError):
+        return 0
+    n = 0
+    try:
+        cutoff = time.time() - max_age
+        for name in os.listdir(dfd):
+            if not PROFILE_NAME.fullmatch(name):
+                continue
+            try:
+                st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+                if stat.S_ISREG(st.st_mode) and st.st_mtime < cutoff:
+                    os.unlink(name, dir_fd=dfd)
+                    n += 1
+            except OSError:
+                continue
+    finally:
+        os.close(dfd)
+    return n
+
+
 # -- entry points -------------------------------------------------------------------------------
 
 _NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
@@ -542,13 +737,15 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
                     socket: str = "", allow_read: Sequence[str] = ()) -> Tuple[List[str], List[int]]:
     """`argv` wrapped so that it writes only to `writable` (and pattern matches), with no
     network unless `net`, and the file descriptors that must stay open for it (Linux: the
-    seccomp program). The caller closes the descriptors after the process starts. `socket`
-    is a resolved path (remote.shared_socket gives one): a link in it stops the request."""
+    seccomp program). The caller closes the descriptors after the process starts, and calls
+    `release_profile` with the argv once the process has ended (macOS: the profile's file).
+    `socket` is a resolved path (remote.shared_socket gives one): a link in it stops the
+    request."""
     b = backend()
     if b == "seatbelt":
-        return [SANDBOX_EXEC, "-p", seatbelt_gateway_profile(writable, patterns, net, deny_read,
-                                                            socket, allow_read)] + \
-            list(argv), []
+        path = write_profile(seatbelt_gateway_profile(writable, patterns, net, deny_read,
+                                                      socket, allow_read))
+        return [SANDBOX_EXEC, "-f", path] + list(argv), []
     if b == "bwrap":
         prog = seccomp_program(unix=bool(socket))
         r, w = os.pipe()
@@ -593,18 +790,32 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
     raise ConfineError(_NO_BACKEND)
 
 
+def _seatbelt_failure(code: int, why: List[str]) -> str:
+    """What `sandbox-exec -f FILE true` failing says: inside another sandbox (macOS cannot apply
+    a second one), or a profile that does not compile here."""
+    last = f": {why[-1]}" if why else ""
+    if any("sandbox_apply" in w for w in why):
+        return ("this process is inside another sandbox, and macOS cannot apply a second one "
+                f"(exit {code}{last}); run phiward from a plain terminal")
+    return f"the profile does not compile or cannot be applied here (exit {code}{last})"
+
+
 def self_test() -> Optional[str]:
     """Why the gateway's confinement does not work here, or None. It runs `true` in the
     gateway profile."""
     try:
+        b = backend()
         cmd, fds = gateway_command(["true"], [], [], False)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=30, pass_fds=fds)
         finally:
             for fd in fds:
                 os.close(fd)
+            release_profile(cmd)
         if r.returncode != 0:
             why = r.stderr.decode("utf-8", "replace").strip().splitlines()
+            if b == "seatbelt":
+                return _seatbelt_failure(r.returncode, why)
             return f"the gateway profile cannot start a process here (exit {r.returncode}" + \
                 (f": {why[-1]}" if why else "; on Ubuntu 24.04, unprivileged user namespaces "
                  "may be blocked by AppArmor") + ")"

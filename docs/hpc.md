@@ -199,7 +199,8 @@ The result is counts (`copy sent: files=N folders=N skipped=N`) and whatever the
 prints, masked like `run --remote` output (your `[remote] roots` included).
 
 **A pull** (remote sources to a protected folder) does not use rsync either: `tar -c` on the
-remote streams through the shared connection into a local `tar -x` that runs in the gateway
+remote streams through the shared connection into phiward's own extractor, a file in the
+installed package (`phiward/tar_extract.py`, run by path with phiward's Python), in the gateway
 profile. It writes only inside protected roots, reads no credential and has no network at all.
 Every pull sends everything named (no resume); files that exist in the protected folder are
 kept, never replaced. What the remote sends lands inside the protected
@@ -333,7 +334,7 @@ been run on the cluster yet. To run it there, as an interactive job:
 - Until you trust the lists you wrote, read every HPC request the agent proposes before it runs
   (Claude Code asks you before it runs a command, unless you allowed it). This is your habit, not
   a phiward feature: phiward itself never asks at run time; your config decides.
-- Keep `[remote] commands` short. Prefer commands that print counts and states.
+- Keep `[remote] commands` short. Prefer commands that print counts and states, with small counts hidden ([Small counts](daily-use.md#small-counts)).
 - The HPC side's own rules (partitions, job names, where clinical data may be read) still apply.
 - The release check's remote probes (`REMOTE`, `REMOTE_DIR`) use an ssh config of their own that
   can only join the shared connection you start for them (no key, no ticket). Give a new, empty

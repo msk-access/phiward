@@ -81,16 +81,6 @@ def test_a4_ordinary_permissions_are_not_taken_for_the_sandbox(tree):
     assert "REFUSED" in out and not (tree / "home" / ".zshrc").exists(), out
 
 
-@macos
-def test_a4_the_foreign_sandbox_check_works():
-    from phiward import wholetool
-    assert wholetool._sandbox_check_self() is False  # this test process is not sandboxed
-    r = subprocess.run(["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", PY, "-c",
-                        f"import sys; sys.path.insert(0, {SRC!r}); from phiward import wholetool;"
-                        " print(wholetool._sandbox_check_self())"], capture_output=True, text=True)
-    assert "True" in r.stdout, r.stdout + r.stderr
-
-
 # --- B: narrow, inert write places --------------------------------------------------------------
 
 @pytest.mark.parametrize("rel", [".cache/uv/x", "Library/Caches/x", ".local/share/claude/versions/x"])

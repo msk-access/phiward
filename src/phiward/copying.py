@@ -373,12 +373,14 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
                           "rsync (install it, or copy single files)\n")
                 return 2
             cp = system_program("cp") or "/bin/cp"
-            cmd = [sys.executable, "-c", "pass"] if dry_run else [cp, "-R", "-n", "--"] + list(args)
+            cmd = [system_program("true") or "/usr/bin/true"] if dry_run else \
+                [cp, "-R", "-n", "--"] + list(args)
+        mkdir: List[str] = []
         if not dry_run:
-            # make the destination folder first (Linux rsync has no --mkpath), inside the same
-            # profile and write place as the copy
+            # make the destination folder first (Linux rsync has no --mkpath): its own step, in
+            # the same profile and write place as the copy, which runs only when it succeeded
             folder = dst if (dst.endswith("/") or len(srcs) > 1) else (os.path.dirname(dst) or ".")
-            cmd = ["/bin/sh", "-c", 'mkdir -p -- "$1" && shift && exec "$@"', "sh", folder] + cmd
+            mkdir = ["/bin/mkdir", "-p", "--", folder]
         # a local copy writes only at its destination (inside a protected root), with no
         # network, and reads no credential
         place, why = dest_place(dst, cwd, cfg)
@@ -397,10 +399,15 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
                       "would be copied there (a folder over a file, or a link); nothing was "
                       "copied\n")
             return 2
-        return run.run_confined(cmd, cfg, san, [place], False, out,
-                                label="copy (dry run, nothing copied)" if dry_run else "copy",
-                                env=env, cwd=cwd, cancelled=cancelled,
-                                deny_read=run.gateway_hidden(cfg))
+        steps = ([(mkdir, "copy (make the folder)")] if mkdir else []) + \
+            [(cmd, "copy (dry run, nothing copied)" if dry_run else "copy")]
+        for step, label in steps:
+            code = run.run_confined(step, cfg, san, [place], False, out, label=label, env=env,
+                                    cwd=cwd, cancelled=cancelled,
+                                    deny_read=run.gateway_hidden(cfg))
+            if code != 0:
+                return code
+        return 0
     except confine.ConfineError as exc:
         out.write(f"copy refused: {exc}\n")
         return 3
@@ -467,7 +474,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
           san: Sanitizer, dry_run: bool, env: Dict[str, str], out: TextIO,
           cancelled: Callable[[], bool]) -> int:
     """A pull: `ssh HOST tar -c` (through the shared connection, no credential, no network but
-    its socket) streams into a local `tar -x` that runs in the gateway profile: it writes only
+    its socket) streams into phiward's extractor (`tar_extract.py`), which runs in the gateway profile: it writes only
     at its destination inside a protected path, reads no credential, and has no network at
     all. Only the system
     ssh touches the socket."""
@@ -497,6 +504,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
         m = _REMOTE.fullmatch(spec)
         assert m is not None
         scratch = tempfile.mkdtemp(prefix="pull-", dir=cfg.cache_dir)
+        argv: List[str] = []
         try:
             argv, fds = confine.gateway_command(
                 rt.ssh + [host, "--", rmt.send_script(m.group(2))], [os.path.realpath(scratch)],
@@ -521,12 +529,12 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             t = threading.Thread(target=read_errors, daemon=True)
             t.start()
 
-            # the stream, from ssh's output into the local tar
+            # the stream, from ssh's output into the extractor
             def relay(stdin, ssh: subprocess.Popen = ssh) -> None:
                 assert ssh.stdout is not None
                 shutil.copyfileobj(ssh.stdout, stdin, 1 << 20)
 
-            extract = [sys.executable, "-I", "-c", rmt.EXTRACT_PY, dest]
+            extract = [sys.executable, "-I", rmt.EXTRACTOR, dest]
             try:
                 c = run.run_confined(extract, cfg, san, [place], False, out, label="copy",
                                      env=dict(env, PATH="/usr/bin:/bin"), cwd=cwd,
@@ -557,6 +565,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             run._log(f"pull: exit {raw}")
             code = 0 if raw == 0 else 1  # the agent sees success or failure only
         finally:
+            confine.release_profile(argv)
             safeio.remove_tree(scratch)
     return code
 

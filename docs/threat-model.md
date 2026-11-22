@@ -21,8 +21,12 @@ This page says what is protected, against whom, and where the limits are.
   system and its sandbox (Seatbelt on macOS; bubblewrap, seccomp and Landlock on Linux), and Claude
   Code's own sandbox and permission rules in Mode A.
 - **Not trusted:** the agent, everything it writes, and the code it runs.
+- **Who it is built against:** an honest user, and an agent that text it reads (prompt
+  injection) can turn against the user. phiward is not built to stop a determined attacker who
+  already runs code on the machine with the user's rights. Some routes such an attacker could
+  use are stated as limits below.
 - **Masking hides names and identifiers, not other content.** Gateway commands should print counts
-  and summaries, not records.
+  and summaries, not records, and hide small counts ([Small counts](daily-use.md#small-counts)).
 - **What stops what.** The kernel is the strongest guard:
 
 | What the agent tries | Mode A stops it with | Mode B stops it with | The main limit |
@@ -135,8 +139,20 @@ not know a project's own settings. So a project whose settings open a `PATH` fol
 writes (allowWrite `~/bin`) lets the agent put a program there, and a gateway call may run it (still
 confined, with its output sanitized). Keep tools out of folders a project opens.
 
+On macOS the broker writes each request's profile to a new file in `~/.phiward/profiles` (a
+random name, made only if no file has that name, mode 0600, read back before use) and runs
+`/usr/bin/sandbox-exec -f` on it; the file is removed when the command ends. `phiward launch`
+writes the tool's profile there the same way and runs `/usr/bin/sandbox-exec -f FILE TOOL`, with
+no program in between; the file is removed when the tool ends. No session can write
+that folder (Claude Code's sandbox denies `~/.phiward`; under `launch` it is not a write place),
+and the hidden list keeps the session's shell, its file tools and every gateway command from
+reading it; under `launch` the tool's own profile denies reading it. A request is refused when
+`~/.phiward` is a link, another account's, or writable by other accounts, or when `profiles` is a
+link or another account's; `profiles` is made 0700.
+
 "Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
-processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.
+processes. macOS denies Mach services, and both macOS profiles also deny mounting file
+systems and creating launchd jobs; Linux uses seccomp, Landlock and new IPC and PID namespaces.
 For the agent tool under `launch` on Linux, unix sockets are limited as
 [below](#open-unix-sockets) says.
 
@@ -427,7 +443,7 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 ## What is not protected
 
 - Data that a gateway command encodes on purpose, or content that is not an identifier, printed
-  through `phiward run`. Write scripts that print aggregates.
+  through `phiward run`. Write scripts that print aggregates, with small counts hidden ([Small counts](daily-use.md#small-counts)).
 - Data a granted write place, the network or a copy remote carries away (see above).
 - On a cluster, what a push puts there is protected only by phiward's masking of remote output
   (`[remote] roots`) and the cluster's own permissions; a link on the cluster can lead a push
@@ -445,6 +461,54 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - Native Windows: there is no confinement.
 
 ## Known limits
+
+- <a id="known-file-mentions"></a>**`@` mentions and the IDE's context.** With mentions on,
+  Claude Code puts a mentioned file's text into the prompt without a tool call, so no hook sees
+  it. `install --user` turns mentions off (`CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, Claude Code
+  v2.1.299+, ignored in a project's settings); a mention is then a Read that the hook and the
+  deny rules judge. `doctor` reports a missing value and an older Claude Code. Not covered: the
+  IDE's open file and selection, which Claude Code adds to the prompt (only its best-effort
+  `Read` deny rules apply; set `claudeCode.attachSelection` and `claudeCode.attachOpenFile` to
+  false in VS Code); a session whose own launch environment sets the variable (the Desktop app,
+  a runner); and any Claude Code older than v2.1.299. What a person types or pastes into Claude
+  Code is checked by [the prompt scan](#known-prompt-scan); in another tool that runs the same
+  hooks, it may not be.
+
+- <a id="known-prompt-scan"></a>**The prompt scan is a tripwire for honest pasting, not a
+  boundary.** phiward's `UserPromptSubmit` hook (`phiward prompt-scan claude`, in both modes)
+  refuses a prompt that the sanitizer would change: a match of the user config's packs or
+  `[sanitize] patterns` (built-in `detail` rules left out), or a path below a protected root or
+  a `[remote] roots` entry ([configuration.md](configuration.md#sanitize)). The message names
+  the kind, never the value. A config or pack file it cannot use, a prompt over 1 MiB, or an
+  error refuses the prompt. What it does not stop:
+  - It protects Claude Code only. Other tools that run the hooks of `.claude/settings.json` may
+    ignore a prompt hook's answer (GitHub Copilot in VS Code does), so there the prompt is sent.
+  - Other prompt hooks (`UserPromptSubmit`, `UserPromptExpansion`) run in parallel with
+    phiward's, at any settings level or in a plugin, so phiward's block does not keep the prompt
+    from them. `doctor` warns of each one; nothing removes them.
+  - A session can add a prompt hook to settings it can write. Under `phiward launch` the entry
+    is in the session's own `settings.json`, which the session can edit: it can remove phiward's
+    prompt entry. A settings `env` that sets `PHIWARD_CONFIG` changes the config the scan reads
+    (doctor names it in a project's settings; under launch, the session's own settings can set
+    it).
+  - It does not see pasted images, the clipboard or other programs, the IDE's selection and
+    open file (only the best-effort `Read` deny rules apply), or what a skill, a custom command,
+    a `!` command or an MCP prompt expands to: it sees the prompt as typed.
+  - Entry names under the roots are not checked: `FAKE-PT-0001` typed alone is sent; a path
+    below a root is not. Nor are relative paths with no `/`, paths with spaces and no quotes, or
+    a link spelling of a root whose target does not exist. The derived protected folders (a
+    work tree's `.git`, the cache folder) do not count.
+  - What the packs do not catch is not caught: an ID glued to letters (`patientFAKE-PT-0001`;
+    the rules start at a word edge), and free text that is not an identifier. With `genomics`
+    alone, file names, read names, positions and numbers are details and are sent.
+  - The hook also runs on automatic turns (`/loop`, scheduled tasks, a background subagent's
+    report, a message from another session); a blocked one stalls the loop, and the user sees
+    the reason.
+  - A blocked prompt stays in the local transcript and the prompt history, which are not
+    guarded paths in Mode A.
+  - Under `phiward launch`, a user pack file inside a protected root cannot be read, so every
+    prompt is refused (`doctor` warns). Below Claude Code 2.1.295 the hook fails open (no
+    `onFailure`).
 
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
@@ -576,8 +640,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   many names in one request. Where a file or identifier rule (a pack, `[sanitize] patterns`)
   matches the text around a name, the name reads as that rule's placeholder, as a name that does
   not exist would. Elsewhere it reads `<ENTRY>`: plain names, names with a plain part, names
-  written where the rule does not match (inside a longer word, or joined to a plain name), and
-  `names_from` names can be
+  written where the rule does not match (inside a longer word, joined to a plain name, in
+  another spelling, or overlapping the rule's match), and `names_from` names can be
   tested. Masking hides names; it does not keep a name the agent already holds a secret.
 - <a id="known-encoded-output"></a>**Code the agent writes can print protected data encoded.** Masking hides names and identifiers,
   not other content. Without `[broker] commands`, a gateway command may be a script the agent wrote,
@@ -676,7 +740,19 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   (fails closed) when the roots hold more entries than `inventory_limit`. A name with spaces (`Doe
   Jane 1970`) is masked whole, after a root, under a pattern (`phi_*` matches `phi_Doe Jane`) and in
   escaped output (`Doe\ Jane`, from `ls -b`); the masked output shows an escaped space as a plain
-  space.
+  space. Every dash is read as `-`, and other decimal digits as ASCII digits, to match names and
+  rules; the masked output shows both as written (Python 3.9, with Unicode 13, knows fewer digits
+  than later versions). A name of 5 or more letters and digits, with a letter, is also masked
+  with its separators (`-`, `_`, `.`, a space) changed or left out; such a name may then mask
+  ordinary text too (`sample_01` masks `sample 01`). A shorter or digits-only name, a name with
+  a separator at either end, or one whose separator-free form is a stop word or part of a
+  placeholder (`SAM_PLE`), is masked only as written; so is a whole name whose stem is masked
+  in other spellings (`FAKE_PT_0001.bam` reads `<ENTRY>.bam`, which a file rule may then mask).
+  Not matched: look-alike letters from other scripts (Cyrillic `А` for Latin `A`), an accent
+  added or left off (`José`, `Jose`), base64, hex and other encodings, a name broken across
+  lines, a tab and the separators `:` `+` `~` `,` `'` and `/`, and IDs that are not entry names
+  (only rules catch those). The pack rules know only `-` as a separator: `P_9990002_T01_IM6` is
+  not an `msk` ID.
 - <a id="known-names-from-files"></a>**`names_from` files** are themselves protected data. Keep them inside a protected root.
 - <a id="known-git-work-tree-root"></a>**A git work tree that holds a root** is closed to the agent's git.
 - <a id="known-claude-settings-in-write-place"></a>**Claude Code settings in a write place.** The gateway may not write a `.claude` folder: on macOS
@@ -685,8 +761,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   project folders. A `write_to` entry that holds a `.claude` folder is skipped (at every load;
   `doctor` counts it).
 - <a id="known-remote-copies"></a>**Remote copies** run the system `ssh` through your shared connection (pushes and pulls are tar
-  streams; [hpc.md](hpc.md)); local copies run the system `rsync` or `cp`. The remote host itself is
-  trusted with what is copied there.
+  streams; [hpc.md](hpc.md)); local copies run the system `mkdir`, then `rsync` or `cp`. A pull
+  unpacks with a file of the installed package, run by path. No part of a copy is code in a
+  command line. The remote host itself is trusted with what is copied there.
 - <a id="known-phiward-python"></a>**The Python that runs phiward** is guarded: the agent may not write its prefix, the `phiward`
   launcher found on `PATH` (the link itself and the file it points to) or the user site folder.
   Install phiward in a folder of its own (`uv tool`, `pipx`).
@@ -985,7 +1062,8 @@ and the hook keeps that server bare. It is not made writable: a record the sessi
 can forge. This matters only for an MCP tool with a shell-like name under a `*` matcher: the hook
 that `launch` writes matches the file tools and Bash only, and the kernel profile confines the
 server. A launch inside the session runs its command directly, under the session's profile (on
-Linux it knows it is inside from the session's seccomp filter); that profile is wider than a
+Linux it knows it is inside from the session's seccomp filter; on macOS from the session's own
+run folder, found from the account's home folder, never `HOME`); that profile is wider than a
 server's own (`SERVER_READ_ONLY`), as on macOS. Any launch inside a session runs so, also for
 another project: that project's repo config (`.phiward.toml`) is not applied. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
 

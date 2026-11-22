@@ -16,6 +16,13 @@ A line is masked in this order (a placeholder is written in angle brackets):
    `[sanitize] patterns` in the config;
 3. name tokens from the `names_from` files and `--names-from` files: <NAME>;
 4. text mode only: the `positions` rules of the packs.
+Then, when the line holds another dash or digit, a root or pattern holds another dash, or
+(with the inventory on) the line may hold a name in another spelling (`_more`): every protected
+path with every dash of its root or pattern as `-`, every entry hit with every dash as `-`,
+other decimal digits as ASCII and a long name with its separators changed or left out
+(inventory.py), and each rule's own matches on the line read so (also with no inventory), each
+widened to the whole of a number it starts or ends inside, are masked too, in the text the steps above left as it was;
+their placeholders are not changed. So a line is never masked less than by the steps alone.
 Table mode skips step 4 (a table's numeric cells are program-made numbers). This command and the
 git hook use it per line. `phiward run --table` reads columns instead (`Columns`): a cell under an
 identifier header is masked whole, and step 4 is skipped only for a plain number in another
@@ -37,6 +44,7 @@ usage:
   phiward sanitize [--names-from FILE ...] --check-table FILE ...
 """
 
+import bisect
 import fnmatch
 import os
 import re
@@ -157,6 +165,10 @@ class Pack:
         self.identifiers: List[Rule] = []
         self.positions: List[Rule] = []
         self.keep_files: List[Pattern[str]] = []
+        # placeholders of this pack's paths and identifiers rules that are details, not
+        # identifiers: the prompt scan leaves them out. Kept for a built-in pack only (the label
+        # is trusted from the package, never from a pack file)
+        self.detail: Set[str] = set()
 
 
 def pack_path(name: str) -> str:
@@ -187,11 +199,21 @@ def load_pack(name: str) -> Pack:
         elif key in _PACK_KEYS:
             if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
                 raise SanitizerError(f"{where}: '{key}' must be a list of non-empty strings")
+        elif key == "detail":
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise SanitizerError(f"{where}: 'detail' must be a list of placeholders")
         else:
             raise SanitizerError(f"{where}: unknown key '{key}'")
     for key in ("paths", "identifiers", "positions"):
         getattr(pack, key).extend(parse_rule(v, f"{where} {key}") for v in body.get(key, []))
     pack.keep_files = [_compile(v, f"{where} keep_files") for v in body.get("keep_files", [])]
+    written = {r for _rx, r in pack.paths + pack.identifiers}
+    detail = set(body.get("detail", []))
+    if not detail <= written:
+        raise SanitizerError(f"{where}: 'detail' names a placeholder that none of its paths or "
+                             "identifiers rules writes")
+    if "/" not in name:
+        pack.detail = detail
     return pack
 
 
@@ -265,6 +287,11 @@ class Sanitizer:
                  known: Iterable[str] = (), roots: Iterable[str] = ()):
         # the protected roots and patterns: their matches in a line (`text_spans`)
         self.protected = protected if protected else None
+        # a root or pattern with another dash: the overlay looks for it written with `-` in
+        # every line (`_paths`)
+        self.dashed_roots = self.protected is not None and any(
+            inventory.normalize(p) != p
+            for p in list(self.protected.roots) + list(self.protected.patterns))
         # the folders a protected pattern matches now, as `_key`s, and their lengths as written
         # (folding can change a length: `ß`), longest first: a protected match that starts with
         # one is marked to its end (`_marked`)
@@ -275,11 +302,18 @@ class Sanitizer:
         # rules applied before every other step: the remote roots of `run --remote`, so a local
         # entry name inside a remote path cannot break its match
         self.first_rules: List[Rule] = []
-        self.entries = inventory.matcher(entries)
         self.path_rules = list(path_rules)
         self.id_rules = list(id_rules)
         self.pos_rules = list(pos_rules)
         self.keep_files = list(keep_files)
+        # a long name is also matched with its separators left out, but not when that form is a
+        # stop word or lies inside a placeholder's word (the second pass would withhold the line)
+        words = PLACEHOLDER_WORDS | {p.strip("<>").replace("_", "") for p in self.placeholders()}
+        self.entries = inventory.matcher(entries, STOP_WORDS, words)
+        # the placeholders the steps write, longest first (remote roots, added later, write
+        # <PROTECTED>, already one of them)
+        self.holes = re.compile("|".join(re.escape(p) for p in sorted(self.placeholders(),
+                                                                       key=len, reverse=True)))
         self.tokens = sorted(set(tokens), key=len, reverse=True)
         self.re_names: Optional[Pattern[str]] = None
         if self.tokens:
@@ -288,16 +322,23 @@ class Sanitizer:
 
     @classmethod
     def from_config(cls, cfg: "config.Config", extra_names_from: Sequence[str] = (),
-                    entries: bool = False, names_lines: Sequence[str] = ()) -> "Sanitizer":
+                    entries: bool = False, names_lines: Sequence[str] = (),
+                    identifiers_only: bool = False) -> "Sanitizer":
         """Build from a loaded config (and extra names files). With `entries`, it also lists the
         protected roots and masks every entry name (the caller must be able to read the roots).
+        With `identifiers_only` (the prompt scan): no detail rules of a built-in pack, no
+        positions, no names, no entries, and only the configured roots and patterns.
         Raises SanitizerError."""
-        return cls._build(cfg, list(extra_names_from), list(names_lines), entries)
+        return cls._build(cfg, list(extra_names_from), list(names_lines), entries,
+                          identifiers_only)
 
     @classmethod
     def _build(cls, cfg: "config.Config", names_files: Sequence[str],
-               name_lines: Iterable[str], entries: bool = False) -> "Sanitizer":
+               name_lines: Iterable[str], entries: bool = False,
+               identifiers_only: bool = False) -> "Sanitizer":
         try:
+            if identifiers_only:
+                names_files, name_lines, entries = [], [], False
             if cfg.problem:
                 raise SanitizerError("the config has a problem")
             names: List[str] = []
@@ -305,25 +346,27 @@ class Sanitizer:
                 if pack_name not in names:
                     names.append(pack_name)
             packs = [load_pack(n) for n in names]
-            path_rules = [r for p in packs for r in p.paths]
-            id_rules = [r for p in packs for r in p.identifiers]
+            drop = (lambda p, r: r[1] in p.detail) if identifiers_only else (lambda p, r: False)
+            path_rules = [r for p in packs for r in p.paths if not drop(p, r)]
+            id_rules = [r for p in packs for r in p.identifiers if not drop(p, r)]
             id_rules += [parse_rule(v, "[sanitize] patterns") for v in cfg.sanitize_patterns]
             # identifiers in any letter case: entry names are matched in any case too
             id_rules = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in id_rules]
-            pos_rules = [r for p in packs for r in p.positions]
+            pos_rules = [] if identifiers_only else [r for p in packs for r in p.positions]
             keep = [k for p in packs for k in p.keep_files]
             # Stop words come from the built-in list only: a rule's placeholder must never
             # exempt an entry name or a name token from masking.
             stop = set(STOP_WORDS)
             tokens = name_tokens(name_lines, stop) if name_lines else set()
-            for f in list(cfg.names_from) + list(names_files):
+            for f in ([] if identifiers_only else list(cfg.names_from)) + list(names_files):
                 tokens |= _read_names_file(f, stop)
             # with the inventory (a gateway run): every folder a pattern matches now, looked up
             # in a set (a regex of tens of thousands of paths takes minutes to build)
             known = {f for p in cfg.patterns for m in pathmatch.matches(p)
                      for r in (m, os.path.realpath(m)) for f in (r, normalize(r))
                      } if entries else set()
-            pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
+            pset = paths.ProtectedSet(cfg.roots if identifiers_only else cfg.all_roots,
+                                      cfg.patterns)
             roots = {f for r in pset.roots for f in (r, normalize(r))}
             ents: set[str] = set()
             if entries:
@@ -364,6 +407,53 @@ class Sanitizer:
         return any(k.fullmatch(base) for k in self.keep_files)
 
     def _mask(self, line: str, table: bool) -> str:
+        return self._more(line, self._steps(line, table), table)
+
+    def _more(self, line: str, out: str, table: bool) -> str:
+        """`out`, the steps' output for `line`, with the protected paths and names in other
+        spellings masked too (`_paths`, `inventory.matcher`), and each rule's own matches on the line read as `inventory.fold` writes it; each widened to
+        the whole of a number it starts or ends inside. Only where `out` still shows the line's
+        own characters (`_shown`): what the steps masked stays as they wrote it."""
+        folded = inventory.fold(line)
+        found = self._paths(folded) if self.protected is not None and (
+            folded != line or self.dashed_roots) else []
+        if folded == line and not found and (self.entries is None
+                                             or not self.entries.other(folded)):
+            return out
+        found += [] if self.entries is None else [(s, e, "<ENTRY>", -1)
+                                                  for s, e in self.entries.spans(line)]
+        rules = self.path_rules + self.id_rules + ([] if table else self.pos_rules)
+        for k, (rx, repl) in enumerate(rules):
+            found += [(m.start(), m.end(), repl, k) for m in rx.finditer(folded)
+                      if m.end() > m.start() and not (repl == KEEP_PLACEHOLDER and self.keep_files
+                                                      and self._kept(m.group(0)))]
+        if self.re_names is not None:
+            found += [(m.start(), m.end(), "<NAME>", len(rules))
+                      for m in self.re_names.finditer(folded) if m.end() > m.start()]
+        if not found:
+            return out
+        places = _shown(line, out, self.holes)
+        # spans and pieces are both in line order and do not overlap among themselves: one walk
+        cuts: List[Tuple[int, int, str]] = []
+        j = 0
+        for s, e, r in _whole_numbers(line, found, table):
+            while j < len(places) and places[j][1] + places[j][2] <= s:
+                j += 1
+            k = j
+            while k < len(places) and places[k][1] < e:
+                o, a, n = places[k]
+                lo, hi = max(s, a), min(e, a + n)
+                if lo < hi:
+                    cuts.append((o + lo - a, o + hi - a, r))
+                k += 1
+        parts, pos = [], 0
+        for s, e, r in cuts:
+            parts += [out[pos:s], r]
+            pos = e
+        parts.append(out[pos:])
+        return "".join(parts)
+
+    def _steps(self, line: str, table: bool) -> str:
         line = self._apply(self.first_rules, line)
         if self.protected is not None:
             # another spelling of a path (`<root>\/Zorro` from JSON, `<root>//x`, `<root>/./x`):
@@ -445,8 +535,19 @@ class Sanitizer:
         Every match counts, also one inside or across another: overlapping matches are joined."""
         if self.protected is None:
             return line
+        out: List[str] = []
+        pos = 0
+        for start, end in self._marks(line, self.protected.text_spans(line)):
+            out += [line[pos:start], _MARK]
+            pos = end
+        out.append(line[pos:])
+        return "".join(out)
+
+    def _marks(self, line: str, spans: Sequence[Tuple[int, int, bool]]
+               ) -> List[Tuple[int, int]]:
+        """Where `_marked` puts its marks, for the protected matches `spans` in `line`."""
         marks: List[Tuple[int, int]] = []
-        for start, end, open_ in self.protected.text_spans(line):
+        for start, end, open_ in spans:
             for size in self.known_lengths:
                 stop = start + size
                 if stop <= len(line) and _key(line[start:stop]) in self.known and \
@@ -461,13 +562,19 @@ class Sanitizer:
                 marks[-1] = (marks[-1][0], max(marks[-1][1], end))
             else:
                 marks.append((start, end))
-        out: List[str] = []
-        pos = 0
-        for start, end in marks:
-            out += [line[pos:start], _MARK]
-            pos = end
-        out.append(line[pos:])
-        return "".join(out)
+        return marks
+
+    def _paths(self, folded: str) -> List[Tuple[int, int, str, int]]:
+        """The protected paths in `folded` (a line as `inventory.fold` writes it) where a root or
+        pattern is read with every dash as `-`, as the steps would mask them: each mark with
+        the rest of its path, to the next tab or the line's end when the name goes on."""
+        found = []
+        for start, end in self._marks(folded, self.protected.text_spans(folded, dashes=True)):
+            stop = _REST_OF_PATH.match(folded, end).end()
+            if stop > end and not _ENDED.match(folded, stop):
+                stop = _line_end(folded, stop)
+            found.append((start, stop, "<PROTECTED>", -2))
+        return found
 
     def clean(self, line: str, table: bool = False) -> str:
         """The line with its identifiers masked (table mode: identifiers only). Never raises:
@@ -475,8 +582,9 @@ class Sanitizer:
         try:
             line = normalize(line)
             out = self._mask(line, table)
-            # the masks must not leave what they mask: a second pass changes nothing
-            if self._mask(out, table) != out:
+            # the masks must not leave what they mask: a second pass changes nothing (a line
+            # the masks left as it was is that second pass already)
+            if out != line and self._mask(out, table) != out:
                 return WITHHELD
             # nor a name written with escapes, as ordinary tools print one (git's octal quoting,
             # JSON's \u, Python's \x, a URL's %XX): the masked line, decoded, holds nothing
@@ -555,6 +663,7 @@ class Columns:
         self.is_id: List[bool] = []
         self.headers = 0  # header lines found (0 or 1)
         self.rows = 0  # rows read by column
+        self._plain = ""  # the last row as the steps alone show it (`_row`)
 
     def reset(self) -> None:
         """Text mode to the end (after a line too long to read)."""
@@ -578,13 +687,21 @@ class Columns:
                 except _Misfit:
                     self.state = "none"
                     return self.san.clean(text)
-                # the second pass: the shown row read again gives itself, else it is withheld
-                try:
-                    if normalize(out) != out or self._row(out, again=True) != out:
-                        self.state = "none"
-                        return WITHHELD
-                except _Misfit:
+                # the second pass: the shown row read again gives itself, else it is withheld.
+                # The table ends where it ended before: when the row as the steps alone show it
+                # (`_plain`) fails its own second pass. A row that fails only by a mask in
+                # another spelling (it can leave a root right before a placeholder) is
+                # withheld, and the table goes on
+                plain = self._plain
+                why = self._check(out)
+                if plain != out:
+                    before = self._check(plain, plain=True)
+                else:
+                    before = None if why in (None, "more") else why
+                if before is not None:
                     self.state = "none"
+                    return WITHHELD
+                if why is not None:
                     return WITHHELD
                 self.rows += 1
                 return out
@@ -614,11 +731,24 @@ class Columns:
         return True
 
     def _mask(self, line: str) -> str:
-        return self.san._mask(line, table=True)
+        """The line as the steps mask it in table mode (`_row` reads the columns in it)."""
+        return self.san._steps(line, True)
 
-    def _row(self, norm: str, again: bool = False) -> str:
+    def _check(self, out: str, plain: bool = False) -> Optional[str]:
+        """None when the shown row `out`, read again, gives itself; else "more" when only a mask
+        in another spelling changed it, or "steps"."""
+        try:
+            if normalize(out) == out and self._row(out, again=True, plain=plain) == out:
+                return None
+            return "steps"
+        except _Misfit as exc:
+            return exc.args[0] if exc.args else "steps"
+
+    def _row(self, norm: str, again: bool = False, plain: bool = False) -> str:
         """The row masked by column; `_Misfit` when it cannot be read so. `again`: the second
-        pass, where the masks of the whole line must change nothing."""
+        pass, where the masks of the whole line must change nothing. `plain`: the row as it was
+        read before the masks in other spellings. The first pass also keeps that row in
+        `_plain`."""
         d, n = self.delim, self.width - 1
         # a quoted CSV row is not parsed; and an escape has no form by column
         if '"' in norm or "\\" in norm or _PCT_ESCAPE.search(norm) or norm.count(d) != n:
@@ -641,10 +771,93 @@ class Columns:
                     cells[i] = IDCOL
             elif not _NUMBER.fullmatch(core):
                 cells[i] = self.san._apply(self.san.pos_rules, c)
+        if not plain:
+            # then the masks in other spellings, in each cell but an ID cell on its own (`_more`,
+            # on the cell as just masked): they never cross a delimiter, nor change a mask
+            if not again:
+                self._plain = d.join(cells)
+            more = [c if self.is_id[i] else self.san._more(a, c, True)
+                    for i, (a, c) in enumerate(zip(norm.split(d), cells))]
+            if again and more != cells:
+                raise _Misfit("more")
+            cells = more
         return d.join(cells)
 
 
 _MARK = "\x00"  # never in a line: normalize removes control characters
+# a number: digits joined by `:` (`12:00`, `1:2345`); in text mode also a number of a million or
+# more in groups of thousands (`1,234,567`), as the `genomics` number rule reads one. Otherwise a
+# comma is a separator (a CSV row: `0001,123` is two cells), so a mask never takes one in
+_NUMBER_RUN = re.compile(r"\d+(?::\d+)*")
+_NUMBER_RUN_TEXT = re.compile(r"(?<![\d,])\d{1,3}(?:,\d{3}){2,}(?![\d,])|\d+(?::\d+)*")
+
+
+def _whole_numbers(line: str, found: Sequence[Tuple[int, int, str, int]], table: bool
+                   ) -> List[Tuple[int, int, str]]:
+    """Each (start, end, placeholder, rank) of `found` widened to the whole of a number
+    (`_NUMBER_RUN`; in text mode `_NUMBER_RUN_TEXT`) it starts or ends inside, so no part of a
+    number is left bare; overlapping ones joined, with one placeholder: `<PROTECTED>` when a protected path (rank -2) is in it,
+    else a rule's match that covers the joined span (the first rule), else `<ENTRY>` when a
+    name (rank -1) is in it, else that of the span that starts first."""
+    runs = [(n.start(), n.end())
+            for n in (_NUMBER_RUN if table else _NUMBER_RUN_TEXT).finditer(line)]
+    starts = [ns for ns, _ne in runs]
+
+    def run_at(i: int) -> Optional[Tuple[int, int]]:
+        k = bisect.bisect_right(starts, i) - 1
+        return runs[k] if k >= 0 and runs[k][0] < i < runs[k][1] else None
+    wide = sorted(((run_at(s) or (s, s))[0], (run_at(e) or (e, e))[1], r, k)
+                  for s, e, r, k in found)
+    groups: List[List[Tuple[int, int, str, int]]] = []
+    end = -1  # the furthest end in the last group
+    for f in wide:
+        if groups and f[0] < end:
+            groups[-1].append(f)
+            end = max(end, f[1])
+        else:
+            groups.append([f])
+            end = f[1]
+    out: List[Tuple[int, int, str]] = []
+    for g in groups:
+        s, e = g[0][0], max(f[1] for f in g)
+        whole = [f for f in g if f[0] == s and f[1] == e and f[3] >= 0]
+        names = [f for f in g if f[3] == -1]
+        r = "<PROTECTED>" if any(f[3] == -2 for f in g) else \
+            min(whole, key=lambda f: f[3])[2] if whole else "<ENTRY>" if names else g[0][2]
+        out.append((s, e, r))
+    return out
+
+
+def _shown(line: str, out: str, holes: "Pattern[str]") -> List[Tuple[int, int, int]]:
+    """Where `out` (the steps' output for `line`) still shows `line`'s own text: (place in
+    `out`, place in `line`, length) of each piece between two placeholders, found in `line`
+    in order (the first at the start, the last at the end when it fits; after a placeholder, at
+    least one character on). A piece not found is left out: nothing is masked in it, and the
+    second pass withholds the line if it still shows a name."""
+    places: List[Tuple[int, int, int]] = []
+    pieces = []
+    pos = 0
+    for m in holes.finditer(out):
+        pieces.append((pos, out[pos:m.start()]))
+        pos = m.end()
+    pieces.append((pos, out[pos:]))
+    at = 0
+    for k, (o, text) in enumerate(pieces):
+        if not text:
+            at += k > 0
+            continue
+        if k == 0:
+            a = 0 if line.startswith(text) else -1
+        elif k == len(pieces) - 1 and line.endswith(text) and len(line) - len(text) >= at + 1:
+            a = len(line) - len(text)
+        else:
+            a = line.find(text, at + 1)
+        if a >= 0:
+            places.append((o, a, len(text)))
+            at = a + len(text)
+    return places
+
+
 _NAME_CHAR = re.compile(r"[\w.\-]")  # a character that would go on with a name
 # after a folder on disk: text that cannot be more of a name (a path goes on, a tab, the end,
 # or after `: ` counts, each with at most one plain unit, to a tab or the end: `: 12 reads, 3
@@ -687,8 +900,9 @@ def _line_end(line: str, start: int) -> int:
 def _key(path: str) -> str:
     """A path as the known-folder set holds it: case folded where the volume ignores case."""
     return path.casefold() if paths.FOLD_CASE else path
+_REST_OF_PATH = re.compile(rf"(?:/{paths._PATH_CHAR}*)*")
 _AFTER_MARK = re.compile("\x00" + rf"(?:/(?:<[A-Z][A-Z0-9_]*>|{paths._PATH_CHAR})*)*")
-normalize = inventory.normalize  # the form masking sees (escapes removed, NFKC)
+normalize = inventory.unfolded  # the form masking sees (escapes removed, NFKC)
 
 # the escapes ordinary tools write a name with: a run of bytes (git's `\303\274`, Python's
 # `\xc3\xbc`, a URL's `%C3%BC`), read as UTF-8 (else one character each: Python's `'\xfc'`),
@@ -819,9 +1033,6 @@ MSK_CASES = [  # packs "genomics" + "msk" with the names of MADE_UP_RUNS
     ("cmo C-ABC123-L001-d seen; also s_C_XYZ789_P001_d", "cmo <CMOID> seen; also <CMOID>"),
     ("stem AB123456-T opened", "stem <BAMID> opened"),
     ("donor DonorFake-7 and DONOR_X1", "donor <DONOR> and <DONOR>"),
-    ("bam /clinical/ZedStudy9/analysis/ZedRun_77/STAR/x.Aligned.bam ok", "bam <CLINICALPATH> ok"),
-    ("impact /clinical/fakeshare/study_00/A/BC/FAKE0001-T.bam end", "impact <CLINICALPATH> end"),
-    ("slice S:/tmp/work/inputs/patient/edge/12/slice.bam, done", "slice <PATIENTPATH>, done"),
     ("file Sample7.sorted.bam and neutral slice.bam", "file <BAMFILE> and neutral slice.bam"),
     ("pos chr1:1234567 and bare 7654321", "pos <LOCUS> and bare <NUM>"),
     ("sample tokens ZedRun_77 and zedstudy9 and QQSAMP-ALPHA-12 and Quux_Case_B",

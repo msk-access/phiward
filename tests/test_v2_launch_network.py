@@ -793,8 +793,15 @@ def _inner(args):
             f"env=dict(os.environ, PYTHONPATH={SRC!r}))\nprint(p.stdout)\n")
 
 
+# macOS: a launch inside a session uses the account's home, which only a CI runner may give a test
+# (as in test_v2_nested_launch)
+_NESTED = pytest.param("nested", marks=pytest.mark.skipif(
+    sys.platform == "darwin" and not os.environ.get("GITHUB_ACTIONS"),
+    reason="macOS on GitHub Actions only: a launch inside a session uses the account's home"))
+
+
 @needs_confine
-@pytest.mark.parametrize("how", ["plain", "entry", "nested"])
+@pytest.mark.parametrize("how", ["plain", "entry", _NESTED])
 def test_1_2_the_session_cannot_reach_this_machines_loopback(tree, server, how):
     probe = _probe(server.port)
     if how == "plain":

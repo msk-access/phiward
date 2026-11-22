@@ -52,7 +52,7 @@ reads (a number the command chooses could carry data).
 as an ordinary command: Claude Code's sandbox denies the protected paths to it, and where the
 sandbox does not confine the shell, the hook refuses it.
 
-**Write scripts that print aggregates**: counts, summaries, tables. The sanitizer masks paths,
+**Write scripts that print aggregates**: counts, summaries, tables. Suppress small counts first ([Small counts](#small-counts)). The sanitizer masks paths,
 entry names and identifiers. It does not mask other content. In text mode it also masks long
 numbers (`<NUM>`). `--table` reads CSV or TSV output by column: cells under an identifier header
 (`sample_id`, `MRN`, `Patient ID`, ...) show `<IDCOL>`, and numbers in the other columns are
@@ -87,6 +87,26 @@ that needs one is not one for the gateway. This includes settings files that may
 `~/.Renviron` (R libraries set there are not found), pip and npm settings, `~/.m2/settings.xml`,
 `~/.ipython`, `~/.gnupg`. Pass what a script needs as arguments, or set it in the script. On
 Linux the list is taken when the command starts: a credential made later is not hidden.
+
+## Small counts
+
+Masking hides identifiers, not small counts. A count of 1 or 2 in a rare group can point to one
+person, with every name masked. So can two tables whose difference leaves one person
+(differencing).
+
+The rule, from [OpenSAFELY's rules on disclosure control](https://docs.opensafely.org/sdc/):
+
+- Suppress every count of 7 or fewer. Do this first.
+- Round the other counts to the nearest 5.
+- Recompute totals after you suppress, and check that no two tables of the same people let a
+  reader subtract a hidden cell back out.
+
+The [SDC Handbook](https://securedatagroup.org/guides-and-resources/sdc-handbook/) and the
+[ACRO](http://sacro-tools.org/) tool set similar rules, with thresholds you can configure. In the
+end, the rule is yours and your data agreement's: a local rule may be stricter, so use it.
+
+phiward does not enforce this. It does not see what a count means. The agent writes the script,
+and you read it before it runs ([Run a script the agent wrote](#run-a-script-the-agent-wrote)).
 
 ## Run a script the agent wrote
 
@@ -130,8 +150,9 @@ phiward copy ~/data/patients/run1 ~/data/patients/run1-copy
 `copy SRC... DST` copies without printing names. The destination must be inside a protected path
 of the user config, or under a `[copy] remotes` entry. Each local path is made absolute
 once, and every check and the copy itself use that path. One with a `..` part, or one that
-starts with `~` (quoted, so the shell left it), is refused: give the full path. A local copy uses the system `rsync -a`
-(or `cp -R`). A copy to or from a remote is a tar stream through your shared SSH connection
+starts with `~` (quoted, so the shell left it), is refused: give the full path. A local copy first makes the destination folder with the system
+`mkdir -p`, then copies with the system `rsync -a` (or `cp -R`): two steps in the same profile,
+and the copy runs only when the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
 ([hpc.md](hpc.md#phiward-copy)). The copy runs in the gateway profile and cannot read
 credentials. Its output is sanitized. The only option is `--dry-run`, as the first word: it
 counts what a push would send, and for a local copy it shows what rsync would copy.
@@ -361,6 +382,18 @@ The hook refuses a tool call that names a protected path, and ends its reason wi
 no tool may read, list, search or print a protected path; use `phiward run -- CMD` as the
 whole command, or `phiward copy`. Once a config exists, it also refuses `phiward setup`,
 `broker`, `pin` and `carryover`: those are for the operator only.
+
+### A prompt that was not sent
+
+Before Claude Code sends a prompt, phiward checks it. A prompt that holds an identifier of
+your packs or `[sanitize] patterns`, or a path below a protected root, is not sent:
+`phiward: this prompt was not sent: it holds <SAMPLEID> (masked by your packs or [sanitize]
+patterns). ...`. The message names the kind, never the value, and the prompt does not reach
+the model. To go on, send it again without that part: use the masked form (`<SAMPLEID>`), a
+pseudonymized ID (`phiward pseudonymize`), or let the agent reach the data through the gateway
+(`phiward run -- CMD`). A message that ends "run `phiward doctor`" means the check itself
+could not run (a config or pack file it cannot use): every prompt is refused until it is fixed.
+What the check does not see: [threat-model.md](threat-model.md#known-prompt-scan).
 
 ### Messages from `run` and `copy`
 

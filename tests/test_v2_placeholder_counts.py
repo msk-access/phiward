@@ -78,7 +78,7 @@ def test_placeholder_sets(tree):
     p = Path(os.environ["PHIWARD_CONFIG"])
     p.write_text(p.read_text().replace("[sanitize]\n", '[sanitize]\npacks = ["genomics", "msk"]\n'))
     msk = sanitize.Sanitizer.from_config(config.load(str(tree / "repo")))
-    assert {"<PATIENTPATH>", "<SAMPLEID>"} <= msk.identifier_placeholders()
+    assert {"<SAMPLEID>", "<CMOID>", "<DONOR>"} <= msk.identifier_placeholders()
 
 
 # --- through a real run ---------------------------------------------------------------------------

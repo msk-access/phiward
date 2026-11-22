@@ -137,6 +137,12 @@ sequenceDiagram
 Under `phiward launch` (Mode B) the kernel decides. The hook there is a quick first layer
 (`fasthook.py`).
 
+A prompt goes through another hook, before Claude Code sends it: `phiward prompt-scan claude`
+(`promptscan.py`). It builds the sanitizer from the user config's packs and patterns, without
+the detail rules, positions, names and entries (`Sanitizer.from_config(identifiers_only=True)`),
+and refuses the prompt when the sanitizer would change a line of it, or the absolute form of a
+path-like word in it. `hook claude` and `fasthook` refuse any event but `PreToolUse`.
+
 ## One gateway request
 
 `phiward run -- CMD` is a client only. The broker runs the command, outside the agent.

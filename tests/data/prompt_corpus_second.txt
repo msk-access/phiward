@@ -1,0 +1,175 @@
+# Made-up ordinary coding prompts: a second set, written separately from prompt_corpus.txt
+# before any pack change, with the words of a genomics group's daily work.
+why does Sample7.sorted.bam fail at chr1:1234567 in the pileup step?
+The run printed 12345678 reads but the summary says 1,234,567
+Index tumor_normal.bam and check the .bai is newer than the BAM
+The VCF has a variant at chr7:55249071 that the filter drops, why?
+Fix the read name parser for names like A00123:8:H5:1:1101:1000:2000
+Add support for .cram input next to .bam
+Why does the donor_id column get dropped when I merge the two tables?
+Rename donors to participants in the docs, the code keeps donor_id
+The DonorSearch class has no docstring, write one
+Explain how a C-string differs from a Python string in the ctypes wrapper
+Add a c-header for the new function in the extension module
+Move src/clinical/report.py into src/reports/ and fix the imports
+The tests under tests/inputs/patient/ need a README that says the data is made up
+We released 2.3.0 on 2026-11-22; write the changelog section
+The log line says 2024-03-05 14:22:01 started, parse that timestamp
+Why does datetime.strptime fail on 03/05/2024?
+Sort the files by the date in their names, like run_20240305.log
+Add a --since option that takes a date such as 2025-01-31
+The cron job ran at Mar 5 14:22 and failed, read its log
+Explain chr2:1,234,567-1,300,000 notation in the region parser
+Parse regions like 12:123456 and chrX 12345 in the CLI
+The variant IDs look like 1_1234_A_C, split them into fields
+Write a test for the interval 1-1000 on chrM
+Why does bedtools say the end is before the start on line 42?
+Count reads with MAPQ 60 on chr17
+Check the panel BED covers TP53 exons 5 to 8
+Add a unit test with a made-up read ID like read_0001/1
+The FASTQ header @M00123:12:000000000-ABCDE:1:1101:15589:1331 1:N:0:1 breaks the parser
+Write a regex that matches Illumina read names with 7 colon fields
+Fix the sample sheet parser for lanes 1 to 4 and index ACGTACGT
+Why does the index ACGTACGT+TGCATGCA not match any sample?
+Count the adapters AGATCGGAAGAGC in the first 100000 reads
+Make the k-mer size 31 the default
+Use 8 threads and 32 GB of memory for the alignment step
+The job id 4567890 failed, show me how to read its sacct record
+Why does squeue show my job as PD with reason Priority?
+Explain what --qos=priority does on the cluster
+Write a SLURM array over 1-96 with a max of 10 running
+Read the log of job 1234567_12 and tell me why it failed
+The port 8080 is taken, use 8081 for the dev server
+Why does the API return 504 after 30 seconds?
+Set the timeout to 300 seconds for the upload
+Write a test that the checksum of the output is stable across runs
+The sha256 starts with 3f2a, compare it with the expected one
+Explain the error code E0425 from rustc in the extension
+The issue #1234 says the parser hangs on an empty line, reproduce it
+Revert commit 9fceb02 and explain what it changed
+Look at PR 87 and tell me if the tests cover the new branch
+Why does git blame show the whole file changed on 4 Mar 2024?
+Write a migration from schema version 12 to 13
+The table has 250000 rows and the query takes 90 s, add an index
+Why does the float 0.1 + 0.2 print 0.30000000000000004?
+Round the p-values to 3 significant digits in the report
+Format large counts as 1.2M and 12.3k in the summary table
+Show the coverage as 30x, 60x and 100x bins
+Plot depth along chr1 in 1 Mb windows
+Why does the plot axis show 1e6 instead of 1,000,000?
+Add a ggplot theme with a 12 pt base font
+Make the figure 7 by 5 inches at 300 dpi
+Convert the hg19 positions in the test fixtures to GRCh38
+Write a function that turns 1-based closed intervals into 0-based half-open ones
+Explain why the BED start is 0-based and the VCF POS is 1-based
+The MAF has Tumor_Sample_Barcode and Matched_Norm_Sample_Barcode columns; which one do I group by?
+Rename the Tumor_Sample_Barcode column to sample in the made-up fixture
+Write a pandas groupby on Hugo_Symbol and Variant_Classification
+Explain the difference between Missense_Mutation and Nonsense_Mutation in the MAF
+Count variants per gene and sort descending
+Why does pd.merge produce duplicate rows here?
+Use a left join and keep the order of the first table
+Write a tiny made-up MAF with three rows for the test
+Add a column with the variant allele fraction t_alt_count / t_depth
+Why is the VAF above 1 for some rows?
+Filter out variants with t_depth below 20
+Write a test for the VAF filter with made-up counts
+The pipeline config has min_depth: 20 and min_vaf: 0.05; add max_vaf
+Load the YAML config and validate it with a schema
+Explain the anchors and aliases in this YAML file
+Why does PyYAML turn "no" into False?
+Quote the strings in the config so they stay strings
+Add an environment variable PIPELINE_THREADS that overrides the config
+Read the env var with a default of 4
+Why does os.environ.get return None in the subprocess?
+Pass the environment to the subprocess explicitly
+Write a context manager that changes the working directory
+Explain what __enter__ and __exit__ return here
+Add a __repr__ to the Interval class
+Make Interval hashable so it can go in a set
+Why does the set lose some of my intervals?
+Implement __eq__ and __hash__ consistently
+Write property-based tests with hypothesis for the interval merge
+Why does hypothesis find a failing case with an empty interval?
+Handle zero-length intervals
+Add a benchmark with pytest-benchmark for the merge
+Explain the output of cProfile for the slow function
+Use functools.lru_cache for the lookup
+Why does the cache not help when the argument is a list?
+Convert the list to a tuple before the cached call
+Write a generator that yields records lazily
+Why does my generator run only once?
+Explain the difference between yield and return in this function
+Add async support to the downloader with asyncio and aiohttp
+Why does asyncio say the event loop is closed?
+Limit the number of concurrent downloads to 8
+Write a retry decorator with a maximum of 5 tries
+Log each retry with the attempt number
+Why does the decorator lose the function name?
+Use functools.wraps in the decorator
+Explain the difference between @staticmethod and @classmethod here
+Turn the module-level globals into a class
+Add a factory function for the reader classes
+Why does the abstract base class not stop me from creating an instance?
+Add abc.abstractmethod to the base reader
+Write tests for each reader subclass with parametrize
+Explain pytest fixtures with scope="module"
+Why does the tmp_path fixture give a different folder each time?
+Use monkeypatch to set HOME in the test
+Write a conftest.py fixture that makes a small made-up folder tree
+Add a test that the CLI exits 2 on a bad argument
+Capture stdout in the test with capsys
+Why does click's CliRunner not see my environment variables?
+Switch the CLI from click to argparse
+Print the help when no subcommand is given
+Add shell completion for bash and zsh
+Explain how entry points work in pyproject.toml
+Why does the console script not find my module after pip install -e .?
+Use a src layout for the package
+Move the tests out of the package folder
+Add a py.typed file and run mypy --strict on one module first
+Why does mypy complain about Optional[str] being passed as str?
+Add an assert or an early return for the None case
+Write a TypedDict for the JSON response
+Explain the difference between TypedDict and dataclass here
+Validate the JSON with jsonschema in the test
+Why does json.load fail with Expecting value: line 1 column 1?
+The file is empty when the download fails; check the size first
+Write a function that downloads to a temp file and renames on success
+Explain why the rename is atomic on the same file system
+Use shutil.move when the target is on another file system
+Why does shutil.copytree fail when the folder exists?
+Pass dirs_exist_ok=True to copytree
+Write a function that walks the folder and lists files bigger than 1 GB
+Skip hidden folders like .git and .snakemake in the walk
+Why does os.walk follow the symlink loop forever?
+Set followlinks=False and detect loops
+Write a test with a symlink to a parent folder
+Explain the difference between os.path.realpath and os.path.abspath
+Why does pathlib.Path.resolve raise on Windows here?
+We only support Linux and macOS, drop the Windows branch
+Add a CI job on macOS-14 as well as ubuntu-24.04
+Why does the macOS job fail on the case-insensitive file system?
+Rename the two files that differ only in case
+Write the release checklist into docs/releasing.md
+Add a step to build the sdist and the wheel and check them with twine
+Why does twine check say the long description is invalid?
+Set the readme content type to text/markdown
+Bump the minimum Python to 3.9 and drop the 3.8 classifier
+Remove the code paths for Python 3.7
+Explain the walrus operator in this loop
+Rewrite the nested ifs with early returns
+Why does the linter want me to use a set literal here?
+Turn on ruff's isort rules and fix the imports
+Format the code with ruff format and commit it separately
+Write a git alias that shows the log as a graph
+Explain what git reflog shows and how to get a lost commit back
+Why does git say detached HEAD after I checked out a tag?
+Create a branch from the tag v1.8.0 for the hotfix
+Backport the fix to the 1.8 branch
+Write the commit message for the backport
+Why does the pre-push hook run the whole test suite?
+Make the pre-push hook run only the quick tests
+Explain the difference between git fetch and git pull --rebase
+Squash the review fixes into the feature commit
+Rewrite the commit message of the second-to-last commit

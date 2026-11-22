@@ -85,9 +85,23 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   so the check warns: paste the token when `check.sh` asks for it.
 - A command reference: [docs/cli.md](docs/cli.md). A test fails when it and a command's help
   disagree.
+- The prompt scan: a `UserPromptSubmit` hook (`phiward prompt-scan claude`, `onFailure:
+  block`) that `install` writes in the user and project wiring and the plugin, and `launch`
+  writes beside the fast hook. A prompt that the sanitizer would change is not sent: a match of
+  the user config's packs or `[sanitize] patterns`, or a path below a protected root or a
+  `[remote] roots` entry (also as `~/...`, `$HOME/...` or a relative path). The message names
+  the kind, never the value. Built-in packs label rules that are details (`detail`; genomics:
+  file and read names), and the scan leaves those and the positions out; with the `dates`
+  pack on, a date blocks. Entry names, `names_from` and derived roots do not count. It fails
+  closed. `doctor` reports a missing or weak prompt entry, warns of other prompt hooks and of a
+  user pack file inside a root. It is a tripwire for honest pasting, not a boundary: the limits
+  are in [docs/threat-model.md](docs/threat-model.md#known-prompt-scan). `hook claude` and
+  the fast hook now refuse a payload of any event but `PreToolUse`.
 
 ### Fixed
 
+- macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
+  systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
   `install claude --help`, `git-hook install --help`); before, it printed the usage as an error
   or refused without a terminal. Every command's help lists its options.
@@ -118,6 +132,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   hidden path at or above a write place or at its `.claude` (before, the command ran with it
   masked or without writes there), and a bind listed twice.
 
+### Docs
+
+- A "Small counts" section in `docs/daily-use.md`: masking hides identifiers, not small counts;
+  suppress counts of 7 or fewer, round the rest to 5, and watch for differencing (after
+  OpenSAFELY's rules). phiward does not enforce it. The rules that `phiward init` adds now say so.
+
 ### Changed
 
 - `phiward launch` routes the tool's network through a proxy that allows only public addresses.
@@ -143,6 +163,55 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   kernel.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
+- The `msk` example pack no longer has path rules: `<PATIENTPATH>` (a path holding
+  `inputs/patient`) and `<CLINICALPATH>` (a path under `/clinical/`) are gone. They were
+  examples of one folder layout, not facts about any institution. A user who relied on them
+  must add those folders as protected roots (`[protected_paths] roots`), or add a
+  `[sanitize] patterns` rule for a custom path shape.
+- The `msk` example pack's `<DONOR>` and `<CMOID>` rules leave ordinary words of code and
+  prompts as written, and keep masking the IDs they are for. `<DONOR>` needs a digit in the
+  name (`DonorFake-7`, not `donor_id`, `donors` or `DonorSearch`). `<CMOID>` needs a digit in
+  the ID or six capital letters (`C-FAKE01`, `C-ABCDEF`, not `C-string` or `c-header`). So with
+  `msk` on, these words no longer block a prompt, and output keeps them.
+- macOS: the gateway's kernel profile is a file, run with `/usr/bin/sandbox-exec -f FILE`,
+  instead of the profile's text in the command line. The file is new for each request, in
+  `~/.phiward/profiles` (made 0700; the file 0600, removed when the request ends; files older
+  than a day are removed when the broker starts). A request is refused, with a message, when
+  `~/.phiward` is a link, another account's or writable by other accounts, or when `profiles`
+  is a link or another account's. `~/.phiward/profiles` is on the hidden list: Claude Code's
+  sandbox, the permission rules and the hook keep sessions from reading or writing it, and
+  gateway commands cannot read it. Under `phiward launch` the tool's profile denies reading
+  it. Run `phiward install claude --user --write` again to add it to an existing wiring;
+  `doctor` warns until then.
+- macOS: the login service runs `/bin/launchctl` by its full path, not from `PATH`.
+- `phiward copy` puts no code in a command line. A pull unpacks with `phiward/tar_extract.py`,
+  a file of the installed package, run as `<python> -I FILE DEST`; a missing file fails the
+  pull, and nothing is written. A local copy makes its destination folder with `/bin/mkdir -p`
+  as its own step, in the same profile and write place as the copy, and copies only when that
+  step succeeded (its output adds a line `copy (make the folder) done: exit=0`). A dry run
+  without rsync runs the system `true`. The remote side of a push and a pull is unchanged.
+- macOS: `phiward launch` starts the tool as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with
+  no Python helper in between. The tool's profile is a file in `~/.phiward/profiles`, under the
+  same rules as the gateway's, removed when the tool ends. A program name is found on the
+  session's `PATH` before the start; when there is none, launch says so and exits 127. The tool
+  now starts with SIGPIPE at its default. Launch no longer checks at start whether it runs
+  inside another sandbox: there `sandbox-exec` cannot apply the profile, and nothing runs. When
+  the tool exits with an error within a few seconds of its start, launch adds a line that
+  points to `phiward doctor`, which names a start inside another sandbox or a profile that
+  does not compile.
+- macOS: a launch inside a session decides from the session's own run folder, which launch
+  names in `PHIWARD_RUN`, and from the account's home folder, never `HOME`. With a `HOME` that
+  is not the account's, a launch inside a session builds its own profile, and nothing runs.
+- Docs: why.md and threat-model.md say whom phiward is built against: an honest user, and an
+  agent that text it reads can mislead; not a determined attacker who already runs code on the
+  machine.
+- `@path` mentions are turned off in the user settings and the `--settings` file
+  (`env.CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`; Claude Code v2.1.299+; ignored in project
+  settings, so none is written there). A mention would put a file's text into the prompt without
+  a tool call the hook sees; now it is a Read. Cost: `@` completion no longer inserts file
+  contents; the agent reads the file with Read. The IDE's open-file and selection context is not
+  covered. `doctor` reports a missing value and a Claude Code older than v2.1.299 (a problem
+  below 2.1.295). Re-run `(cd ~ && phiward install claude --user --write)`.
 - Linux: `launch` no longer masks host unix sockets by name; the kernel limits them. From
   Landlock ABI 9 (Linux 7.1) the session reaches only the unix sockets it made itself (and the
   name-service ones), and a helper that cannot apply this stops the start. Below ABI 9,
@@ -198,6 +267,28 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   around a name under a root, the name reads as that rule's placeholder, as a name that does not
   exist would; nothing is masked less than before. Some ordinary words now match the `msk` rules (`c-string`, `donor-derived`); the git
   hook refuses them as identifiers.
+- Entry names now match across dashes, digits and separators. The sanitizer reads every dash
+  (U+2010, U+2013, U+2212, ...) as `-`, in lines and names alike, to find names in other
+  spellings; pack rules written with `-` match those spellings too, also with no inventory. Other
+  decimal digits (Arabic-Indic `٠١`, ...) are matched as ASCII digits, by entry names and by pack
+  rules (Python 3.9 knows fewer of them than later versions). The masked line is printed as
+  written. A name of 5 or more letters and digits, with a letter, is also masked with its
+  separators (`-`, `_`, `.`, a space) changed or left out: `FAKE-PT-0001` masks `FAKE_PT_0001`,
+  `FAKE PT 0001` and `FAKEPT0001`. Shorter names, digits-only names and names with a separator at
+  either end are matched as written only; a name whose stem is matched that way
+  (`FAKE-PT-0001.bam`) is matched whole as written only, so its extension stays for the file
+  rules. The sanitizer masks a line as before, then masks the names in other spellings, and each
+  rule's matches on the line read that way, in the text it left; its placeholders stay as they
+  are, so a line is never masked less than before. Such a mask takes the whole of a number it
+  starts or ends inside (`SAM_PLE12:00`; across a comma only a number of a million or more, and
+  only in text mode), and overlapping ones become one placeholder: `<PROTECTED>` when a protected
+  path is in it, else a rule's match that covers them all, else `<ENTRY>` when a name is in it,
+  else that of the first. In a table read by column (`--table`), the row is masked as before, then
+  these masks are made in each cell but an ID cell on its own; the table ends only where it ended
+  before (a row that only these masks keep from its second pass is withheld). A root whose name
+  holds another dash also matches a path written with `-`, so the hook and the git hooks refuse
+  that spelling too. Generic names under a root (`sample_01`) now also mask text such as
+  `sample 01`.
 
 ## [0.2.0b1] - 2026-11-18 (beta)
 

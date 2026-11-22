@@ -77,6 +77,67 @@ def _program_there(h: Dict[str, Any]) -> bool:
     return shutil.which(first) is not None
 
 
+PROMPT_EVENTS = ("UserPromptSubmit", "UserPromptExpansion")
+HOOK_TYPES = ("command", "prompt", "agent", "http", "mcp_tool")
+
+
+def is_prompt_scan(h: Dict[str, Any]) -> bool:
+    """Whether a hook entry is phiward's prompt check, by its exact shape: the user form
+    (`install.isolated_command`), or the project form and the plugin's (PROJECT_PROMPT_HOOK).
+    A program at any other path, whatever its name, is not."""
+    if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash") \
+            or h.get("args"):
+        return False
+    command = str(h.get("command", ""))
+    return command == install.PROJECT_PROMPT_HOOK or \
+        bool(install.isolated_python(command, "prompt-scan"))
+
+
+def prompt_hooks(data: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    """(event, entry) for each UserPromptSubmit and UserPromptExpansion hook in a settings
+    object or a plugin's hooks.json."""
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return []
+    return [(ev, h) for ev in PROMPT_EVENTS
+            for g in (hooks.get(ev) if isinstance(hooks.get(ev), list) else [])
+            if isinstance(g, dict) and isinstance(g.get("hooks"), list)
+            for h in g["hooks"] if isinstance(h, dict)]
+
+
+def _hook_type(h: Dict[str, Any]) -> str:
+    t = h.get("type", "command")
+    return t if t in HOOK_TYPES else "unknown"
+
+
+def _other_prompt_hook(where: str, ev: str, h: Dict[str, Any]) -> str:
+    return (f"  WARNING: {where} has a {ev} hook of type `{_hook_type(h)}`: it runs beside "
+            "phiward's prompt check, and may send the prompt on (the check is a tripwire, not a "
+            "boundary)")
+
+
+def plugin_prompt_lines(project: str, home: str) -> List[str]:
+    """The WARNINGs for the prompt hooks of each enabled plugin other than phiward's (its
+    hooks/hooks.json in each installed copy that applies here)."""
+    from phiward import claude_settings, mcp_config
+    enabled: Dict[str, bool] = {}
+    for _lvl, _p, data in claude_settings.levels(project, home):
+        plugins = data.get("enabledPlugins") if isinstance(data, dict) else None
+        if isinstance(plugins, dict):
+            for k, v in plugins.items():
+                if isinstance(k, str) and k not in enabled:
+                    enabled[k] = v is True  # the highest level that names it wins
+    out: List[str] = []
+    for key in sorted(k for k, on in enabled.items() if on and k != "phiward@phiward"):
+        roots = (mcp_config._plugin_roots(home, dict(os.environ), project,
+                                          key.split("@", 1)[0]) or {}).get(key, [])
+        for root in roots:
+            data, _err = claude_settings.read_settings(os.path.join(root, "hooks", "hooks.json"))
+            for ev, h in prompt_hooks(data):
+                out.append(_other_prompt_hook(f"the enabled plugin {key}", ev, h))
+    return out
+
+
 @dataclass
 class Wiring:
     """What Claude Code's settings files say about phiward's hook, for `doctor` and its
@@ -109,6 +170,20 @@ def wiring_state(project: str, home: str) -> Wiring:
         mine = [(g, h, form) for g in (data.get("hooks", {}) or {}).get("PreToolUse", []) or []
                 if isinstance(g, dict) for h in g.get("hooks", []) or [] if isinstance(h, dict)
                 for form in [hook_form(h)] if form]
+        prompts = prompt_hooks(data)
+        scans = [h for ev, h in prompts if ev == "UserPromptSubmit" and is_prompt_scan(h)]
+        w.lines += [_other_prompt_hook(f"the {level} settings", ev, h) for ev, h in prompts
+                    if not (ev == "UserPromptSubmit" and is_prompt_scan(h))]
+        if mine and not scans:
+            w.problems.append(f"the {level} settings run phiward's hook but not its prompt "
+                              "check (a UserPromptSubmit entry): run `(cd ~ && phiward install "
+                              "claude --user --write)`")
+        for h in scans:
+            if h.get("onFailure") != "block" or h.get("async") or h.get("asyncRewake") \
+                    or "if" in h:
+                w.problems.append(f"phiward's prompt check in the {level} settings has no "
+                                  "onFailure: block, or has `async` or `if`, so a prompt can be "
+                                  "sent unchecked")
         if mine:
             wired_levels.append(level)
             blocks = all(h.get("onFailure") == "block" for _g, h, _f in mine)
@@ -151,6 +226,7 @@ def wiring_state(project: str, home: str) -> Wiring:
             w.problems.append(f"disableAllHooks is true at the {disable[0]} level")
     if managed_only and "managed" not in wired_levels:
         w.problems.append("managed settings allow only managed hooks, and they do not run phiward")
+    w.lines += plugin_prompt_lines(project, home)
     on, level, off, path = install.plugin_state(project, home)
     if on:
         w.lines.append(f"  the phiward plugin is enabled ({level} settings): it carries hooks")
@@ -184,6 +260,17 @@ def wiring_state(project: str, home: str) -> Wiring:
                            "folder (a parent folder, another checkout) has no protection. Wire "
                            "your user settings too: `(cd ~ && phiward install claude --user --write)`.")
     return w
+
+
+def pack_lines(cfg: config.Config) -> List[str]:
+    """A WARNING for each user pack file inside a protected path: under `phiward launch` the
+    prompt check cannot read it, so every prompt is refused."""
+    from phiward import paths
+    pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
+    return [f"WARNING: a pack file of the user config ({p}) is inside a protected path: under "
+            "`phiward launch` the prompt check cannot read it, and refuses every prompt. Move it "
+            "out of the root." for p in cfg.user_packs
+            if "/" in p and pset.relation(os.path.expanduser(p)) == paths.INSIDE]
 
 
 def claude_report(project: str, home: str) -> List[str]:
@@ -633,7 +720,7 @@ def _after_install(project: str, home: str, cfg: config.Config,
 _FOLDED = ("  WARNING: no Claude Code settings file runs phiward", "  mode: none:",
            "  hidden list in the sandbox:", "  permission rules for the hidden list:",
            "  WARNING: sandbox confines the shell: NO", "  NOTE: Claude Code's shell is not pinned",
-           "  NOTE: no `--settings` file yet")
+           "  NOTE: no `--settings` file yet", "  WARNING: env.CLAUDE_CODE_DISABLE_FILE_MENTIONS is not")
 
 
 def main(argv: List[str]) -> int:
@@ -699,6 +786,8 @@ def main(argv: List[str]) -> int:
     try:
         Sanitizer.from_config(cfg)
         print(f"sanitizer: ok (packs: {', '.join(cfg.packs) or 'default'})")
+        for line in pack_lines(cfg):
+            print(line)
     except SanitizerError as exc:
         print(f"PROBLEM: the sanitizer cannot start: {exc}")
         return 1
@@ -885,6 +974,8 @@ def main(argv: List[str]) -> int:
         say(line)
     for line in launch_settings_report():
         say(line)
+    for line in mentions_report(project, home):
+        say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
             say(line)
@@ -1146,12 +1237,43 @@ def launch_settings_report() -> List[str]:
         data = None
     sb = data.get("sandbox") if isinstance(data, dict) else None
     want = install.LAUNCH_SETTINGS["sandbox"]
-    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()):
+    env = data.get("env") if isinstance(data, dict) else None
+    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()) or \
+            not isinstance(env, dict) or env.get(install.MENTIONS_OFF) != "1":
         return [f"  WARNING: {path} does not set " + ", ".join(
-            f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()) +
+            [f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()] +
+            [f"env.{install.MENTIONS_OFF}: \"1\""]) +
             ". Run `(cd ~ && phiward install claude --user --write)` again."]
     return [f"  --settings file: {path}. Start Claude Code with `claude --settings {path}`; "
             "doctor cannot tell whether this session was started with it."]
+
+
+# Claude Code knows the setting from 2.1.299; below 2.1.295 it also has no `onFailure` for hooks
+MENTIONS_MIN_VERSION = (2, 1, 299)
+MENTIONS_PROBLEM_BELOW = (2, 1, 295)
+
+
+def mentions_report(project: Optional[str], home: str) -> List[str]:
+    """`@path` mentions: with them on, a mention puts a file's text into the prompt without a
+    tool call phiward's hook sees. The user (or managed) settings turn them off with
+    `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` (Claude Code v2.1.299+, and ignored in a project's
+    settings, so a project's value is not read)."""
+    trusted = [lv for lv in claude_settings.levels(project, home) if lv[0] in ("managed", "user")]
+    value = claude_settings._first(trusted, "env", install.MENTIONS_OFF)
+    out: List[str] = []
+    if value != "1":
+        out.append(f"  WARNING: env.{install.MENTIONS_OFF} is not \"1\" in your user settings: an "
+                   "@-mention puts a file's text into the prompt without a tool call the hook "
+                   "sees. Run `(cd ~ && phiward install claude --user --write)`.")
+    version = claude_settings.claude_version()
+    if version is not None and version < MENTIONS_MIN_VERSION:
+        word = "PROBLEM" if version < MENTIONS_PROBLEM_BELOW else "WARNING"
+        out.append(f"  {word}: Claude Code {claude_settings.version_text(version)} does not know "
+                   f"env.{install.MENTIONS_OFF} (from "
+                   f"{claude_settings.version_text(MENTIONS_MIN_VERSION)} on): an @-mention still "
+                   "puts a file's text into the prompt without a tool call the hook sees. Update "
+                   "Claude Code.")
+    return out
 
 
 def network_report(project: Optional[str], home: str, cfg: config.Config) -> List[str]:

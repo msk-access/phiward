@@ -22,6 +22,7 @@ phiward also uses these places. You do not configure them in a file.
 | `~/.cache/phiward` (or `$XDG_CACHE_HOME/phiward`) | the gateway's scratch folders, while commands run | not read or write it |
 | `~/.phiward-spool` (or `$PHIWARD_SPOOL`) | requests from clients to the broker | write requests (it must) |
 | `~/.phiward/broker.json` | the broker's status: the config, cache folder, roots and patterns it uses | not write it |
+| `~/.phiward/profiles` | macOS: the gateway's kernel profile for each request, one file (mode 0600) that `sandbox-exec -f` reads, removed when the request ends; files left for over a day are removed when the broker starts. The folder is made 0700; a request is refused when `~/.phiward` is a link, another account's, or writable by other accounts | not read or write it |
 | `~/.phiward/backups/keys` | the keys of `phiward pseudonymize` (ID, a tab, the code), mode 0700; made on first use inside `~/.phiward/backups`, which install makes | not read or write it |
 
 ## Who may set what
@@ -145,10 +146,10 @@ is first masked on the whole line as in table mode (protected paths, entry names
 rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
 shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
 `12.5`, `1e-05`, `1,234,567`); any other text in it gets the position rules (`chr1:1234567` is
-`<LOCUS>`). The first line that is not such a row ends column mode: it and every later line are
+`<LOCUS>`). Then names and rule matches in other spellings (another dash, other digits, other separators) are masked inside each cell on its own: never in an ID cell, and never across a delimiter. The first line that is not such a row ends column mode: it and every later line are
 masked as text. Such a line is an empty line, a row with another field count, a quote, a
 backslash or a `%XX` escape, a row with no plain-number cell (another header, as from `cat
-a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. Output
+a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. A row that fails the second pass only because of the masks in other spellings is withheld, and column mode goes on. Output
 without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under `chrom` and `pos`, `chr1` and `1234567` are both
@@ -160,14 +161,24 @@ table mode (identifiers only; numbers and positions are kept).
 
 An entry name shorter than 4 characters (6 when it is only digits) is not masked, and neither is
 one that is a common word of the built-in stop list (for example `patient`, `normal`, `tumour`,
-`bam`, `runs`, `test`).
+`bam`, `runs`, `test`). Lines and names are compared with every dash read as `-` and every
+decimal digit as ASCII. A name of 5 or more letters and digits, with a letter, is also masked
+with its separators (`-`, `_`, `.`, a space; not a tab) changed or left out: `FAKE-PT-0001`
+masks `FAKE_PT_0001`, `FAKE PT 0001` and `FAKEPT0001`. Shorter and digits-only names, and
+names with a separator at either end, are masked only as written. What is not matched is
+listed in the
+[threat model](threat-model.md#known-sanitizer-short-names).
 
 - **`packs`** (list). Built-in packs are `genomics` (the default) and `msk` (one institution's
-  identifiers; an example, not a default). A name with `/` is the path of a pack file of your
-  own (user config only). A pack file has the lists `paths`, `identifiers`,
+  identifiers; an example, not a default). No pack masks a folder layout: list your clinical
+  folders in `[protected_paths]`, or add a `[sanitize] patterns` rule for a custom path shape.
+  A name with `/` is the path of a pack file of your own (user config only). A pack file has the lists `paths`, `identifiers`,
   `positions` and `keep_files`; the format is at the top of
   `phiward/packs/genomics.toml` in the installed package. A pack file must be a regular
-  file, not a link.
+  file, not a link. A built-in pack may also list `detail`: placeholders of its own `paths` and
+  `identifiers` rules that are details, not identifiers (`genomics`: `<BAMFILE>` and `<READ>`).
+  The prompt scan leaves them out; output masking does not. In a pack file of your own the key
+  is checked and has no effect: every rule of your pack files counts as an identifier.
 - **`names_from`** (list of files). Index files: each line is tab-separated fields; in each field
   that holds a `/`, every path part of 4 or more characters, the part before its first dot, and
   its `-`/`_`/`.` pieces are masked as `<NAME>` (never a stop word or a bare number). A file
@@ -193,9 +204,9 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
   `hn`, `kit`, `tube`, a lab's own codes) belong in `id_columns`.
 - **`patterns`** (list). Each entry is `REGEX => <PLACEHOLDER>`. Like every identifier rule of a
   pack, it matches in any letter case; write `(?-i:...)` around a part that must keep its case.
-  So the `msk` pack also masks some ordinary words (`c-string`, `donor-derived`), the git
-  hook refuses a commit that holds them as it would an identifier, and `phiward sanitize
-  --check` counts them. To check that your rules match your data, run a command over it: the
+  So a word in an ID's shape is masked too (with the `msk` pack, `C-STRING` or `donor_v2`), the
+  git hook refuses a commit that holds it as it would an identifier, and `phiward sanitize
+  --check` counts it. To check that your rules match your data, run a command over it: the
   note at the end of `phiward run` counts the placeholders shown and says when no identifier
   placeholder was shown.
 - **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
@@ -209,6 +220,21 @@ one that is a common word of the built-in stop list (for example `patient`, `nor
 
 Built-in packs: `genomics` (the default), `msk`, and `dates` (v0.2, off by default: dates and
 times become `<DATE>`, for example the dates `ls -l` prints).
+
+**These keys also block prompts.** Before Claude Code sends a prompt, the prompt scan asks
+whether the sanitizer would change it; if so, the prompt is not sent. Three groups count:
+- every rule of `[sanitize] patterns`, and every rule of a pack file named in `packs`;
+- the rules of the built-in packs in the user config's `packs` (the default `genomics` when it
+  names none), except those a pack lists as `detail`. So `msk` IDs block, and with the `dates`
+  pack on, a date blocks too (`the 2026-11-22 release`). With `genomics` alone, file names,
+  read names, positions and numbers do not block;
+- a path at or below a protected root or pattern (also `~/...`, `$HOME/...` and a relative path
+  with a `/`, read from the session's folder), and below a `[remote] roots` entry.
+
+What does not count: entry names under the roots (`FAKE-PT-0001` typed alone is sent),
+`names_from`, a repo config's packs (`patterns` and pack files are user config only anyway),
+and the derived protected folders. Details and limits:
+[threat-model.md](threat-model.md#known-prompt-scan).
 
 ### `[copy]`
 

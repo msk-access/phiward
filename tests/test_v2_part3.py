@@ -20,7 +20,8 @@ def home(tree, monkeypatch):
 
 def test_the_user_wiring_always_pins_bash_and_a_project_never_does(tree, home):
     cfg = config.load(str(tree / "repo"))
-    assert install.wiring(cfg)["env"] == {"CLAUDE_CODE_SHELL": "/bin/bash"}
+    assert install.wiring(cfg)["env"] == {"CLAUDE_CODE_SHELL": "/bin/bash",
+                                          "CLAUDE_CODE_DISABLE_FILE_MENTIONS": "1"}
     assert "env" not in install.wiring(cfg, project=True, project_dir=str(tree / "repo"))
 
 

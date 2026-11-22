@@ -34,15 +34,16 @@ says what it holds. By feature:
 | The hook: protected paths in shell and file tools | test_protected_paths, test_v2_p0a, test_v2_p0a2, test_v2_p0a3, test_v2_p0a4, test_v2_round8, test_v2_round9, test_v2_round10, test_v2_round11, test_v2_round12, test_v2_round13, test_v2_round14, test_v2_round15, test_v2_round16, test_v2_round17, test_v2_properties, test_v2_fuzz, test_v2_usability, test_v2_final_review, test_v2_release18, test_v2_release18d, test_v2_release18f |
 | Globs | test_v2_glob_cases |
 | Credentials and other hidden places | test_v2_hidden, test_v2_modes |
-| Claude Code's sandbox settings and confinement | test_install_and_sandbox, test_v2_part2, test_v2_part3, test_v2_part6, test_v2_sandbox_boundary, test_v2_reason_steps, test_v2_steps_match_install, test_v2_records_place, test_v2_launch_settings, test_v2_old_settings, test_v2_network |
+| Claude Code's sandbox settings and confinement | test_install_and_sandbox, test_v2_part2, test_v2_part3, test_v2_part6, test_v2_sandbox_boundary, test_v2_reason_steps, test_v2_steps_match_install, test_v2_records_place, test_v2_launch_settings, test_v2_old_settings, test_v2_network, test_v2_file_mentions |
 | Tools other than Bash (MCP tools, Copilot) | test_v2_tool_rule, test_v2_shell_names, test_v2_refusal_words, test_v2_mcp_source |
 | MCP: wrap, list, launch records, launcher | test_v2_mcp_wrap, test_v2_mcp_wrap_cmd, test_v2_wrap_shared, test_v2_backups, test_v2_entry_id, test_v2_one_answer, test_v2_one_wrapped, test_v2_twin_count, test_v2_launch_records, test_v2_launcher_identity, test_v2_launcher_owner, test_v2_launcher_path, test_v2_path_risk, test_v2_attacks, test_v2_review_round3, test_v2_review_round4 |
-| The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review, test_v2_placeholder_counts, test_v2_gateway_places |
-| HPC: remote runs and pushes | test_v2_remote, test_v2_push |
+| The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review, test_v2_placeholder_counts, test_v2_gateway_places, test_macos_gateway_profile_file, test_macos_inline_code |
+| HPC: remote runs and pushes; copy run from files | test_v2_remote, test_v2_push, test_macos_copy_from_files |
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, Markdown, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
-| The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects |
-| `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta |
+| The prompt scan (the core, `prompt-scan claude`, the wiring in both modes, doctor, the corpus of ordinary prompts, speed) | test_promptscan |
+| The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
+| `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta, test_macos_profile_mount_jobs, test_macos_launch_no_helper |
 | `launch`'s network: the proxy (token, the address check, an upstream proxy, limits), the macOS profile's one port, Linux's network namespace and relay | test_v2_launch_network |
 | Unix sockets under `launch` on Linux (Landlock ABI 9; below it Claude Code's seccomp filter for `--tool claude`, and no unix sockets for other tools). `conftest.py` plants a made-up native Claude Code that runs as Python (`helpers.tool_py`) | test_v2_launch_sockets, test_v2_nested_launch |
 | Files that other tools run later (read-only under `launch` for the tool and a wrapped server, at any depth, with link targets; Mode A's nested `.vscode` and `.idea` on macOS; the network limit's exact host list; renv under `launch`, Linux with R) | test_v2_runs_later |

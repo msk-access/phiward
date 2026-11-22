@@ -57,6 +57,13 @@ phiward launch --tool claude
   folder, `~/Library`, a folder on your `PATH`, or a phiward folder.
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
   threat model).
+- On macOS the tool starts as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with nothing in
+  between. The profile is a new file in `~/.phiward/profiles`, as for the gateway, removed when
+  the tool ends. A program name is found on the session's `PATH` first; when there is none,
+  `launch` says so and exits 127. Inside another sandbox, `sandbox-exec` cannot apply the
+  profile, and nothing runs. When the tool exits with an error within a few seconds of its
+  start, `launch` adds a line: if `sandbox-exec` printed an error above it, `phiward doctor`
+  names the cause (inside another sandbox, or a profile that does not compile).
 
 ## What a session can and cannot do
 
@@ -64,7 +71,7 @@ phiward launch --tool claude
 |---|---|---|
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
 | Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
-| Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps |
+| Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps; on macOS also mount file systems or create launchd jobs |
 | Network | HTTPS to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
 
@@ -284,7 +291,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
     make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
-  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;
+  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS it decides from the session's own folder, found
+  from your account's home folder (not `HOME`): a file there that only that profile denies, and
+  a new file that only the session can make in its own run folder (`PHIWARD_RUN`, which `launch`
+  sets);
   on Linux the session's seccomp filter answers one unused system call with an error number
   nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
   profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
@@ -299,7 +309,7 @@ Read [threat-model.md](threat-model.md) (Mode B, [limits L1–L10](threat-model.
   session.
 - **macOS:** the Keychain and the per-user temp folder are shared with your own tools.
 - **Masking covers names and identifiers, not content.** Through the gateway, print counts and
-  summaries, not records (rule 3 of the agent rules that `phiward init` adds to `AGENTS.md`). Dates can be masked with the `dates` pack.
+  summaries, not records, and hide small counts ([Small counts](daily-use.md#small-counts)) (rule 3 of the agent rules that `phiward init` adds to `AGENTS.md`). Dates can be masked with the `dates` pack.
 - `tmux`, `script` and other tools that open a new terminal do not work yet.
 - Other tools than Claude Code run under `launch -- PROGRAM` with the boundary, but without a
   per-session config folder (no adapter yet).
