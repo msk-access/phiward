@@ -83,17 +83,14 @@ HOOK_TYPES = ("command", "prompt", "agent", "http", "mcp_tool")
 
 def is_prompt_scan(h: Dict[str, Any]) -> bool:
     """Whether a hook entry is phiward's prompt check, by its exact shape: the user form
-    (`install.isolated_command`), the project form and the plugin's (PROJECT_PROMPT_HOOK), or
-    an absolute `.../phiward prompt-scan claude`."""
+    (`install.isolated_command`), or the project form and the plugin's (PROJECT_PROMPT_HOOK).
+    A program at any other path, whatever its name, is not."""
     if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash") \
             or h.get("args"):
         return False
     command = str(h.get("command", ""))
-    if command == install.PROJECT_PROMPT_HOOK or install.isolated_python(command, "prompt-scan"):
-        return True
-    words = _hook_words(h)
-    return len(words) == 3 and words[0].startswith("/") and \
-        words[1:] == ["prompt-scan", "claude"] and os.path.basename(words[0]) in config.PROGRAMS
+    return command == install.PROJECT_PROMPT_HOOK or \
+        bool(install.isolated_python(command, "prompt-scan"))
 
 
 def prompt_hooks(data: Any) -> List[Tuple[str, Dict[str, Any]]]:

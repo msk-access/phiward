@@ -167,16 +167,18 @@ def _prompt_block(reason: str) -> str:
 
 _AWK_FAILS = ('{ echo "phiward: /usr/bin/awk could not list the Python and loader variables to '
               'clear; every tool call is refused" >&2; exit 2; }')
+# the clean-up of the prompt entry (user and project forms): its awk failure refuses the prompt
+# with the block JSON
+PROMPT_CLEAN_ENV = CLEAN_ENV.replace(_AWK_FAILS, _prompt_block(
+    "phiward: /usr/bin/awk could not list the Python and loader variables to clear; every "
+    "prompt and tool call is refused"))
 # the project form of the prompt entry: both of its failure branches refuse the prompt with
 # the block JSON
 PROJECT_PROMPT_HOOK = (
     "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || " + _prompt_block(
         "phiward is not installed or not on PATH: install it (step 1 of its quickstart), then "
         "start Claude Code again; every prompt and tool call is refused until then") + "; "
-    + CLEAN_ENV.replace(_AWK_FAILS, _prompt_block(
-        "phiward: /usr/bin/awk could not list the Python and loader variables to clear; every "
-        "prompt and tool call is refused"))
-    + "exec phiward prompt-scan claude'")
+    + PROMPT_CLEAN_ENV + "exec phiward prompt-scan claude'")
 PROJECT_NOTE = ("/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"phiward is not installed: "
                 "its guards refuse every tool call until it is; ask the operator\"; exit 0; }; "
                 + CLEAN_ENV + "exec phiward session-note claude'")
@@ -366,9 +368,14 @@ def _entry_text(h: Dict[str, Any]) -> str:
 def isolated_command(python: str, what: str) -> str:
     """The user wiring's command for `phiward <what> claude`: phiward's own Python, isolated
     (-I: no PYTHON* variable, no user site folder), started by /bin/sh after CLEAN_ENV has
-    unset every PYTHON*, LD_* and DYLD_* variable (-I does not cover the loader's)."""
-    inner = f"{CLEAN_ENV}exec {shlex.quote(python)} -I -m phiward {what} claude"
+    unset every PYTHON*, LD_* and DYLD_* variable (-I does not cover the loader's). The prompt
+    entry's clean-up refuses with the block JSON (PROMPT_CLEAN_ENV)."""
+    inner = f"{_clean_env(what)}exec {shlex.quote(python)} -I -m phiward {what} claude"
     return "/bin/sh -c " + shlex.quote(inner)
+
+
+def _clean_env(what: str) -> str:
+    return PROMPT_CLEAN_ENV if what == "prompt-scan" else CLEAN_ENV
 
 
 def isolated_python(command: str, what: str = "hook") -> str:
@@ -377,11 +384,12 @@ def isolated_python(command: str, what: str = "hook") -> str:
         words = shlex.split(command)
     except ValueError:
         return ""
+    clean = _clean_env(what)
     if len(words) != 3 or words[:2] != ["/bin/sh", "-c"] or not words[2].startswith(
-            CLEAN_ENV + "exec "):
+            clean + "exec "):
         return ""
     try:
-        rest = shlex.split(words[2][len(CLEAN_ENV) + len("exec "):])
+        rest = shlex.split(words[2][len(clean) + len("exec "):])
     except ValueError:
         return ""
     if len(rest) == 6 and rest[0].startswith("/") and rest[1:] == ["-I", "-m", "phiward",
