@@ -28,6 +28,7 @@ l9
 l10
 known-leftover-processes
 known-pseudonymized-tables
+known-file-mentions
 known-git-control-files
 known-claude-code-path
 known-only-output-masked

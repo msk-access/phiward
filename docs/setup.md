@@ -390,7 +390,7 @@ hook refuses shell commands other than gateway calls. Protect plain folders (roo
 
 **The `--settings` file.** `install --user --write` also writes
 `~/.config/phiward/claude-settings.json`, which sets `sandbox.enabled`, `failIfUnavailable` and
-`allowUnsandboxedCommands: false`. Start Claude Code with `claude --settings
+`allowUnsandboxedCommands: false`, and turns `@` mentions off (below). Start Claude Code with `claude --settings
 ~/.config/phiward/claude-settings.json` (an alias in your shell startup file does it): a `false`
 given with `--settings` makes the sandbox admin-required, as managed settings would, so a
 repository's `.claude/settings.json` cannot turn the sandbox off, add excluded commands or
@@ -408,6 +408,19 @@ and the hook refuses shell commands (`doctor` says so).
 the hook reads commands as bash does. A project's settings that
 set `CLAUDE_CODE_SHELL` or `CLAUDE_CODE_SHELL_PREFIX` make the hook refuse every call (a
 project's value wins over yours in Claude Code).
+
+**`@` mentions are turned off.** `install --user` sets `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` to
+`1` (also in the `--settings` file). Why: with mentions on, `@path` in a prompt puts the file's
+text into the prompt without a tool call phiward's hook sees. With them off, Claude Code passes
+the path and the agent reads the file with Read, which the hook and the deny rules judge like
+any read. The cost: `@` completion of files no longer inserts their contents; the agent reads
+them with one more tool call. Claude Code ignores the setting in a project's settings, so
+`install --project` does not write it, and it needs Claude Code v2.1.299 or later (older ones
+do not know it). `doctor` reports a missing or different value, and a Claude Code older than
+v2.1.299. It does not cover what an IDE adds to the prompt (the open file and the selection): set
+`claudeCode.attachSelection` and `claudeCode.attachOpenFile` to false in the VS Code settings
+when protected files are open in the editor; `doctor` cannot see them. A session started by the
+Desktop app or a runner whose own environment sets the variable takes that value instead.
 
 An older phiward offered `--shell-prefix`, which ran every shell command through its own kernel
 profile. It is gone: Claude Code's sandbox confines the shell. If you used it, run

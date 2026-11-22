@@ -2,6 +2,8 @@
 
 It builds two things from the phiward config:
 - the PreToolUse hooks (shell, file tools, MCP tools), each with `onFailure: "block"`;
+- with --user, `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1"`: an `@path` mention is then a Read
+  the hook sees (Claude Code v2.1.299+ reads it; it ignores it in a project's settings);
 - the sandbox block: `enabled: true`, `allowUnsandboxedCommands: false`;
   `filesystem.denyRead` with every protected root (and the derived ones); `filesystem.denyWrite`
   with the same roots and the phiward config and code; `filesystem.allowWrite` with the
@@ -251,7 +253,10 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
         out["permissions"].update(_read_blocking(version))
     if not project:
         # the shell pinned to bash (the hook reads commands as bash)
-        out["env"] = {"CLAUDE_CODE_SHELL": claude_settings.BASH}
+        # and `@path` mentions off: a mention would put a file's text into the prompt with no
+        # tool call the hook sees; with them off it is a Read. Claude Code ignores this in a
+        # project's settings, so only the user form carries it
+        out["env"] = {"CLAUDE_CODE_SHELL": claude_settings.BASH, MENTIONS_OFF: "1"}
     if cfg.network_limit and not project:
         # Claude Code honours strictAllowlist only from the user (or managed) settings, and
         # then ignores a repository's allowedDomains and WebFetch allow rules
@@ -260,13 +265,17 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     return out
 
 
+# `@path` mentions off (Claude Code v2.1.299+; unknown before it, and ignored in project settings)
+MENTIONS_OFF = "CLAUDE_CODE_DISABLE_FILE_MENTIONS"
+
 # the file `claude --settings` reads (config.launch_settings_path): `allowUnsandboxedCommands:
 # false` from `--settings` makes the sandbox admin-required (no admin rights needed), so a
 # repository's settings cannot turn it off, exclude commands or add writable paths. Source:
 # code.claude.com/docs/en/sandboxing, "Repository settings under an admin-required sandbox".
 # The hook cannot see this file: it still checks the user and project settings itself
 LAUNCH_SETTINGS: Dict[str, Any] = {"sandbox": {
-    "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False}}
+    "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False},
+    "env": {MENTIONS_OFF: "1"}}
 
 
 def _write_launch_settings() -> int:
@@ -578,9 +587,10 @@ def plugin_state(project: str, home: str) -> "tuple":
 def _env_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:
     """What the merge changes in the settings' `env` that the operator set."""
     before = current.get("env") if isinstance(current.get("env"), dict) else {}
-    return [f"env.{k} was {before[k]!r}; it becomes {after['env'][k]!r} (the hook reads "
-            "commands as bash)" for k in ("CLAUDE_CODE_SHELL",)
-            if k in before and before[k] != after.get("env", {}).get(k)]
+    why = {"CLAUDE_CODE_SHELL": "the hook reads commands as bash",
+           MENTIONS_OFF: "an @-mention becomes a Read the hook sees"}
+    return [f"env.{k} was {before[k]!r}; it becomes {after['env'][k]!r} ({why[k]})"
+            for k in why if k in before and before[k] != after.get("env", {}).get(k)]
 
 
 def _network_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:

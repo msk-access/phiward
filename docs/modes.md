@@ -58,6 +58,11 @@ only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
   app, load the user settings (`settingSources: ["user", "project", "local"]`), pass
   `phiward install claude --json` as its `settings`, or run the whole program under
   `phiward launch`. See [unattended.md](unattended.md).
+- **`@path` mentions are turned off** (`CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, written by
+  `install --user`; Claude Code v2.1.299+): a mention would put a file's text into the prompt
+  without a tool call phiward sees. Now it is a Read, which the hook judges. `@` completion no
+  longer inserts contents. The IDE's open-file and selection context is not covered
+  ([setup.md](setup.md)).
 - The file tools are refused inside Claude Code, not by the kernel. A path spelling that both the
   permission rules and the hook miss reads the file. The hook resolves links and spellings, and
   Claude Code's deny rules also match a link's target, so this needs a gap in both.
