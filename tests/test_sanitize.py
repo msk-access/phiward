@@ -83,6 +83,44 @@ def test_msk_table_cases(msk, src, want):
     assert msk.clean(src, table=True) == want
 
 
+@pytest.fixture()
+def msk_only_packs():
+    return Sanitizer._build(config.Config(packs=["genomics", "msk"]), (), ())
+
+
+# What each msk rule is for (the pack's comments, MSK_CASES, the spelling tests): each stays
+# masked, in made-up shapes.
+MSK_INTENDED = [
+    # <DONOR>: a donor name with a number in it
+    ("x DonorFake-7 y", "x <DONOR> y"), ("x DONOR_X1 y", "x <DONOR> y"),
+    ("x Donor_FAKE7 y", "x <DONOR> y"), ("x donorfake12 y", "x <DONOR> y"),
+    ("x Donor-1234567 y", "x <DONOR> y"), ("x id_DonorFake-3 y", "x id_<DONOR> y"),
+    # <CMOID>: C- and six letters or digits, with or without the suffixes; s_C_ forms
+    ("x C-ABC123-L001-d y", "x <CMOID> y"), ("x c-abc123-l001-d y", "x <CMOID> y"),
+    ("x C-FAKE01 y", "x <CMOID> y"), ("x C-ABCDEF y", "x <CMOID> y"),
+    ("x C-ABCDEF-L001 y", "x <CMOID> y"), ("x C-ABC123_P001_d y", "x <CMOID> y"),
+    ("x s_C_FAKE01_P001_d y", "x <CMOID> y"), ("x bam_C-FAKE02-N001 y", "x bam_<CMOID> y"),
+]
+
+
+@pytest.mark.parametrize("src,want", MSK_INTENDED)
+def test_msk_rules_keep_masking_what_they_are_for(msk_only_packs, src, want):
+    assert msk_only_packs.clean(src) == want
+
+
+# Ordinary words of coding prompts (tests/data/prompt_corpus*.txt) that no msk rule masks
+MSK_ORDINARY = [
+    "the donor_id column", "rename donors to participants", "the DonorSearch class",
+    "donor-derived cells", "a Donor", "how a C-string differs", "add a c-header",
+    "move src/clinical/report.py", "under tests/inputs/patient/ here",
+]
+
+
+@pytest.mark.parametrize("src", MSK_ORDINARY)
+def test_msk_rules_leave_ordinary_words(msk_only_packs, src):
+    assert msk_only_packs.clean(src) == src
+
+
 def test_default_pack_is_genomics():
     san = Sanitizer.from_config(config.Config())
     assert san.clean("read A00123:45:HABCDEFXX:1:1101:12345:6789") == "read <READ>"

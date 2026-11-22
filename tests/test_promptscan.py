@@ -185,7 +185,7 @@ CORPUS = [ln for f in ("prompt_corpus.txt", "prompt_corpus_second.txt")
           if ln.strip() and not ln.startswith("#")]
 # Pack rules that hit ordinary prompts: each is a pack follow-up (it over-masks output too),
 # never a filter in the scan. <DATE> blocks by design when the dates pack is on.
-KNOWN_PACK_FOLLOW_UPS = {"<DONOR>", "<CMOID>", "<PATIENTPATH>", "<CLINICALPATH>"}
+KNOWN_PACK_FOLLOW_UPS: set = set()
 BY_DESIGN = {"<DATE>"}
 
 
@@ -195,6 +195,11 @@ def test_the_corpus_is_big_enough():
 
 def test_no_ordinary_prompt_blocks_with_the_default_packs(place):
     hits = [(t, place(t).kinds) for t in CORPUS if place(t).blocked]
+    assert hits == []
+
+
+def test_no_ordinary_prompt_blocks_with_the_msk_pack(place):
+    hits = [(t, place(t, MSK).kinds) for t in CORPUS if place(t, MSK).blocked]
     assert hits == []
 
 

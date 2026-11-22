@@ -134,6 +134,16 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- The `msk` example pack no longer has path rules: `<PATIENTPATH>` (a path holding
+  `inputs/patient`) and `<CLINICALPATH>` (a path under `/clinical/`) are gone. They were
+  examples of one folder layout, not facts about any institution. A user who relied on them
+  must add those folders as protected roots (`[protected_paths] roots`), or add a
+  `[sanitize] patterns` rule for a custom path shape.
+- The `msk` example pack's `<DONOR>` and `<CMOID>` rules leave ordinary words of code and
+  prompts as written, and keep masking the IDs they are for. `<DONOR>` needs a digit in the
+  name (`DonorFake-7`, not `donor_id`, `donors` or `DonorSearch`). `<CMOID>` needs a digit in
+  the ID or six capital letters (`C-FAKE01`, `C-ABCDEF`, not `C-string` or `c-header`). So with
+  `msk` on, these words no longer block a prompt, and output keeps them.
 - macOS: the gateway's kernel profile is a file, run with `/usr/bin/sandbox-exec -f FILE`,
   instead of the profile's text in the command line. The file is new for each request, in
   `~/.phiward/profiles` (made 0700; the file 0600, removed when the request ends; files older
