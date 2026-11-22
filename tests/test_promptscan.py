@@ -198,6 +198,11 @@ def test_no_ordinary_prompt_blocks_with_the_default_packs(place):
     assert hits == []
 
 
+def test_no_ordinary_prompt_blocks_with_the_msk_pack(place):
+    hits = [(t, place(t, MSK).kinds) for t in CORPUS if place(t, MSK).blocked]
+    assert hits == []
+
+
 def test_ordinary_prompts_hit_only_the_known_rules_with_every_pack(place):
     every = '[sanitize]\npacks = ["genomics", "msk", "dates"]\n'
     hits = {t: place(t, every).kinds for t in CORPUS}
