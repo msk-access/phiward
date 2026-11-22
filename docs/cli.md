@@ -315,6 +315,21 @@ usage: phiward session-note claude   (reads the hook payload on stdin)
 |---|---|
 | `-h`, `--help` | Show the help (`phiward session-note --help`). |
 
+### phiward prompt-scan claude
+
+The check of each prompt before Claude Code sends it, run as a UserPromptSubmit hook. A prompt
+that holds a match of the user config's packs or `[sanitize] patterns`, or a path below a
+protected root, is not sent; the reply names the kind, never the value.
+Detail: [threat-model.md](threat-model.md#known-prompt-scan).
+
+```text
+usage: phiward prompt-scan claude   (reads the hook payload on stdin)
+```
+
+| Option | What it does |
+|---|---|
+| `-h`, `--help` | Show the help (`phiward prompt-scan --help`). |
+
 ### phiward mcp
 
 phiward's gateway as an MCP server on stdin and stdout, which Claude Code starts.

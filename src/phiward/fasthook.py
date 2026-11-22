@@ -38,6 +38,11 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (ValueError, OSError):
         return 0
+    if not isinstance(payload, dict):
+        return 0
+    if payload.get("hook_event_name", "PreToolUse") != "PreToolUse":
+        sys.stderr.write("phiward: this hook is a PreToolUse hook; this event is refused\n")
+        return 2
     fold = sys.platform == "darwin"
     keys = [(r.rstrip("/").casefold() if fold else r.rstrip("/")) for r in roots]
     tool = payload.get("tool_name") or payload.get("toolName") or ""

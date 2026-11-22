@@ -36,6 +36,7 @@ SECTIONS = {
     # so `hook claude --help` and `git-hook pre-commit --help` are no help calls: the parent's is
     "phiward hook claude": [["hook"]],
     "phiward session-note claude": [["session-note"]],
+    "phiward prompt-scan claude": [["prompt-scan"]],
     "phiward mcp": [["mcp"]],
     "phiward git-hook": [["git-hook"], ["git-hook", "install"]],
 }
@@ -47,7 +48,8 @@ USAGE_LINES = {
     "mcp list|wrap|unwrap": "phiward mcp list, wrap and unwrap", "run": "phiward run",
     "copy": "phiward copy", "launch": "phiward launch", "check": "phiward check",
     "sanitize": "phiward sanitize", "hook": "phiward hook claude",
-    "session-note": "phiward session-note claude", "mcp": "phiward mcp",
+    "session-note": "phiward session-note claude", "prompt-scan": "phiward prompt-scan claude",
+    "mcp": "phiward mcp",
     "git-hook": "phiward git-hook",
 }
 _FLAG = re.compile(r"(?<![\w-])(--?[A-Za-z][\w-]*)")

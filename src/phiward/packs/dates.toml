@@ -1,6 +1,7 @@
 # Built-in sanitizer pack: dates and times (HIPAA treats dates tied to a person as identifiers).
 # Off by default; turn it on with `[sanitize] packs = ["genomics", "dates"]`. Format: see
-# packs/genomics.toml. Times are masked with their dates; a bare year is kept.
+# packs/genomics.toml. Times are masked with their dates; a bare year is kept. A date is an
+# identifier (no `detail`): with this pack on, a prompt that holds a date is not sent.
 [pack]
 name = "dates"
 

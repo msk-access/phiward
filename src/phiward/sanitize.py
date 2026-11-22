@@ -165,6 +165,10 @@ class Pack:
         self.identifiers: List[Rule] = []
         self.positions: List[Rule] = []
         self.keep_files: List[Pattern[str]] = []
+        # placeholders of this pack's paths and identifiers rules that are details, not
+        # identifiers: the prompt scan leaves them out. Kept for a built-in pack only (the label
+        # is trusted from the package, never from a pack file)
+        self.detail: Set[str] = set()
 
 
 def pack_path(name: str) -> str:
@@ -195,11 +199,21 @@ def load_pack(name: str) -> Pack:
         elif key in _PACK_KEYS:
             if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
                 raise SanitizerError(f"{where}: '{key}' must be a list of non-empty strings")
+        elif key == "detail":
+            if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+                raise SanitizerError(f"{where}: 'detail' must be a list of placeholders")
         else:
             raise SanitizerError(f"{where}: unknown key '{key}'")
     for key in ("paths", "identifiers", "positions"):
         getattr(pack, key).extend(parse_rule(v, f"{where} {key}") for v in body.get(key, []))
     pack.keep_files = [_compile(v, f"{where} keep_files") for v in body.get("keep_files", [])]
+    written = {r for _rx, r in pack.paths + pack.identifiers}
+    detail = set(body.get("detail", []))
+    if not detail <= written:
+        raise SanitizerError(f"{where}: 'detail' names a placeholder that none of its paths or "
+                             "identifiers rules writes")
+    if "/" not in name:
+        pack.detail = detail
     return pack
 
 
@@ -308,16 +322,23 @@ class Sanitizer:
 
     @classmethod
     def from_config(cls, cfg: "config.Config", extra_names_from: Sequence[str] = (),
-                    entries: bool = False, names_lines: Sequence[str] = ()) -> "Sanitizer":
+                    entries: bool = False, names_lines: Sequence[str] = (),
+                    identifiers_only: bool = False) -> "Sanitizer":
         """Build from a loaded config (and extra names files). With `entries`, it also lists the
         protected roots and masks every entry name (the caller must be able to read the roots).
+        With `identifiers_only` (the prompt scan): no detail rules of a built-in pack, no
+        positions, no names, no entries, and only the configured roots and patterns.
         Raises SanitizerError."""
-        return cls._build(cfg, list(extra_names_from), list(names_lines), entries)
+        return cls._build(cfg, list(extra_names_from), list(names_lines), entries,
+                          identifiers_only)
 
     @classmethod
     def _build(cls, cfg: "config.Config", names_files: Sequence[str],
-               name_lines: Iterable[str], entries: bool = False) -> "Sanitizer":
+               name_lines: Iterable[str], entries: bool = False,
+               identifiers_only: bool = False) -> "Sanitizer":
         try:
+            if identifiers_only:
+                names_files, name_lines, entries = [], [], False
             if cfg.problem:
                 raise SanitizerError("the config has a problem")
             names: List[str] = []
@@ -325,25 +346,27 @@ class Sanitizer:
                 if pack_name not in names:
                     names.append(pack_name)
             packs = [load_pack(n) for n in names]
-            path_rules = [r for p in packs for r in p.paths]
-            id_rules = [r for p in packs for r in p.identifiers]
+            drop = (lambda p, r: r[1] in p.detail) if identifiers_only else (lambda p, r: False)
+            path_rules = [r for p in packs for r in p.paths if not drop(p, r)]
+            id_rules = [r for p in packs for r in p.identifiers if not drop(p, r)]
             id_rules += [parse_rule(v, "[sanitize] patterns") for v in cfg.sanitize_patterns]
             # identifiers in any letter case: entry names are matched in any case too
             id_rules = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in id_rules]
-            pos_rules = [r for p in packs for r in p.positions]
+            pos_rules = [] if identifiers_only else [r for p in packs for r in p.positions]
             keep = [k for p in packs for k in p.keep_files]
             # Stop words come from the built-in list only: a rule's placeholder must never
             # exempt an entry name or a name token from masking.
             stop = set(STOP_WORDS)
             tokens = name_tokens(name_lines, stop) if name_lines else set()
-            for f in list(cfg.names_from) + list(names_files):
+            for f in ([] if identifiers_only else list(cfg.names_from)) + list(names_files):
                 tokens |= _read_names_file(f, stop)
             # with the inventory (a gateway run): every folder a pattern matches now, looked up
             # in a set (a regex of tens of thousands of paths takes minutes to build)
             known = {f for p in cfg.patterns for m in pathmatch.matches(p)
                      for r in (m, os.path.realpath(m)) for f in (r, normalize(r))
                      } if entries else set()
-            pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
+            pset = paths.ProtectedSet(cfg.roots if identifiers_only else cfg.all_roots,
+                                      cfg.patterns)
             roots = {f for r in pset.roots for f in (r, normalize(r))}
             ents: set[str] = set()
             if entries:

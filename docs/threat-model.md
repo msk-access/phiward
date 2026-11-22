@@ -462,8 +462,45 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   IDE's open file and selection, which Claude Code adds to the prompt (only its best-effort
   `Read` deny rules apply; set `claudeCode.attachSelection` and `claudeCode.attachOpenFile` to
   false in VS Code); a session whose own launch environment sets the variable (the Desktop app,
-  a runner); and any Claude Code older than v2.1.299. A prompt a person types or pastes is not
-  scanned.
+  a runner); and any Claude Code older than v2.1.299. What a person types or pastes into Claude
+  Code is checked by [the prompt scan](#known-prompt-scan); in another tool that runs the same
+  hooks, it may not be.
+
+- <a id="known-prompt-scan"></a>**The prompt scan is a tripwire for honest pasting, not a
+  boundary.** phiward's `UserPromptSubmit` hook (`phiward prompt-scan claude`, in both modes)
+  refuses a prompt that the sanitizer would change: a match of the user config's packs or
+  `[sanitize] patterns` (built-in `detail` rules left out), or a path below a protected root or
+  a `[remote] roots` entry ([configuration.md](configuration.md#sanitize)). The message names
+  the kind, never the value. A config or pack file it cannot use, a prompt over 1 MiB, or an
+  error refuses the prompt. What it does not stop:
+  - It protects Claude Code only. Other tools that run the hooks of `.claude/settings.json` may
+    ignore a prompt hook's answer (GitHub Copilot in VS Code does), so there the prompt is sent.
+  - Other prompt hooks (`UserPromptSubmit`, `UserPromptExpansion`) run in parallel with
+    phiward's, at any settings level or in a plugin, so phiward's block does not keep the prompt
+    from them. `doctor` warns of each one; nothing removes them.
+  - A session can add a prompt hook to settings it can write. Under `phiward launch` the entry
+    is in the session's own `settings.json`, which the session can edit: it can remove phiward's
+    prompt entry. A settings `env` that sets `PHIWARD_CONFIG` changes the config the scan reads
+    (doctor names it in a project's settings; under launch, the session's own settings can set
+    it).
+  - It does not see pasted images, the clipboard or other programs, the IDE's selection and
+    open file (only the best-effort `Read` deny rules apply), or what a skill, a custom command,
+    a `!` command or an MCP prompt expands to: it sees the prompt as typed.
+  - Entry names under the roots are not checked: `FAKE-PT-0001` typed alone is sent; a path
+    below a root is not. Nor are relative paths with no `/`, paths with spaces and no quotes, or
+    a link spelling of a root whose target does not exist. The derived protected folders (a
+    work tree's `.git`, the cache folder) do not count.
+  - What the packs do not catch is not caught: an ID glued to letters (`patientFAKE-PT-0001`;
+    the rules start at a word edge), and free text that is not an identifier. With `genomics`
+    alone, file names, read names, positions and numbers are details and are sent.
+  - The hook also runs on automatic turns (`/loop`, scheduled tasks, a background subagent's
+    report, a message from another session); a blocked one stalls the loop, and the user sees
+    the reason.
+  - A blocked prompt stays in the local transcript and the prompt history, which are not
+    guarded paths in Mode A.
+  - Under `phiward launch`, a user pack file inside a protected root cannot be read, so every
+    prompt is refused (`doctor` warns). Below Claude Code 2.1.295 the hook fails open (no
+    `onFailure`).
 
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and

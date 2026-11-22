@@ -2,6 +2,8 @@
 
 It builds two things from the phiward config:
 - the PreToolUse hooks (shell, file tools, MCP tools), each with `onFailure: "block"`;
+- the UserPromptSubmit hook (`phiward prompt-scan claude`, `onFailure: "block"`): a prompt that
+  holds an identifier or a path below a protected root is not sent;
 - with --user, `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1"`: an `@path` mention is then a Read
   the hook sees (Claude Code v2.1.299+ reads it; it ignores it in a project's settings);
 - the sandbox block: `enabled: true`, `allowUnsandboxedCommands: false`;
@@ -153,6 +155,30 @@ OLD_PROJECT_HOOKS = (PROJECT_HOOK.replace(
     "install it (step 1 of its quickstart), then start Claude Code again; every tool call is "
     "refused until then", "this project needs it (see its README); every tool call is refused "
     "until it is"),)
+def _prompt_block(reason: str) -> str:
+    """Shell words (inside the hooks' single quotes) that refuse the prompt: the block JSON on
+    stdout and the reason on stderr, exit 2. A plugin's exit 2 with an empty stdout would be no
+    block."""
+    reply = json.dumps({"decision": "block", "reason": reason, "hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit", "suppressOriginalPrompt": True}})
+    return ('{ echo "' + reply.replace('"', '\\"') + '"; echo "' + reason
+            + '" >&2; exit 2; }')
+
+
+_AWK_FAILS = ('{ echo "phiward: /usr/bin/awk could not list the Python and loader variables to '
+              'clear; every tool call is refused" >&2; exit 2; }')
+# the clean-up of the prompt entry (user and project forms): its awk failure refuses the prompt
+# with the block JSON
+PROMPT_CLEAN_ENV = CLEAN_ENV.replace(_AWK_FAILS, _prompt_block(
+    "phiward: /usr/bin/awk could not list the Python and loader variables to clear; every "
+    "prompt and tool call is refused"))
+# the project form of the prompt entry: both of its failure branches refuse the prompt with
+# the block JSON
+PROJECT_PROMPT_HOOK = (
+    "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || " + _prompt_block(
+        "phiward is not installed or not on PATH: install it (step 1 of its quickstart), then "
+        "start Claude Code again; every prompt and tool call is refused until then") + "; "
+    + PROMPT_CLEAN_ENV + "exec phiward prompt-scan claude'")
 PROJECT_NOTE = ("/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"phiward is not installed: "
                 "its guards refuse every tool call until it is; ask the operator\"; exit 0; }; "
                 + CLEAN_ENV + "exec phiward session-note claude'")
@@ -187,7 +213,7 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     sp = (lambda xs: _sandbox_paths(list(xs), home))  # ~/... under the home folder
     secret = [h for h in hidden.paths(None, cfg, session=True) if h not in cfg.all_roots]
     if project:
-        hook_cmd, note_cmd = PROJECT_HOOK, PROJECT_NOTE
+        hook_cmd, note_cmd, prompt_cmd = PROJECT_HOOK, PROJECT_NOTE, PROJECT_PROMPT_HOOK
         secret = [h for h in secret if h.startswith(home.rstrip("/") + "/")]
         rel, _other = _project_split(cfg, project_dir or os.getcwd())
         roots_sb, roots_rules = rel, [f"Read({r})" for r in rel] + [f"Read({r}/**)" for r in rel] \
@@ -201,6 +227,7 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
         # which a project's settings could set, cannot choose the code the hook runs
         hook_cmd = isolated_command(sys.executable, "hook")
         note_cmd = isolated_command(sys.executable, "session-note")
+        prompt_cmd = isolated_command(sys.executable, "prompt-scan")
         roots_sb = sp(cfg.all_roots)
         roots_rules = permission_rules(list(cfg.all_roots), home)
         guard = [g for g in config.guard_files() + config.command_paths(cfg) + config.listed_in_home(cfg) if g not in cfg.all_roots]
@@ -221,9 +248,12 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     entry.update({"timeout": 10, "onFailure": "block"})
     # the start-of-session note: every session knows the rules before its first refusal
     note["timeout"] = 10
+    # the prompt scan: a prompt that holds an identifier or a protected path is not sent
+    prompt = {"type": "command", "command": prompt_cmd, "timeout": 10, "onFailure": "block"}
     out = {
         "hooks": {"PreToolUse": [{"matcher": m, "hooks": [dict(entry)]} for m in MATCHERS],
-                  "SessionStart": [{"hooks": [note]}]},
+                  "SessionStart": [{"hooks": [note]}],
+                  "UserPromptSubmit": [{"hooks": [prompt]}]},
         "permissions": {"deny": _once(roots_rules + permission_rules(secret, home)
                                       + edit_rules(guard, home))},
         "sandbox": {
@@ -338,9 +368,14 @@ def _entry_text(h: Dict[str, Any]) -> str:
 def isolated_command(python: str, what: str) -> str:
     """The user wiring's command for `phiward <what> claude`: phiward's own Python, isolated
     (-I: no PYTHON* variable, no user site folder), started by /bin/sh after CLEAN_ENV has
-    unset every PYTHON*, LD_* and DYLD_* variable (-I does not cover the loader's)."""
-    inner = f"{CLEAN_ENV}exec {shlex.quote(python)} -I -m phiward {what} claude"
+    unset every PYTHON*, LD_* and DYLD_* variable (-I does not cover the loader's). The prompt
+    entry's clean-up refuses with the block JSON (PROMPT_CLEAN_ENV)."""
+    inner = f"{_clean_env(what)}exec {shlex.quote(python)} -I -m phiward {what} claude"
     return "/bin/sh -c " + shlex.quote(inner)
+
+
+def _clean_env(what: str) -> str:
+    return PROMPT_CLEAN_ENV if what == "prompt-scan" else CLEAN_ENV
 
 
 def isolated_python(command: str, what: str = "hook") -> str:
@@ -349,11 +384,12 @@ def isolated_python(command: str, what: str = "hook") -> str:
         words = shlex.split(command)
     except ValueError:
         return ""
+    clean = _clean_env(what)
     if len(words) != 3 or words[:2] != ["/bin/sh", "-c"] or not words[2].startswith(
-            CLEAN_ENV + "exec "):
+            clean + "exec "):
         return ""
     try:
-        rest = shlex.split(words[2][len(CLEAN_ENV) + len("exec "):])
+        rest = shlex.split(words[2][len(clean) + len("exec "):])
     except ValueError:
         return ""
     if len(rest) == 6 and rest[0].startswith("/") and rest[1:] == ["-I", "-m", "phiward",
@@ -366,12 +402,12 @@ def isolated_python(command: str, what: str = "hook") -> str:
 # `<python> -I -m phiward`, the isolated command): `merge` replaces those it is not writing,
 # so the hook does not run twice
 _LAUNCHER_FORMS = re.compile(r"^(?:(?:\S*/)?(?:phiward|agent-guards)|(?:'[^']*'|\S+) -I -m phiward) "
-                             r"(?:hook|session-note) claude$")
+                             r"(?:hook|session-note|prompt-scan) claude$")
 
 
 def _is_phiward_user_entry(command: str) -> bool:
     return bool(_LAUNCHER_FORMS.match(command)) or any(
-        isolated_python(command, w) for w in ("hook", "session-note"))
+        isolated_python(command, w) for w in ("hook", "session-note", "prompt-scan"))
 
 
 def _drop_old_commands(groups: List[Any], keep: Set["tuple"]) -> None:
@@ -426,12 +462,13 @@ def fix_own_modes() -> None:
 def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
     out = json.loads(json.dumps(current))
     hooks = out.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    wanted = {_entry_key(h) for k in ("PreToolUse", "SessionStart")
+    wanted = {_entry_key(h) for k in ("PreToolUse", "SessionStart", "UserPromptSubmit")
               for g in want["hooks"].get(k, []) for h in g["hooks"]}
     if any(_is_phiward_user_entry(c) for c, _x in wanted):  # the user wiring: replace older forms
         _drop_old_commands(hooks, wanted)
-        if isinstance(out["hooks"].get("SessionStart"), list):
-            _drop_old_commands(out["hooks"]["SessionStart"], wanted)
+        for k in ("SessionStart", "UserPromptSubmit"):
+            if isinstance(out["hooks"].get(k), list):
+                _drop_old_commands(out["hooks"][k], wanted)
     # phiward's own entries under other matchers (an older install's four groups): dropped, so
     # one tool call never runs the hook twice
     mine = {_entry_key(h) for g in want["hooks"]["PreToolUse"] for h in g["hooks"]}
@@ -453,14 +490,15 @@ def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
     for g in want["hooks"]["PreToolUse"]:
         if (g["matcher"], _entry_key(g["hooks"][0])) not in have:
             hooks.append(g)
-    starts = want["hooks"].get("SessionStart", [])
-    if starts:
-        have_start = out["hooks"].setdefault("SessionStart", [])
-        cmds = {_entry_key(h) for g in have_start if isinstance(g, dict)
-                for h in g.get("hooks", []) if isinstance(h, dict)}
-        for g in starts:
-            if _entry_key(g["hooks"][0]) not in cmds:
-                have_start.append(g)
+    for event in ("SessionStart", "UserPromptSubmit"):
+        starts = want["hooks"].get(event, [])
+        if starts:
+            have_start = out["hooks"].setdefault(event, [])
+            cmds = {_entry_key(h) for g in have_start if isinstance(g, dict)
+                    for h in g.get("hooks", []) if isinstance(h, dict)}
+            for g in starts:
+                if _entry_key(g["hooks"][0]) not in cmds:
+                    have_start.append(g)
     sb = out.setdefault("sandbox", {})
     sb["enabled"] = True
     if "failIfUnavailable" in want["sandbox"]:
@@ -712,7 +750,7 @@ Options:
   -h, --help   show this help
 
 Build the Claude Code wiring from the phiward config: the hooks that run before each tool
-call, and the sandbox and permission settings that keep protected data out of the shell.
+call and before each prompt is sent, and the sandbox and permission settings that keep protected data out of the shell.
 Without --write it prints the wiring and changes nothing; printing (and --json) runs only in
 your own terminal, because the wiring names every protected path. It adds entries and turns on what
 the guard needs. It removes only old entries that phiward itself wrote. Without a terminal, --write refuses when PHIWARD_CONFIG, PHIWARD_SPOOL,
@@ -779,6 +817,9 @@ def main(argv: List[str]) -> int:
               "after you update it.", file=sys.stderr)
     notes = [
         "Claude Code 2.1.295 or newer is needed for onFailure.",
+        "The UserPromptSubmit entry checks each prompt before it is sent: a prompt that holds a "
+        "match of your packs or [sanitize] patterns, or a path below a protected root, is not "
+        "sent. Other prompt hooks run beside it (doctor warns).",
         "Strong form: put the same settings in managed settings. A repository can set "
         "\"disableAllHooks\": true, or add sandbox.excludedCommands, unless managed settings "
         "set allowUnsandboxedCommands to false.",
@@ -805,7 +846,8 @@ def main(argv: List[str]) -> int:
         # wiring keeps its own full-path hooks unless told otherwise
         want["hooks"] = {"PreToolUse": []}
         notes.append("--no-hooks: only the sandbox and permission settings are written here; "
-                     "the hooks must come from your user wiring or the plugin.")
+                     "the hooks (also the prompt check) must come from your user wiring or the "
+                     "plugin.")
     if project:
         why = _claude_folder_problem(cwd)
         if why:

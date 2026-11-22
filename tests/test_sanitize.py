@@ -428,3 +428,74 @@ def test_entry_names_are_masked_through_escapes_and_lookalikes(src):
     san = Sanitizer(entries={"fake-pt-0042.bam", "fake-pt-0042"})
     out = san.clean(src)
     assert "PT-0042" not in out and "\x1b" not in out and "<ENTRY>" in out
+
+
+# --- the label of each built-in rule: identifier or detail (the prompt scan) ---------------------
+# Every built-in pack is listed with the placeholders it labels detail: a new pack must say.
+DETAIL_LABELS = {"genomics": {"<BAMFILE>", "<READ>"}, "msk": set(), "dates": set()}
+
+
+def test_every_built_in_rule_has_a_label():
+    folder = Path(sanitize.__file__).with_name("packs")
+    assert {p.stem for p in folder.glob("*.toml")} == set(DETAIL_LABELS)
+    for name, want in DETAIL_LABELS.items():
+        pack = sanitize.load_pack(name)
+        assert pack.detail == want, name
+        written = {r for _rx, r in pack.paths + pack.identifiers}
+        assert pack.detail <= written, name
+
+
+def _pack_file(tmp_path, body):
+    p = tmp_path / "mine.toml"
+    p.write_text("[pack]\n" + body)
+    return str(p)
+
+
+def test_detail_naming_a_placeholder_the_pack_does_not_write_is_refused(tmp_path):
+    for body in ("identifiers = ['ZQX\\d+ => <BAR>']\ndetail = [\"<FOO>\"]\n",
+                 "identifiers = ['ZQX\\d+ => <BAR>']\ndetail = \"<BAR>\"\n",
+                 # a positions placeholder is no paths or identifiers rule's
+                 "positions = ['ZQX\\d+ => <BAR>']\ndetail = [\"<BAR>\"]\n"):
+        with pytest.raises(SanitizerError) as exc:
+            sanitize.load_pack(_pack_file(tmp_path, body))
+        assert "'detail'" in str(exc.value) and "unknown key" not in str(exc.value)
+
+
+def test_a_pack_file_detail_does_not_drop_its_rule(tmp_path):
+    f = _pack_file(tmp_path, "identifiers = ['ZQX\\d+ => <BAMFILE>']\ndetail = [\"<BAMFILE>\"]\n")
+    assert sanitize.load_pack(f).detail == set()
+    cfg = load_cfg(tmp_path, f'[sanitize]\npacks = ["{f}"]\n')
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.clean("see ZQX123 here") == "see <BAMFILE> here"
+
+
+def _raises(*_a, **_k):
+    raise AssertionError("must not run")
+
+
+def test_identifiers_only_drops_details_positions_names_and_entries(tmp_path, monkeypatch):
+    nf = names_file(tmp_path)
+    cfg = load_cfg(tmp_path, f'[sanitize]\npacks = ["genomics", "msk"]\nnames_from = ["{nf}"]\n')
+    monkeypatch.setattr(sanitize.inventory, "build", _raises)
+    monkeypatch.setattr(sanitize, "_read_names_file", _raises)
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.entries is None and san.re_names is None and not san.pos_rules
+    for line in ("why does Sample7.sorted.bam fail at chr1:1234567",
+                 "read A00123:8:H5:1:1101:1000:2000 has 12345678 bases"):
+        assert san.clean(line) == sanitize.normalize(line)
+    assert san.clean("P-9990001-T01-IM6") == "<SAMPLEID>"
+    # output masking is unchanged
+    out = Sanitizer.from_config(load_cfg(tmp_path, '[sanitize]\npacks = ["genomics"]\n'))
+    assert "<BAMFILE>" in out.clean("Sample7.sorted.bam")
+    assert "<LOCUS>" in out.clean("chr1:1234567")
+
+
+def test_identifiers_only_uses_the_configured_roots_only(tmp_path):
+    root = tmp_path / "phi"
+    root.mkdir()
+    cfg = load_cfg(tmp_path, f'[protected_paths]\nroots = ["{root}"]\n')
+    cfg.derived_roots.append(str(tmp_path / "derivedgit"))
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.clean(f"{root}/FAKE-PT-0001/x") != f"{root}/FAKE-PT-0001/x"
+    lock = f"{tmp_path}/derivedgit/index.lock"
+    assert san.clean(lock) == lock

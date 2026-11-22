@@ -173,7 +173,13 @@ listed in the
   own (user config only). A pack file has the lists `paths`, `identifiers`,
   `positions` and `keep_files`; the format is at the top of
   `phiward/packs/genomics.toml` in the installed package. A pack file must be a regular
-  file, not a link.
+  file, not a link. A built-in pack may also list `detail`: placeholders of its own `paths` and
+  `identifiers` rules that are details, not identifiers (`genomics`: `<BAMFILE>` and `<READ>`).
+  The prompt scan leaves them out; output masking does not. In a pack file of your own the key
+  is checked and has no effect: every rule of your pack files counts as an identifier. With
+  `msk` on, a prompt that names `donor` (`donor_id`, `DonorSearch`), a `C-…` string
+  (`C-string`, `c-header`), or a folder called `clinical` or `inputs/patient` is not sent,
+  until the pack's rules are tightened (a follow-up).
 - **`names_from`** (list of files). Index files: each line is tab-separated fields; in each field
   that holds a `/`, every path part of 4 or more characters, the part before its first dot, and
   its `-`/`_`/`.` pieces are masked as `<NAME>` (never a stop word or a bare number). A file
@@ -215,6 +221,21 @@ listed in the
 
 Built-in packs: `genomics` (the default), `msk`, and `dates` (v0.2, off by default: dates and
 times become `<DATE>`, for example the dates `ls -l` prints).
+
+**These keys also block prompts.** Before Claude Code sends a prompt, the prompt scan asks
+whether the sanitizer would change it; if so, the prompt is not sent. Three groups count:
+- every rule of `[sanitize] patterns`, and every rule of a pack file named in `packs`;
+- the rules of the built-in packs in the user config's `packs` (the default `genomics` when it
+  names none), except those a pack lists as `detail`. So `msk` IDs block, and with the `dates`
+  pack on, a date blocks too (`the 2026-11-22 release`). With `genomics` alone, file names,
+  read names, positions and numbers do not block;
+- a path at or below a protected root or pattern (also `~/...`, `$HOME/...` and a relative path
+  with a `/`, read from the session's folder), and below a `[remote] roots` entry.
+
+What does not count: entry names under the roots (`FAKE-PT-0001` typed alone is sent),
+`names_from`, a repo config's packs (`patterns` and pack files are user config only anyway),
+and the derived protected folders. Details and limits:
+[threat-model.md](threat-model.md#known-prompt-scan).
 
 ### `[copy]`
 

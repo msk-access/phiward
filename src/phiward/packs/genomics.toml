@@ -7,6 +7,10 @@
 #   identifiers = [ RULE, ... ]   applied in text mode AND table mode, in any letter case
 #   positions   = [ RULE, ... ]   text mode only (numbers and positions)
 #   keep_files  = [ REGEX, ... ]  whole file names that a <BAMFILE> rule leaves alone
+#   detail      = [ "<PLACEHOLDER>", ... ]  built-in packs only: placeholders of this pack's
+#                 paths and identifiers rules that are details, not identifiers; a prompt that
+#                 holds only these is sent (the prompt scan). In a pack file the key is
+#                 checked and has no effect: every rule of a pack file counts as an identifier
 #
 # A RULE is 'REGEX => <PLACEHOLDER>': a Python regular expression, then " => ", then a
 # placeholder in capitals between angle brackets. Write the regex as a TOML literal string
@@ -15,6 +19,9 @@
 # second pass must change nothing, else the line is withheld.
 [pack]
 name = "genomics"
+
+# file and read names are details: masked in output, not a reason to stop a prompt
+detail = ["<BAMFILE>", "<READ>"]
 
 identifiers = [
   # sequence and alignment file names (a path token ending in one), unless in keep_files;

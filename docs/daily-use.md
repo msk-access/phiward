@@ -362,6 +362,18 @@ no tool may read, list, search or print a protected path; use `phiward run -- CM
 whole command, or `phiward copy`. Once a config exists, it also refuses `phiward setup`,
 `broker`, `pin` and `carryover`: those are for the operator only.
 
+### A prompt that was not sent
+
+Before Claude Code sends a prompt, phiward checks it. A prompt that holds an identifier of
+your packs or `[sanitize] patterns`, or a path below a protected root, is not sent:
+`phiward: this prompt was not sent: it holds <SAMPLEID> (masked by your packs or [sanitize]
+patterns). ...`. The message names the kind, never the value, and the prompt does not reach
+the model. To go on, send it again without that part: use the masked form (`<SAMPLEID>`), a
+pseudonymized ID (`phiward pseudonymize`), or let the agent reach the data through the gateway
+(`phiward run -- CMD`). A message that ends "run `phiward doctor`" means the check itself
+could not run (a config or pack file it cannot use): every prompt is refused until it is fixed.
+What the check does not see: [threat-model.md](threat-model.md#known-prompt-scan).
+
 ### Messages from `run` and `copy`
 
 Messages start with `run` or `copy` (the table shows `run`; `copy` says the same), and the real

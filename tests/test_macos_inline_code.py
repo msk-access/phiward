@@ -45,6 +45,7 @@ ALLOWED = {
     # repositories that also run on Linux; a recogniser of the user wiring's older form
     ("src/phiward/remote.py", "receive_script", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "PROJECT_HOOK", "sh -c"): EXCEPTION,
+    ("src/phiward/install.py", "PROJECT_PROMPT_HOOK", "sh -c"): EXCEPTION,  # the same form as PROJECT_HOOK
     ("src/phiward/install.py", "PROJECT_NOTE", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
     ("src/phiward/install.py", "_entry_text", "sh -c"): EXCEPTION,
@@ -61,6 +62,8 @@ ALLOWED = {
     ("plugin/hooks/hooks.json", "hooks.PreToolUse", "awk program"): LATER_HOOKS,
     ("plugin/hooks/hooks.json", "hooks.SessionStart", "sh -c"): LATER_HOOKS,
     ("plugin/hooks/hooks.json", "hooks.SessionStart", "awk program"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "sh -c"): LATER_HOOKS,
+    ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "awk program"): LATER_HOOKS,
     ("plugin/.mcp.json", "mcpServers.phiward", "sh -c"): LATER_HOOKS,
     ("src/phiward/copying.py", "execute", "python -c"): LATER_COPY,
     ("src/phiward/copying.py", "execute", "sh -c"): LATER_COPY,
