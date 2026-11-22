@@ -474,7 +474,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
           san: Sanitizer, dry_run: bool, env: Dict[str, str], out: TextIO,
           cancelled: Callable[[], bool]) -> int:
     """A pull: `ssh HOST tar -c` (through the shared connection, no credential, no network but
-    its socket) streams into a local `tar -x` that runs in the gateway profile: it writes only
+    its socket) streams into phiward's extractor (`tar_extract.py`), which runs in the gateway profile: it writes only
     at its destination inside a protected path, reads no credential, and has no network at
     all. Only the system
     ssh touches the socket."""
@@ -529,7 +529,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             t = threading.Thread(target=read_errors, daemon=True)
             t.start()
 
-            # the stream, from ssh's output into the local tar
+            # the stream, from ssh's output into the extractor
             def relay(stdin, ssh: subprocess.Popen = ssh) -> None:
                 assert ssh.stdout is not None
                 shutil.copyfileobj(ssh.stdout, stdin, 1 << 20)
