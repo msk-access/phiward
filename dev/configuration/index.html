@@ -1593,6 +1593,11 @@ file that does not exist, the config is bad (see <a href="#fail-closed">Fail clo
 <td>not write it</td>
 </tr>
 <tr>
+<td><code>~/.phiward/profiles</code></td>
+<td>macOS: the gateway's kernel profile for each request, one file (mode 0600) that <code>sandbox-exec -f</code> reads, removed when the request ends; files left for over a day are removed when the broker starts. The folder is made 0700; a request is refused when <code>~/.phiward</code> is a link, another account's, or writable by other accounts</td>
+<td>not read or write it</td>
+</tr>
+<tr>
 <td><code>~/.phiward/backups/keys</code></td>
 <td>the keys of <code>phiward pseudonymize</code> (ID, a tab, the code), mode 0700; made on first use inside <code>~/.phiward/backups</code>, which install makes</td>
 <td>not read or write it</td>
