@@ -1450,7 +1450,8 @@ resolves it once, opens it without following links, and sends what it reads as a
 <p>The result is counts (<code>copy sent: files=N folders=N skipped=N</code>) and whatever the remote side
 prints, masked like <code>run --remote</code> output (your <code>[remote] roots</code> included).</p>
 <p><strong>A pull</strong> (remote sources to a protected folder) does not use rsync either: <code>tar -c</code> on the
-remote streams through the shared connection into a local <code>tar -x</code> that runs in the gateway
+remote streams through the shared connection into phiward's own extractor, a file in the
+installed package (<code>phiward/tar_extract.py</code>, run by path with phiward's Python), in the gateway
 profile. It writes only inside protected roots, reads no credential and has no network at all.
 Every pull sends everything named (no resume); files that exist in the protected folder are
 kept, never replaced. What the remote sends lands inside the protected
