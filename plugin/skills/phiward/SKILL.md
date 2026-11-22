@@ -22,6 +22,7 @@ as a login service) runs the command and sends back its sanitized output.
    The broker finds the program on the operator's PATH and uses its own environment, not
    yours: give a path (`./tools/x.py`, `.venv/bin/python`) for a program that only you have.
 3. Write scripts that print aggregates (counts, summaries, tables). Do not print raw records.
+   Suppress counts of 7 or fewer and round the rest to 5 (see `docs/daily-use.md`, Small counts).
    The sanitizer masks identifiers and the names of protected entries. It does not mask other
    content. Content that you print is content that the provider receives.
 4. Copy with `phiward copy SRC... DST`. The destination must be inside a protected folder

@@ -45,7 +45,7 @@ the machine ([threat model](threat-model.md#for-reviewers-the-summary)).
    **gateway** (`phiward run`, `phiward copy`). Your **broker** runs the command outside the
    agent, as you, and masks the output: protected paths, the names of files under them, and
    identifier patterns become placeholders. Ask for counts and summaries: masking hides names and
-   identifiers, not other content.
+   identifiers, not other content, and not small counts ([Small counts](daily-use.md#small-counts)).
 3. **HPC without giving the agent your login.** `phiward run --remote` and `phiward copy` go
    through your own shared SSH connection. No request reads your key or Kerberos ticket, and only
    the hosts and programs you list are allowed.

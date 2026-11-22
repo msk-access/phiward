@@ -65,7 +65,7 @@ newer, macOS or Linux, and Claude Code 2.1.295 or newer.
 ## What it does not do
 
 - Masking hides names and identifiers, not other content: through the gateway, print counts and
-  summaries, not records.
+  summaries, not records, and hide small counts (see "Small counts" in docs/daily-use.md).
 - Out of the box, masking inside file contents covers only sequence and alignment file names,
   read names and loci (the `genomics` pack). Subject and sample identifiers inside files are
   masked only with a pack that has them (the `msk` example), your own `[sanitize] patterns` or

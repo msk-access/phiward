@@ -132,6 +132,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   hidden path at or above a write place or at its `.claude` (before, the command ran with it
   masked or without writes there), and a bind listed twice.
 
+### Docs
+
+- A "Small counts" section in `docs/daily-use.md`: masking hides identifiers, not small counts;
+  suppress counts of 7 or fewer, round the rest to 5, and watch for differencing (after
+  OpenSAFELY's rules). phiward does not enforce it. The rules that `phiward init` adds now say so.
+
 ### Changed
 
 - The `msk` example pack no longer has path rules: `<PATIENTPATH>` (a path holding
