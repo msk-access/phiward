@@ -372,3 +372,75 @@ def test_the_launched_prompt_scan_names_a_pack_file_it_cannot_read(tree):
     _user_config(f'[sanitize]\npacks = ["genomics", "{pack}"]\n')
     (got,) = _launched(tree, "fix the bug in src/app.py")
     assert got[0] == 2 and "mine.toml" in json.loads(got[1])["reason"]
+
+
+# --- doctor -------------------------------------------------------------------------------------
+
+def _state(tree, user):
+    from helpers import user_settings
+    from phiward import doctor
+    user_settings(tree, user)
+    return doctor.wiring_state(str(tree / "repo"), str(tree / "home"))
+
+
+def _user_wiring(tree):
+    from phiward import install
+    return install.wiring(config.load(str(tree / "repo")))
+
+
+def test_doctor_wants_the_prompt_entry_where_phiward_is_wired(tree):
+    w = _user_wiring(tree)
+    assert not any("prompt" in p for p in _state(tree, w).problems)
+    only_tools = {"hooks": {"PreToolUse": w["hooks"]["PreToolUse"]}}
+    assert any("prompt" in p for p in _state(tree, only_tools).problems)
+    for bad in ({"onFailure": None}, {"async": True}, {"if": "x"}):
+        entry = dict(_prompt_entries(w)[0], **bad)
+        entry = {k: v for k, v in entry.items() if v is not None}
+        data = dict(w, hooks=dict(w["hooks"], UserPromptSubmit=[{"hooks": [entry]}]))
+        assert any("prompt" in p for p in _state(tree, data).problems), bad
+
+
+@pytest.mark.parametrize("event,kind", [("UserPromptSubmit", "prompt"),
+                                        ("UserPromptSubmit", "http"),
+                                        ("UserPromptExpansion", "command")])
+def test_doctor_warns_of_other_prompt_hooks_without_a_problem(tree, event, kind):
+    w = _user_wiring(tree)
+    (tree / "repo" / ".claude").mkdir(exist_ok=True)
+    other = {"type": kind, "command": "/opt/tools/FAKE-HOOK-SECRET", "url": "https://x.org/h",
+             "prompt": "FAKE-HOOK-SECRET"}
+    (tree / "repo" / ".claude" / "settings.json").write_text(json.dumps(
+        {"hooks": {event: [{"hooks": [other]}]}}))
+    s = _state(tree, w)
+    said = [ln for ln in s.lines if "WARNING" in ln and event in ln]
+    assert said and "project" in said[0] and kind in said[0]
+    assert "FAKE-HOOK-SECRET" not in "\n".join(s.lines + s.problems)
+    assert not any(event in p for p in s.problems)
+
+
+def test_doctor_warns_of_a_prompt_hook_in_an_enabled_plugin(tree):
+    w = _user_wiring(tree)
+    root = tree / "home" / ".claude" / "plugins" / "cache" / "mkt" / "logger" / "1.0"
+    (root / "hooks").mkdir(parents=True)
+    (root / "hooks" / "hooks.json").write_text(json.dumps({"hooks": {"UserPromptSubmit": [
+        {"hooks": [{"type": "http", "url": "https://x.org/FAKE-HOOK-SECRET"}]}]}}))
+    (tree / "home" / ".claude" / "plugins" / "installed_plugins.json").write_text(json.dumps(
+        {"version": 2, "plugins": {"logger@mkt": [{"scope": "user", "installPath": str(root)}]}}))
+    s = _state(tree, dict(w, enabledPlugins={"logger@mkt": True}))
+    said = [ln for ln in s.lines if "WARNING" in ln and "logger@mkt" in ln]
+    assert said and "http" in said[0] and "FAKE-HOOK-SECRET" not in "\n".join(s.lines)
+    assert not any("logger" in p for p in s.problems)
+
+
+def test_doctor_warns_of_a_user_pack_file_under_a_root(tree):
+    from phiward import doctor
+    pack = tree / "phi" / "mine.toml"
+    pack.write_text("[pack]\nidentifiers = ['ZQX\\\\d+ => <CODE>']\n")
+    first = Path(os.environ["PHIWARD_CONFIG"]).read_text()
+    _user_config(f'[sanitize]\npacks = ["genomics", "{pack}"]\n')
+    lines = doctor.pack_lines(config.load(str(tree / "repo")))
+    assert len(lines) == 1 and lines[0].startswith("WARNING") and "launch" in lines[0]
+    outside = tree / "pub" / "mine.toml"
+    outside.write_text(pack.read_text())
+    Path(os.environ["PHIWARD_CONFIG"]).write_text(first)
+    _user_config(f'[sanitize]\npacks = ["genomics", "{outside}"]\n')
+    assert doctor.pack_lines(config.load(str(tree / "repo"))) == []
