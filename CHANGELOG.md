@@ -144,8 +144,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `phiward` that is not there, an awk list that cannot be read, or a start without the
   arguments exits 2, and `entry.py` exits 2 when phiward's code cannot be loaded.
   `launch --tool claude` refuses, on macOS and Linux, a Claude Code older than 2.1.295, or a
-  tool that gives no Claude Code version (run the binary directly, or use `--tool generic`);
-  it never asks the version of a program inside the project or the session's folders.
+  tool that gives no Claude Code version (run Claude Code's own program directly, or use
+  `--tool generic`). It starts only a native binary to ask the version (from `/`), never a
+  program inside the project or the session's folders; for the npm build it reads the
+  package's `package.json`, and a shim or a wrapper is refused.
   `install --project` keeps its one
   `/bin/sh` line. **Re-install:** run `(cd ~ && phiward install claude --user --write)` once;
   it replaces the old entries in place, and until then `doctor` warns that they are in the

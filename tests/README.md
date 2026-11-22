@@ -8,8 +8,13 @@ and the fixtures (`tree`, `broker`, `launchers`, `home`); `helpers.py` holds the
 ## Running them
 
 ```bash
-uv run --with pytest --with pytest-timeout python -m pytest --timeout=300
+uv run --with pytest --with pytest-timeout python -m pytest --timeout=300 \
+  --basetemp="$HOME/.cache/phiward-pt"
 ```
+
+- `--basetemp`: the made-up trees go outside the temp folder, as in CI. On macOS the per-user
+  temp folder is a session's write place, so launch would refuse the made-up Claude Code there;
+  on Linux a session replaces `/tmp`. Give a folder of its own: pytest empties it on each run.
 
 - `-m "not slow"`: the quick loop; it leaves out the cost and property tests over many entries
   (marked `slow`). Every full run and CI run them.

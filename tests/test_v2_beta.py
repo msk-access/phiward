@@ -105,9 +105,11 @@ def test_b1_a_planted_memory_link_does_not_mount_a_root(tree):
     env = dict(os.environ, PYTHONPATH=SRC)
     r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--memory", "--",
                         tool_py(tree), "-c",
-                        f"import os\nprint(os.listdir({str(tree / 'phi')!r}))"], cwd=str(tree / "repo"),
+                        f"import os\ntry:\n    print(os.listdir({str(tree / 'phi')!r}))\n"
+                        "except OSError:\n    pass\nprint('TOOL-RAN')"], cwd=str(tree / "repo"),
                        capture_output=True, text=True, env=env, timeout=120)
     assert "FAKE-PT" not in r.stdout, r.stdout + r.stderr
+    assert "TOOL-RAN" in r.stdout, r.stdout + r.stderr  # a refused start cannot pass
 
 
 # --- HPC variables, settings.local.json, .claude/.vscode ----------------------------------------

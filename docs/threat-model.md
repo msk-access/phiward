@@ -401,9 +401,12 @@ What phiward does with a project's `env`:
   no `onFailure` (older than 2.1.295) a hook that does not start lets the call go on. phiward
   needs Claude Code 2.1.295 or newer for that reason. Under `phiward launch` the hooks run
   `<python> -I -S <package>/phiward/entry.py ...`, and `launch` refuses, on every platform, a
-  Claude Code older than 2.1.295 or one that gives no version. It asks `TOOL --version`
-  outside the profile, so it never asks a program inside the project or the session's
-  folders. The project hook stays one `/bin/sh` line, because a committed file names no path
+  Claude Code older than 2.1.295 or one that gives no version. It learns the version outside
+  the profile, so it never starts a program inside the project or the session's folders, and
+  it starts only a native binary (`TOOL --version`, from `/`). A script's interpreter is found
+  on PATH and a shim reads the project's config, so either could be the session's: for a
+  script (the npm build) it reads the npm package's `package.json` instead, and a shim or a
+  wrapper is refused. The project hook stays one `/bin/sh` line, because a committed file names no path
   of this machine.
 
 **Masking never trades a name for a count.** A folder a protected pattern matches now is masked as a

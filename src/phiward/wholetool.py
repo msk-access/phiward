@@ -102,11 +102,12 @@ What the session can do:
   program that runs blocks unix sockets in the session (run Claude Code's native binary
   itself, which carries it; a JavaScript build is refused); hooks, MCP servers and Claude Code itself are outside that
   sandbox. Any other tool cannot make unix sockets at all.
-- --tool claude: Claude Code 2.1.295 or newer, asked with `TOOL --version` before the start
-  (never of a program inside the project or the session's folders). The hooks launch writes
-  into the session's settings run phiward's entry.py file with arguments and onFailure, which
-  an older one would not honour. No Claude Code version (another program, a wrapper) is
-  refused: run the Claude Code binary directly, or use --tool generic.
+- --tool claude: Claude Code 2.1.295 or newer. Before the start, launch asks the native
+  binary `TOOL --version`, or reads the npm build's package.json; it never starts a script or
+  a program inside the project or the session's folders. The hooks launch writes into the
+  session's settings run phiward's entry.py file with arguments and onFailure, which an older
+  one would not honour. No Claude Code version (another program, a wrapper, a shim) is
+  refused: start Claude Code's own program directly, or use --tool generic.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
@@ -1695,21 +1696,72 @@ def _find_tool(word: str, env: Dict[str, str]) -> str:
                        "PATH)")
 
 
+CLAUDE_PACKAGE = "@anthropic-ai/claude-code"  # the npm package of Claude Code
+_PACKAGE_JSON_CAP = 64 * 1024
+
+
+def _read_regular(path: str, cap: int, whole: bool = True) -> Optional[bytes]:
+    """Up to `cap` bytes of the regular file `path`, or None: not a regular file, not
+    readable, or (with `whole`) longer than `cap`. Opened without blocking (a FIFO would hang
+    a plain open) and judged by fstat, so what is read is what was judged."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        return None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        data = os.read(fd, cap + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    return data[:cap] if len(data) <= cap or not whole else None
+
+
+def _npm_version(script: str, places: Sequence[str]) -> Optional[Tuple[int, int, int]]:
+    """The version in the package.json beside `script` (npm's `<package>/cli.js`), when that
+    file is Claude Code's package (by its name) and outside the session's write `places`; else
+    None. Read, never run."""
+    pkg = os.path.realpath(os.path.join(os.path.dirname(script), "package.json"))
+    if any(pathid.inside(pkg, os.path.realpath(p)) for p in places):
+        return None
+    data = _read_regular(pkg, _PACKAGE_JSON_CAP)
+    try:
+        doc = json.loads(data) if data is not None else None
+    except ValueError:
+        return None
+    if not isinstance(doc, dict) or doc.get("name") != CLAUDE_PACKAGE or \
+            not isinstance(doc.get("version"), str):
+        return None
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)(?![\d.])", doc["version"])
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
 def claude_version_problem(tool: str, places: Sequence[str],
                            env: Optional[Dict[str, str]] = None) -> str:
     """Why `tool` cannot run under `--tool claude`, or "": it is not a Claude Code of
     VERSION_HOOK_ARGS or newer. The launched hooks are in exec form (`args`) with `onFailure`,
-    and an older one would run their Python alone. Judged by `tool --version`, which runs
-    outside the profile: so never for a program inside one of the session's write `places`
-    (the session could have put it there). No Claude Code version (another program, a wrapper)
-    is a refusal too."""
+    and an older one would run their Python alone. Only a native binary outside the session's
+    write `places` is started to ask (`--version`, from /), as that runs outside the profile.
+    A script (an npm build) is never started: its interpreter is found on PATH, and a shim
+    reads the project's config, so either could be the session's. Its version is read from
+    its npm package's package.json. No Claude Code version (another program, a wrapper, a
+    shim) is a refusal too."""
     need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
+    unknown = (f"`{tool}` gives no Claude Code version, and --tool claude needs Claude Code "
+               f"{need} or newer: start Claude Code's own program directly (the native binary, "
+               "or the npm package's cli.js; not a wrapper or a shim), or use --tool generic "
+               "for another tool")
     real = os.path.realpath(tool)
-    try:  # read, never started
-        with open(real, "rb") as fh:
-            head = fh.read(256).split(b"\n")[0]
-    except OSError:
-        head = b""
+    for p in places:
+        if pathid.inside(real, os.path.realpath(p)):
+            return (f"Claude Code ({real}) is in a folder the session can write; install it "
+                    "outside the project and the session's folders")
+    head = _read_regular(real, 256, whole=False)  # read, never started
+    if head is None:
+        return unknown
+    head = head.split(b"\n")[0]
     if sys.platform != "darwin" and (real.endswith((".js", ".mjs", ".cjs")) or (
             head.startswith(b"#!") and b"node" in head)):
         # Linux needs the native build (its seccomp filter): the refusal the start gives there,
@@ -1717,21 +1769,21 @@ def claude_version_problem(tool: str, places: Sequence[str],
         return (f"{real} is a JavaScript program, not Claude Code's native build; update Claude "
                 "Code to the native build: `claude install`, or `npm install -g "
                 "@anthropic-ai/claude-code@latest`")
-    for p in places:
-        if pathid.inside(real, os.path.realpath(p)):
-            return (f"Claude Code ({real}) is in a folder the session can write; install it "
-                    "outside the project and the session's folders")
-    try:
-        out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL, capture_output=True,
-                             text=True, timeout=20, env=env).stdout
-    except (OSError, subprocess.SubprocessError, ValueError):
-        out = ""
-    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
-    if not m:
-        return (f"`{tool} --version` gives no Claude Code version, and --tool claude needs "
-                f"Claude Code {need} or newer: run the Claude Code binary directly (not a "
-                "wrapper or another program), or use --tool generic for another tool")
-    version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    if head.startswith(b"#!"):
+        version = _npm_version(real, places)
+        if version is None:
+            return unknown
+    else:
+        try:
+            out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
+                                 capture_output=True, text=True, timeout=20, env=env,
+                                 cwd="/").stdout
+        except (OSError, subprocess.SubprocessError, ValueError):
+            out = ""
+        m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
+        if not m:
+            return unknown
+        version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
     if version < claude_settings.VERSION_HOOK_ARGS:
         return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
                 "which launch needs (an older one would not run phiward's hooks); update "

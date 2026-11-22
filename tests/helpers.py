@@ -285,6 +285,9 @@ def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HE
                  ("os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n" if python else
                   "print('ARGV', json.dumps(sys.argv[1:]))\n"))
     os.chmod(p, 0o755)
+    # a script, so launch reads its version from its package's package.json and never starts it
+    (p.parent / "package.json").write_text(
+        '{"name": "@anthropic-ai/claude-code", "version": "2.1.330"}\n')
     return p
 
 
