@@ -430,6 +430,7 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     if anc:
         p += "(deny file-write* " + " ".join(anc) + ")"
     p += "(deny process-info* (require-not (target same-sandbox)))"
+    p += "(deny file-mount)(deny job-creation)"
     p += "(deny signal (require-not (target same-sandbox)))"
     p += f"(deny file-ioctl (ioctl-command #x{_TIOCSTI_MACOS:x}))"
     p += "(deny network-outbound (remote unix-socket))"

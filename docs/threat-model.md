@@ -130,7 +130,8 @@ writes (allowWrite `~/bin`) lets the agent put a program there, and a gateway ca
 confined, with its output sanitized). Keep tools out of folders a project opens.
 
 "Other processes" means: no clipboard, notifications, unix sockets, signals or views of other
-processes. macOS denies Mach services; Linux uses seccomp, Landlock and new IPC and PID namespaces.
+processes. macOS denies Mach services, and both macOS profiles also deny mounting file
+systems and creating launchd jobs; Linux uses seccomp, Landlock and new IPC and PID namespaces.
 For the agent tool under `launch` on Linux, unix sockets are limited as
 [below](#open-unix-sockets) says.
 

@@ -169,6 +169,7 @@ def seatbelt_gateway_profile(writable: Sequence[str], patterns: Sequence[str], n
     # Seatbelt matches the resolved path (/tmp is /private/tmp): every spelling of the socket
     profile += "(deny mach-lookup)(deny ipc-posix*)(deny ipc-sysv*)"
     profile += "(deny darwin-notification-post)(deny distributed-notification-post)"
+    profile += "(deny file-mount)(deny job-creation)"
     profile += "(deny signal (require-not (target same-sandbox)))"
     profile += "(deny process-info* (require-not (target same-sandbox)))"
     if socket:
