@@ -1,0 +1,1935 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/dev/endpoint-security/">
+      
+      
+        <link rel="prev" href="../threat-model/">
+      
+      
+        <link rel="next" href="../developer/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>For IT and security teams - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#for-it-and-security-teams-what-phiward-runs-on-a-mac" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              For IT and security teams
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For IT and security teams
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For IT and security teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-phiward-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What phiward is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-installs-and-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it installs and writes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-process-phiward-starts-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every process phiward starts on macOS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Every process phiward starts on macOS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-command-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command lines
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-signed-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who signed what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-agent-runs-is-not-phiwards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the agent runs is not phiward's
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-put-in-an-exception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to put in an exception
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-check-a-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to check a Mac
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-phiward-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What phiward is
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-it-installs-and-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it installs and writes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-process-phiward-starts-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every process phiward starts on macOS
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Every process phiward starts on macOS">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-command-lines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command lines
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-signed-what" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who signed what
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-agent-runs-is-not-phiwards" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the agent runs is not phiward's
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-to-put-in-an-exception" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to put in an exception
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-to-check-a-mac" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to check a Mac
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="for-it-and-security-teams-what-phiward-runs-on-a-mac">For IT and security teams: what phiward runs on a Mac<a class="headerlink" href="#for-it-and-security-teams-what-phiward-runs-on-a-mac" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>For:</strong> the people who run an endpoint tool on Macs where phiward is used.</li>
+<li><strong>You will have:</strong> every process phiward starts, with its exact command line and a regex
+  for it, so that you can recognise each one and, if your policy needs it, scope one exception.</li>
+</ul>
+<h2 id="what-phiward-is">What phiward is<a class="headerlink" href="#what-phiward-is" title="Permanent link">&para;</a></h2>
+<p>phiward keeps protected health information (PHI) out of what an AI coding agent sends to its
+model provider. It runs the agent's commands in a kernel profile (<code>sandbox-exec</code>) and masks the
+output. It is a Python package that runs as the user.</p>
+<p>It needs no admin rights, no kernel extension and no network service. It opens no listening
+port: the agent and the broker talk through files in a private folder.</p>
+<h2 id="what-it-installs-and-writes">What it installs and writes<a class="headerlink" href="#what-it-installs-and-writes" title="Permanent link">&para;</a></h2>
+<p>All of it is in the user's home folder, written by the user's own account:</p>
+<ul>
+<li><strong>The package</strong>, installed by <code>uv tool</code> or <code>pipx</code>, with its own Python: for example
+  <code>~/.local/share/uv/tools/phiward/</code> (uv) or <code>~/.local/pipx/venvs/phiward/</code> (pipx). Below it,
+  <code>lib/python3.X/site-packages/phiward/</code> holds phiward's code and its two hook files
+  (<code>data/clean-exec.sh</code>, <code>data/clean-env.awk</code>).</li>
+<li><strong>The launcher</strong> <code>~/.local/bin/phiward</code>: a Python script that uv or pipx writes.</li>
+<li><strong>phiward's own state</strong> in <code>~/.phiward/</code>: the sessions of <code>phiward launch</code>, the kernel profiles
+  of running commands (<code>profiles/</code>, one file per command, removed when it ends), records of
+  running launchers, the broker's status and backups.</li>
+<li><strong>The spool</strong> <code>~/.phiward-spool/</code>: requests from the agent to the broker, and their output.</li>
+<li><strong>Scratch folders</strong> in <code>~/.cache/phiward/</code>: one per gateway command, removed when it ends.</li>
+<li><strong>The user config</strong> <code>~/.config/phiward/config.toml</code>, and <code>~/.config/phiward/claude-settings.json</code>.</li>
+<li><strong>Claude Code's settings</strong> <code>~/.claude/settings.json</code>: the hook entries and the sandbox settings.</li>
+<li><strong>The login service</strong> <code>~/Library/LaunchAgents/org.phiward.broker.plist</code>, if the user sets it up,
+  and its log <code>~/Library/Logs/phiward/broker.log</code>.</li>
+<li><strong>In a repository, on request:</strong> <code>.claude/settings.json</code> (<code>install --project</code>) and the git
+  hooks <code>.git/hooks/pre-commit</code> and <code>pre-push</code> (<code>phiward init</code>).</li>
+<li><strong>The Claude Code plugin</strong>, if the user installs it: Claude Code copies it into its own plugin
+  folder (<code>~/.claude/plugins/...</code>).</li>
+</ul>
+<h2 id="every-process-phiward-starts-on-macos">Every process phiward starts on macOS<a class="headerlink" href="#every-process-phiward-starts-on-macos" title="Permanent link">&para;</a></h2>
+<p>Each row is one kind of process. The ID points to its command lines and its regex in the
+<a href="#the-command-lines">list below</a>. phiward puts no code in a local command line: no
+<code>python -c</code>, no <code>sh -c</code> of its own, no <code>awk</code> program, no <code>sandbox-exec -p</code>. There are two
+exceptions:</p>
+<ul>
+<li>the command that ssh carries to the remote host (C3, C7, C8), which runs there, not on the
+  Mac. A push's (C7) is a fixed <code>sh -c</code> script with the destination path;</li>
+<li>the project hook's fixed line (R1, R2), which a repository commits.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Parent</th>
+<th>Image</th>
+<th>How often</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>G1</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each <code>phiward run</code> request</td>
+<td>runs the agent's command in the gateway's profile</td>
+</tr>
+<tr>
+<td>G2</td>
+<td><code>phiward doctor</code></td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each <code>doctor</code></td>
+<td>the gateway's self-test: <code>/usr/bin/true</code> in the profile</td>
+</tr>
+<tr>
+<td>C1</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each local <code>phiward copy</code></td>
+<td>makes the destination folder (<code>/bin/mkdir</code>)</td>
+</tr>
+<tr>
+<td>C2</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each local <code>phiward copy</code></td>
+<td>copies the files (<code>/usr/bin/rsync</code>)</td>
+</tr>
+<tr>
+<td>C3</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each copy from a remote host</td>
+<td>runs <code>/usr/bin/ssh</code> through the user's shared connection; the remote host runs <code>tar -c</code></td>
+</tr>
+<tr>
+<td>C7</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each copy to a remote host</td>
+<td>runs <code>/usr/bin/ssh</code> through the shared connection; the remote host runs a fixed script that makes the folder and unpacks with <code>tar -x</code></td>
+</tr>
+<tr>
+<td>C8</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each copy from a remote host, with <code>[remote] use_shared_connection = false</code></td>
+<td>as C3, but ssh logs in itself</td>
+</tr>
+<tr>
+<td>C4</td>
+<td>the broker</td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>each copy from a remote host</td>
+<td>unpacks what ssh receives, with a file in the package</td>
+</tr>
+<tr>
+<td>C5</td>
+<td>the broker</td>
+<td><code>/usr/bin/ssh</code></td>
+<td>each request to a remote host</td>
+<td>reads the ssh config (no network)</td>
+</tr>
+<tr>
+<td>C6</td>
+<td>the broker</td>
+<td><code>/usr/bin/ssh</code></td>
+<td>each request to a remote host</td>
+<td>checks that the shared connection is up</td>
+</tr>
+<tr>
+<td>H1</td>
+<td>Claude Code</td>
+<td><code>/bin/sh</code></td>
+<td>each tool call, prompt and session start</td>
+<td>the hook's script: clears the Python and loader variables, then runs phiward</td>
+</tr>
+<tr>
+<td>H2</td>
+<td>the H1 script</td>
+<td><code>/usr/bin/awk</code></td>
+<td>with each H1</td>
+<td>lists the variables to clear, from a file in the package</td>
+</tr>
+<tr>
+<td>H3</td>
+<td>the H1 script (exec)</td>
+<td>the Python</td>
+<td>with each H1</td>
+<td>the hook itself: decides the tool call, checks the prompt, or writes the session note</td>
+</tr>
+<tr>
+<td>P1</td>
+<td>Claude Code</td>
+<td><code>/bin/sh</code></td>
+<td>each tool call, prompt and session start, with the plugin</td>
+<td>the plugin's copy of the H1 script</td>
+</tr>
+<tr>
+<td>P2</td>
+<td>the P1 script</td>
+<td><code>/usr/bin/awk</code></td>
+<td>with each P1</td>
+<td>the plugin's copy of H2</td>
+</tr>
+<tr>
+<td>P3</td>
+<td>the P1 script or the R1 line (exec)</td>
+<td>the Python</td>
+<td>with each P1 or R1</td>
+<td>the hook, through the launcher</td>
+</tr>
+<tr>
+<td>P4</td>
+<td>Claude Code</td>
+<td>the Python</td>
+<td>once per session, with the plugin</td>
+<td>phiward's MCP server (the gateway's tools)</td>
+</tr>
+<tr>
+<td>L1</td>
+<td><code>phiward launch</code></td>
+<td><code>/usr/bin/sandbox-exec</code></td>
+<td>once per launched session or wrapped MCP server</td>
+<td>runs the agent tool, or the server, in the tool's profile</td>
+</tr>
+<tr>
+<td>L2</td>
+<td><code>phiward launch</code></td>
+<td><code>/usr/bin/getconf</code></td>
+<td>each launch</td>
+<td>asks for the per-user temp folder</td>
+</tr>
+<tr>
+<td>L3</td>
+<td>Claude Code, under <code>launch</code></td>
+<td>the Python</td>
+<td>each tool call and prompt</td>
+<td>the hook in a launched session</td>
+</tr>
+<tr>
+<td>L4</td>
+<td><code>launch</code>, a wrapped server, <code>doctor</code>, the session note</td>
+<td>the Python</td>
+<td>each start</td>
+<td>phiward checks its own installed files, in a separate Python</td>
+</tr>
+<tr>
+<td>L5</td>
+<td><code>launch --tool claude</code>, <code>install</code>, <code>doctor</code></td>
+<td>Claude Code</td>
+<td>each start</td>
+<td>asks Claude Code its version (<code>--version</code>, from <code>/</code>)</td>
+</tr>
+<tr>
+<td>M1</td>
+<td>Claude Code</td>
+<td>the Python</td>
+<td>once per session, per wrapped MCP server</td>
+<td>starts a wrapped MCP server under <code>phiward launch</code></td>
+</tr>
+<tr>
+<td>M2</td>
+<td><code>phiward launch</code> (exec)</td>
+<td>the server's</td>
+<td>inside a launched session</td>
+<td>a wrapped server inside a session: its own command line, unchanged</td>
+</tr>
+<tr>
+<td>S1</td>
+<td>launchd</td>
+<td>the Python</td>
+<td>at login, kept running</td>
+<td>the broker</td>
+</tr>
+<tr>
+<td>S2</td>
+<td><code>phiward setup</code>, <code>phiward broker --service --write</code></td>
+<td><code>/bin/launchctl</code></td>
+<td>when the user sets up the login service</td>
+<td>loads or restarts the broker's service</td>
+</tr>
+<tr>
+<td>D1</td>
+<td><code>phiward install</code></td>
+<td>the Python</td>
+<td>each <code>install --write</code></td>
+<td>checks that the isolated Python finds phiward</td>
+</tr>
+<tr>
+<td>D2</td>
+<td><code>phiward doctor</code></td>
+<td><code>/bin/sh</code></td>
+<td>each <code>doctor</code></td>
+<td>runs the H1 script once, with <code>phiward --help</code></td>
+</tr>
+<tr>
+<td>D3</td>
+<td>the D2 script (exec)</td>
+<td>the Python</td>
+<td>with each D2</td>
+<td><code>phiward --help</code>, through the launcher</td>
+</tr>
+<tr>
+<td>R1</td>
+<td>Claude Code</td>
+<td><code>/bin/sh</code></td>
+<td>each tool call, prompt and session start, in a repository with <code>install --project</code></td>
+<td>the project hook: one fixed line</td>
+</tr>
+<tr>
+<td>R2</td>
+<td>the R1 line</td>
+<td><code>/usr/bin/awk</code></td>
+<td>with each R1</td>
+<td>lists the variables to clear (its program is in the fixed line)</td>
+</tr>
+<tr>
+<td>R3</td>
+<td>git</td>
+<td><code>/bin/sh</code></td>
+<td>each commit and push, in a repository with <code>phiward init</code></td>
+<td>the git hooks phiward writes</td>
+</tr>
+<tr>
+<td>R4</td>
+<td>the R3 hook (exec)</td>
+<td>the Python</td>
+<td>with each R3</td>
+<td>phiward's git checks</td>
+</tr>
+<tr>
+<td>R5</td>
+<td>R4</td>
+<td><code>git</code> from <code>PATH</code></td>
+<td>with each R4</td>
+<td>the git commands of those checks</td>
+</tr>
+</tbody>
+</table>
+<p>"The Python" is phiward's own Python: the <code>bin/python</code> of its uv or pipx environment, which
+points to the Python that uv or the system installed. "The launcher" is <code>~/.local/bin/phiward</code>,
+a Python script; the kernel shows it as <code>&lt;python&gt; &lt;launcher&gt;</code>.</p>
+<p>The user also starts phiward in a terminal (<code>phiward launch -- claude</code>, <code>phiward doctor</code>,
+<code>phiward setup</code>). Those command lines are the user's own words after <code>&lt;python&gt; &lt;launcher&gt;</code>.</p>
+<p>Rarer forms, not in the list: a local copy without rsync runs <code>/bin/cp -R -n -- SOURCE...
+DEST</code>; a dry run runs <code>/usr/bin/true</code>; a git hook without <code>phiward</code> on <code>PATH</code> runs <code>python3 -m
+phiward git-hook NAME</code>; <code>phiward run --remote</code> runs <code>/usr/bin/sandbox-exec -f &lt;profile&gt;
+/usr/bin/ssh ... HOST -- WORDS</code> (the C3 or C8 ssh words), where WORDS are the agent's own,
+quoted for the remote shell.</p>
+<p>G1 and L1 match any command under any file in <code>~/.phiward/profiles</code>. The account that runs
+phiward can write that folder, so a process of that account could start <code>sandbox-exec</code> there
+with a profile of its own, <code>(allow default)</code> included. An exception for G1 or L1 trusts every
+process of that account to that extent.</p>
+<h3 id="the-command-lines">The command lines<a class="headerlink" href="#the-command-lines" title="Permanent link">&para;</a></h3>
+<p>Each entry gives the command line as the kernel shows it (<code>argv</code>), and a regex for it (<code>regex</code>;
+<code>-</code> where none fits). The regexes are written for an install by uv or pipx. The placeholders:</p>
+<ul>
+<li><code>&lt;python&gt;</code>: phiward's Python, such as <code>~/.local/share/uv/tools/phiward/bin/python</code>;</li>
+<li><code>&lt;PKG&gt;</code>: its <code>site-packages</code> folder; <code>&lt;plugin&gt;</code>: the plugin's folder;</li>
+<li><code>&lt;launcher&gt;</code>: <code>~/.local/bin/phiward</code>;</li>
+<li><code>&lt;profile&gt;</code>: <code>~/.phiward/profiles/</code> and a random name of 32 hex digits, then <code>.sb</code>;</li>
+<li><code>&lt;home&gt;</code>: the home folder; <code>&lt;uid&gt;</code>: the user's id; <code>&lt;entry&gt;</code>: 16 hex digits;</li>
+<li><code>&lt;path&gt;</code>, <code>&lt;source&gt;</code>, <code>&lt;dest&gt;</code>: paths the request names;</li>
+<li><code>&lt;ssh-config&gt;</code>, <code>&lt;socket&gt;</code>, <code>&lt;host&gt;</code>: the user's ssh config file, the shared connection's
+  socket and the host;</li>
+<li><code>&lt;remote-pull&gt;</code>: the command for the remote host on a pull, <code>tar -c -f - -C DIR -- NAME</code> (or
+  <code>-C DIR .</code>); <code>&lt;remote-push&gt;</code>: on a push, <code>sh -c SCRIPT sh DIR</code>, where SCRIPT is the fixed text
+  <code>_RECEIVE</code> in <code>remote.py</code>;</li>
+<li><code>&lt;record&gt;</code>: the package's install record; <code>&lt;claude&gt;</code>: Claude Code's program;</li>
+<li><code>&lt;command&gt; ...</code>, <code>&lt;tool&gt; ...</code>, <code>&lt;server&gt; ...</code>, <code>&lt;arguments&gt;</code>: the user's or the agent's own
+  words;</li>
+<li><code>&lt;project-hook&gt;</code>, <code>&lt;project-prompt-hook&gt;</code>, <code>&lt;project-note&gt;</code>: the project hook's fixed text
+  (<code>PROJECT_HOOK</code>, <code>PROJECT_PROMPT_HOOK</code> and <code>PROJECT_NOTE</code> in <code>install.py</code>), which begins
+  <code>command -v phiward &gt;/dev/null 2&gt;&amp;1 ||</code>; <code>&lt;awk-program&gt;</code>: the awk program in it, which begins
+  <code>BEGIN{for(k in ENVIRON)</code>.</li>
+</ul>
+<p>A path with a space in it shows as more than one word, so <code>[^ ]+</code> does not match it. Use <code>.+</code>
+there if your users have such paths.</p>
+<!-- argv-shapes: tests/test_docs_endpoint_security.py and tests/test_macos_processes.py read this block -->
+<div class="highlight"><pre><span></span><code>G1 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; &lt;command&gt; ...
+G1 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /?[^ ]+
+G2 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /usr/bin/true
+G2 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/true$
+C1 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /bin/mkdir -p -- &lt;path&gt;
+C1 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /bin/mkdir -p -- /
+C2 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /usr/bin/rsync -rt --ignore-existing --exclude=.claude/ -- &lt;source&gt; ... &lt;dest&gt;
+C2 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /usr/bin/rsync -rt --ignore-existing --exclude=\.claude/ -- [^ ]
+C3 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /usr/bin/ssh -F &lt;ssh-config&gt; -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S &lt;socket&gt; &lt;host&gt; -- &lt;remote-pull&gt;
+C3 regex -
+C7 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /usr/bin/ssh -F &lt;ssh-config&gt; -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T -o ControlMaster=no -S &lt;socket&gt; &lt;host&gt; -- &lt;remote-push&gt;
+C7 regex -
+C8 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; /usr/bin/ssh -F &lt;ssh-config&gt; -o BatchMode=yes -o ProxyCommand=none -o ProxyJump=none -o PermitLocalCommand=no -o ClearAllForwardings=yes -o ForwardAgent=no -o ForwardX11=no -o ForwardX11Trusted=no -o RequestTTY=no -T &lt;host&gt; -- &lt;remote-pull&gt;
+C8 regex -
+C4 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; &lt;python&gt; -I &lt;PKG&gt;/phiward/tar_extract.py &lt;path&gt;
+C4 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb [^ ]+/bin/python[0-9.]* -I [^ ]+/site-packages/phiward/tar_extract\.py /
+C5 argv  /usr/bin/ssh -G -F &lt;ssh-config&gt; -- &lt;host&gt;
+C5 regex ^/usr/bin/ssh -G -F [^ ]+ -- [^ ]+$
+C6 argv  /usr/bin/ssh -F &lt;ssh-config&gt; -S &lt;socket&gt; -O check -- &lt;host&gt;
+C6 regex ^/usr/bin/ssh -F [^ ]+ -S [^ ]+ -O check -- [^ ]+$
+H1 argv  /bin/sh &lt;PKG&gt;/phiward/data/clean-exec.sh &lt;python&gt; -I -m phiward hook claude
+H1 argv  /bin/sh &lt;PKG&gt;/phiward/data/clean-exec.sh &lt;python&gt; -I -m phiward prompt-scan claude
+H1 argv  /bin/sh &lt;PKG&gt;/phiward/data/clean-exec.sh &lt;python&gt; -I -m phiward session-note claude
+H1 regex ^/bin/sh [^ ]+/site-packages/phiward/data/clean-exec\.sh [^ ]+/bin/python[0-9.]* -I -m phiward (hook|prompt-scan|session-note) claude$
+H2 argv  /usr/bin/awk -f &lt;PKG&gt;/phiward/data/clean-env.awk
+H2 regex ^/usr/bin/awk -f [^ ]+/site-packages/phiward/data/clean-env\.awk$
+H3 argv  &lt;python&gt; -I -m phiward hook claude
+H3 argv  &lt;python&gt; -I -m phiward prompt-scan claude
+H3 argv  &lt;python&gt; -I -m phiward session-note claude
+H3 regex ^[^ ]+/bin/python[0-9.]* -I -m phiward (hook|prompt-scan|session-note) claude$
+P1 argv  /bin/sh &lt;plugin&gt;/hooks/clean-exec.sh phiward hook claude
+P1 argv  /bin/sh &lt;plugin&gt;/hooks/clean-exec.sh phiward prompt-scan claude
+P1 argv  /bin/sh &lt;plugin&gt;/hooks/clean-exec.sh phiward session-note claude
+P1 regex ^/bin/sh [^ ]+/hooks/clean-exec\.sh phiward (hook|prompt-scan|session-note) claude$
+P2 argv  /usr/bin/awk -f &lt;plugin&gt;/hooks/clean-env.awk
+P2 regex ^/usr/bin/awk -f [^ ]+/hooks/clean-env\.awk$
+P3 argv  &lt;python&gt; &lt;launcher&gt; hook claude
+P3 argv  &lt;python&gt; &lt;launcher&gt; prompt-scan claude
+P3 argv  &lt;python&gt; &lt;launcher&gt; session-note claude
+P3 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward (hook|prompt-scan|session-note) claude$
+P4 argv  &lt;python&gt; &lt;launcher&gt; mcp
+P4 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward mcp$
+L1 argv  /usr/bin/sandbox-exec -f &lt;profile&gt; &lt;tool&gt; ...
+L1 regex ^/usr/bin/sandbox-exec -f [^ ]+/\.phiward/profiles/[0-9a-f]{32}\.sb /[^ ]+
+L2 argv  /usr/bin/getconf DARWIN_USER_TEMP_DIR
+L2 regex ^/usr/bin/getconf DARWIN_USER_TEMP_DIR$
+L3 argv  &lt;python&gt; -I -S &lt;PKG&gt;/phiward/entry.py hook claude --launched
+L3 argv  &lt;python&gt; -I -S &lt;PKG&gt;/phiward/entry.py prompt-scan claude
+L3 regex ^[^ ]+/bin/python[0-9.]* -I -S [^ ]+/site-packages/phiward/entry\.py (hook claude --launched|prompt-scan claude)$
+L4 argv  &lt;python&gt; -I -S -B -X pycache_prefix=/dev/null/phiward &lt;PKG&gt;/phiward/selfcheck.py &lt;record&gt;
+L4 argv  &lt;python&gt; -I -S -B -X pycache_prefix=/dev/null/phiward &lt;PKG&gt;/phiward/selfcheck.py --full &lt;record&gt; &lt;python&gt;
+L4 regex ^[^ ]+/bin/python[0-9.]* -I -S -B -X pycache_prefix=/dev/null/phiward [^ ]+/site-packages/phiward/selfcheck\.py [^ ]
+L5 argv  &lt;claude&gt; --version
+L5 regex ^[^ ]+/claude --version$
+M1 argv  &lt;python&gt; &lt;launcher&gt; launch --entry &lt;entry&gt; -- &lt;server&gt; ...
+M1 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward launch --entry [0-9a-f]{16} -- [^ ]
+M2 argv  &lt;server&gt; ...
+M2 regex -
+S1 argv  &lt;python&gt; &lt;launcher&gt; broker
+S1 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward broker$
+S2 argv  /bin/launchctl print gui/&lt;uid&gt;/org.phiward.broker
+S2 argv  /bin/launchctl kickstart -k gui/&lt;uid&gt;/org.phiward.broker
+S2 argv  /bin/launchctl bootstrap gui/&lt;uid&gt; &lt;home&gt;/Library/LaunchAgents/org.phiward.broker.plist
+S2 regex ^/bin/launchctl (print|kickstart -k|bootstrap) gui/[0-9]+(/org\.phiward\.broker| [^ ]+/Library/LaunchAgents/org\.phiward\.broker\.plist)$
+D1 argv  &lt;python&gt; -I -m phiward --version
+D1 regex ^[^ ]+/bin/python[0-9.]* -I -m phiward --version$
+D2 argv  /bin/sh &lt;PKG&gt;/phiward/data/clean-exec.sh phiward --help
+D2 regex ^/bin/sh [^ ]+/site-packages/phiward/data/clean-exec\.sh phiward --help$
+D3 argv  &lt;python&gt; &lt;launcher&gt; --help
+D3 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward --help$
+R1 argv  /bin/sh -c &lt;project-hook&gt;
+R1 argv  /bin/sh -c &lt;project-prompt-hook&gt;
+R1 argv  /bin/sh -c &lt;project-note&gt;
+R1 regex -
+R2 argv  /usr/bin/awk &lt;awk-program&gt;
+R2 regex -
+R3 argv  /bin/sh &lt;repo&gt;/.git/hooks/pre-commit
+R3 argv  /bin/sh &lt;repo&gt;/.git/hooks/pre-push
+R3 regex ^/bin/sh [^ ]+/\.git/hooks/pre-(commit|push)$
+R4 argv  &lt;python&gt; &lt;launcher&gt; git-hook pre-commit
+R4 argv  &lt;python&gt; &lt;launcher&gt; git-hook pre-push
+R4 regex ^[^ ]+/bin/python[0-9.]* [^ ]+/bin/phiward git-hook pre-(commit|push)$
+R5 argv  git &lt;arguments&gt;
+R5 regex ^git [^ ]
+</code></pre></div>
+<p>A test records every process phiward starts on macOS and checks that this list holds the same
+command lines, both ways (<code>tests/test_macos_processes.py</code>).</p>
+<h2 id="who-signed-what">Who signed what<a class="headerlink" href="#who-signed-what" title="Permanent link">&para;</a></h2>
+<p><code>sandbox-exec</code>, <code>sh</code>, <code>awk</code>, <code>ssh</code>, <code>mkdir</code>, <code>rsync</code>, <code>getconf</code> and <code>launchctl</code> are Apple's
+platform binaries. The Python is the one the user installed, signed by whoever built it (the
+python.org installer's is signed with its Developer ID). <code>git</code> is Apple's, or the one the user
+installed (Homebrew, for example). phiward itself is not signed code: it is Python
+source that the Python reads.</p>
+<h2 id="what-the-agent-runs-is-not-phiwards">What the agent runs is not phiward's<a class="headerlink" href="#what-the-agent-runs-is-not-phiwards" title="Permanent link">&para;</a></h2>
+<p>The agent chooses the commands it runs through the gateway (G1) and inside a launched session
+(L1). Their command lines are the agent's own, and they may use any shape: an agent may run
+<code>python -c</code> or <code>sh -c</code> there. Their parent is <code>sandbox-exec</code>, and they run inside phiward's
+profile. A wrapped MCP server (M1, M2) has the command line its user configured; many servers
+are started as <code>sh -c "..."</code> or <code>npx ...</code>.</p>
+<h2 id="what-to-put-in-an-exception">What to put in an exception<a class="headerlink" href="#what-to-put-in-an-exception" title="Permanent link">&para;</a></h2>
+<p>If your policy needs an exception, scope it narrowly:</p>
+<ul>
+<li>by the image path and the regex of the row you see;</li>
+<li>to the users who run phiward;</li>
+<li>not for all of Python, and not for every program in phiward's Python folder.</li>
+</ul>
+<p>The rows that phiward starts most often are H1 to H3 (each tool call in a Claude Code session),
+L3 (each tool call under <code>launch</code>) and G1 (each gateway request).</p>
+<h2 id="how-to-check-a-mac">How to check a Mac<a class="headerlink" href="#how-to-check-a-mac" title="Permanent link">&para;</a></h2>
+<p><code>phiward doctor</code>, in the user's terminal, checks the install, the hook wiring, the broker and the
+gateway's profile, and says what is missing. It starts G2, D2, L4 and L5.</p>
+<h2 id="limits">Limits<a class="headerlink" href="#limits" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>sandbox-exec</code> is deprecated by Apple, with no date and no named replacement.</li>
+<li>The commands the agent runs (G1, L1) have their own shapes, and your tool may judge what they
+  do. phiward cannot change that.</li>
+<li>The project hook (R1, R2) is one fixed line with code in it. A repository commits it, and the
+  same line runs on Linux. A push's remote command (C7) is fixed code too, carried to the
+  remote host.</li>
+<li>C3, C7 and C8 have no regex either. phiward's fixed ssh options do not fit in 256
+  characters, and a regex that loops over options would admit one that weakens them (ssh takes
+  the first value it sees). Match these rows on the image path <code>/usr/bin/ssh</code> with its parent
+  <code>/usr/bin/sandbox-exec</code>, and on the fixed options exactly, in the order the shape gives them;
+  the profile file, the ssh config, the socket, the host and the paths vary.</li>
+<li>R1, R2 and C7 have no regex. Their full text is longer than 256 characters, and a regex for
+  its first part would also admit that text with any command after it. If you need an
+  exception for them, match the exact command line instead: R1 and R2 are the same on every
+  Mac (a hash of the command line works), and C7 is the fixed text with the user's paths
+  (<code>receive_script</code> in <code>remote.py</code> builds it).</li>
+<li>This page lists macOS only.</li>
+</ul>
+<h2 id="linux">Linux<a class="headerlink" href="#linux" title="Permanent link">&para;</a></h2>
+<p>On Linux phiward confines with bubblewrap (<code>bwrap</code>), Landlock and seccomp instead of
+<code>sandbox-exec</code>. Its processes have the same parents and the same jobs, with other command
+lines: <code>bwrap</code> in place of <code>sandbox-exec</code>, a small Python helper with inline code inside the
+<code>bwrap</code> profile, and <code>systemctl --user</code> for the login service. Those command lines are not
+listed here.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../threat-model/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Threat model and limits">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Threat model and limits
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../developer/" class="md-footer__link md-footer__link--next" aria-label="Next: For contributors">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                For contributors
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
