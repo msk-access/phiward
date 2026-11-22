@@ -32,5 +32,5 @@ summaries, not records.
 |---|---|
 | Set phiward up | [Quick start](quickstart.md), then [daily use](daily-use.md) |
 | Work on an HPC cluster | [HPC](hpc.md) |
-| Decide whether it is enough for your data | [Why phiward](why.md), [the two modes](modes.md), [the threat model](threat-model.md) |
+| Decide whether it is enough for your data | [Why phiward](why.md), [the two modes](modes.md), [the threat model](threat-model.md), [for IT and security teams](endpoint-security.md) |
 | Change phiward's code | [For contributors](developer.md) |

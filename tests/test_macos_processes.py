@@ -198,6 +198,8 @@ def _record(tree, hpc_home, monkeypatch):  # noqa: C901 - one scenario after ano
         m.setattr(sys, "stdin", Tty())
         with _Recording(started):
             assert install.main(["claude", "--user", "--write", "--yes"]) == 0
+            # outside a source checkout (no PHIWARD_DEV) install asks this first
+            assert install._isolated_import_problem() == ""
     monkeypatch.setenv("PATH", f"{bindir}:{claude.parent}:/usr/bin:/bin:/usr/sbin:/sbin")
     settings = json.loads((tree / "home" / ".claude" / "settings.json").read_text())
     wiring = _entries(settings["hooks"])

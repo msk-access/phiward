@@ -449,5 +449,8 @@ anything: the broker's log has the reason.
   temporary files to `$TMPDIR`, its private scratch folder.
 - **git does not work in a repository.** A protected root sits in that work tree, so its `.git`
   is protected. Move the data out of the repository.
+- **Your endpoint tool stops or reports a phiward process.** Send your IT or security team
+  [endpoint-security.md](endpoint-security.md): it lists every process phiward starts on a Mac,
+  with its command line and a regex for an exception.
 - **Every shell command fails after an upgrade.** An older phiward's shell prefix is still set:
   run `(cd ~ && phiward install claude --user --write)` again (`doctor` warns about it).
