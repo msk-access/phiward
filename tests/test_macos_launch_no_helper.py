@@ -10,7 +10,6 @@ a made-up recorder, so these run on every platform and start no real sandbox. Ma
 """
 
 import errno
-import json
 import os
 import re
 import subprocess
@@ -39,16 +38,17 @@ def seatbelt(monkeypatch):
 
 @pytest.fixture()
 def recorder(tree, monkeypatch, seatbelt):
-    """A made-up `sandbox-exec`: it saves its arguments and the profile file it is given to
-    $REC, then runs the command (no sandbox)."""
+    """A made-up `sandbox-exec`: it copies the profile file it is given next to itself, then
+    runs the command (no sandbox). The path is in the script: launch passes the tool an
+    environment of its own."""
     fake = tree / "bin-fake" / "sandbox-exec"
     fake.parent.mkdir()
-    fake.write_text('#!/bin/sh\n[ "$1" = -f ] || exit 99\ncp "$2" "$REC" || exit 98\n'
+    rec = tree / "bin-fake" / "recorded.sb"
+    fake.write_text(f'#!/bin/sh\n[ "$1" = -f ] || exit 99\ncp "$2" "{rec}" || exit 98\n'
                     'shift 2\nexec "$@"\n')
     fake.chmod(0o755)
     monkeypatch.setattr(confine, "SANDBOX_EXEC", str(fake))
-    monkeypatch.setenv("REC", str(tree / "recorded.sb"))
-    return tree / "recorded.sb"
+    return rec
 
 
 def _build(tree, argv, env=None):
@@ -93,10 +93,10 @@ def test_a_missing_tool_gives_exit_127_and_runs_nothing(tree, seatbelt, monkeypa
     monkeypatch.chdir(tree / "repo")
     started = []
 
-    def no_start(*a, **k):
-        started.append(a)
+    def no_start(cmd, *a, **k):
+        started.append(cmd)
         raise AssertionError("the tool was started")
-    monkeypatch.setattr(wholetool.subprocess, "Popen", no_start)
+    monkeypatch.setattr(wholetool, "_run_tool", no_start)
     run = wholetool._Run()
     code = wholetool._launch("generic", False, ["--", "no-such-tool-FAKE-PT-0001"],
                              dict(os.environ), run, "")
@@ -350,14 +350,3 @@ def test_ci_the_tool_starts_with_sigpipe_at_its_default(tree):
     words = [w for w in r.stdout.split() if re.fullmatch(r"[0-9a-fA-F]+", w)]
     assert r.returncode == 0 and words, r.stdout + r.stderr
     assert int(words[-1], 16) & (1 << 12) == 0, r.stdout  # SIGPIPE (13) is not ignored
-
-
-@ci_macos
-def test_ci_launch_inside_launch_still_runs_its_command_directly(tree):
-    # the account's home as HOME: the run folder must be where the inner check looks
-    env = dict(os.environ, PYTHONPATH=str(SRC), HOME=_account_home())
-    inner = (f"{json.dumps(sys.executable)} -m phiward launch -- /bin/echo NESTED-FAKE-OK")
-    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--", "/bin/sh", "-c", inner],
-                       cwd=str(tree / "repo"), capture_output=True, text=True, env=env,
-                       timeout=180, stdin=subprocess.DEVNULL)
-    assert r.returncode == 0 and "NESTED-FAKE-OK" in r.stdout, r.stdout + r.stderr

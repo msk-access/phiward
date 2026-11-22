@@ -116,23 +116,6 @@ def test_an_unlisted_startup_file_is_found(tmp_path):
         "evil.pth: runs code at start"]
 
 
-def test_a_canary_link_does_not_count_as_confined(tree, monkeypatch):
-    import sys
-    from phiward import wholetool
-    if sys.platform != "darwin":
-        return
-    monkeypatch.setattr(wholetool, "_sandbox_check_self", lambda: True)
-    canary = wholetool._canary_path(dict(os.environ))
-    os.makedirs(os.path.dirname(canary), exist_ok=True)
-    if os.path.lexists(canary):
-        os.unlink(canary)
-    os.symlink("/nonexistent-target", canary)
-    assert wholetool.already_confined(dict(os.environ)) is False
-    monkeypatch.setattr(wholetool, "_sandbox_check_self", lambda: False)
-    os.unlink(canary)
-    assert wholetool.already_confined(dict(os.environ)) is False
-
-
 # --- last fixes -----------------------------------------------------------------------------------
 
 def test_a_repository_planted_through_a_git_file_is_reported(tree):

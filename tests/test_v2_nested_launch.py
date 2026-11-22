@@ -7,7 +7,11 @@ holds read-only: the wrapped server never started (found by scripts/sandbox-chec
 Now the tool's seccomp filter answers one unassigned syscall number with an errno nothing else
 returns (the fingerprint). A launch that sees exactly that errno is inside phiward's session and
 runs the command directly, as on macOS. No filter (ENOSYS), another filter (EPERM, another
-errno), or a Mode A-shaped bubblewrap builds the full profile as before. Made-up trees only."""
+errno), or a Mode A-shaped bubblewrap builds the full profile as before.
+
+On macOS the launch inside looks for the session's run folder under the account's home folder,
+never `HOME`, so the tests of a launch inside a session run there with `HOME` set to the
+account's home: on GitHub Actions only, never on a maintainer's machine. Made-up trees only."""
 
 import json
 import os
@@ -25,6 +29,10 @@ from helpers import needs_confine
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
 linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux")
+# macOS: these use the account's home folder, which only a CI runner may give a test
+inside_a_session = pytest.mark.skipif(
+    sys.platform == "darwin" and not os.environ.get("GITHUB_ACTIONS"),
+    reason="macOS on GitHub Actions only: a launch inside a session uses the account's home")
 
 PROBE_NR, PROBE_ERRNO = 360, 3917
 ID = "0123456789abcdef"
@@ -174,8 +182,11 @@ def test_a_launch_in_a_mode_a_shaped_bubblewrap_still_builds_the_profile(tree):
 
 # --- launch inside launch ----------------------------------------------------------------------
 
-def _launch(tree, code):
+def _launch(tree, code, account_home=False):
     env = dict(os.environ, PYTHONPATH=SRC)
+    if account_home and sys.platform == "darwin":
+        import pwd
+        env["HOME"] = pwd.getpwuid(os.getuid()).pw_dir
     r = subprocess.run([PY, "-m", "phiward", "launch", "--", PY, "-c", code],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env,
                        timeout=120)
@@ -196,9 +207,10 @@ WHO = "import os; print('INNER-RAN-%d' % os.getpid())"
 
 
 @needs_confine
+@inside_a_session
 def test_a_wrapped_server_inside_a_session_runs_directly(tree):
     """The Linux Mode B bug: the inner `launch --entry ID --` never started its command."""
-    _, out = _launch(tree, _inner(["--entry", ID, "--", PY, "-c", WHO]))
+    _, out = _launch(tree, _inner(["--entry", ID, "--", PY, "-c", WHO]), account_home=True)
     child = [ln for ln in out.splitlines() if ln.startswith("CHILD-")]
     assert child, out
     # the command replaced the inner launcher: no second session around it
@@ -214,12 +226,14 @@ def test_the_command_inside_runs_under_the_outer_filter(tree):
 
 
 @needs_confine
+@inside_a_session
 def test_a_report_inside_a_session_is_handled_as_on_macos(tree):
     """--report inside a session: the report says the outer profile holds and the command runs
     directly, or, where the report cannot be written there, nothing runs (exit 2)."""
     report = "/tmp/phiward-nested-FAKE-PT-0001.json"
     show = f"import json; print('REPORT-' + json.dumps(json.load(open({report!r}))))"
-    _, out = _launch(tree, _inner(["--report", report, "--entry", ID, "--", PY, "-c", show]))
+    _, out = _launch(tree, _inner(["--report", report, "--entry", ID, "--", PY, "-c", show]),
+                     account_home=True)
     if "INNER-EXIT-2" in out:
         # macOS: the session may not write the report's place; Linux: the session's own /tmp is
         # writable, so the report must be written there

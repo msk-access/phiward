@@ -145,6 +145,17 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   it. Run `phiward install claude --user --write` again to add it to an existing wiring;
   `doctor` warns until then.
 - macOS: the login service runs `/bin/launchctl` by its full path, not from `PATH`.
+- macOS: `phiward launch` starts the tool as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with
+  no Python helper in between. The tool's profile is a file in `~/.phiward/profiles`, under the
+  same rules as the gateway's, removed when the tool ends. A program name is found on the
+  session's `PATH` before the start; when there is none, launch says so and exits 127. The tool
+  now starts with SIGPIPE at its default. Launch no longer checks at start whether it runs
+  inside another sandbox: there `sandbox-exec` cannot apply the profile, and nothing runs. When
+  the tool exits with an error, launch adds a line that points to `phiward doctor`, which names
+  a start inside another sandbox or a profile that does not compile.
+- macOS: a launch inside a session decides from the session's own run folder, which launch
+  names in `PHIWARD_RUN`, and from the account's home folder, never `HOME`. With a `HOME` that
+  is not the account's, a launch inside a session builds its own profile, and nothing runs.
 - Docs: why.md and threat-model.md say whom phiward is built against: an honest user, and an
   agent that text it reads can mislead; not a determined attacker who already runs code on the
   machine.

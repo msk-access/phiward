@@ -522,7 +522,8 @@ def _profile_name() -> str:
 
 
 def profiles_dir(env: Optional[Dict[str, str]] = None) -> str:
-    """Where the gateway writes its profiles (and `launch`'s tool profile denies reads)."""
+    """Where the gateway and `launch` write their profiles (and the tool profile denies
+    reads)."""
     return os.path.join(os.path.realpath(pathid.home(env)), ".phiward", "profiles")
 
 
@@ -604,8 +605,7 @@ def write_profile(text: str) -> str:
             fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW |
                          getattr(os, "O_CLOEXEC", 0), 0o600, dir_fd=dfd)
         except OSError:
-            raise ConfineError("the gateway's profile file cannot be made; nothing "
-                               "runs") from None
+            raise ConfineError("the profile file cannot be made; nothing runs") from None
         try:
             try:
                 os.fchmod(fd, 0o600)
@@ -616,8 +616,8 @@ def write_profile(text: str) -> str:
             finally:
                 os.close(fd)
             if _read_back(dfd, name, made) != data:
-                raise ConfineError("the gateway's profile file changed after it was written; "
-                                   "nothing runs")
+                raise ConfineError("the profile file changed after it was written; nothing "
+                                   "runs")
         except BaseException as exc:
             try:
                 os.unlink(name, dir_fd=dfd)
@@ -625,8 +625,7 @@ def write_profile(text: str) -> str:
                 pass
             if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
                 raise
-            raise ConfineError("the gateway's profile file cannot be written; nothing "
-                               "runs") from None
+            raise ConfineError("the profile file cannot be written; nothing runs") from None
         return os.path.join(profiles_dir(), name)
     finally:
         os.close(dfd)
@@ -761,10 +760,21 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
     raise ConfineError(_NO_BACKEND)
 
 
+def _seatbelt_failure(code: int, why: List[str]) -> str:
+    """What `sandbox-exec -f FILE true` failing says: inside another sandbox (macOS cannot apply
+    a second one), or a profile that does not compile here."""
+    last = f": {why[-1]}" if why else ""
+    if any("sandbox_apply" in w for w in why):
+        return ("this process is inside another sandbox, and macOS cannot apply a second one "
+                f"(exit {code}{last}); run phiward from a plain terminal")
+    return f"the profile does not compile or cannot be applied here (exit {code}{last})"
+
+
 def self_test() -> Optional[str]:
     """Why the gateway's confinement does not work here, or None. It runs `true` in the
     gateway profile."""
     try:
+        b = backend()
         cmd, fds = gateway_command(["true"], [], [], False)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=30, pass_fds=fds)
@@ -774,6 +784,8 @@ def self_test() -> Optional[str]:
             release_profile(cmd)
         if r.returncode != 0:
             why = r.stderr.decode("utf-8", "replace").strip().splitlines()
+            if b == "seatbelt":
+                return _seatbelt_failure(r.returncode, why)
             return f"the gateway profile cannot start a process here (exit {r.returncode}" + \
                 (f": {why[-1]}" if why else "; on Ubuntu 24.04, unprivileged user namespaces "
                  "may be blocked by AppArmor") + ")"

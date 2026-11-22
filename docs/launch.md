@@ -57,6 +57,13 @@ phiward launch --tool claude
   folder, `~/Library`, a folder on your `PATH`, or a phiward folder.
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
   threat model).
+- On macOS the tool starts as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with nothing in
+  between. The profile is a new file in `~/.phiward/profiles`, as for the gateway, removed when
+  the tool ends. A program name is found on the session's `PATH` first; when there is none,
+  `launch` says so and exits 127. Inside another sandbox, `sandbox-exec` cannot apply the
+  profile, and nothing runs. When the tool exits with an error, `launch` adds a line: if
+  `sandbox-exec` printed an error above it, `phiward doctor` names the cause (inside another
+  sandbox, or a profile that does not compile).
 
 ## What a session can and cannot do
 
@@ -240,7 +247,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
     make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
-  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS a file only that profile denies tells `launch` it is inside;
+  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS it decides from the session's own folder, found
+  from your account's home folder (not `HOME`): a file there that only that profile denies, and
+  a new file that only the session can make in its own run folder (`PHIWARD_RUN`, which `launch`
+  sets);
   on Linux the session's seccomp filter answers one unused system call with an error number
   nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
   profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
