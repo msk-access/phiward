@@ -23,7 +23,6 @@ PLUGIN = ROOT / "plugin"
 LINUX = "Linux only"
 EXCEPTION = "a listed exception"
 LATER_HOOKS = "macOS: until the hooks run from files"
-LATER_COPY = "macOS: until copy runs from files"
 KEPT = "kept: libproc's proc_pidinfo"
 MESSAGE = "a refusal's text (it shows the agent `phiward run -- sh -c ...`); nothing runs it"
 
@@ -61,9 +60,6 @@ ALLOWED = {
     ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "sh -c"): LATER_HOOKS,
     ("plugin/hooks/hooks.json", "hooks.UserPromptSubmit", "awk program"): LATER_HOOKS,
     ("plugin/.mcp.json", "mcpServers.phiward", "sh -c"): LATER_HOOKS,
-    ("src/phiward/copying.py", "execute", "python -c"): LATER_COPY,
-    ("src/phiward/copying.py", "execute", "sh -c"): LATER_COPY,
-    ("src/phiward/copying.py", "_pull", "python -c"): LATER_COPY,
 }
 
 # the inline-code flag of each kind of interpreter
