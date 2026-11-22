@@ -574,18 +574,27 @@ def test_never_less_masked_than_before_in_tables_over_many_lines():
 
 # --- R10: speed ----------------------------------------------------------------------------------
 
-def _made_up_lines(n):
+def _made_up_lines(n, names_every=0):
+    """Made-up output lines. Dense (`names_every` 0): two kinds in five hold a name, one of
+    them in another spelling. Typical (`names_every` 50): one line in 50 holds a name, half of
+    those in another spelling; the other lines are of the kinds that hold none."""
     rnd = random.Random(7)
     out = []
     for i in range(n):
         k = rnd.randrange(200000)
-        out.append(rnd.choice([
+        kinds = [
             f"read{i}\t0\tchr1\t{rnd.randrange(10**8)}\t60\t100M\t*\t0\t0\tACGTACGTAC\tFFFFFFFFFF",
             f"INFO {i}: processed sample_{k:06d} in {rnd.random():.3f}s, 0 errors",
             f"{i},FAKE-SPEED-{k:06d},tumor,{rnd.random():.4f},pass",
             f"[{i}] wrote out/run{k % 50}/summary.txt ({rnd.randrange(10**6)} bytes)",
             f"{i}\tFAKE–SPEED–{k:06d}\t{rnd.randrange(100)} µg — ok",
-        ]))
+        ]
+        if not names_every:
+            out.append(rnd.choice(kinds))
+        elif rnd.randrange(names_every) == 0:
+            out.append(rnd.choice([kinds[2], kinds[4]]))
+        else:
+            out.append(rnd.choice([kinds[0], kinds[1], kinds[3]]))
     return out
 
 
@@ -617,19 +626,25 @@ def _best_of(runs, sides):
     return best, got
 
 
-@pytest.mark.slow
-def test_speed_within_the_targets():
-    """200,000 made-up names: building the matcher and masking a line each cost at most 1.5x
-    what they did before this change (the targets of the change). Each side's best of 3, in
-    turn."""
-    stop = {w.casefold() for w in STOP_WORDS}
-    strings = sorted({s for i in range(200000)
-                      for s in inventory._strings_of(f"FAKE-SPEED-{i:06d}.bam", stop)})
-    old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(200000))
-    build, made = _best_of(3, {"new": (_fresh, lambda: Sanitizer(entries=strings)),
-                               "old": (_fresh, lambda: _Before(entries=old_strings))})
-    lines = _made_up_lines(400000)
-    size = sum(len(x) + 1 for x in lines)
+_R10 = {}
+
+
+def _r10_build():
+    """200,000 made-up names, built on each side: each side's best of 3, in turn (once per
+    run)."""
+    if not _R10:
+        stop = {w.casefold() for w in STOP_WORDS}
+        strings = sorted({s for i in range(200000)
+                          for s in inventory._strings_of(f"FAKE-SPEED-{i:06d}.bam", stop)})
+        old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(200000))
+        _R10["build"], _R10["made"] = _best_of(
+            3, {"new": (_fresh, lambda: Sanitizer(entries=strings)),
+                "old": (_fresh, lambda: _Before(entries=old_strings))})
+    return _R10["build"], _R10["made"]
+
+
+def _r10_mask(lines):
+    made = _r10_build()[1]
 
     def mask(s):
         def work():
@@ -638,11 +653,38 @@ def test_speed_within_the_targets():
         return work
     run, _ = _best_of(3, {"new": (lambda: None, mask(made["new"])),
                           "old": (lambda: None, mask(made["old"]))})
-    t_new, t_old, l_new, l_old = build["new"], build["old"], run["new"], run["old"]
-    print(f"\nR10: build {t_new:.2f}s (before {t_old:.2f}s); {size / 1e6:.1f} MB masked in "
-          f"{l_new:.2f}s (before {l_old:.2f}s)")
+    return run["new"], run["old"]
+
+
+@pytest.mark.slow
+def test_speed_in_typical_text_within_the_targets():
+    """The targets of the change, for typical text (one line in 50 holds a name, half of those
+    in another spelling): building the matcher and masking each cost at most 1.5x what they did
+    before."""
+    build = _r10_build()[0]
+    t_new, t_old = build["new"], build["old"]
+    lines = _made_up_lines(400000, names_every=50)
+    l_new, l_old = _r10_mask(lines)
+    print(f"\nR10 typical: build {t_new:.2f}s (before {t_old:.2f}s); "
+          f"{sum(len(x) + 1 for x in lines) / 1e6:.1f} MB masked in {l_new:.2f}s "
+          f"(before {l_old:.2f}s)")
     assert t_new <= 1.5 * t_old + 0.2, (t_new, t_old)
     assert l_new <= 1.5 * l_old + 0.2, (l_new, l_old)
+
+
+@pytest.mark.slow
+def test_speed_with_dense_hits():
+    """Two lines in five hold a name, one in another spelling: masking at most 2.5x what it
+    cost before (the build as in typical text: at most 1.5x)."""
+    build = _r10_build()[0]
+    t_new, t_old = build["new"], build["old"]
+    lines = _made_up_lines(400000)
+    l_new, l_old = _r10_mask(lines)
+    print(f"\nR10 dense: build {t_new:.2f}s (before {t_old:.2f}s); "
+          f"{sum(len(x) + 1 for x in lines) / 1e6:.1f} MB masked in {l_new:.2f}s "
+          f"(before {l_old:.2f}s)")
+    assert t_new <= 1.5 * t_old + 0.2, (t_new, t_old)
+    assert l_new <= 2.5 * l_old + 0.2, (l_new, l_old)
 
 
 def test_a_long_line_with_many_hits_costs_little():

@@ -218,11 +218,18 @@ def _glued(s: str) -> Optional[str]:
     """`s` with its separators left out, when it is matched that way: 5 or more letters and
     digits with a letter, and no separator at either end (such a string is matched as written,
     so its separators stay masked)."""
-    key = _SEP_RUN.sub("", s)
+    if s.isascii():  # the same, faster: an ASCII string's separators are `-`, `_`, `.`, a space
+        if s[0] in "-_. " or s[-1] in "-_. ":
+            return None
+        key = _glue(s)
+        if key.isalnum():
+            return key if len(key) >= 5 and not key.isdigit() else None
+    else:
+        key = _SEP_RUN.sub("", s)
+        if _SEP_RUN.match(s[0]) or _SEP_RUN.match(s[-1]):
+            return None
     alnum = len(key) if key.isalnum() else sum(c.isalnum() for c in key)
     if alnum < 5 or not any(c.isalpha() for c in key):
-        return None
-    if _SEP_RUN.match(s[0]) or _SEP_RUN.match(s[-1]):
         return None
     return key
 
