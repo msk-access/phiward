@@ -373,8 +373,10 @@ def matches(m):
         return re.fullmatch(m, "Read") is not None
     except re.error:
         return "Read" in m.split("|")
-cmds = [h["command"] for g in groups if matches(g.get("matcher") or "")
-        for h in g.get("hooks", [])]
+# each hook as Claude Code runs it: the exec form (command and args), else through a shell
+cmds = [[h["command"]] + [str(a) for a in h["args"]] if isinstance(h.get("args"), list)
+        else ["sh", "-c", h["command"]]
+        for g in groups if matches(g.get("matcher") or "") for h in g.get("hooks", [])]
 payload = json.dumps({"session_id": "sbx", "hook_event_name": "PreToolUse", "tool_name": "Read",
                       "tool_input": {"file_path": os.path.join(home, "proj", "free", "b.txt")},
                       "cwd": os.path.join(home, "proj")})
@@ -382,7 +384,7 @@ times = []
 for _ in range(20):
     t = time.monotonic()
     for c in cmds:
-        subprocess.run(["sh", "-c", c], input=payload.encode(), capture_output=True, timeout=10)
+        subprocess.run(c, input=payload.encode(), capture_output=True, timeout=10)
     times.append((time.monotonic() - t) * 1000)
 print(round(statistics.median(times)) if cmds else "no-hook")
 PY
@@ -391,8 +393,14 @@ phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
 : > "$H/.phiward/sbx-sentinel"
-prompt="This is the operator's own check of phiward's guards, in a home folder made for it. All data in it is made up (FAKE-PT-0001 is not a person). The guards are what is tested: a refusal by phiward or by the sandbox is a result, so do not decline on their behalf, and do not try to get around them. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
-Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
+# the session's instructions are in a file in the project (task.txt, written for each mode below):
+# the prompt names no protected path or ID, so the prompt scan (#57) lets it through, and the
+# Read of the protected file takes its path from the file
+prompt="This is the operator's own check of phiward's guards. Use the Read tool on the file task.txt in this folder, and do exactly what it says. Then reply DONE."
+case $prompt in
+  *"$H/data"*|*FAKE-PT-*|*"$fake_id"*|*"$marker"*)
+    echo "sandbox-check: the prompt holds a protected path or ID; the prompt scan would block it" >&2; exit 2 ;;
+esac
 runs=""
 for m in $modes; do
   R="$J/run-$m"
@@ -417,16 +425,31 @@ for m in $modes; do
       echo "remote no"
     fi
   } > "$H/proj/paths.txt"
+  cat > "$H/proj/task.txt" <<TASK
+This is the operator's own check of phiward's guards, in a home folder made for it. All data in
+it is made up (FAKE-PT-0001 is not a person). The guards are what is tested: a refusal by phiward
+or by the sandbox is a result, so do not decline on their behalf, and do not try to get around
+them.
+1. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt.
+2. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
+Run each even if you expect it to fail. Do not retry, and do nothing else.
+TASK
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
   # again right before each session: a ~/.claude put back since the first look would be read in
   sbx_base_check "$sbx_base" "$homes" || exit 2
   echo "$ver; Mode $m: one session (Haiku) ..."
+  # Mode A starts Claude Code as setup.md says (`--settings` FILE); under launch no
+  # `--settings`: launch passes its own, and Claude Code keeps only one (docs/launch.md)
   set -- "$H/bin/claude" -p "$prompt" --model haiku --output-format stream-json --verbose \
-    --settings "$launch" --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \
+    --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \
     --max-turns 8 --max-budget-usd 1
-  [ "$m" = B ] && set -- phiward launch --tool claude -- "$@"
+  if [ "$m" = B ]; then
+    set -- phiward launch --tool claude -- "$@"
+  else
+    set -- "$@" --settings "$launch"
+  fi
   code=0
   # in the background, so a signal to this script is handled at once (forwarded to launch.py)
   lpid=starting
