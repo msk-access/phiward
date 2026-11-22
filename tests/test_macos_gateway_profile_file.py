@@ -180,15 +180,16 @@ def test_a_planted_name_is_refused_not_used(tree, seatbelt, monkeypatch, plant):
 
 def test_a_file_changed_after_it_was_written_is_refused(tree, seatbelt, monkeypatch):
     """The read-back: the file at the name must be the one written, with its text."""
-    real = os.fsync
+    real = os.write
 
-    def swap(fd):
-        real(fd)
+    def swap(fd, data):
+        n = real(fd, data)
         for name in os.listdir(_folder(tree)):  # replaced by another file with other text
             os.unlink(_folder(tree) / name)
             (_folder(tree) / name).write_text("(version 1)(allow default)\n")
             (_folder(tree) / name).chmod(0o600)
-    monkeypatch.setattr(os, "fsync", swap)
+        return n
+    monkeypatch.setattr(os, "write", swap)
     with pytest.raises(confine.ConfineError, match="changed after it was written"):
         _argv()
     assert os.listdir(_folder(tree)) == []
@@ -196,16 +197,66 @@ def test_a_file_changed_after_it_was_written_is_refused(tree, seatbelt, monkeypa
 
 def test_a_file_whose_text_changed_is_refused(tree, seatbelt, monkeypatch):
     """The same file, its text rewritten after the write."""
-    real = os.fsync
+    real = os.write
 
-    def rewrite(fd):
-        real(fd)
+    def rewrite(fd, data):
+        n = real(fd, data)
         os.lseek(fd, 0, os.SEEK_SET)
-        os.write(fd, b"(version 1)(allow network*)")  # not the profile's own first bytes
-    monkeypatch.setattr(os, "fsync", rewrite)
+        real(fd, b"(version 1)(allow network*)")  # not the profile's own first bytes
+        return n
+    monkeypatch.setattr(os, "write", rewrite)
     with pytest.raises(confine.ConfineError, match="changed after it was written"):
         _argv()
     assert os.listdir(_folder(tree)) == []
+
+
+def test_a_failed_write_is_refused_and_leaves_no_file(tree, seatbelt, monkeypatch):
+    import errno
+
+    def full(fd, data):
+        raise OSError(errno.ENOSPC, "made-up: no space")
+    monkeypatch.setattr(os, "write", full)
+    with pytest.raises(confine.ConfineError, match="cannot be written"):
+        _argv()
+    assert os.listdir(_folder(tree)) == []
+
+
+def test_no_fsync_per_request(tree, seatbelt, monkeypatch):
+    def fsync(fd):
+        raise AssertionError("fsync called")
+    monkeypatch.setattr(os, "fsync", fsync)
+    argv, _ = _argv()
+    assert Path(argv[2]).exists()
+
+
+def test_a_missing_sandbox_exec_refuses_and_writes_nothing(tree, monkeypatch):
+    real = os.path.exists
+    monkeypatch.setattr(confine.sys, "platform", "darwin")
+    monkeypatch.setattr(os.path, "exists",
+                        lambda p: False if p == confine.SANDBOX_EXEC else real(p))
+    with pytest.raises(confine.ConfineError, match="no confinement backend"):
+        _argv()
+    assert not _folder(tree).exists()
+
+
+def test_an_open_error_is_named(tree, seatbelt, monkeypatch):
+    import errno
+    real = os.open
+
+    def refuse(path, flags, *a, **k):
+        if path == ".phiward":
+            raise OSError(errno.EACCES, "made-up")
+        return real(path, flags, *a, **k)
+    monkeypatch.setattr(os, "open", refuse)
+    with pytest.raises(confine.ConfineError, match="EACCES"):
+        _argv()
+
+
+def test_a_folder_removed_after_it_was_made_is_refused(tree, seatbelt, monkeypatch):
+    """The folder made, then gone before it is opened: a refusal, not a traceback."""
+    monkeypatch.setattr(os, "mkdir", lambda *a, **k: None)  # made, then removed at once
+    with pytest.raises(confine.ConfineError, match="~/.phiward"):
+        _argv()
 
 
 # --- removed when the request ends -------------------------------------------------------------

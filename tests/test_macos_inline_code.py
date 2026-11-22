@@ -314,6 +314,44 @@ def h():
                        ("x.py", "f", "perl -e")}, s.found
 
 
+def test_the_scan_finds_the_shapes_that_got_past_it():
+    """Made-up code: each shape the first scan missed, and lists that are not code."""
+    code = '''
+def s1():
+    return [prog, "-c", code]
+def s2():
+    return [sys.executable, "-Ic", code]
+def s3():
+    argv += ["-c", code]
+def s4():
+    argv.extend(["-e", code])
+def s5():
+    argv.append("-p")
+def s6():
+    subprocess.run(cmd, shell=True)
+def s7():
+    os.system(cmd)
+def s8():
+    os.popen(cmd)
+def s9():
+    return "exec env X=1 sh -c " + q
+def ok1():
+    return ["tar", "-c", "-f", "-", "--", name]
+def ok2():
+    return ["/usr/bin/ssh", "-p", "22", host]
+def ok3():
+    subprocess.run(cmd, shell=False)
+'''
+    s = _Scan("x.py")
+    s.visit(ast.parse(code))
+    want = {"s1": "flag, program unknown", "s2": "python -c", "s3": "flag added to an argv",
+            "s4": "flag added to an argv", "s5": "flag added to an argv", "s6": "shell=True",
+            "s7": "os.system", "s8": "os.popen", "s9": "sh -c"}
+    missed = [(fn, kind) for fn, kind in want.items() if ("x.py", fn, kind) not in s.found]
+    assert not missed, (missed, sorted(s.found))
+    assert not [f for f in s.found if f[1].startswith("ok")], sorted(s.found)
+
+
 # --- launchctl by its full path ----------------------------------------------------------------
 
 def test_the_login_service_runs_launchctl_by_its_full_path(monkeypatch):
