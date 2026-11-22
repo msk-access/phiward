@@ -1324,6 +1324,16 @@ were refused, and the gateway returned masked output. Mode B is for the terminal
   profile, and nothing runs. When the tool exits with an error within a few seconds of its
   start, <code>launch</code> adds a line: if <code>sandbox-exec</code> printed an error above it, <code>phiward doctor</code>
   names the cause (inside another sandbox, or a profile that does not compile).</li>
+<li>The hooks <code>launch</code> writes into the session's settings (the fast hook and the prompt check)
+  run from a file in phiward's package, <code>&lt;python&gt; -I -S &lt;package&gt;/phiward/entry.py ...</code>, with
+  <code>onFailure: "block"</code>. So <code>launch --tool claude</code> refuses, on macOS and Linux, a Claude Code
+  older than 2.1.295, which would not honour them. It never starts a program inside the
+  project or the session's folders to learn the version. It asks the native binary
+  <code>TOOL --version</code>, from <code>/</code>. It never starts a script (the npm build): the script's
+  interpreter, or a shim's config, could be the session's. It reads the version from the
+  <code>package.json</code> of the script's npm package (<code>@anthropic-ai/claude-code</code>). A tool that gives
+  no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
+  start Claude Code's own program directly, or use <code>--tool generic</code> for another tool.</li>
 </ul>
 <h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
 <table>

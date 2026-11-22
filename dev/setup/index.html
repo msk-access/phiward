@@ -2004,30 +2004,40 @@ contributor (it can be committed) and puts the personal part into <code>.claude/
 <p>The block has five parts.</p>
 <ol>
 <li>One <code>PreToolUse</code> hook entry with the matcher <code>*</code> (every tool). It sets <code>"onFailure": "block"</code>: without it, Claude
-   Code lets a tool call go on when the hook fails. The command is
-   <code>/bin/sh -c 'V=$(/usr/bin/awk ...) || { ...; exit 2; }; IFS=" "; unset $V; exec /path/to/python -I -m phiward hook claude'</code>:
-   every <code>PYTHON*</code>, <code>LD_*</code> and <code>DYLD_*</code> variable is unset (a project's settings could set them to
-   load other code; if <code>/usr/bin/awk</code> cannot list them, the hook refuses every call), then
-   phiward's own Python runs isolated (<code>-I</code>: no user site folder). Before it writes, <code>install</code>
-   checks that this Python finds phiward with <code>-I</code> (an install in the user site folder is not
-   seen there) and that <code>/usr/bin/awk</code> exists. The plugin's hooks and <code>install --project</code> run
-   <code>phiward</code> by name after the same unset; a project's <code>env.PATH</code> would choose that <code>phiward</code>, so
-   the hook refuses every call while a project sets it, and you should wire your user settings
-   too. <code>install</code>
-   replaces every earlier form of its own hook entries (<code>.../bin/phiward hook claude</code>,
-   <code>... -I -m phiward ...</code>).</li>
-<li>A <code>SessionStart</code> hook (<code>phiward session-note claude</code>): every session starts with a short note
-   on the rules (the gateway is the intended route). It names no protected path.</li>
-<li>A <code>UserPromptSubmit</code> hook (<code>phiward prompt-scan claude</code>, <code>"onFailure": "block"</code>, the same
+   Code lets a tool call go on when the hook fails. The hook runs from files in phiward's
+   package, with no inline code (Claude Code's exec form, <code>command</code> and <code>args</code>):
+   <code>"command": "&lt;package&gt;/phiward/data/clean-exec.sh"</code>,
+   <code>"args": ["/path/to/python", "-I", "-m", "phiward", "hook", "claude"]</code>. The script unsets
+   every <code>PYTHON*</code>, <code>LD_*</code> and <code>DYLD_*</code> variable (a project's settings could set them to load
+   other code; the list is <code>clean-env.awk</code> beside it, run by <code>/usr/bin/awk</code>; if awk cannot list
+   them, the hook refuses every call), then phiward's own Python runs isolated (<code>-I</code>: no user
+   site folder). Each failure blocks the call: a script that is not there cannot start
+   (<code>onFailure: "block"</code>), and a Python that is not there, or a start without the arguments (a
+   Claude Code that ignores <code>args</code>), exits 2. Before it writes, <code>install</code> checks that this
+   Python finds phiward with <code>-I</code> (an install in the user site folder is not seen there) and
+   that <code>/usr/bin/awk</code> exists. The plugin runs its own copy of the script with <code>phiward</code> by
+   name; <code>install --project</code> runs <code>phiward</code> by name after the same unset, in one <code>/bin/sh</code>
+   line (a committed file names no path of this machine). A project's <code>env.PATH</code> would choose
+   that <code>phiward</code>, so the hook refuses every call while a project sets it, and you should wire
+   your user settings too. <code>install</code> replaces every earlier form of its own hook entries
+   (<code>.../bin/phiward hook claude</code>, <code>... -I -m phiward ...</code>, the one <code>/bin/sh</code> line an earlier
+   release wrote) in place.</li>
+</ol>
+<p><strong>After an upgrade that moves phiward's Python</strong> (<code>uv tool upgrade --python ...</code>, or another
+   Python version), the script's path in the settings is gone, and every tool call is refused
+   until you run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again. <code>doctor</code> names the
+   cause.
+2. A <code>SessionStart</code> hook (<code>phiward session-note claude</code>): every session starts with a short note
+   on the rules (the gateway is the intended route). It names no protected path.
+3. A <code>UserPromptSubmit</code> hook (<code>phiward prompt-scan claude</code>, <code>"onFailure": "block"</code>, the same
    command form as the first). It checks each prompt before Claude Code sends it. A prompt
    that the sanitizer would change is not sent: a match of the user config's packs or
    <code>[sanitize] patterns</code>, or a path below a protected root. The message names the kind, never
-   the value. What it does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</li>
-<li><code>permissions.deny</code>: <code>Read(...)</code> and <code>Edit(...)</code> rules for every protected root and every entry
+   the value. What it does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.
+4. <code>permissions.deny</code>: <code>Read(...)</code> and <code>Edit(...)</code> rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
-   tools, inside Claude Code.</li>
-<li>The sandbox block (shortened here; the real one also lists the hidden list):</li>
-</ol>
+   tools, inside Claude Code.
+5. The sandbox block (shortened here; the real one also lists the hidden list):</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">"sandbox"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>

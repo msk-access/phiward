@@ -1889,7 +1889,9 @@ refused, since that name may be a code file. This check is for the built-in file
 server's tool is not checked for it.</p>
 <p>What phiward does with a project's <code>env</code>:</p>
 <ul>
-<li>Its hooks start <code>/bin/sh</code> by absolute path. They unset the variables that make Python or a library
+<li>Its hooks start a shell script from phiward's package (the user wiring and the plugin, in exec
+  form: no inline code), or <code>/bin/sh</code> by absolute path (<code>install --project</code>). They unset the
+  variables that make Python or a library
   load other code or read a file they name. These are: every <code>PYTHON*</code>, <code>LD_*</code>, <code>DYLD_*</code>,
   <code>OPENSSL_*</code>, <code>MALLOC_*</code> and macOS <code>Malloc*</code> variable; <code>__PYVENV_LAUNCHER__</code> (macOS framework,
   conda and Homebrew Pythons read it even with <code>-I</code>); <code>GCONV_PATH</code>, <code>LOCPATH</code>, <code>NLSPATH</code>,
@@ -1929,9 +1931,21 @@ server's tool is not checked for it.</p>
   check below.</li>
 <li>Claude Code itself ignores <code>HOME</code>, <code>TMPDIR</code>, the <code>XDG_*</code> family and <code>CLAUDE_CONFIG_DIR</code> in a
   project's <code>env</code>.</li>
-<li>Later: hooks in Claude Code's exec form (<code>args</code>, no shell) would remove the shell; a Claude Code
-  older than May 2026 ignores <code>args</code> and would run the hook's program without them, so phiward does
-  not write that form yet.</li>
+<li>The user wiring's and the plugin's hooks are in Claude Code's exec form (<code>args</code>, no shell
+  between Claude Code and the script). Their command is the script itself: a Claude Code that
+  ignores <code>args</code> runs it with no arguments, and it refuses (exit 2). It reads no input. That
+  holds only when the script's path has no space or other character a shell splits on: an
+  older Claude Code runs the command through <code>sh -c</code>, so such a path does not start, and with
+  no <code>onFailure</code> (older than 2.1.295) a hook that does not start lets the call go on. phiward
+  needs Claude Code 2.1.295 or newer for that reason. Under <code>phiward launch</code> the hooks run
+  <code>&lt;python&gt; -I -S &lt;package&gt;/phiward/entry.py ...</code>, and <code>launch</code> refuses, on every platform, a
+  Claude Code older than 2.1.295 or one that gives no version. It learns the version outside
+  the profile, so it never starts a program inside the project or the session's folders, and
+  it starts only a native binary (<code>TOOL --version</code>, from <code>/</code>). A script's interpreter is found
+  on PATH and a shim reads the project's config, so either could be the session's: for a
+  script (the npm build) it reads the npm package's <code>package.json</code> instead, and a shim or a
+  wrapper is refused. The project hook stays one <code>/bin/sh</code> line, because a committed file names no path
+  of this machine.</li>
 </ul>
 <p><strong>Masking never trades a name for a count.</strong> A folder a protected pattern matches now is masked as a
 whole path, spaces and all. That includes <code>'</code>, <code>(</code> and <code>&amp;</code>, which a pattern's wildcard at its end

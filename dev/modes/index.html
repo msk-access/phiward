@@ -1241,6 +1241,11 @@ only its login files (<code>.credentials.json</code>, <code>~/.claude.json</code
 <td>the same check, written beside the fast hook in the session's own settings (the session can remove it)</td>
 </tr>
 <tr>
+<td>How phiward's hooks start</td>
+<td>from files in phiward's package, no inline code: a script that clears the Python and loader variables, then phiward's own Python (<a href="../setup/">setup.md</a>)</td>
+<td>from a file in phiward's package (<code>entry.py</code>); Claude Code 2.1.295 or newer, on macOS and Linux</td>
+</tr>
+<tr>
 <td>Use it for</td>
 <td>day-to-day work, every protected step through the gateway</td>
 <td>long sessions close to protected data, or untrusted input (web pages, other people's repositories)</td>
