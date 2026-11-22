@@ -199,12 +199,13 @@ def test_a_tz_that_names_a_file_is_cleared_and_a_plain_tz_stays(tree):
     fake = tree / "fakepython"
     fake.write_text("#!/bin/sh\n/usr/bin/env\n")
     fake.chmod(0o755)
-    cmd = install.isolated_command(str(fake), "hook")
-    out = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+    h = install.hook_entry(str(fake), "hook")
+    cmd = [h["command"]] + h["args"]
+    out = subprocess.run(cmd, capture_output=True, text=True,
                          env={"PATH": "/usr/bin:/bin", "TZ": ":/evil/zone"}).stdout
     assert "TZ=" not in out, out
     for tz in ("UTC", "America/New_York", ":America/New_York"):
-        out = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+        out = subprocess.run(cmd, capture_output=True, text=True,
                              env={"PATH": "/usr/bin:/bin", "TZ": tz}).stdout
         assert f"TZ={tz}\n" in out, (tz, out)
 

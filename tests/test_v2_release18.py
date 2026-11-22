@@ -696,10 +696,10 @@ def test_a_hook_that_runs_another_environments_python_is_not_isolated(tree):
     py = other / "python3"
     py.write_text("#!/bin/sh\necho {}\n")
     py.chmod(0o755)
-    mine = install.isolated_command(sys.executable, "hook")
-    theirs = mine.replace(sys.executable, str(py))
-    assert doctor.hook_form({"type": "command", "command": mine}) == "isolated"
-    assert doctor.hook_form({"type": "command", "command": theirs}) != "isolated"
+    mine = dict(install.hook_entry(sys.executable, "hook"), type="command")
+    theirs = dict(mine, args=[str(py)] + mine["args"][1:])
+    assert doctor.hook_form(mine) == "isolated"
+    assert doctor.hook_form(theirs) != "isolated"
 
 
 def test_a_guard_file_that_is_a_link_is_denied_in_both_spellings(tree):

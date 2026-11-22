@@ -741,6 +741,59 @@ def test_4_a_proxy_that_cannot_start_stops_launch(tree, monkeypatch):
     assert code != 0 and not run.ran and any("proxy" in n for n in run.notes), run.notes
 
 
+def _record_proxies(monkeypatch):
+    from phiward import netproxy
+    made = []
+    real = netproxy.start
+
+    def start(*a, **k):
+        made.append(real(*a, **k))
+        return made[-1]
+    monkeypatch.setattr(netproxy, "start", start)
+    return made
+
+
+@needs_confine
+def test_4_a_refused_claude_code_version_starts_no_proxy(tree, monkeypatch):
+    from phiward import wholetool
+    made = _record_proxies(monkeypatch)
+    monkeypatch.setattr(wholetool, "claude_version_problem",
+                        lambda *a, **k: "made-up: Claude Code is older than 2.1.295")
+    monkeypatch.setattr(wholetool, "already_confined", lambda env: False)
+    monkeypatch.chdir(tree / "repo")
+    run = wholetool._Run()
+    code = wholetool._launch("claude", False, ["--", tool_py(tree, "claude"), "-c", "print(1)"],
+                             dict(os.environ), run, "")
+    assert code != 0 and not run.ran and any("2.1.295" in n for n in run.notes), run.notes
+    assert made == []
+    profiles = tree / "home" / ".phiward" / "profiles"
+    assert not profiles.exists() or not [n for n in os.listdir(profiles)
+                                         if not n.startswith(".")], os.listdir(profiles)
+
+
+@needs_confine
+def test_4_a_refusal_after_the_proxy_starts_closes_it(tree, monkeypatch):
+    """A refusal once the proxy serves (the profile cannot be written on macOS, the view cannot
+    be built on Linux): the proxy is closed, and nothing runs."""
+    from phiward import confine, wholetool
+    made = _record_proxies(monkeypatch)
+
+    def fail(*a, **k):
+        raise confine.ConfineError("made-up refusal after the proxy")
+    if sys.platform == "darwin":
+        monkeypatch.setattr(confine, "write_profile", fail)
+    else:
+        monkeypatch.setattr(wholetool, "_bwrap_command", fail)
+    monkeypatch.setattr(wholetool, "already_confined", lambda env: False)
+    monkeypatch.chdir(tree / "repo")
+    run = wholetool._Run()
+    code = wholetool._launch("generic", False, ["--", PY, "-c", "print('RAN')"],
+                             dict(os.environ), run, "")
+    assert code != 0 and not run.ran and any("made-up refusal" in n for n in run.notes), \
+        run.notes
+    assert len(made) == 1 and made[0]._closed.is_set(), made
+
+
 @needs_confine
 def test_4_an_upstream_that_cannot_be_chained_stops_launch(tree):
     code, out = launch(tree, "print('RAN')", env_extra={"HTTPS_PROXY": "socks5://proxy.example:1"})

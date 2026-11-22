@@ -46,8 +46,7 @@ def test_the_note_never_fails_a_session(tree, monkeypatch):
 
 def test_install_wires_the_note_once(tree):
     w = install.wiring(config.load(str(tree / "repo")))
-    assert install.isolated_python(w["hooks"]["SessionStart"][0]["hooks"][0]["command"],
-                                   "session-note")
+    assert install.hook_python(w["hooks"]["SessionStart"][0]["hooks"][0], "session-note")
     m = install.merge({}, w)
     assert install.merge(m, w) == m
     assert len(m["hooks"]["SessionStart"]) == 1
@@ -100,12 +99,15 @@ def test_the_marketplace_lists_the_plugin_at_the_package_version():
     assert m["plugins"][0]["version"] == p["version"] == phiward.__version__
 
 
-def test_the_plugin_hooks_are_the_project_hooks():
+def test_the_plugin_hooks_run_phiward_by_name_from_the_plugins_script():
     h = json.loads((ROOT / "plugin" / "hooks" / "hooks.json").read_text())["hooks"]
+    script = "${CLAUDE_PLUGIN_ROOT}/hooks/clean-exec.sh"
     assert [g["matcher"] for g in h["PreToolUse"]] == install.MATCHERS
-    assert all(g["hooks"][0]["command"] == install.PROJECT_HOOK and
+    assert all(g["hooks"][0]["command"] == script and
+               g["hooks"][0]["args"] == ["phiward", "hook", "claude"] and
                g["hooks"][0]["onFailure"] == "block" for g in h["PreToolUse"])
-    assert h["SessionStart"][0]["hooks"][0]["command"] == install.PROJECT_NOTE
+    note = h["SessionStart"][0]["hooks"][0]
+    assert note["command"] == script and note["args"] == ["phiward", "session-note", "claude"]
 
 
 def test_the_plugin_skill_is_the_skill():

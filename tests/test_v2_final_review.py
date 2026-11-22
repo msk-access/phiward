@@ -2,6 +2,7 @@
 
 import os
 import re
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -436,9 +437,9 @@ def test_the_user_hook_runs_python_isolated(tree):
     import sys as _sys
     w = install.wiring(config.load(str(tree / "repo")))
     for g in w["hooks"]["PreToolUse"]:
-        assert install.isolated_python(g["hooks"][0]["command"]) == _sys.executable
-    note = w["hooks"]["SessionStart"][0]["hooks"][0]["command"]
-    assert install.isolated_python(note, "session-note") == _sys.executable
+        assert install.hook_python(g["hooks"][0]) == _sys.executable
+    note = w["hooks"]["SessionStart"][0]["hooks"][0]
+    assert install.hook_python(note, "session-note") == _sys.executable
 
 
 def test_the_user_hook_clears_python_and_loader_variables(tree):
@@ -446,12 +447,12 @@ def test_the_user_hook_clears_python_and_loader_variables(tree):
     fake = tree / "fakepython"
     fake.write_text("#!/bin/sh\n/usr/bin/env\n")
     fake.chmod(0o755)
-    cmd = install.isolated_command(str(fake), "hook")
+    h = install.hook_entry(str(fake), "hook")
     evil = tree / "evilbin"  # an `awk` a project's PATH could put first: not used
     evil.mkdir()
     (evil / "awk").write_text("#!/bin/sh\nexit 0\n")
     (evil / "awk").chmod(0o755)
-    out = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+    out = subprocess.run([h["command"]] + h["args"], capture_output=True, text=True,
                          env={"PATH": f"{evil}:/usr/bin:/bin", "LD_FOO": "1", "DYLD_BAR": "1",
                               "PYTHONPATH": "/evil", "__PYVENV_LAUNCHER__": "/evil/bin/python",
                               "OPENSSL_CONF": "/evil.cnf", "OPENSSL_MODULES": "/evil",
@@ -539,12 +540,14 @@ def test_doctor_names_a_hook_by_its_exact_shape_only():
     import sys as _sys
     from phiward import doctor
     assert doctor.hook_form({"command": install.PROJECT_HOOK}) == "project"
-    assert doctor.hook_form({"command": install.isolated_command(_sys.executable, "hook")}) == \
-        "isolated"
+    assert doctor.hook_form(install.hook_entry(_sys.executable, "hook")) == "isolated"
+    old = "/bin/sh -c " + shlex.quote(
+        f"{install.CLEAN_ENV}exec {shlex.quote(_sys.executable)} -I -m phiward hook claude")
+    assert doctor.hook_form({"command": old}) == "isolated"  # an earlier phiward's shell form
     assert doctor.hook_form({"command": f"{_sys.executable} -I -m phiward hook claude"}) == \
         "launcher"  # an earlier form: the loader variables are not cleared
-    assert doctor.hook_form({"type": "prompt",
-                             "command": install.isolated_command(_sys.executable, "hook")}) == ""
+    assert doctor.hook_form(dict(install.hook_entry(_sys.executable, "hook"),
+                                 type="prompt")) == ""
     assert doctor.hook_form({"command": "/x/bin/phiward hook claude"}) == "launcher"
     for other in ("sh -c 'echo phiward hook claude'", "phiward hook claude",
                   f"{_sys.executable} -m phiward hook claude",
@@ -858,17 +861,26 @@ def _hook_marker(tree):
 @pytest.mark.parametrize("form", ["user", "project"])
 def test_the_hook_stops_when_its_clean_up_cannot_run(tree, form):
     import subprocess
+    import shutil
     fake = _hook_marker(tree)
-    cmd = (install.isolated_command(str(fake), "hook") if form == "user"
-           else install.PROJECT_HOOK.replace("exec phiward", f"exec {fake}")
-           .replace("command -v phiward", f"command -v {fake}"))
-    assert "/usr/bin/awk" in cmd
-    broken = cmd.replace("/usr/bin/awk", str(tree / "no-awk"))
-    r = subprocess.run(broken, shell=True, capture_output=True, text=True,
+    if form == "user":
+        h = install.hook_entry(str(fake), "hook")
+        assert "/usr/bin/awk" in Path(h["command"]).read_text()
+        copy = tree / "pkg-copy" / "clean-exec.sh"  # beside it, an awk list that is not there
+        copy.parent.mkdir()
+        shutil.copy2(h["command"], copy)
+        cmd, broken = [h["command"]] + h["args"], [str(copy)] + h["args"]
+    else:
+        text = (install.PROJECT_HOOK.replace("exec phiward", f"exec {fake}")
+                .replace("command -v phiward", f"command -v {fake}"))
+        assert "/usr/bin/awk" in text
+        cmd = ["/bin/sh", "-c", text]
+        broken = ["/bin/sh", "-c", text.replace("/usr/bin/awk", str(tree / "no-awk"))]
+    r = subprocess.run(broken, capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "LD_PRELOAD": "/evil.so"})
     assert r.returncode == 2, (r.returncode, r.stderr)
     assert not (tree / "RAN").exists()
-    r = subprocess.run(cmd, shell=True, capture_output=True, text=True,
+    r = subprocess.run(cmd, capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "LD_PRELOAD": "/evil.so"})
     assert r.returncode == 0 and (tree / "RAN").exists(), r.stderr
 
