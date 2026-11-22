@@ -740,3 +740,13 @@ def test_the_cost_in_other_text_is_measured():
     print(f"\nR11: {len(lines)} lines, {changed} masked more than before, {held} withheld, "
           f"{generic} of them for a generic name (sample 01, batch 12)")
     assert held == 0
+
+
+@pytest.mark.parametrize("s", ["", "-", "_.", " ", "–", "FAKE-PT-0001", "FAKE–PT–0001", "-FAKE01", "ab-1"])
+def test_the_fast_ascii_key_agrees_with_the_regex_key(s):
+    """`_glued`'s ASCII path gives the key the separator regex gives, the empty string included."""
+    key = inventory._SEP_RUN.sub("", s)
+    alnum = sum(c.isalnum() for c in key)
+    edge = bool(s) and bool(inventory._SEP_RUN.match(s[0]) or inventory._SEP_RUN.match(s[-1]))
+    want = None if (alnum < 5 or not any(c.isalpha() for c in key) or edge) else key
+    assert inventory._glued(s) == want
