@@ -1269,6 +1269,9 @@ before you choose; they change fast.</p>
 <h2 id="the-gap-phiward-fills">The gap phiward fills<a class="headerlink" href="#the-gap-phiward-fills" title="Permanent link">&para;</a></h2>
 <p>phiward is for <strong>work beside protected data</strong>: the agent helps with the analysis, and the data
 does not reach the model provider.</p>
+<p>It is built for an honest user, and for an agent that is honest but can be misled by text it
+reads (prompt injection). It is not built to stop a determined attacker who already runs code on
+the machine (<a href="../threat-model/#for-reviewers-the-summary">threat model</a>).</p>
 <ol>
 <li><strong>Protected data by folder, for the whole tool.</strong> You name the folders that hold protected
    data once. phiward writes that into Claude Code's sandbox and permission rules (Mode A), or

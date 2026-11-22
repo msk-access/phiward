@@ -1487,6 +1487,10 @@
   system and its sandbox (Seatbelt on macOS; bubblewrap, seccomp and Landlock on Linux), and Claude
   Code's own sandbox and permission rules in Mode A.</li>
 <li><strong>Not trusted:</strong> the agent, everything it writes, and the code it runs.</li>
+<li><strong>Who it is built against:</strong> an honest user, and an agent that text it reads (prompt
+  injection) can turn against the user. phiward is not built to stop a determined attacker who
+  already runs code on the machine with the user's rights. Some routes such an attacker could
+  use are stated as limits below.</li>
 <li><strong>Masking hides names and identifiers, not other content.</strong> Gateway commands should print counts
   and summaries, not records.</li>
 <li><strong>What stops what.</strong> The kernel is the strongest guard:</li>
