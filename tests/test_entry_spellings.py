@@ -18,9 +18,7 @@ from helpers import check_shell, needs_confine, protect
 from phiward import config, inventory, paths
 from phiward.core import DENY
 from phiward.run import remote_root_regex
-from phiward.sanitize import (STOP_WORDS, WITHHELD, Columns, Sanitizer, _AFTER_MARK, _GOES_ON,
-                              _KEEP_AFTER, _MARK, _NAME_CHAR, KEEP_PLACEHOLDER, _key, _line_end,
-                              _tail, load_pack, parse_rule, unescape)
+from phiward.sanitize import (STOP_WORDS, WITHHELD, Columns, Sanitizer, load_pack, parse_rule)
 
 NAMES = ["Doe_Jane_FAKE", "FAKEPT0005", "T_xyz9", "ab12", "20240115", "SAM_PLE", "EN-TRY"]
 
@@ -243,171 +241,66 @@ def test_a_hit_never_cuts_a_number():
 
 
 # --- R9: never less masked than before ------------------------------------------------------------
-# The masking as it was before this change, kept here as the reference: lines in NFKC only (no fold
-# of dashes or digits), every name string in one literal trie, an entry hit covered only by a rule
-# match that holds it whole, and each rule applied as a plain substitution. The line as written
-# goes to both; the text each keeps is compared after the fold. Where the reference withheld a
-# line (its masked line was not a fixed point), its first masked line is the reference.
+# The reference is the code as it was before this change: copies of develop's inventory.py,
+# paths.py and sanitize.py (tests/data), loaded as their own modules, with the packs as they were
+# (tests/data/develop-packs). So no change in this tree can weaken the reference. The line as
+# written goes to both; the text each keeps is compared after the fold. Where the reference
+# withheld a line (its masked line was not a fixed point), its first masked line is the reference.
 
-def _nfkc_only(text):
-    """The form lines were read in before this change: NFKC, with no fold of dashes or digits."""
-    text = inventory._ESCAPES.sub("", text)
-    text = text.replace("\\ ", " ")
-    text = unicodedata.normalize("NFKC", text)
-    return "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+DATA = Path(__file__).resolve().parent / "data"
+BEFORE_PACKS = DATA / "develop-packs"
 
 
-def _old_trie_regex(words):
-    """The trie regex as it was built before this change."""
-    trie = {}
-    for w in words:
-        node = trie
-        for ch in w:
-            node = node.setdefault(ch, {})
-        node[""] = {}
-
-    def emit(node):
-        ends = "" in node
-        alts = [re.escape(ch) + emit(sub) for ch, sub in sorted(node.items()) if ch]
-        if not alts:
-            return ""
-        body = alts[0] if len(alts) == 1 else "(?:" + "|".join(alts) + ")"
-        return "(?:" + body + ")?" if ends else body
-
-    return emit(trie)
+def _load(name, file):
+    spec = importlib.util.spec_from_file_location(name, DATA / file)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-class _Before(Sanitizer):
-    def __init__(self, *a, strings=(), **k):
-        super().__init__(*a, **k)
-        words = sorted(set(strings))
-        self.old = re.compile(_old_trie_regex(words), re.IGNORECASE) if words else None
+def _load_before():
+    """develop's sanitize.py, with develop's inventory.py and paths.py in place of this tree's
+    (`from phiward import inventory, paths` reads the package's attributes while it loads)."""
+    import phiward
+    old_inventory = _load("_inventory_before", "develop_inventory.py")
+    old_paths = _load("_paths_before", "develop_paths.py")
+    saved = phiward.inventory, phiward.paths
+    phiward.inventory, phiward.paths = old_inventory, old_paths
+    try:
+        return old_inventory, old_paths, _load("_sanitize_before", "develop_sanitize.py")
+    finally:
+        phiward.inventory, phiward.paths = saved
 
-    def _apply(self, rules, line):
-        for rx, repl in rules:
-            if repl == KEEP_PLACEHOLDER and self.keep_files:
-                line = rx.sub(lambda m, r=repl: m.group(0) if self._kept(m.group(0)) else r, line)
-            else:
-                line = rx.sub(lambda _m, r=repl: r, line)
-        return line
 
-    def _entries(self, line, *_rest):
-        rx = self.old
-        if rx is None:
-            return line
-        hits = [(m.start(), m.end()) for m in rx.finditer(line)]
-        if not hits:
-            return line
-        spans = []
-        for rule, repl in self.path_rules + self.id_rules:
-            spans += [(m.start(), m.end(), repl) for m in rule.finditer(line)
-                      if m.end() > m.start() and _MARK not in m.group(0)
-                      and not (repl == KEEP_PLACEHOLDER and self.keep_files
-                               and self._kept(m.group(0)))]
-        parts = []
-        for a, b in hits:
-            cover = next(((s, e, r) for s, e, r in spans if s <= a and b <= e), None)
-            parts.append(cover or (a, b, "<ENTRY>"))
-        parts.sort()
-        merged = []
-        for a, b, r in parts:
-            if merged and a < merged[-1][1]:
-                merged[-1][1] = max(merged[-1][1], b)
-                if r == "<ENTRY>" or merged[-1][2] != r:
-                    merged[-1][2] = "<ENTRY>"
-            else:
-                merged.append([a, b, r])
-        out, pos = [], 0
-        for a, b, r in merged:
-            out += [line[pos:a], r]
-            pos = b
-        out.append(line[pos:])
-        return "".join(out)
+old_inventory, old_paths, old_sanitize = _load_before()
 
-    def _marked(self, line):
-        marks = []
-        for start, end, open_ in self.protected.text_spans(line):
-            for size in self.known_lengths:
-                stop = start + size
-                if stop <= len(line) and _key(line[start:stop]) in self.known and \
-                        (stop == len(line) or not _NAME_CHAR.match(line[stop])):
-                    end = stop if _KEEP_AFTER.match(line, stop) else _line_end(line, stop)
-                    break
-            else:
-                if open_ and _key(line[start:end]) not in self.root_keys:
-                    end = _line_end(line, end)
-            end = max(end, start + 1)
-            if marks and start <= marks[-1][1]:
-                marks[-1] = (marks[-1][0], max(marks[-1][1], end))
-            else:
-                marks.append((start, end))
-        out, pos = [], 0
-        for start, end in marks:
-            out += [line[pos:start], _MARK]
-            pos = end
-        out.append(line[pos:])
-        return "".join(out)
 
-    def _mask(self, line, table, *_rest):
-        """The steps one after another, each on the text the step before it left."""
-        line = self._apply(self.first_rules, line)
-        if self.protected is not None:
-            plain = old_paths.plain_spelling(line)
-            spans = self.protected.text_spans(plain) if plain != line else []
-            if spans:
-                plain, pos = old_paths.plain_spelling_map(line)
-                cut = spans[0][0]
-                line = line[:pos[cut]] + plain[cut:]
-            line = self._marked(line)
-        line = self._entries(line)
-        if self.protected is not None:
-            line = _AFTER_MARK.sub(
-                lambda m: "<PROTECTED>" + (_GOES_ON if len(m.group(0)) > 1 else ""), line)
-            line = _tail(line)
-        line = self._apply(self.path_rules, line)
-        line = self._apply(self.id_rules, line)
-        if self.re_names is not None:
-            line = self.re_names.sub("<NAME>", line)
-        if not table:
-            line = self._apply(self.pos_rules, line)
-        return line
-
+class _Before(old_sanitize.Sanitizer):
     def first(self, line, table=False):
         """The reference's first masked line (before the check that withholds a line)."""
-        return self._mask(_nfkc_only(line), table)
-
-    def clean(self, line, table=False):
-        try:
-            line = _nfkc_only(line)
-            out = self._mask(line, table)
-            if self._mask(out, table) != out:
-                return WITHHELD
-            if "\\" in out or "%" in out:
-                plain = _nfkc_only(unescape(out))
-                if plain != out and self._mask(plain, table) != plain:
-                    return WITHHELD
-            return out
-        except Exception:  # noqa: BLE001
-            return WITHHELD
+        return self._mask(old_sanitize.normalize(line), table)
 
 
-# the packs and paths.py as they were before this change (copies of develop's), for the
-# reference: a change to a pack or to how paths are found can never weaken what it masks
-BEFORE_PACKS = Path(__file__).resolve().parent / "data" / "develop-packs"
-_spec = importlib.util.spec_from_file_location(
-    "_paths_before", Path(__file__).resolve().parent / "data" / "develop_paths.py")
-old_paths = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(old_paths)
+def _nfkc_only(text):
+    """The form lines were read in before this change."""
+    return old_sanitize.normalize(text)
 
 
 def _rules(packs, patterns=(), before=False):
-    loaded = [load_pack(str(BEFORE_PACKS / f"{p}.toml") if before else p) for p in packs]
+    load, parse = ((old_sanitize.load_pack, old_sanitize.parse_rule) if before
+                   else (load_pack, parse_rule))
+    loaded = [load(str(BEFORE_PACKS / f"{p}.toml") if before else p) for p in packs]
     ids = [r for p in loaded for r in p.identifiers]
-    ids += [parse_rule(v, "[sanitize] patterns") for v in patterns]
+    ids += [parse(v, "[sanitize] patterns") for v in patterns]
     ids = [(re.compile(rx.pattern, rx.flags | re.IGNORECASE), r) for rx, r in ids]
     return {"path_rules": [r for p in loaded for r in p.paths], "id_rules": ids,
             "pos_rules": [r for p in loaded for r in p.positions],
             "keep_files": [k for p in loaded for k in p.keep_files]}
+
+
+def _old_strings(names):
+    stop = {w.casefold() for w in old_sanitize.STOP_WORDS}
+    return sorted({s for n in names for s in old_inventory._strings_of(n, stop)})
 
 
 def _pair(names, packs, patterns=(), roots=(), remote=()):
@@ -417,7 +310,7 @@ def _pair(names, packs, patterns=(), roots=(), remote=()):
     if roots:
         rules.update(protected=paths.ProtectedSet(list(roots), []), roots=roots)
         old.update(protected=old_paths.ProtectedSet(list(roots), []), roots=roots)
-    pair = Sanitizer(entries=strings, **rules), _Before(strings=strings, **old)
+    pair = Sanitizer(entries=strings, **rules), _Before(entries=_old_strings(names), **old)
     for s in pair:
         s.first_rules += [(remote_root_regex(r), "<PROTECTED>") for r in remote]
     return pair
@@ -571,7 +464,7 @@ def _r9_rows(seeds, fixed=()):
     bad = []
     for seed in [0] + list(seeds):
         rnd = random.Random(seed)
-        cn, co = Columns(new), Columns(old)
+        cn, co = Columns(new), old_sanitize.Columns(old)
         for c in (cn, co):
             c.line("sample_id\tvalue\tnote")
         rows = list(fixed) if seed == 0 else (
@@ -580,7 +473,7 @@ def _r9_rows(seeds, fixed=()):
             for x in _r9_path_lines(seed, 300))
         for row in rows:
             if cn.state != "table" or co.state != "table":
-                cn, co = Columns(new), Columns(old)
+                cn, co = Columns(new), old_sanitize.Columns(old)
                 for c in (cn, co):
                     c.line("sample_id\tvalue\tnote")
             n, o = cn.line(row), co.line(row)
@@ -602,7 +495,7 @@ def test_an_id_cell_reads_as_before_by_column(row):
     """An ID cell takes the form it took before (`<IDCOL>`, or a placeholder the steps wrote,
     with its spaces), also when a name in another spelling is in it."""
     new, old = _pair(R9_NAMES, ("genomics", "msk"))
-    cn, co = Columns(new), Columns(old)
+    cn, co = Columns(new), old_sanitize.Columns(old)
     for c in (cn, co):
         c.line("sample_id\tvalue\tnote")
     got, before = cn.line(row), co.line(row)
@@ -618,6 +511,63 @@ def test_never_less_masked_than_before_by_column():
 @pytest.mark.slow
 def test_never_less_masked_than_before_by_column_over_many_lines():
     bad = _r9_rows(range(1, 61))
+    assert not bad, (len(bad), bad[:5])
+
+
+# Whole tables, by column: an entry next to a number, a dashed root in a cell, a CSV and a TSV
+R9_TABLE_HEAD = ("sample_id", "name", "n", "note")
+R9_TABLES = [(",", ["S77ZQ,FAKE-PT-0001,123,2019–2021", "S88QQ,x,3,ok"]),
+             (",", ["S77ZQ,/data/p–y/a.bam ok,12,x", "S88QQ,x,3,ok"]),
+             (",", ["S77ZQ,/data/p-x/a.bam ok,12,x", "S88QQ,x,3,ok"]),
+             ("\t", ["S77ZQ\tFAKE‐PT‐0001\t1,234\tok", "S88QQ\tx\t3\tok"])]
+R9_CELLS = ["S77ZQ", "FAKE-PT-0001", "FAKE‐PT‐0001", "FAKE_PT_0001", "C–ABC123-L001-d", "",
+            "12345", "/data/p-x/a.bam ok", "/data/p–y", "/T/ph-i/q", "2019–2021", "x", "ok"]
+
+
+def _r9_table_rows(seed, d, n):
+    rnd = random.Random(seed)
+    lines = _r9_path_lines(seed, n)
+    for x in lines:
+        cells = [rnd.choice(R9_CELLS), x, str(rnd.randrange(10 ** rnd.randint(1, 7))),
+                 rnd.choice(R9_CELLS + R9_PIECES + R9_PATH_PIECES)]
+        if rnd.random() < 0.5:  # a name right before the number
+            cells[1] = rnd.choice(R9_CELLS + R9_NAMES)
+        yield d.join(c.replace(d, " ").replace("\t", " ") for c in cells)
+
+
+def _r9_tables(seeds):
+    """Tables through `Columns`: column mode holds on every row where it holds before, and
+    every cell keeps no text the reference masked in that cell."""
+    new, old = _pair(R9_NAMES + ["FAKE-PT-0001"], ("genomics", "msk"), R9_DASH_RULES, R9_ROOTS,
+                     R9_REMOTE)
+    tables = list(R9_TABLES) + [(d, list(_r9_table_rows(seed, d, 40)))
+                                for seed in seeds for d in (",", "\t")]
+    bad = []
+    for d, rows in tables:
+        cn, co = Columns(new), old_sanitize.Columns(old)
+        for c in (cn, co):
+            c.line(d.join(R9_TABLE_HEAD))
+        for row in rows:
+            n, o = cn.line(row), co.line(row)
+            if co.state == "table" and cn.state != "table":
+                bad.append(("column mode ends", row, n, o))
+                break
+            if WITHHELD in (n, o):
+                continue
+            pairs = zip(n.split(d), o.split(d)) if n.count(d) == o.count(d) else [(n, o)]
+            if any(not any(k in y for y in _kept(b)) for a, b in pairs for k in _kept(a)):
+                bad.append(("cell", row, n, o))
+    return bad
+
+
+def test_never_less_masked_than_before_in_tables():
+    bad = _r9_tables(range(1, 6))
+    assert not bad, (len(bad), bad[:5])
+
+
+@pytest.mark.slow
+def test_never_less_masked_than_before_in_tables_over_many_lines():
+    bad = _r9_tables(range(1, 61))
     assert not bad, (len(bad), bad[:5])
 
 
@@ -650,9 +600,11 @@ def test_speed_within_the_targets():
     t = time.perf_counter()
     new = Sanitizer(entries=strings)
     t_new = time.perf_counter() - t
+    old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(200000))
+    old_inventory._MATCHER.clear()
     re.purge()
     t = time.perf_counter()
-    old = _Before(strings=strings)
+    old = _Before(entries=old_strings)
     t_old = time.perf_counter() - t
     lines = _made_up_lines(400000)
     size = sum(len(x) + 1 for x in lines)
