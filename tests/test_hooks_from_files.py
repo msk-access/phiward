@@ -231,7 +231,7 @@ def test_the_launched_module_exits_2_when_phiwards_code_is_gone(tmp_path):
     assert r.returncode == 2, r.returncode  # Python's own exit for a file that is not there
 
 
-# --- launch's Claude Code floor (macOS) ---------------------------------------------------------
+# --- launch's Claude Code floor (macOS and Linux) -----------------------------------------------
 
 def _fake(path: Path, text: str) -> str:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -242,20 +242,36 @@ def _fake(path: Path, text: str) -> str:
 
 def test_the_claude_code_floor(tmp_path):
     from phiward import wholetool
+    places = [str(tmp_path / "project")]
     old = _fake(tmp_path / "a" / "claude", f"#!/bin/sh\necho '{OLD_CLAUDE}'\n")
-    assert "2.1.295" in wholetool.claude_version_problem(old)
+    assert "2.1.295" in wholetool.claude_version_problem(old, places)
     new = _fake(tmp_path / "b" / "claude", "#!/bin/sh\necho '2.1.330 (Claude Code)'\n")
-    assert wholetool.claude_version_problem(new) == ""
-    mute = _fake(tmp_path / "c" / "claude", "#!/bin/sh\nexit 1\n")
-    assert wholetool.claude_version_problem(mute)  # a Claude Code that gives no version
-    other = _fake(tmp_path / "d" / "made-up-agent", "#!/bin/sh\necho 'made-up 1.0'\n")
-    assert wholetool.claude_version_problem(other) == ""  # not Claude Code
+    assert wholetool.claude_version_problem(new, places) == ""
+    # no version, whatever the program's name: refused, with the way on
+    for name, text in (("claude", "exit 1"), ("claude", "echo"),
+                       ("made-up-agent", "echo 'made-up 1.0'"),
+                       ("my-claude", f"exec {new} --verbose \"$@\"")):  # a wrapper
+        p = _fake(tmp_path / "c" / name, f"#!/bin/sh\n{text}\n")
+        why = wholetool.claude_version_problem(p, places)
+        assert "directly" in why and "--tool generic" in why, (name, why)
 
 
-def test_launch_on_macos_refuses_a_claude_code_below_the_floor(tree, monkeypatch):
+def test_the_floor_never_starts_a_claude_the_session_can_write(tmp_path):
+    from phiward import wholetool
+    marker = tmp_path / "RAN"
+    inside = _fake(tmp_path / "project" / "bin" / "claude",
+                   f"#!/bin/sh\ntouch {marker}\necho '2.1.330 (Claude Code)'\n")
+    why = wholetool.claude_version_problem(inside, [str(tmp_path / "project")])
+    assert why and "write" in why and not marker.exists(), why
+
+
+@pytest.mark.parametrize("backend", ["seatbelt", "bwrap"])
+def test_launch_refuses_a_claude_code_below_the_floor(tree, monkeypatch, backend):
     from phiward import confine, selfcheck, wholetool
-    monkeypatch.setattr(confine, "backend", lambda: "seatbelt")
+    monkeypatch.setattr(confine, "backend", lambda: backend)
     monkeypatch.setattr(selfcheck, "check_isolated", lambda *a, **k: (False, []))
+    # on this Mac the test's folder is in the per-user temp folder, a write place
+    monkeypatch.setattr(wholetool, "_darwin_user_dir", lambda name: "")
     old = _fake(tree / "made-up-bin" / "claude", f"#!/bin/sh\necho '{OLD_CLAUDE}'\n")
     with pytest.raises(wholetool.LaunchError, match="2.1.295"):
         wholetool.build([old], str(tree / "repo"), dict(os.environ), wholetool.ADAPTERS["claude"])
