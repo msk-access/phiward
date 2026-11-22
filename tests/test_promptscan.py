@@ -268,18 +268,30 @@ def test_the_prompt_scan_is_quick(in_a_work_tree, capsys):
     assert small <= 0.25 and big <= 1.0
 
 
-@pytest.mark.slow
-def test_the_prompt_scan_does_not_walk_the_root(in_a_work_tree):
+def test_the_prompt_scan_does_not_walk_the_root(in_a_work_tree, monkeypatch):
+    """No folder at or below a root is listed (os.walk lists through os.scandir), and the
+    inventory never runs: the size of a root cannot matter."""
     place = in_a_work_tree
-    text = _ordinary_text(4096)
-    empty = _p95(place, text, runs=10)
-    for i in range(200):
-        d = place.data / f"d{i:03d}"
-        d.mkdir()
-        for j in range(1000):
-            (d / f"FAKE-{i:03d}-{j:04d}").touch()
-    full = _p95(place, text, runs=10)
-    assert full <= empty * 1.5 + 0.05, (empty, full)
+    (place.data / "sub").mkdir()
+    listed = []
+    for name in ("scandir", "listdir"):
+        real = getattr(os, name)
+
+        def spy(path=".", _real=real):
+            listed.append(os.fspath(path) if not isinstance(path, int) else path)
+            return _real(path)
+        monkeypatch.setattr(os, name, spy)
+
+    def boom(*_a, **_k):
+        raise AssertionError("the inventory ran")
+
+    monkeypatch.setattr(inventory, "build", boom)
+    for text in (_ordinary_text(4096), f"open {place.data}/sub/x", "see data/sub and ~/data"):
+        place(text, MSK)
+    root = str(place.data)
+    assert [p for p in listed if isinstance(p, str) and
+            (p == root or p.startswith(root + "/"))] == []
+
 
 def _scan(place, payload, user=""):
     cfg_file = place.home.parent / "user.toml"
@@ -443,12 +455,14 @@ def test_launch_writes_the_prompt_entry_and_replaces_its_own(tmp_path):
     assert _launch_settings(tmp_path) == s  # once, however often it runs
 
 
+# the prompts are written into the code, not given as arguments: on Linux, launch adds
+# `--settings JSON` to the tool's arguments (Claude Code's own sandbox inside the profile)
 LAUNCHED_SCAN = """
 import json, os, subprocess, sys
 s = json.load(open(os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "settings.json")))
 cmd = [h["command"] for g in s["hooks"]["UserPromptSubmit"] for h in g["hooks"]
        if "prompt-scan claude" in h["command"]]
-for text in sys.argv[1:]:
+for text in TEXTS:
     p = {"hook_event_name": "UserPromptSubmit", "prompt": text, "cwd": os.getcwd()}
     r = subprocess.run(cmd[0], shell=True, input=json.dumps(p), capture_output=True, text=True)
     print("RESULT", json.dumps([r.returncode, r.stdout]))
@@ -457,8 +471,9 @@ for text in sys.argv[1:]:
 
 def _launched(tree, *texts):
     from helpers import tool_py
+    code = f"TEXTS = {list(texts)!r}\n" + LAUNCHED_SCAN
     r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--tool", "claude", "--",
-                        tool_py(tree), "-c", LAUNCHED_SCAN, *texts], cwd=str(tree / "repo"),
+                        tool_py(tree), "-c", code], cwd=str(tree / "repo"),
                        capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL,
                        env=dict(os.environ, PYTHONPATH=str(Path(promptscan.__file__).parents[1])))
     got = [json.loads(ln[len("RESULT "):]) for ln in r.stdout.splitlines()
