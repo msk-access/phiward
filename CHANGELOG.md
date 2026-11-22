@@ -123,7 +123,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - `phiward launch` routes the tool's network through a proxy that allows only public addresses.
   The tool has no direct IP network: on macOS its profile allows only the proxy's random port on
   loopback, TCP only (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
-  its own, with the proxy's socket bound in and a relay on the session's own 127.0.0.1. The
+  its own, and a relay on the session's own 127.0.0.1 gets each connection to the proxy as one end
+  of a socket pair from the launcher (no socket with a path leads to the proxy, so this works
+  also where the tool cannot make unix sockets; a pair that cannot be passed is a refusal). The
   proxy runs in the launcher, outside the profile. It takes HTTPS (CONNECT) only, needs a token
   for the session, looks a name up once, checks every address, and connects to the checked addresses in turn
   (a short timeout each, so broken IPv6 does not stop a connection). It refuses this

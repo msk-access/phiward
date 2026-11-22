@@ -1065,7 +1065,9 @@ test`), or read the change before you run it outside.
   the profile, and only to public addresses ([launch.md](launch.md#the-network)). The tool has no
   direct IP network: on macOS the profile allows only the proxy's port on loopback, which the
   launcher holds on both 127.0.0.1 and [::1] until it exits; on Linux the session has a network
-  namespace of its own, with the proxy's socket bound in. The proxy needs the session's token,
+  namespace of its own, and a relay on its own 127.0.0.1 gets each connection to the proxy as one
+  end of a socket pair from the launcher: no socket with a path leads to the proxy, and a pair
+  that cannot be passed is a refusal, never a direct connection. The proxy needs the session's token,
   looks a name up once, judges every address it gets (an embedded IPv4 address unwrapped first),
   and connects to the checked address. It refuses this machine (its names, and its addresses
   read again for each connection), the local link and the private ranges. What stays open:

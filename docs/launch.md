@@ -102,7 +102,9 @@ What this breaks:
   local clusters. Use unix sockets in the project or the session's temp folder, or an IPC
   transport (`jupyter ... --transport ipc`). Name lookups still work.
 - **Linux:** the session has a network of its own, with its own `localhost`: servers it starts
-  itself work. Name lookups inside the session fail (`ping`, `dig`, `ssh` to a name); tools that
+  itself work. The proxy variables name a relay on that `localhost`, which gets each connection
+  to the proxy as a socket pair from `launch` (no socket file; it works also where the tool
+  cannot make unix sockets). Name lookups inside the session fail (`ping`, `dig`, `ssh` to a name); tools that
   use the proxy do not need them. `launch` refuses to start where network namespaces are not
   available: it says so when `user.max_net_namespaces` is 0, and bubblewrap stops the start
   when it cannot make one for another reason. Nothing runs then; `phiward doctor` checks both.

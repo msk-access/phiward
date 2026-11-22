@@ -190,8 +190,6 @@ PASS_PREFIXES = ("LC_", "ANTHROPIC_", "CLAUDE_", "PHIWARD_", "LMOD_", "__LMOD_")
 # the tool's proxy variables: all name the session's own proxy (netproxy), and nothing bypasses it
 PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
 NO_PROXY_VARS = ("NO_PROXY", "no_proxy")
-# Linux: where the proxy's unix socket appears in the session's view (its /tmp is the run's)
-PROXY_SOCKET = "/tmp/phiward-proxy.sock"
 
 
 def _keep_env(k: str, extra: Sequence[str] = ()) -> bool:
@@ -1091,7 +1089,7 @@ def _view_ops(split: Dict[str, str], hidden: Dict[str, str], whole: Set[str],
 
 def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                     env: Dict[str, str], folder: str, run: str,
-                    server: bool = False, proxy_socket: str = ""
+                    server: bool = False
                     ) -> Tuple[List[str], List[int], List[Tuple[str, bool, object]]]:
     """The bwrap arguments, the descriptors they name, and what the helper checks inside the
     session before the tool runs: (the path in the view, whether it is an entry of the view
@@ -1167,7 +1165,7 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             args += ["--ro-bind-try", op[1], op[1]]
             checks[op[1]] = (True, op[1])
     # a network of its own: no way to this machine's loopback or any address but through the
-    # session's proxy (its unix socket, bound in below)
+    # session's proxy (the relay's socket pair, inherited by the helper)
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
              "--unshare-net", "--die-with-parent"]
     # the tool's own temp folder as /tmp, then the write places on top (a project under /tmp
@@ -1178,9 +1176,6 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
     args += ["--tmpfs", folder]
     over(folder)
     bind(os.path.join(run, "tmp"), False, "/tmp")
-    if proxy_socket:
-        args += ["--ro-bind", proxy_socket, PROXY_SOCKET]
-        over(PROXY_SOCKET)
     for p in places:
         if os.path.isdir(p) and _no_link_on_path(p):
             bind(p, False)
@@ -1292,9 +1287,10 @@ def _raise_fd_limit(need: int) -> None:
 
 # the helper the tool starts through: on Linux it first checks that each bind in the session's
 # view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
-# a name in between), then it closes the launcher's descriptors, starts the relay to the proxy's
-# socket on the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:SOCKET`; it dies with the
-# tool, PR_SET_PDEATHSIG, and starts before the limits below, which are the tool's), limits
+# a name in between), then it closes the launcher's descriptors, starts the relay to the proxy on
+# the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:FD`: FD is its end of the proxy's socket
+# pair; it dies with the tool, PR_SET_PDEATHSIG, and starts before the limits below, which are
+# the tool's), limits
 # unix sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
 # argv: CHK UNIX N FD... CMD [ARG]...
 # - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
@@ -1522,8 +1518,9 @@ RELAY = r"""
 relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
 if relay:
     import socket, threading
-    rport, _, rpath = relay.partition(":")
+    rport, _, rfd = relay.partition(":")
     try:
+        ctl = socket.socket(fileno=int(rfd))
         ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ls.bind(("127.0.0.1", int(rport)))
         ls.listen(128)
@@ -1539,8 +1536,11 @@ if relay:
             nul = os.open("/dev/null", os.O_RDWR)
             os.dup2(nul, 0)
             os.dup2(nul, 1)
-            os.closerange(3, ls.fileno())
-            os.closerange(ls.fileno() + 1, 65536)
+            keep = sorted((ls.fileno(), ctl.fileno()))
+            os.closerange(3, keep[0])
+            os.closerange(keep[0] + 1, keep[1])
+            os.closerange(keep[1] + 1, 65536)
+            asking = threading.Lock()
 
             def pump(a, b):
                 try:
@@ -1557,13 +1557,22 @@ if relay:
                     pass
 
             def serve(c):
-                u = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                # one end of a new pair to the proxy, or the connection is closed: never a
+                # direct dial, and no socket with a path
                 try:
-                    u.connect(rpath)
+                    with asking:
+                        ctl.sendall(b"c")
+                        msg, fds, _f, _a = socket.recv_fds(ctl, 1, 4)
                 except OSError:
+                    msg, fds = b"", []
+                for f in fds[1:]:
+                    os.close(f)
+                if msg != b"y" or not fds:
+                    if fds:
+                        os.close(fds[0])
                     c.close()
-                    u.close()
                     return
+                u = socket.socket(fileno=fds[0])
                 t = threading.Thread(target=pump, args=(u, c), daemon=True)
                 t.start()
                 pump(c, u)
@@ -1576,6 +1585,7 @@ if relay:
         finally:
             os._exit(0)
     ls.close()
+    ctl.close()
 """
 HELPER_LINUX = HELPER.replace(
     "# RELAY (Linux: the relay to the proxy's socket, RELAY below)\n", RELAY, 1)
@@ -1723,9 +1733,9 @@ def _proxy_env(url: str) -> Dict[str, str]:
     return out
 
 
-def _start_proxy(cfg: config.Config, env: Dict[str, str], unix_path: str = "") -> "netproxy.Proxy":
+def _start_proxy(cfg: config.Config, env: Dict[str, str], pair: bool = False) -> "netproxy.Proxy":
     try:
-        return netproxy.start(env, cfg.launch_private_networks, unix_path)
+        return netproxy.start(env, cfg.launch_private_networks, pair)
     except netproxy.ProxyError as exc:
         raise LaunchError(f"the session's network proxy cannot start: {exc}") from None
 
@@ -1872,22 +1882,15 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
             unix = "deny"
-        # the proxy's socket in a folder of its own, outside every place the session can see; the
-        # session reaches it at PROXY_SOCKET through the relay on its own 127.0.0.1
-        sockdir = tempfile.mkdtemp(prefix="phiward-proxy-",
-                                   dir="/tmp" if os.path.isdir("/tmp") else None)
-        sock = os.path.join(sockdir, "s")
-        try:
-            proxy = _start_proxy(cfg, env, sock)
-        except BaseException:
-            os.rmdir(sockdir)
-            raise
+        # the session reaches the proxy through the relay on its own 127.0.0.1, which asks for
+        # each connection on its end of the proxy's socket pair (no socket with a path)
+        proxy = _start_proxy(cfg, env, pair=True)
         try:
             relay = netproxy.random_port()
             child_env.update(_proxy_env(proxy.url(relay)))
-            child_env["PHIWARD_PROXY_RELAY"] = f"{relay}:{PROXY_SOCKET}"
-            args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server,
-                                                proxy_socket=sock)
+            args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
+            end = proxy.take_session_end()
+            child_env["PHIWARD_PROXY_RELAY"] = f"{relay}:{end}"
         except BaseException:
             proxy.close()
             raise
@@ -1905,12 +1908,12 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
                                  argv)
         except LaunchError:
-            for fd in fds + [r, chk]:
+            for fd in fds + [r, chk, end]:
                 os.close(fd)
             proxy.close()
             raise
-        return cmd, child_env, fds + [r, chk], project, lambda: _write_checks(chk, checks), \
-            proxy
+        return cmd, child_env, fds + [r, chk, end], project, \
+            lambda: _write_checks(chk, checks), proxy
     raise LaunchError("no confinement backend on this system")
 
 

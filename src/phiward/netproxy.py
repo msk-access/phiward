@@ -1,9 +1,11 @@
 """The network of a `phiward launch` session: one CONNECT proxy in the launcher, outside the
 profile, with the operator's rights. The tool has no direct IP network. On macOS the profile
 allows only the proxy's port on loopback, which the launcher holds on both 127.0.0.1 and [::1]
-for its whole life. On Linux the session has a network namespace of its own; the proxy listens
-on a unix socket bound into it, and a relay in the session's helper listens on the namespace's
-own 127.0.0.1.
+for its whole life. On Linux the session has a network namespace of its own, and a relay in the
+session's helper listens on the namespace's own 127.0.0.1. The relay holds one end of a socket
+pair from the start; for each connection it sends `c` on it, and the proxy answers `y` with one
+end of a new socket pair (SCM_RIGHTS), whose other end it serves like an accepted connection, or
+`n` without one (the connection is refused). No socket with a path leads to the proxy.
 
 How one CONNECT is decided:
 - the session's token (`Proxy-Authorization: Basic`, user `phiward`); without it, 407;
@@ -257,6 +259,9 @@ def random_port() -> int:
     return PORTS[0] + secrets.randbelow(PORTS[1] - PORTS[0] + 1)
 
 
+_pair = socket.socketpair  # the socket pairs of the relay (a seam for the tests)
+
+
 class _Refuse(Exception):
     def __init__(self, code: int, why: str, extra: str = "") -> None:
         super().__init__(why)
@@ -313,7 +318,8 @@ class Proxy:
         self.idle_timeout = idle_timeout
         self.listeners: List[socket.socket] = []
         self.port = 0
-        self.unix_path = ""
+        self.session_end: Optional[socket.socket] = None  # Linux: the relay's end of the pair
+        self._control: Optional[socket.socket] = None
         self._slots = threading.BoundedSemaphore(limit)
         self._closed = threading.Event()
         self._want = f"{USER}:{token}".encode()
@@ -348,35 +354,41 @@ class Proxy:
             return port
         raise ProxyError(f"the proxy cannot hold a port on both 127.0.0.1 and [::1] ({last})")
 
-    def listen_unix(self, path: str) -> None:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    def listen_pair(self) -> socket.socket:
+        """The socket pair the session's relay asks for connections on: its end is returned
+        (inheritable, for the helper) and kept in `session_end` until `close`."""
         try:
-            s.bind(path)
-            s.listen(128)
+            mine, theirs = _pair()
         except OSError as exc:
-            s.close()
-            raise ProxyError(f"the proxy cannot listen on its socket ({exc.strerror or exc})")
-        self.listeners.append(s)
-        self.unix_path = path
+            raise ProxyError(f"the proxy cannot make its socket pair ({exc.strerror or exc})")
+        theirs.set_inheritable(True)
+        self._control, self.session_end = mine, theirs
+        return theirs
+
+    def take_session_end(self) -> int:
+        """The relay's end as a descriptor of its own (inheritable), no longer the proxy's to
+        close: the launcher passes it to the session and closes it."""
+        if self.session_end is None:
+            raise ProxyError("the proxy has no socket pair")
+        fd = self.session_end.detach()
+        self.session_end = None
+        return fd
 
     def serve(self) -> None:
         for ls in self.listeners:
             threading.Thread(target=self._accept_loop, args=(ls,), daemon=True).start()
+        if self._control is not None:
+            threading.Thread(target=self._pair_loop, args=(self._control,), daemon=True).start()
 
     def close(self) -> None:
         self._closed.set()
-        for ls in self.listeners:
+        for ls in self.listeners + [self._control, self.session_end]:
+            if ls is None:
+                continue
             try:
                 ls.close()
             except OSError:
                 pass
-        if self.unix_path:  # the socket, and the folder of its own that holds it
-            for f in (os.unlink, os.rmdir):
-                try:
-                    f(self.unix_path if f is os.unlink else os.path.dirname(self.unix_path))
-                except OSError:
-                    pass
-            self.unix_path = ""
 
     def url(self, port: int = 0) -> str:
         return f"http://{USER}:{self.token}@127.0.0.1:{port or self.port}"
@@ -414,6 +426,45 @@ class Proxy:
                 if self._closed.is_set():
                     return
                 time.sleep(0.05)
+
+    def _pair_loop(self, ctl: socket.socket) -> None:
+        """One request (`c`) on the relay's pair: `y` with one end of a new pair, the other end
+        served as an accepted connection; `n` without one when no pair can be made, or once the
+        worker is gone (a refusal, as on loopback). It ends when the relay's end closes."""
+        broken = False
+        while not self._closed.is_set():
+            try:
+                if not ctl.recv(1):
+                    return
+            except OSError:
+                return
+            c = theirs = None
+            try:
+                if broken:
+                    raise OSError("the worker is gone")
+                c, theirs = _pair()
+            except OSError:
+                try:
+                    ctl.sendall(b"n")
+                    continue
+                except OSError:
+                    return
+            try:
+                socket.send_fds(ctl, [b"y"], [theirs.fileno()])
+            except OSError:
+                c.close()
+                return
+            finally:
+                theirs.close()
+            if not self._slots.acquire(blocking=False):
+                self._refuse(c, _Refuse(503, "too many connections at once"))
+                continue
+            try:
+                self._start_worker(c)
+            except BaseException:
+                self._slots.release()
+                c.close()
+                broken = True
 
     def _start_worker(self, c: socket.socket) -> None:
         threading.Thread(target=self._handle, args=(c,), daemon=True).start()
@@ -570,14 +621,15 @@ class Proxy:
             sel.close()
 
 
-def start(env, allow: Sequence[str] = (), unix_path: str = "") -> Proxy:
-    """The proxy for one launch, serving: on a unix socket at `unix_path` (Linux), otherwise on
-    a random loopback port held on both addresses (macOS). Raises ProxyError."""
+def start(env, allow: Sequence[str] = (), pair: bool = False) -> Proxy:
+    """The proxy for one launch, serving: on a socket pair for the session's relay (`pair`,
+    Linux; its end is `session_end`), otherwise on a random loopback port held on both addresses
+    (macOS). Raises ProxyError."""
     nets = [ipaddress.ip_network(n) for n in allow]
     p = Proxy(secrets.token_hex(16), nets, upstream_from(env))
     try:
-        if unix_path:
-            p.listen_unix(unix_path)
+        if pair:
+            p.listen_pair()
         else:
             p.listen_loopback()
     except BaseException:
