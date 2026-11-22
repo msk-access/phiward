@@ -218,6 +218,8 @@ def _glued(s: str) -> Optional[str]:
     """`s` with its separators left out, when it is matched that way: 5 or more letters and
     digits with a letter, and no separator at either end (such a string is matched as written,
     so its separators stay masked)."""
+    if not s:
+        return None
     if s.isascii():  # the same, faster: an ASCII string's separators are `-`, `_`, `.`, a space
         if s[0] in "-_. " or s[-1] in "-_. ":
             return None
