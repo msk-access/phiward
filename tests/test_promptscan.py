@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from helpers import needs_confine
 from phiward import config, inventory, promptscan, sanitize
 
 MSK = '[sanitize]\npacks = ["genomics", "msk"]\n'
@@ -298,3 +299,76 @@ def test_the_project_prompt_hook_blocks_with_json_when_it_cannot_run(tmp_path, b
     reply = json.loads(r.stdout)
     assert reply["decision"] == "block" and "every prompt" in reply["reason"]
     assert reply["hookSpecificOutput"]["suppressOriginalPrompt"] is True
+
+
+# --- Mode B: the entry beside the fast hook in the session's own settings -----------------------
+
+def _launch_settings(folder, data=None):
+    from phiward import wholetool
+    if data is not None:
+        (folder / "settings.json").write_text(json.dumps(data))
+    fd = os.open(str(folder), os.O_RDONLY)
+    try:
+        wholetool.ADAPTERS["claude"].turn_own_sandbox_off(fd)
+    finally:
+        os.close(fd)
+    return json.loads((folder / "settings.json").read_text())
+
+
+def test_launch_writes_the_prompt_entry_and_replaces_its_own(tmp_path):
+    mine = {"type": "command", "command": "/opt/tools/my-prompt-log"}
+    decoy = {"type": "command", "command": "/usr/bin/true phiward prompt-scan claude"}
+    s = _launch_settings(tmp_path, {"hooks": {"UserPromptSubmit": [{"hooks": [mine]},
+                                                                   {"hooks": [decoy]}]}})
+    got = _prompt_entries(s)
+    ours = [h for h in got if "prompt-scan claude" in h["command"]]
+    assert mine in got and decoy not in got and len(ours) == 1
+    assert ours[0]["timeout"] == 10 and ours[0]["onFailure"] == "block"
+    assert " -I -S -c " in ours[0]["command"]
+    assert _launch_settings(tmp_path) == s  # once, however often it runs
+
+
+LAUNCHED_SCAN = """
+import json, os, subprocess, sys
+s = json.load(open(os.path.join(os.environ["CLAUDE_CONFIG_DIR"], "settings.json")))
+cmd = [h["command"] for g in s["hooks"]["UserPromptSubmit"] for h in g["hooks"]
+       if "prompt-scan claude" in h["command"]]
+for text in sys.argv[1:]:
+    p = {"hook_event_name": "UserPromptSubmit", "prompt": text, "cwd": os.getcwd()}
+    r = subprocess.run(cmd[0], shell=True, input=json.dumps(p), capture_output=True, text=True)
+    print("RESULT", json.dumps([r.returncode, r.stdout]))
+"""
+
+
+def _launched(tree, *texts):
+    from helpers import tool_py
+    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--tool", "claude", "--",
+                        tool_py(tree), "-c", LAUNCHED_SCAN, *texts], cwd=str(tree / "repo"),
+                       capture_output=True, text=True, timeout=180, stdin=subprocess.DEVNULL,
+                       env=dict(os.environ, PYTHONPATH=str(Path(promptscan.__file__).parents[1])))
+    got = [json.loads(ln[len("RESULT "):]) for ln in r.stdout.splitlines()
+           if ln.startswith("RESULT ")]
+    assert len(got) == len(texts), r.stdout + r.stderr
+    return got
+
+
+def _user_config(text):
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text().replace("[protected_paths]\n", text + "[protected_paths]\n"))
+
+
+@needs_confine
+def test_the_launched_prompt_scan_works_with_the_roots_unreadable(tree):
+    _user_config('[sanitize]\npacks = ["genomics", "msk"]\n')
+    clear, pack = _launched(tree, "fix the bug in src/app.py", "check P-9990001-T01-IM6")
+    assert clear == [0, ""]
+    assert pack[0] == 2 and "<SAMPLEID>" in json.loads(pack[1])["reason"]
+
+
+@needs_confine
+def test_the_launched_prompt_scan_names_a_pack_file_it_cannot_read(tree):
+    pack = tree / "phi" / "mine.toml"
+    pack.write_text("[pack]\nidentifiers = ['ZQX\\\\d+ => <CODE>']\n")
+    _user_config(f'[sanitize]\npacks = ["genomics", "{pack}"]\n')
+    (got,) = _launched(tree, "fix the bug in src/app.py")
+    assert got[0] == 2 and "mine.toml" in json.loads(got[1])["reason"]
