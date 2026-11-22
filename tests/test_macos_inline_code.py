@@ -22,7 +22,6 @@ PLUGIN = ROOT / "plugin"
 
 LINUX = "Linux only"
 EXCEPTION = "a listed exception"
-LATER_COPY = "macOS: until copy runs from files"
 KEPT = "kept: libproc's proc_pidinfo"
 MESSAGE = "a refusal's text (it shows the agent `phiward run -- sh -c ...`); nothing runs it"
 
@@ -47,10 +46,6 @@ ALLOWED = {
     ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
     ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
     ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
-    # macOS, not yet converted
-    ("src/phiward/copying.py", "execute", "python -c"): LATER_COPY,
-    ("src/phiward/copying.py", "execute", "sh -c"): LATER_COPY,
-    ("src/phiward/copying.py", "_pull", "python -c"): LATER_COPY,
 }
 
 # the inline-code flag of each kind of interpreter

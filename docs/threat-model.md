@@ -766,8 +766,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   project folders. A `write_to` entry that holds a `.claude` folder is skipped (at every load;
   `doctor` counts it).
 - <a id="known-remote-copies"></a>**Remote copies** run the system `ssh` through your shared connection (pushes and pulls are tar
-  streams; [hpc.md](hpc.md)); local copies run the system `rsync` or `cp`. The remote host itself is
-  trusted with what is copied there.
+  streams; [hpc.md](hpc.md)); local copies run the system `mkdir`, then `rsync` or `cp`. A pull
+  unpacks with a file of the installed package, run by path. No part of a copy is code in a
+  command line. The remote host itself is trusted with what is copied there.
 - <a id="known-phiward-python"></a>**The Python that runs phiward** is guarded: the agent may not write its prefix, the `phiward`
   launcher found on `PATH` (the link itself and the file it points to) or the user site folder.
   Install phiward in a folder of its own (`uv tool`, `pipx`).

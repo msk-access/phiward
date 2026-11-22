@@ -516,7 +516,7 @@ def test_a_local_copy_and_a_pull_leave_claude_folders_out():
     cmd = copying.rsync_command(["a", "b"], False)
     if cmd is not None:
         assert "--exclude=.claude/" in cmd
-    assert ".claude" in remote.EXTRACT_PY
+    assert ".claude" in Path(remote.EXTRACTOR).read_text()
 
 
 def test_the_destination_checks_compare_by_identity(tree, monkeypatch):
@@ -944,7 +944,7 @@ def test_the_pull_extractor_keeps_what_exists_and_skips_what_is_unsafe(tmp_path)
         add(t, "/abs.txt", b"a\n")                       # absolute: lands inside, stripped
         add(t, "lnk", kind=tarfile.SYMTYPE, link="/etc")  # a link
         add(t, "proj/.claude/settings.json", b"{}")       # a .claude folder
-    r = subprocess.run([sys.executable, "-I", "-c", remote.EXTRACT_PY, str(dest)],
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
                        input=buf.getvalue(), capture_output=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert (dest / "keepdir").is_dir() and (os.stat(dest / "keepdir").st_mode & 0o777) == 0o700
@@ -1201,7 +1201,7 @@ def test_claude_folders_in_any_letter_case_are_left_out(tree, tmp_path):
         ti.size = 2
         t.addfile(ti, io.BytesIO(b"{}"))
     dest = tmp_path / "d"
-    r = subprocess.run([sys.executable, "-I", "-c", remote.EXTRACT_PY, str(dest)],
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
                        input=buf.getvalue(), capture_output=True, timeout=30)
     assert r.returncode == 0 and not (dest / "proj" / ".Claude").exists()
     src = tree / "repo" / "proj"
