@@ -177,7 +177,109 @@ def test_kinds_and_why_never_hold_input_text(place, text, user):
     assert not any(s in said for s in SECRETS) and str(place.data) not in said
 
 
-# --- the Claude Code adapter: `phiward prompt-scan claude` --------------------------------------
+# --- the corpus: ordinary prompts clear, made-up identifiers and paths block ---------------------
+
+DATA = Path(__file__).with_name("data")
+CORPUS = [ln for f in ("prompt_corpus.txt", "prompt_corpus_holdout.txt")
+          for ln in (DATA / f).read_text(encoding="utf-8").splitlines()
+          if ln.strip() and not ln.startswith("#")]
+# Pack rules that hit ordinary prompts: each is a pack follow-up (it over-masks output too),
+# never a filter in the scan. <DATE> blocks by design when the dates pack is on.
+KNOWN_PACK_FOLLOW_UPS = {"<DONOR>", "<CMOID>", "<PATIENTPATH>", "<CLINICALPATH>"}
+BY_DESIGN = {"<DATE>"}
+
+
+def test_the_corpus_is_big_enough():
+    assert len(CORPUS) >= 350 and len(set(CORPUS)) == len(CORPUS)
+
+
+def test_no_ordinary_prompt_blocks_with_the_default_packs(place):
+    hits = [(t, place(t).kinds) for t in CORPUS if place(t).blocked]
+    assert hits == []
+
+
+def test_ordinary_prompts_hit_only_the_known_rules_with_every_pack(place):
+    every = '[sanitize]\npacks = ["genomics", "msk", "dates"]\n'
+    hits = {t: place(t, every).kinds for t in CORPUS}
+    unknown = {t: k for t, k in hits.items()
+               if set(k) - KNOWN_PACK_FOLLOW_UPS - BY_DESIGN}
+    assert unknown == {}
+    assert not [t for t, k in hits.items() if k == () and place(t, every).blocked]
+
+
+def test_made_up_identifiers_and_paths_all_block(place):
+    d = place.data
+    user = MSK[:-1] + "\npatterns = ['ZQX-FAKE\\d+ => <CODE>']\n"
+    lines = [f"cat {d}/FAKE-PT-{n:04d}/calls.vcf" for n in range(1, 6)] + [
+        f"look at @{d}/FAKE-PT-0001.txt#L1-5", f"diff {d}/a {d}/b", f"ls '{d}/FAKE PT 7'",
+        "head ~/data/FAKE-PT-0002/x.tsv", "wc -l $HOME/data/FAKE-PT-0003",
+        "check P-9990001-T01-IM6 and P-9990002-N01-IM6", "is s_C_FAKE01_P001_d done?",
+        "the code ZQX-FAKE7 failed", "see AB999999-T for the stem", "P%2D9990001%2DT01",
+    ]
+    assert [ln for ln in lines if not place(ln, user).blocked] == []
+
+
+# --- speed: the hook runs before every prompt ---------------------------------------------------
+
+def _p95(place, text, user="", runs=20):
+    import time
+    code = (f"import sys; sys.path.insert(0, {str(Path(promptscan.__file__).parents[1])!r}); "
+            "from phiward.cli import main; sys.exit(main())")
+    cfg_file = place.home.parent / "user.toml"
+    cfg_file.write_text(f'[protected_paths]\nroots = ["{place.data}"]\n'
+                        'snapshot_names = [".snapshot", ".zfs"]\n' + user)
+    env = {"HOME": str(place.home), "PHIWARD_CONFIG": str(cfg_file), "PATH": os.environ["PATH"]}
+    payload = json.dumps(_prompt(place, text))
+    took = []
+    for _ in range(runs):
+        t = time.perf_counter()
+        r = subprocess.run([sys.executable, "-I", "-S", "-c", code, "prompt-scan", "claude"],
+                           input=payload, capture_output=True, text=True, env=env,
+                           cwd=str(place.repo), timeout=60)
+        took.append(time.perf_counter() - t)
+        assert r.returncode in ((0, 2) if user else (0,)), r.stdout + r.stderr
+    return sorted(took)[int(0.95 * (runs - 1))]
+
+
+def _ordinary_text(size):
+    out, i = [], 0
+    while sum(len(x) + 1 for x in out) < size:
+        out.append(CORPUS[i % len(CORPUS)])
+        i += 1
+    return "\n".join(out)
+
+
+@pytest.fixture()
+def in_a_work_tree(place):
+    """The root inside a made-up git work tree: config.load then finds its .git, as it does on
+    every prompt (Review 3 M4)."""
+    (place.home / ".git").mkdir()
+    return place
+
+
+@pytest.mark.slow
+def test_the_prompt_scan_is_quick(in_a_work_tree, capsys):
+    place = in_a_work_tree
+    small, big = _p95(place, _ordinary_text(4096)), _p95(place, _ordinary_text(65536), runs=10)
+    msk = _p95(place, _ordinary_text(65536), MSK[:-1] + "\n", runs=5)
+    with capsys.disabled():
+        print(f"\nprompt-scan p95: 4 KB {small * 1000:.0f} ms, 64 KB {big * 1000:.0f} ms, "
+              f"64 KB with msk {msk * 1000:.0f} ms (reported, not asserted)")
+    assert small <= 0.25 and big <= 1.0
+
+
+@pytest.mark.slow
+def test_the_prompt_scan_does_not_walk_the_root(in_a_work_tree):
+    place = in_a_work_tree
+    text = _ordinary_text(4096)
+    empty = _p95(place, text, runs=10)
+    for i in range(200):
+        d = place.data / f"d{i:03d}"
+        d.mkdir()
+        for j in range(1000):
+            (d / f"FAKE-{i:03d}-{j:04d}").touch()
+    full = _p95(place, text, runs=10)
+    assert full <= empty * 1.5 + 0.05, (empty, full)
 
 def _scan(place, payload, user=""):
     cfg_file = place.home.parent / "user.toml"
