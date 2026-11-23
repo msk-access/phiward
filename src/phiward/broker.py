@@ -545,13 +545,6 @@ class Broker:
     def serve(self) -> int:
         last_gc = last_beat = last_status = 0.0
         from phiward import run as run_mod
-        # the scratch folders' place, made now: Claude Code's sandbox (Linux) puts a read-only
-        # file at a denied path that does not exist while a command runs, and the cache folder
-        # is denied, so a first `phiward run` from a session would find a file there
-        try:
-            os.makedirs(config.cache_dir(), mode=0o700, exist_ok=True)
-        except OSError:
-            self.say("the cache folder cannot be made; gateway commands fail until it can")
         if run_mod.sweep_scratch(config.cache_dir()):
             self.say("removed scratch folders an earlier broker left")
         from phiward import confine
@@ -801,6 +794,25 @@ def main(argv: List[str]) -> int:
     problem = config.load("/").problem
     if problem:
         sys.stderr.write(f"phiward broker: the user config cannot be used: {problem}\n")
+        return 3
+    # the scratch folders' place, made now: while a command runs, Claude Code's sandbox (Linux)
+    # puts an empty read-only file at a denied path that does not exist (the cache folder is
+    # denied), so a first `phiward run` from a session would find a file there. One left behind
+    # is refused, never removed
+    cache = config.cache_dir()
+    try:
+        os.makedirs(cache, mode=0o700, exist_ok=True)
+    except OSError:
+        spot = cache
+        while not os.path.lexists(spot) and os.path.dirname(spot) != spot:
+            spot = os.path.dirname(spot)
+        if os.path.lexists(spot) and not os.path.isdir(spot):
+            sys.stderr.write(f"phiward broker: {spot} is a file, not a folder, where the cache "
+                             "folder goes; an empty one is likely the placeholder Claude Code's "
+                             "sandbox left there. Read it, remove it, then start the broker "
+                             "again\n")
+        else:
+            sys.stderr.write(f"phiward broker: the cache folder ({cache}) cannot be made\n")
         return 3
     try:
         spool = Spool(config.spool_dir())

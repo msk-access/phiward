@@ -502,6 +502,32 @@ def test_the_broker_makes_its_cache_folder_at_start(tree, broker):
     assert st_mod.S_ISDIR(st.st_mode) and st_mod.S_IMODE(st.st_mode) == 0o700, oct(st.st_mode)
 
 
+@pytest.mark.parametrize("where", ["cache", "parent"])
+def test_the_broker_refuses_to_start_on_a_file_where_its_cache_folder_goes(tree, broker,
+                                                                           where):
+    """Claude Code removes its mount points after each command, but one left behind (a session
+    that ended while a command ran) is an empty read-only file at the cache folder or a folder
+    above it. The broker removes nothing: it refuses to start, names the file and says what to
+    do."""
+    import shutil
+    import subprocess
+    from phiward import config
+    cache = config.cache_dir()
+    shutil.rmtree(cache, ignore_errors=True)
+    spot = cache if where == "cache" else os.path.dirname(cache)
+    shutil.rmtree(spot, ignore_errors=True)
+    os.close(os.open(spot, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444))
+    r = subprocess.run([sys.executable, "-m", "phiward", "broker"], cwd=str(tree / "home"),
+                       env=dict(os.environ, PYTHONPATH=str(SRC)), stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 3, (r.returncode, r.stdout, r.stderr)
+    assert spot in r.stderr and "not a folder" in r.stderr and "remove it" in r.stderr, r.stderr
+    assert "Claude Code" in r.stderr, r.stderr
+    assert os.path.isfile(spot) and os.path.getsize(spot) == 0  # left as it was
+    os.chmod(spot, 0o600)
+    os.unlink(spot)
+
+
 def test_a_fifo_named_like_the_heartbeat_does_not_hang_the_broker(tree, broker):
     import time
     alive = os.path.join(broker.spool, "broker.alive")
