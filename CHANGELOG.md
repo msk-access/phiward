@@ -7,6 +7,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Added
 
+- The masking check, and `[sanitize] examples` (user config only): made-up values in the form
+  of your own rules (`FAKE-PT-0001` for `FAKE-PT-\d{4} => <SUBJECT>`), never real ones.
+  `phiward doctor`, `phiward launch` and the broker at its start check that each value is fully
+  masked (only placeholders left, in text and table mode) and blocked by the prompt scan, and
+  that a made-up path below each root, protected pattern and `[remote] roots` entry comes out
+  masked. It names index numbers only. Doctor warns (the exit status is unchanged) and notes
+  each rule no example tests; `doctor --headless` lists a failure.
 - `phiward pseudonymize` (the operator's, in a terminal) makes a copy of one CSV/TSV table with
   the identifier columns you name coded (`S0042`: drawn at random, the same code for the same ID
   in every table of one key). The key stays in `~/.phiward/backups/keys`, hidden from every
@@ -148,6 +155,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `phiward launch` and the broker may now refuse a config they used to accept: when the masking
+  check fails, launch refuses to start (`the masking check failed: ...; run phiward doctor`),
+  and the broker refuses every request until the config is fixed and the broker restarted.
+  With no `[sanitize] examples`, only the roots are checked. One case that now fails: a
+  `[remote] roots` entry that is not absolute (`~/data`), which the sanitizer never matched as
+  written; write the remote path in full. To fix any failure, run `phiward doctor`: it names
+  the entry, the rule or the root by number.
 - The hooks phiward writes run from files in its package, with no inline code. The user
   wiring's hooks are in Claude Code's exec form: the command is `data/clean-exec.sh` (it clears
   the Python and loader variables, listed in `data/clean-env.awk`), and phiward's own Python

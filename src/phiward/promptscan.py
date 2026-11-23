@@ -97,24 +97,21 @@ def _kinds(clean: str, plain: str) -> List[str]:
     return [k for k in after if after[k] > before[k]]
 
 
-def prompt_verdict(text: str, cfg: config.Config, cwd: str) -> Verdict:
-    """Block or clear `text` (a prompt), under the config `cfg`, from the folder `cwd`."""
+def prompt_sanitizer(cfg: config.Config) -> sanitize.Sanitizer:
+    """The sanitizer the prompt scan uses under `cfg` (built once; `verdict_with` checks text
+    with it). Raises SanitizerError."""
+    scan_cfg = dataclasses.replace(cfg, names_from=[], packs=list(cfg.user_packs),
+                                   sanitize_patterns=list(cfg.sanitize_patterns))
+    san = sanitize.Sanitizer.from_config(scan_cfg, identifiers_only=True)
+    if cfg.remote_roots:
+        from phiward.run import add_remote_roots
+        add_remote_roots(san, cfg)
+    return san
+
+
+def verdict_with(san: sanitize.Sanitizer, cfg: config.Config, text: str, cwd: str) -> Verdict:
+    """Block or clear `text` with `san`, the prompt sanitizer of `cfg` (`prompt_sanitizer`)."""
     try:
-        if len(text.encode("utf-8", "surrogatepass")) > MAX_BYTES:
-            return Verdict(True, (), "phiward: this prompt was not sent: it is too long to "
-                           f"check (over {MAX_BYTES // (1 << 20)} MiB); send it in parts.")
-        if cfg.problem:
-            return _fail("the repo config (.phiward.toml) has a problem" if cfg.problem_detail
-                         else "the phiward config has a problem")
-        scan_cfg = dataclasses.replace(cfg, names_from=[], packs=list(cfg.user_packs),
-                                       sanitize_patterns=list(cfg.sanitize_patterns))
-        try:
-            san = sanitize.Sanitizer.from_config(scan_cfg, identifiers_only=True)
-        except sanitize.SanitizerError as exc:
-            return _fail(f"the prompt check cannot be built: {exc}")
-        if cfg.remote_roots:
-            from phiward.run import add_remote_roots
-            add_remote_roots(san, cfg)
         found: List[str] = []
         changed = False
         for line in text.splitlines() + path_forms(text, cwd):
@@ -128,8 +125,29 @@ def prompt_verdict(text: str, cfg: config.Config, cwd: str) -> Verdict:
         kinds = tuple(sorted(found))
         return Verdict(True, kinds, reason(kinds))
     except Exception:  # noqa: BLE001 - fail closed on anything
-        return Verdict(True, (), "phiward: this prompt was not sent: the check could not run; "
-                       + DOCTOR)
+        return _UNCHECKED
+
+
+def prompt_verdict(text: str, cfg: config.Config, cwd: str) -> Verdict:
+    """Block or clear `text` (a prompt), under the config `cfg`, from the folder `cwd`."""
+    try:
+        if len(text.encode("utf-8", "surrogatepass")) > MAX_BYTES:
+            return Verdict(True, (), "phiward: this prompt was not sent: it is too long to "
+                           f"check (over {MAX_BYTES // (1 << 20)} MiB); send it in parts.")
+        if cfg.problem:
+            return _fail("the repo config (.phiward.toml) has a problem" if cfg.problem_detail
+                         else "the phiward config has a problem")
+        try:
+            san = prompt_sanitizer(cfg)
+        except sanitize.SanitizerError as exc:
+            return _fail(f"the prompt check cannot be built: {exc}")
+        return verdict_with(san, cfg, text, cwd)
+    except Exception:  # noqa: BLE001 - fail closed on anything
+        return _UNCHECKED
+
+
+_UNCHECKED = Verdict(True, (), "phiward: this prompt was not sent: the check could not run; "
+                     + DOCTOR)
 
 
 # ---- the Claude Code adapter: `phiward prompt-scan claude` -------------------------------------

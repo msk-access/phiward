@@ -422,6 +422,7 @@ anything: the broker's log has the reason.
 | ``copy refused: a local path holds `..` or starts with `~` `` | A local source or destination was written with `..` or a quoted `~`. | Give the full path. |
 | `copy refused: options are not accepted` | `copy` picks its own options. | Remove the options (only `--dry-run` first is allowed). |
 | `refused: the broker is busy` | Too many requests wait. | Try again later. |
+| `refused: the masking check failed when the broker started` | A value of `[sanitize] examples` is not fully masked by the operator's rules, or a made-up path below a root came out unmasked. | The operator runs `phiward doctor`, which names the entry or the root by number, fixes the config and restarts the broker. |
 | `refused: the phiward config changed since the broker started` | The config, the approved programs or a names file changed while the broker ran. | The operator reads the change and restarts the broker. |
 | `refused: N program(s) of [broker] commands differ from what the operator approved` | A listed program changed, is new, cannot be read or is a link. | The operator runs `phiward doctor`, checks the programs, runs `phiward pin` and restarts the broker. |
 | `run refused: the sanitizer cannot start` | A pack, a names file or the entry limit is wrong. | The operator runs `phiward doctor`. |
@@ -443,6 +444,11 @@ anything: the broker's log has the reason.
 - **`doctor` says the broker uses another config.** The broker and the agent tool were started
   with a different `HOME`, `PHIWARD_CONFIG` or `XDG_*` variable. Start both from the same
   environment.
+- **`doctor` warns that the masking check failed, and `launch` refuses.** A value of
+  `[sanitize] examples` is not fully masked, or a made-up path below a root came out unmasked.
+  The warning names the entry, the rule or the root by number. Fix the rule (often an edit
+  that narrowed it), or the example if it is not in the rule's form; then restart the broker
+  ([configuration.md](configuration.md#sanitize)).
 - **A write place is skipped.** `doctor` says why: it does not exist yet, or a link is on its
   path. Name the real folder in `write_to`.
 - **A gateway command fails to write to `/tmp`.** The gateway sees `/tmp` read-only. It writes

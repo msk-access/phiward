@@ -526,6 +526,16 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     prompt is refused (`doctor` warns). Below Claude Code 2.1.295 the hook fails open (no
     `onFailure`).
 
+- <a id="known-masking-check"></a>**The masking check tests only what its examples show.**
+  Doctor, launch and the broker's start check that each `[sanitize] examples` value is fully
+  masked, and that a made-up path below each root is
+  ([configuration.md](configuration.md#sanitize)). What it cannot see:
+  - a rule too narrow for real forms that its examples do not show (an example of one form
+    passes while another real form leaks);
+  - a rule with no example (doctor's NOTE says which, by number);
+  - entry names under the roots and `names_from` (the check reads neither);
+  - the built-in packs, which the self-check covers as installed files, not the check.
+
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
   removes its scratch folder. A process that leaves the group (`setsid`, a daemon) keeps running on

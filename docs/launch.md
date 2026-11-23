@@ -60,6 +60,11 @@ phiward launch --tool claude
   changes go to quarantine like any other instruction.
 - `launch` refuses to start in `/`, your home, a folder above or inside protected data, a dot
   folder, `~/Library`, a folder on your `PATH`, or a phiward folder.
+- `launch` refuses to start when the masking check fails: `the masking check failed: ...; run
+  phiward doctor`. A value of `[sanitize] examples` is not fully masked by your own rules, or a
+  made-up path below a root came out unmasked
+  ([configuration.md](configuration.md#sanitize)). Fix the rule, the example or the root, then
+  start again. A wrapped MCP server (`launch --server`) is not checked.
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
   threat model).
 - On macOS the tool starts as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with nothing in

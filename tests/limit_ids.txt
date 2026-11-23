@@ -30,6 +30,7 @@ known-leftover-processes
 known-pseudonymized-tables
 known-file-mentions
 known-prompt-scan
+known-masking-check
 known-git-control-files
 known-claude-code-path
 known-only-output-masked
