@@ -1307,8 +1307,9 @@ test`), or read the change before you run it outside.
   restores the conversation, the model, the agent, a permission mode other than bypass (Claude
   Code starts a resumed bypass session in the mode a new one starts in), an active goal and
   scheduled tasks, inside the kernel profile and `launch`'s hooks; deny rules hold in every
-  mode. A transcript holds what was already sent to the provider (masked output only under
-  `launch`), and a resume sends it again. A transcript a session wrote is an instruction carried
+  mode. A transcript holds what the session could read (masked output only under `launch`):
+  its `tool-results/` keep whole outputs, more than was sent to the provider, and a resume
+  can send them. A transcript a session wrote is an instruction carried
   across sessions; phiward does not read it (its format is Claude Code's own), so unlike auto
   memory it is not quarantined. Delete the store, or one project's folder in it, to forget
   ([launch.md](launch.md#when-a-session-ends));

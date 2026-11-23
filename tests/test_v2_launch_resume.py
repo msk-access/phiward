@@ -305,8 +305,10 @@ def test_a1b_the_left_out_folders_in_other_letter_case_are_left_out_too(tree):
 
 def test_a1b_a_session_trimmed_whole_gets_a_note(tree, monkeypatch):
     key = _key(tree)
-    monkeypatch.setattr(carryover, "MAX_BYTES", 4)
+    # 9 bytes: within the merge's budget (twice the cap), past the cap
+    monkeypatch.setattr(carryover, "MAX_BYTES", 6)
     s, run, _ = _session(tree, "one", key)
+    (run / "config" / "projects" / key).mkdir(parents=True)  # no store: no folder at the start
     (run / "config" / "projects" / key / "new.jsonl").write_text("abcdefgh\n")
     msgs = s.end(str(base(tree)))
     assert any("NOTE" in m and "cap" in m for m in msgs), msgs

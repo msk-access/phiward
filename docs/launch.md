@@ -221,9 +221,10 @@ What this breaks:
   into the new session's folder. phiward never reads a transcript: their format is Claude Code's
   own.
   - Only plain files and real folders are kept. Links are dropped with a NOTE. `memory/` (auto
-    memory, an instruction) and `mcp-tasks/` are never kept.
+    memory, an instruction) and `mcp-tasks/` are never kept, in any letter case.
   - Sessions that end one after the other are merged; a file is replaced only by a newer one.
   - At most 500 MB and 20,000 entries for each project; past that, the oldest sessions go first.
+    A session larger than that on its own is not kept, and its end says so with a NOTE.
   - A resumed session restores what Claude Code restores (the conversation, the model, the
     agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
     kernel profile and `launch`'s hooks. What an earlier session wrote is read as history

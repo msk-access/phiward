@@ -32,7 +32,7 @@ import stat
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from phiward import claude_settings, safeio
 
@@ -535,7 +535,7 @@ def _merge_tree(src_fd: int, dst: str, budget: _Budget) -> int:
                     dropped += 1
                     continue
                 for e in sorted(os.scandir(dfd), key=lambda x: x.name):
-                    if e.name in TRANSCRIPTS_LEFT_OUT:
+                    if e.name.casefold() in TRANSCRIPTS_LEFT_OUT:  # macOS ignores case
                         continue
                     st = e.stat(follow_symlinks=False)
                     if not budget.take(st.st_size if stat.S_ISREG(st.st_mode) else 0):
@@ -576,14 +576,14 @@ def _tree_size(p: str) -> Tuple[int, int]:
     return n, b
 
 
-def _trim(folder: str) -> None:
+def _trim(folder: str) -> Set[str]:
     """The folder kept under MAX_ENTRIES and MAX_BYTES: the oldest sessions go first, each
-    `<name>.jsonl` with its folder `<name>/`."""
+    `<name>.jsonl` with its folder `<name>/`. Returns the names of the sessions removed."""
     units: Dict[str, List[int]] = {}  # name: [mtime, entries, bytes]
     for e in os.scandir(folder):
         st = e.stat(follow_symlinks=False)
         n, b = _tree_size(e.path)
-        stem = e.name[:-len(".jsonl")] if e.name.endswith(".jsonl") else e.name
+        stem = _stem(e.name)
         u = units.setdefault(stem, [st.st_mtime_ns, 0, 0])
         if e.name.endswith(".jsonl"):
             u[0] = st.st_mtime_ns
@@ -591,14 +591,21 @@ def _trim(folder: str) -> None:
         u[2] += b
     entries = sum(u[1] for u in units.values())
     size = sum(u[2] for u in units.values())
+    removed: Set[str] = set()
     for stem in sorted(units, key=lambda s: units[s][0]):
         if entries <= MAX_ENTRIES and size <= MAX_BYTES:
             break
         for name in (stem + ".jsonl", stem):
             if os.path.lexists(os.path.join(folder, name)):
                 _remove(os.path.join(folder, name))
+        removed.add(stem)
         entries -= units[stem][1]
         size -= units[stem][2]
+    return removed
+
+
+def _stem(name: str) -> str:
+    return name[:-len(".jsonl")] if name.endswith(".jsonl") else name
 
 
 def _expand(folder: str, pattern: str) -> List[str]:
@@ -895,18 +902,23 @@ class Store:
                     "is a link or not yours)"]
         try:
             with self._locked():
-                dropped = self._merge_transcripts(src, key)
+                dropped, whole = self._merge_transcripts(src, key)
         except (OSError, CarryoverError, RecursionError) as exc:
             return [f"phiward launch: NOTE: this session's transcripts were not kept "
                     f"({_esc(str(exc))})"]
         finally:
             os.close(src)
+        out = []
+        if whole:
+            out.append("phiward launch: NOTE: this session's transcripts were not kept: they are "
+                       "larger than the cap of kept transcripts")
         if dropped:
-            return [f"phiward launch: NOTE: {dropped} entry(ies) of this session's transcripts "
-                    "were not kept (not a plain file or a folder)"]
-        return []
+            out.append(f"phiward launch: NOTE: {dropped} entry(ies) of this session's transcripts "
+                       "were not kept (not a plain file or a folder)")
+        return out
 
-    def _merge_transcripts(self, src: int, key: str) -> int:
+    def _merge_transcripts(self, src: int, key: str) -> Tuple[int, bool]:
+        """(entries left out, whether the cap removed every session of the folder at `src`)."""
         root = self.transcripts_dir()
         os.makedirs(root, mode=0o700, exist_ok=True)
         if os.path.realpath(root) != os.path.normpath(root):
@@ -927,7 +939,8 @@ class Store:
                 finally:
                     os.close(cfd)
             dropped = _merge_tree(src, new, _Budget(2))
-            _trim(new)
+            mine = {_stem(n) for n in os.listdir(src) if n.casefold() not in TRANSCRIPTS_LEFT_OUT}
+            whole = bool(mine) and mine <= _trim(new)
             if os.path.lexists(cur):
                 os.rename(cur, old)
             os.rename(new, cur)
@@ -935,7 +948,7 @@ class Store:
             for p in (new, old):
                 if os.path.lexists(p):
                     _remove(p)
-        return dropped
+        return dropped, whole
 
     def _move_legacy(self, base: str) -> List[str]:
         """Entries of an older layout (state, caches, a shared temp folder, the old config
