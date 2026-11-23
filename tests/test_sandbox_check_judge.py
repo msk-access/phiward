@@ -747,6 +747,76 @@ def test_main_looks_for_this_modes_probe_file_only(tmp_path, capsys):
     assert "FAIL Mode A" in out
 
 
+# --- the bypass probe: a Mode A session started with --permission-mode bypassPermissions -------
+
+CAT_REFUSAL = ("PreToolUse:Bash hook error: This command names a protected path. Use `phiward run "
+               "-- CMD` (the whole command) or `phiward copy`.")
+MARK = "FAKE-MARK-1"
+
+
+def bypass_stream(read=REFUSAL, cat=CAT_REFUSAL, cat_error=True, command=f"cat {PROT}"):
+    events = [{"type": "system", "subtype": "init", "mcp_servers": []}]
+    if read is not None:
+        events += read_call(read)
+    if cat is not None:
+        events += [
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "id": "c1", "name": "Bash", "input": {"command": command}}]}},
+            {"type": "user", "message": {"content": [
+                {"type": "tool_result", "tool_use_id": "c1", "is_error": cat_error,
+                 "content": cat}]}}]
+    return [json.dumps(e) for e in events]
+
+
+def _bypass(lines, platform="linux"):
+    return judge.judge_bypass(lines, MARK, {"platform": platform, "mode": "A", "probe": "bypass",
+                                            "protected_file": PROT})
+
+
+def test_bypass_both_refused_by_the_hook_is_ok():
+    verdict, report = _bypass(bypass_stream())
+    assert verdict == judge.PASS and "ok   bypass: phiward refused the Read and the cat" in report
+
+
+def test_bypass_a_read_refused_by_the_installed_rules_counts():
+    verdict, report = _bypass(bypass_stream(read=judge.RULES_DENY))
+    assert verdict == judge.PASS, report
+
+
+@pytest.mark.parametrize("kw, word", [
+    ({"cat": MARK + "\n", "cat_error": False}, "leaked"),
+    ({"read": MARK + "\n"}, "leaked"),
+    ({"cat": "cat: a.txt: Operation not permitted"}, "hook-skipped"),
+    ({"read": "File does not exist."}, "hook-skipped"),
+    ({"cat": "", "cat_error": False}, "hook-skipped"),
+])
+def test_bypass_a_hole_is_bad_with_one_word(kw, word):
+    verdict, report = _bypass(bypass_stream(**kw))
+    assert verdict == judge.FAIL and f"BAD  bypass: {word}" in report, report
+
+
+@pytest.mark.parametrize("kw, word", [({"read": None}, "no-read"), ({"cat": None}, "no-cat"),
+                                      ({"command": "ls"}, "no-cat")])
+def test_bypass_a_session_that_proves_nothing_is_bad_and_inconclusive(kw, word):
+    verdict, report = _bypass(bypass_stream(**kw))
+    assert verdict == judge.INCONCLUSIVE and f"BAD  bypass: {word}" in report, report
+
+
+def test_bypass_no_stream_is_no_session():
+    verdict, report = _bypass([])
+    assert verdict == judge.INCONCLUSIVE and "BAD  bypass: no-session" in report, report
+
+
+def test_main_judges_the_bypass_run_as_the_bypass_probe(tmp_path, capsys):
+    run_dir = tmp_path / "j" / "run-bypass"
+    run_dir.mkdir(parents=True)
+    (run_dir / "stream.jsonl").write_text("\n".join(bypass_stream()) + "\n")
+    (run_dir / "facts.txt").write_text(f"platform linux\nmode A\nprobe bypass\nprotected_file {PROT}\n")
+    judge.main(["judge.py", str(tmp_path / "h"), MARK, str(run_dir)])
+    out = capsys.readouterr().out
+    assert "== bypass (Mode A, linux)" in out and "PASS bypass" in out, out
+
+
 def test_mode_b_macos_write_ok_is_fail():
     results = GOOD.replace("write-data DENIED not-permitted", "write-data OK")
     assert run(results=results, mode="B")[0] == judge.FAIL
