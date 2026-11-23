@@ -100,6 +100,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux: the broker makes its cache folder (`~/.cache/phiward`) when it starts. While a
+  command runs, Claude Code's own sandbox puts an empty read-only file at each denied path
+  that does not exist, and the cache folder is denied: a first `phiward run` from a session
+  (no `launch`) failed with `run failed (FileExistsError)`. The sandbox check's stand-in
+  now leaves the same files, and an unclassified gateway failure notes its first line
+  (words of letters only; any other word shown as `<x>`).
 - Linux: under `phiward launch` the session's `TMPDIR`, `TMUX_TMPDIR` and
   `CLAUDE_CODE_TMPDIR` are `/tmp`, the name the session's view gives its own temp folder, not
   that folder's full path under `~/.phiward`. A unix socket's path holds at most 107 bytes, and

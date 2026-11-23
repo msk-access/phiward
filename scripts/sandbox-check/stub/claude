@@ -6,7 +6,9 @@
 # as Claude Code does), then what the prompt asks: a Read of ./target.txt and a Read of the
 # protected file whose path it holds (each refused if a PreToolUse hook refuses it, as Claude
 # Code runs the hooks, else read for real), then one Bash call of `sh ./probes.sh`, run with the
-# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
+# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does); on Linux, while it
+# runs, the mount points Claude Code's sandbox leaves on the host stand (an empty read-only file
+# at the first missing part of each deny path). So in Mode A, where
 # nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
 # probes meet the real boundary. It cannot test the terminal prompt.
 # launch reads its version from the package.json beside it (as for the npm build; it starts no
@@ -186,7 +188,47 @@ emit({"type": "assistant", "message": {"content": [
      "input": {"command": "sh ./probes.sh"}}]}})
 env = {k: v for k, v in os.environ.items()
        if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
-r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=240)
+
+
+def mount_points():
+    """What Claude Code's sandbox leaves on the host while a command runs, on Linux: for a
+    sandbox.filesystem deny path that does not exist, its first missing part, made as an empty
+    read-only file (the mount point that blocks its creation), where the host lets it be made.
+    Removed after the command, as Claude Code removes them. The paths made."""
+    if not sys.platform.startswith("linux"):
+        return []
+    deny = []
+    for path in [user] + settings:
+        fs = (load(path).get("sandbox") or {}).get("filesystem") or {}
+        for key in ("denyRead", "denyWrite"):
+            deny += [str(p) for p in fs.get(key) or [] if isinstance(p, str)]
+    made = []
+    for p in deny:
+        p = home + p[1:] if p == "~" or p.startswith("~/") else p
+        if not p.startswith("/") or any(c in p for c in "*?["):
+            continue
+        part = ""
+        for name in p.strip("/").split("/"):
+            part += "/" + name
+            if not os.path.lexists(part):
+                try:
+                    os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444))
+                    made.append(part)
+                except OSError:
+                    pass
+                break
+    return made
+
+
+made = mount_points()
+try:
+    r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=240)
+finally:
+    for part in made:
+        try:
+            os.unlink(part)
+        except OSError:
+            pass
 emit({"type": "user", "message": {"content": [
     {"type": "tool_result", "tool_use_id": "stub-bash", "is_error": r.returncode != 0,
      "content": (r.stdout + r.stderr).decode(errors="replace")[-2000:]}]}})

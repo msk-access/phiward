@@ -53,6 +53,8 @@ GATEWAY_WHY = ("no-broker", "stopped", "not-found", "refused", "failed", "other"
 GATEWAY_ERROR = ("landlock", "bwrap", "gateway", "permission-denied", "read-only",
                  "not-permitted", "no-such", "python-fatal", "traceback", "none")
 EXIT = re.compile(r"[0-9]{1,3}")
+# the first line of an unclassified failure (probes.sh): words of letters only, or <x>
+LINE = re.compile(r"[(]*[A-Za-z]+[):,;.]*|<x>")
 # the environ scan (probes.sh): counts and PIDs only
 PARENT = re.compile(r"readable=(?P<readable>[0-9]+) empty=(?P<empty>[0-9]+) refused=(?P<refused>[0-9]+) "
                     r"token-names=(?P<named>[0-9]+) ancestors=(?P<ancestors>[0-9]+) "
@@ -303,6 +305,12 @@ def judge(results, stream_lines, server, marker, created, facts):
             note += ", exit " + (code if code and EXIT.fullmatch(code) else "unknown")
             note += ", error " + (err if err in GATEWAY_ERROR else "unknown")
         report.append("note gateway-run: " + note)
+        line = lines.get("gateway-line")
+        if line is not None and why == "other":
+            words = line.split(" ")
+            ok = line == "-" or (len(words) <= 30 and all(LINE.fullmatch(w) for w in words))
+            report.append("note gateway-run, its first line: " +
+                          ("(none)" if line == "-" else line if ok else "unknown"))
 
     got = lines.get("control-commit")
     if got is not None and got != "OK":

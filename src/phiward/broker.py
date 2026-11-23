@@ -545,6 +545,13 @@ class Broker:
     def serve(self) -> int:
         last_gc = last_beat = last_status = 0.0
         from phiward import run as run_mod
+        # the scratch folders' place, made now: Claude Code's sandbox (Linux) puts a read-only
+        # file at a denied path that does not exist while a command runs, and the cache folder
+        # is denied, so a first `phiward run` from a session would find a file there
+        try:
+            os.makedirs(config.cache_dir(), mode=0o700, exist_ok=True)
+        except OSError:
+            self.say("the cache folder cannot be made; gateway commands fail until it can")
         if run_mod.sweep_scratch(config.cache_dir()):
             self.say("removed scratch folders an earlier broker left")
         from phiward import confine

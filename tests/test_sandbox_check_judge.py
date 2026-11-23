@@ -393,6 +393,28 @@ def test_gateway_class_not_in_the_list_is_never_printed(why):
     assert not any("FAKE-PT" in ln or "a.txt" in ln for ln in report), report
 
 
+@pytest.mark.parametrize("line, shown", [
+    ("run failed (FileExistsError)", "run failed (FileExistsError)"),
+    ("wc: <x> <x> Traceback: something", "wc: <x> <x> Traceback: something"),
+    ("-", "(none)"),
+    ("wc: FAKE-PT-0001/a.txt", "unknown"),
+    ("run failed 3", "unknown"),
+])
+def test_gateway_prints_an_unclassified_failures_first_line_in_letters_only(line, shown):
+    results = gw("BAD other") + f"gateway-why other\ngateway-exit 3\ngateway-error none\n" \
+        f"gateway-line {line}\n"
+    verdict, report = run(results=results, platform="linux")
+    assert verdict == judge.INCONCLUSIVE
+    assert f"note gateway-run, its first line: {shown}" in report, report
+    assert not any("FAKE-PT" in ln for ln in report), report
+
+
+def test_gateway_first_line_is_printed_only_for_an_unclassified_failure():
+    results = gw("BAD other") + "gateway-why refused\ngateway-line run refused\n"
+    verdict, report = run(results=results, platform="linux")
+    assert not any("its first line" in ln for ln in report), report
+
+
 def test_gateway_class_is_not_printed_when_the_gateway_masked():
     results = LINUX + "gateway-why other\n"
     verdict, report = run(results=results, platform="linux")
@@ -518,8 +540,27 @@ def test_probes_record_only_the_class_of_phiward_runs_failure(tmp_path, why):
     assert lines["gateway-run"] == "BAD other"
     assert lines["gateway-why"] == why, lines
     assert "gateway-err" not in lines
-    for bit in ("FAKE-PT-00", "a.txt", "%2D", "Traceback", "broker log", "doctor"):
+    # an unclassified failure keeps its first line's words of letters only (below)
+    for bit in ("FAKE-PT-00", "a.txt", "%2D") + (() if why == "other" else
+                                                  ("Traceback", "broker log", "doctor")):
         assert bit not in text, (bit, text)
+    assert ("gateway-line" in lines) == (why == "other"), lines
+
+
+@pytest.mark.parametrize("text, line", [
+    (FAKES["other"][0], "wc: <x> <x> Traceback: something"),
+    ("run failed (FileExistsError)", "run failed (FileExistsError)"),
+    ("", "-"),
+])
+def test_probes_record_an_unclassified_failures_first_line_in_letters_only(tmp_path, text,
+                                                                            line):
+    """The real check's `phiward run` exited 3 with output no word fits (`other`), and nothing
+    said why: the first line is kept, each word with anything but letters as <x>, so no path,
+    ID or name in another spelling (FAKE-PT-0001/a.txt%2D) reaches results.txt."""
+    lines, kept = _probes(tmp_path, (text, 3))
+    assert lines["gateway-why"] == "other", lines
+    assert lines["gateway-line"] == line, lines
+    assert "FAKE-PT" not in kept and "a.txt" not in kept and "%2D" not in kept, kept
 
 
 def test_probes_see_the_targets_when_nothing_hides_them(tmp_path):

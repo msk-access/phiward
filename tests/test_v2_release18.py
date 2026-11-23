@@ -486,6 +486,22 @@ def test_the_broker_removes_leftover_scratch_folders_at_start(tree, broker):
     assert not os.path.exists(old)
 
 
+def test_the_broker_makes_its_cache_folder_at_start(tree, broker):
+    """Claude Code's sandbox on Linux, while a command runs, puts an empty read-only file at a
+    denied path that does not exist (the mount point that blocks its creation), on the host.
+    The cache folder is denied, and the broker makes its scratch there: `phiward run` from the
+    session failed with exit 3 (run failed (FileExistsError)) when the folder was not made yet.
+    The broker makes it when it starts, before a session can ask."""
+    import shutil
+    import stat as st_mod
+    from phiward import config
+    cache = config.cache_dir()
+    shutil.rmtree(cache, ignore_errors=True)
+    broker()  # a restart, with no cache folder
+    st = os.lstat(cache)
+    assert st_mod.S_ISDIR(st.st_mode) and st_mod.S_IMODE(st.st_mode) == 0o700, oct(st.st_mode)
+
+
 def test_a_fifo_named_like_the_heartbeat_does_not_hang_the_broker(tree, broker):
     import time
     alive = os.path.join(broker.spool, "broker.alive")

@@ -116,7 +116,9 @@ Then push `main`, `develop` and the tag.
    each session, of whether the probe file is on the host (for the settings, their hash before
    and after). When `phiward run` fails in the session for another reason, the report notes one
    word for why (for example `no-broker` or `refused`), its exit code and an error class (for
-   example `permission-denied` or `traceback`); no text of its output is kept. In Mode A, Claude
+   example `permission-denied` or `traceback`). When no word fits (`other`), it also notes the
+   first line of the output, with each word that holds anything but letters (a digit, a path,
+   an ID, a sign) shown as `<x>`; no other text of the output is kept. In Mode A, Claude
    Code's own refusal of the Read ("denied by your permission settings": the deny rules
    `install` writes) counts as a refusal. The session also reads the environment of every
    process it can see in `/proc`, and records only counts and PIDs: a credential variable's
