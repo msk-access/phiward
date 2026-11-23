@@ -290,7 +290,9 @@ git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false c
 "$uv" tool install -q ${SBX_WHEEL:+--offline} --python "$py" "$wheel" > "$H/install.out" 2>&1 || fail "uv tool install" "$H/install.out"
 {
   printf '[protected_paths]\nroots = ["%s/data"]\n[broker]\ncommands = ["wc"]\n' "$H"
-  printf '[sanitize]\npacks = ["genomics", "msk"]\n'
+  # paths.txt (the probes' list, in the project) holds the made-up sample ID: the project scan
+  # (#68) would refuse Mode B's launch for it
+  printf '[sanitize]\npacks = ["genomics", "msk"]\nscan_allow = ["%s/proj/paths.txt"]\n' "$H"
   if [ -n "$REMOTE" ]; then
     printf '[copy]\nremotes = ["%s:%s"]\nssh_config = "%s/.config/phiward/ssh_config"\n' "$REMOTE" "$REMOTE_DIR" "$H"
     printf '[remote]\nhosts = ["%s"]\ncommands = ["wc", "ls"]\nroots = ["%s"]\n' "$REMOTE" "$REMOTE_DIR"
