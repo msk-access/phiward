@@ -193,7 +193,7 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 ### Changed
 
 - `phiward launch` routes the tool's network through a proxy that allows only public addresses.
-  The tool has no direct IP network: on macOS its profile allows only the proxy's random port on
+  The tool has no direct outbound IP connection: on macOS its profile allows only the proxy's random port on
   loopback, TCP only (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
   its own, and a relay on the session's own 127.0.0.1 gets each connection to the proxy as one end
   of a socket pair from the launcher (no socket with a path leads to the proxy, so this works
@@ -209,8 +209,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   lookups inside the session). `launch` refuses to start when the proxy cannot start, and on
   Linux where network namespaces are not available, which `doctor` reports. On macOS the
   profile no longer allows the `nsurlsessiond`, `networkd`, `ocspd` and system `trustd`
-  services (the user's `trustd` agent stays: it reads the OS trust store). The macOS profile denies
-  every IP bind (no machine on the network can connect in; loopback cannot be told apart). The launcher raises
+  services (the user's `trustd` agent stays: it reads the OS trust store). On macOS a session can still
+  listen on any address (Seatbelt cannot limit binds to loopback): bind local servers to
+  `127.0.0.1`. The launcher raises
   its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
   held. On Linux the session's network namespace keeps abstract unix sockets apart, on every
   kernel.

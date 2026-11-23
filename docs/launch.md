@@ -141,12 +141,12 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
 | Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
 | Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps; on macOS also mount file systems or create launchd jobs |
-| Network | tunnels (CONNECT) to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; on macOS listen on an IP address; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
+| Network | tunnels (CONNECT) to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
 
 ## The network
 
-The session has no direct network. `launch` runs a proxy outside the profile, and the tool's
+The session has no direct outbound network. `launch` runs a proxy outside the profile, and the tool's
 `HTTPS_PROXY`, `HTTP_PROXY` and `ALL_PROXY` (and their lowercase forms) name it, with a token for
 this session only; `NO_PROXY` is empty. Claude Code, git, pip, npm and curl use it.
 
@@ -178,12 +178,10 @@ What this breaks:
 - Docker over TCP (`DOCKER_HOST=tcp://localhost`); the Docker socket is blocked already.
 - **macOS:** the session cannot reach a server on this machine, also one it started itself: test
   suites with local HTTP fixtures, dev servers, Jupyter kernels (ZMQ over TCP by default) and Dask
-  local clusters. It cannot listen on an IP address at all (no bind, also not on `127.0.0.1`), so
-  no machine on the network can connect in (`python -m http.server` binds every address): the
-  kernel profile cannot tell a bind to `0.0.0.0` from one to loopback. Claude Code's own sandbox
-  allows no bind either unless `allowLocalBinding` is set, and its sign-in asks for the code
-  when it cannot listen. Use unix sockets in the project or the session's temp folder, or an IPC
-  transport (`jupyter ... --transport ipc`). Name lookups still work.
+  local clusters. Use unix sockets in the project or the session's temp folder, or an IPC
+  transport (`jupyter ... --transport ipc`). Name lookups still work. A server the session
+  starts can listen on every address, and the LAN can reach it: bind local servers to
+  `127.0.0.1` (`python -m http.server --bind 127.0.0.1`) ([the limit](threat-model.md#open-network)).
 - **Linux:** the session has a network of its own, with its own `localhost`: servers it starts
   itself work. The proxy variables name a relay on that `localhost`, which gets each connection
   to the proxy as a socket pair from `launch` (no socket file; it works also where the tool

@@ -491,12 +491,9 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1); `tcp`, as the
     # proxy holds only TCP on that port, and UDP to it would reach whoever binds it
     p += '(deny network-outbound (remote ip "*:*"))'
-    # no inbound from the network: no IP bind at all. A bind to 0.0.0.0, :: or this machine's
-    # address would let a host on the network connect in and read the project, and the
-    # profile's `(local ip "localhost:*")` also matches 0.0.0.0 and ::, so loopback cannot be
-    # kept alone. Claude Code's own sandbox allows no bind either unless allowLocalBinding is
-    # set, and its sign-in falls back to a pasted code when it cannot listen
-    p += '(deny network-bind (local ip "*:*"))'
+    # binds stay allowed: the profile's `(local ip "localhost:*")` also matches 0.0.0.0 and ::,
+    # so loopback cannot be kept alone, and a total deny breaks localhost servers and Claude
+    # Code's sign-in (the limit: threat-model.md)
     if proxy_port:
         p += f'(allow network-outbound (remote tcp "localhost:{int(proxy_port)}"))'
     p += "(deny lsopen)(deny appleevent-send)(deny user-preference-write)"

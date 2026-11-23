@@ -1,5 +1,5 @@
 """The network of a `phiward launch` session: one CONNECT proxy in the launcher, outside the
-profile, with the operator's rights. The tool has no direct IP network. On macOS the profile
+profile, with the operator's rights. The tool has no direct outbound IP connection. On macOS the profile
 allows only the proxy's port on loopback, which the launcher holds on both 127.0.0.1 and [::1]
 for its whole life. On Linux the session has a network namespace of its own, and a relay in the
 session's helper listens on the namespace's own 127.0.0.1. The relay holds one end of a socket

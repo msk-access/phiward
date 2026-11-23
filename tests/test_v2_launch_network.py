@@ -1033,46 +1033,6 @@ def test_1_the_profiles_one_port_is_tcp_only(tree):
     assert "TCP ::1 PROXY-PORT" in out and "TCP-REFUSED ::ffff:127.0.0.1" in out, out
 
 
-
-@macos
-def test_1_the_session_binds_no_ip_address(tree):
-    """No inbound from the network: a process in the profile cannot bind 0.0.0.0, :: or this
-    machine's own address (a LAN host would connect in and read the project, as with
-    `python -m http.server`). Loopback is refused too: the profile's localhost filter also
-    matches 0.0.0.0 and ::, so it cannot be kept alone. A unix socket in the session's own
-    folder still binds."""
-    from phiward import config, confine, netproxy, wholetool
-    if confine.backend() != "seatbelt":
-        pytest.skip("no sandbox-exec")
-    lan = sorted(a for a in (str(x[0]) if isinstance(x, tuple) else str(x)
-                             for x in netproxy.own_addresses())
-                 if ":" not in a and not a.startswith("127."))
-    cfg = config.load(str(tree / "repo"))
-    folder = tree / "home" / ".phiward" / "tools" / "generic"
-    run = folder / "runs" / "r1"
-    (run / "tmp").mkdir(parents=True)
-    prof = wholetool.seatbelt_tool_profile(cfg, [str(tree / "repo"), str(run)],
-                                           str(tree / "repo"), dict(os.environ), str(folder),
-                                           str(tree / "home" / ".phiward" / "canary"),
-                                           proxy_port=40999)
-    hosts = ["0.0.0.0", "::", "127.0.0.1", "::1"] + lan[:1]
-    code = ("import os, socket, sys\n"
-            f"u = socket.socket(socket.AF_UNIX); u.bind(os.path.join({str(run / 'tmp')!r}, 's'))\n"
-            "print('UNIX-BOUND')\n"
-            "for host in sys.argv[1:]:\n"
-            "    s = socket.socket(socket.AF_INET6 if ':' in host else socket.AF_INET)\n"
-            "    try:\n"
-            "        s.bind((host, 0)); s.listen(1)\n"
-            "        print('BOUND', host)\n"
-            "    except OSError as e:\n"
-            "        print('REFUSED', host, e.errno)\n")
-    r = subprocess.run([confine.SANDBOX_EXEC, "-p", prof, PY, "-c", code] + hosts,
-                       capture_output=True, text=True, timeout=60)
-    out = r.stdout + r.stderr
-    for host in hosts:
-        assert f"REFUSED {host} {errno.EPERM}" in out, (host, out)
-    assert "UNIX-BOUND" in out, out
-
 # --- 13: limits at launch level: tunnels held while carry-over runs ------------------------------
 
 class HoldingUpstream(FakeUpstream):

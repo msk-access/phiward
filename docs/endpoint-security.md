@@ -224,7 +224,7 @@ command lines, both ways (`tests/test_macos_processes.py`).
 
 ## Network: the launch proxy
 
-Under `phiward launch`, the agent tool has no direct IP network. Its HTTPS goes through a proxy
+Under `phiward launch`, the agent tool has no direct outbound IP connection. Its HTTPS goes through a proxy
 that runs in the launcher's own process (`phiward launch`, the Python): it starts no process
 of its own, and it ends with the session.
 
@@ -238,8 +238,8 @@ of its own, and it ends with the session.
 
 The proxy refuses this machine, the local link and the private ranges. On macOS, the tool's
 profile allows it only the proxy's port on loopback. On Linux, the session has a network
-namespace of its own, and a relay inside it hands each connection to the launcher. On macOS the
-session itself cannot listen on an IP address.
+namespace of its own, and a relay inside it hands each connection to the launcher. On macOS a server
+the session starts can still listen on any address (see the threat model).
 
 ## Who signed what
 

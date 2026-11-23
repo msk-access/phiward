@@ -13,7 +13,7 @@ This page says what is protected, against whom, and where the limits are.
   sending what it can read. It stops the agent from reading protected data. In Mode A, `[network]
   limit` lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it.
   The WebFetch tool, MCP servers and commands a project excludes from the sandbox stay open.
-  In Mode B the tool has no direct network: everything goes through phiward's proxy, which allows
+  In Mode B the tool has no direct outbound network: every connection goes through phiward's proxy, which allows
   only public addresses (not this machine, its link or private ranges, unless the user config
   lists a private range). Each host that can be reached is itself a way out (a push, a gist, a
   host behind a shared CDN).
@@ -1217,7 +1217,7 @@ test`), or read the change before you run it outside.
 **Known open items in this phase:**
 - <a id="open-network"></a>the network under `launch` goes only through phiward's proxy, outside
   the profile, and only to public addresses ([launch.md](launch.md#the-network)). The tool has no
-  direct IP network: on macOS the profile allows only the proxy's port on loopback, which the
+  direct outbound IP connection: on macOS the profile allows only the proxy's port on loopback, which the
   launcher holds on both 127.0.0.1 and [::1] until it exits; on Linux the session has a network
   namespace of its own, and a relay on its own 127.0.0.1 gets each connection to the proxy as one
   end of a socket pair from the launcher: no socket with a path leads to the proxy, and a pair
@@ -1237,9 +1237,11 @@ test`), or read the change before you run it outside.
     addresses, but decides itself what it forwards; an address in `[launch] private_networks`
     is connected to directly;
   - the proxy tunnels to any port of a checked address, not only 443;
-  - inbound: on Linux the session's network is its own; on macOS its profile denies every IP
-    bind (also loopback, which the profile cannot tell from `0.0.0.0`), so no machine on the
-    network connects in;
+  - inbound, macOS: a session can listen on any address, and Seatbelt cannot limit that to
+    loopback (its `localhost` filter also matches `0.0.0.0` and `::`). A server the session
+    starts on every interface is reachable from the LAN. What it can serve is what the session
+    can read: the project and masked output; the protected roots stay unreadable. Linux is not
+    affected: the session has a network namespace of its own;
   - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
     lookups fail inside the session too;
   - macOS: the user's `trustd` agent stays reachable, as the OS trust store is read through it
