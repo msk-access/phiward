@@ -11,8 +11,8 @@ How one CONNECT is decided:
 - the session's token (`Proxy-Authorization: Basic`, user `phiward`); without it, 407;
 - one request per connection, CONNECT only (anything else: 405); after a 200 the connection is
   a tunnel to the checked address and nothing in it is read as a request;
-- the target: brackets and one trailing dot taken off; `localhost`, `*.localhost` and this
-  machine's names refused before any lookup;
+- the target: brackets and one trailing dot taken off; no name is refused by its text
+  (`localhost`, `*.localhost` and this machine's names are refused by their addresses below);
 - one lookup (getaddrinfo), and only the addresses it returns are judged, never the text
   (`0177.1`, `2130706433` and `0` are loopback or unspecified once parsed). An embedded IPv4 is
   unwrapped first (mapped, compatible, NAT64, 6to4). Each form must be global and not one of
@@ -165,14 +165,7 @@ def own_addresses() -> Set[Address]:
     return out
 
 
-def own_names() -> Set[str]:
-    """This machine's names, refused before any lookup."""
-    name = socket.gethostname().lower().rstrip(".")
-    short = name.split(".", 1)[0]
-    return {n for n in (name, short, short + ".local") if n}
-
-
-_own_addresses, _own_names = own_addresses, own_names
+_own_addresses = own_addresses
 
 
 def _resolve(host: str, port: int) -> List[str]:
@@ -302,7 +295,6 @@ class Proxy:
                  upstream: Optional[Upstream] = None,
                  resolver: Optional[Callable[[str, int], List[str]]] = None,
                  own_addresses: Optional[Callable[[], Set[Address]]] = None,
-                 own_names: Optional[Callable[[], Set[str]]] = None,
                  dial: Optional[Callable[[str, int, float], socket.socket]] = None,
                  limit: int = MAX_CONNECTIONS, header_timeout: float = HEADER_TIMEOUT,
                  connect_timeout: float = CONNECT_TIMEOUT,
@@ -312,7 +304,6 @@ class Proxy:
         self.upstream = upstream
         self.resolver = resolver or _resolve
         self.own_addresses = own_addresses or _own_addresses
-        self.own_names = own_names or _own_names
         self.dial = dial or _dial
         self.header_timeout, self.connect_timeout = header_timeout, connect_timeout
         self.idle_timeout = idle_timeout
@@ -530,9 +521,6 @@ class Proxy:
             host, port = target(parts[1])
         except ValueError:
             raise _Refuse(400, "not a host:port target") from None
-        names = self.own_names()
-        if host == "localhost" or host.endswith(".localhost") or host in names:
-            raise _Refuse(403, f"{host} is this machine")
         try:
             addrs = list(dict.fromkeys(self.resolver(host, port)))
         except Exception:  # noqa: BLE001 - any lookup failure refuses
@@ -551,13 +539,20 @@ class Proxy:
         each = min(self.connect_timeout, PER_ADDRESS_TIMEOUT)
         for ip in addrs:
             try:
-                if self.upstream is None:
+                # an address of the user's private networks is dialled directly: an upstream
+                # (a corporate HTTPS_PROXY) does not reach the internal network
+                if self.upstream is None or self._allowed_private(ip):
                     return self.dial(ip, port, each), rest, b""
                 remote, early = self._via_upstream(ip, port, each)
                 return remote, rest, early
             except Exception:  # noqa: BLE001 - this address failed: the next one
                 continue
         raise _Refuse(502, f"{host} cannot be reached")
+
+    def _allowed_private(self, ip: str) -> bool:
+        """Whether a checked address is one of `[launch] private_networks`, not a public one."""
+        a = ipaddress.ip_address(ip.split("%", 1)[0])
+        return not a.is_global and _within(a, self.allow)
 
     def _token_ok(self, auth: str) -> bool:
         scheme, _, value = auth.partition(" ")

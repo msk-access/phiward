@@ -1233,8 +1233,13 @@ test`), or read the change before you run it outside.
   - a service on this machine reached through another machine (a public host or listed private
     host that forwards back), or a public address of this machine that `getifaddrs` does not
     list (a NAT in front of it);
-  - an upstream proxy (your `HTTPS_PROXY` when `launch` starts) gets only checked addresses, but
-    decides itself what it forwards;
+  - an upstream proxy (your `HTTPS_PROXY` when `launch` starts) gets only checked public
+    addresses, but decides itself what it forwards; an address in `[launch] private_networks`
+    is connected to directly;
+  - the proxy tunnels to any port of a checked address, not only 443;
+  - inbound: on Linux the session's network is its own; on macOS its profile denies every IP
+    bind (also loopback, which the profile cannot tell from `0.0.0.0`), so no machine on the
+    network connects in;
   - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
     lookups fail inside the session too;
   - macOS: the user's `trustd` agent stays reachable, as the OS trust store is read through it

@@ -491,6 +491,12 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1); `tcp`, as the
     # proxy holds only TCP on that port, and UDP to it would reach whoever binds it
     p += '(deny network-outbound (remote ip "*:*"))'
+    # no inbound from the network: no IP bind at all. A bind to 0.0.0.0, :: or this machine's
+    # address would let a host on the network connect in and read the project, and the
+    # profile's `(local ip "localhost:*")` also matches 0.0.0.0 and ::, so loopback cannot be
+    # kept alone. Claude Code's own sandbox allows no bind either unless allowLocalBinding is
+    # set, and its sign-in falls back to a pasted code when it cannot listen
+    p += '(deny network-bind (local ip "*:*"))'
     if proxy_port:
         p += f'(allow network-outbound (remote tcp "localhost:{int(proxy_port)}"))'
     p += "(deny lsopen)(deny appleevent-send)(deny user-preference-write)"
@@ -2120,30 +2126,33 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         # the session reaches the proxy through the relay on its own 127.0.0.1, which asks for
         # each connection on its end of the proxy's socket pair (no socket with a path)
         proxy = _start_proxy(cfg, env, pair=True)
+        opened: List[int] = []  # every descriptor made here: closed with the proxy on a refusal
         try:
             relay = netproxy.random_port()
             child_env.update(_proxy_env(proxy.url(relay)))
             args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
+            opened += fds
             end = proxy.take_session_end()
+            opened.append(end)
             child_env["PHIWARD_PROXY_RELAY"] = f"{relay}:{end}"
-        except BaseException:
-            proxy.close()
-            raise
-        r, w = os.pipe()
-        os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
-        os.close(w)
-        os.set_inheritable(r, True)
-        # the helper's checks, written by `ready` right before bwrap starts (an unlinked file:
-        # a pipe holds too little for a large view)
-        with tempfile.TemporaryFile() as fh:
-            chk = os.dup(fh.fileno())
-        os.set_inheritable(chk, True)
-        held = [str(fd) for fd in fds]
-        try:
+            r, w = os.pipe()
+            opened.append(r)
+            try:
+                os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
+            finally:
+                os.close(w)
+            os.set_inheritable(r, True)
+            # the helper's checks, written by `ready` right before bwrap starts (an unlinked
+            # file: a pipe holds too little for a large view)
+            with tempfile.TemporaryFile() as fh:
+                chk = os.dup(fh.fileno())
+            opened.append(chk)
+            os.set_inheritable(chk, True)
+            held = [str(fd) for fd in fds]
             cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
                                  argv)
         except BaseException:  # any refusal (also confine's): nothing is left open
-            for fd in fds + [r, chk, end]:
+            for fd in opened:
                 os.close(fd)
             proxy.close()
             raise

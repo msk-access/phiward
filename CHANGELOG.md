@@ -198,18 +198,19 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   its own, and a relay on the session's own 127.0.0.1 gets each connection to the proxy as one end
   of a socket pair from the launcher (no socket with a path leads to the proxy, so this works
   also where the tool cannot make unix sockets; a pair that cannot be passed is a refusal). The
-  proxy runs in the launcher, outside the profile. It takes HTTPS (CONNECT) only, needs a token
+  proxy runs in the launcher, outside the profile. It takes CONNECT tunnels only (to any port), needs a token
   for the session, looks a name up once, checks every address, and connects to the checked addresses in turn
   (a short timeout each, so broken IPv6 does not stop a connection). It refuses this
   machine, the local link and the private ranges; `[launch] private_networks` in the user config
-  (never a project's) lists private ranges it may reach. A `HTTPS_PROXY` in the terminal is
-  chained by checked address only. The tool's proxy variables all name the session's proxy and
+  (never a project's) lists private ranges it may reach, connected to directly. A `HTTPS_PROXY`
+  in the terminal is chained by checked address only, for public addresses. The tool's proxy variables all name the session's proxy and
   `NO_PROXY` is empty. What this breaks is in docs/launch.md (servers on this machine, also on
   macOS one the session starts; tools that ignore the proxy variables; UDP; on Linux, name
   lookups inside the session). `launch` refuses to start when the proxy cannot start, and on
   Linux where network namespaces are not available, which `doctor` reports. On macOS the
   profile no longer allows the `nsurlsessiond`, `networkd`, `ocspd` and system `trustd`
-  services (the user's `trustd` agent stays: it reads the OS trust store). The launcher raises
+  services (the user's `trustd` agent stays: it reads the OS trust store). The macOS profile denies
+  every IP bind (no machine on the network can connect in; loopback cannot be told apart). The launcher raises
   its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
   held. On Linux the session's network namespace keeps abstract unix sockets apart, on every
   kernel.

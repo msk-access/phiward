@@ -38,6 +38,7 @@ tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-F]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-U]
 tests/test_v2_launch_network.py::test_1_the_profile_allows_only_the_proxys_port
 tests/test_v2_launch_network.py::test_1_the_profiles_one_port_is_tcp_only
+tests/test_v2_launch_network.py::test_1_the_session_binds_no_ip_address
 tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v4]
 tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v6]
 tests/test_v2_launch_network.py::test_8_launch_refuses_when_the_proxys_port_is_squatted

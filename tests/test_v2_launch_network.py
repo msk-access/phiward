@@ -192,7 +192,6 @@ def make_proxy():
     def make(**kw):
         np = _np()
         kw.setdefault("own_addresses", lambda: set())
-        kw.setdefault("own_names", lambda: {"fake-host", "fake-host.local"})
         p = np.Proxy(kw.pop("token", TOKEN), **kw)
         p.listen_loopback()
         p.serve()
@@ -247,13 +246,37 @@ def _status(line):
     "x.localhost:443", "0.0.0.0:443", "169.254.169.254:80", "fake-host:443", "FAKE-HOST.:443",
     "fake-host.local:443"])
 def test_3_the_proxy_refuses_this_machine_and_its_link(make_proxy, authority):
+    # the names as this machine's resolver answers them (made up: no mDNS lookup in a test)
     dial = Dial()
-    p = make_proxy(dial=dial)
+    p = make_proxy(dial=dial, resolver=Resolver({
+        "localhost": ["127.0.0.1", "::1"], "x.localhost": ["127.0.0.1"],
+        "fake-host": ["127.0.1.1"], "fake-host.local": ["fe80::1"]}))
     try:
         line, _ = ask(p, authority)
     finally:
         dial.close()
     assert _status(line) == 403 and not dial.calls, (authority, line)
+
+
+@pytest.mark.parametrize("name, answer", [
+    ("localhost", "127.0.0.1"), ("localhost", "::1"), ("x.localhost", "127.0.0.1"),
+    ("fake-host", "127.0.1.1"), ("fake-host", "10.20.1.2"), ("FAKE-HOST.", "8.8.4.4"),
+    ("fake-host.local", "fe80::1")])
+def test_3_this_machines_names_are_refused_by_their_address(make_proxy, name, answer):
+    """No name list: `localhost`, `*.localhost` and this machine's names are refused by the
+    address they resolve to (loopback, the link, or one of this machine's own addresses, also
+    one inside `[launch] private_networks` or a public one), as every other name is."""
+    import ipaddress
+    dial = Dial()
+    own = {ipaddress.ip_address("10.20.1.2"), ipaddress.ip_address("8.8.4.4")}
+    p = make_proxy(dial=dial, own_addresses=lambda: own,
+                   allow=[ipaddress.ip_network("10.20.0.0/16")],
+                   resolver=Resolver({name.lower().rstrip("."): [answer]}))
+    try:
+        line, _ = ask(p, f"{name}:443")
+    finally:
+        dial.close()
+    assert _status(line) == 403 and not dial.calls, (name, answer, line)
 
 
 def test_3_a_name_that_resolves_to_loopback_is_refused(make_proxy):
@@ -514,6 +537,29 @@ def test_11_upstream_gets_connect_to_the_checked_address(make_proxy, addr, sent)
     assert _status(line) == 200 and b"FAKE-PT-0001" in rest, (line, rest)
     assert len(up.heads) == 1 and up.heads[0].startswith(sent), up.heads
     assert b"pub.example" not in up.heads[0]
+
+
+def test_11_an_allowed_private_address_is_dialled_directly_not_upstream(make_proxy):
+    """A corporate HTTPS_PROXY does not reach the internal network: an address inside
+    `[launch] private_networks` is dialled from the launcher, never sent upstream; a public
+    one still goes upstream."""
+    import ipaddress
+    up, dial = FakeUpstream(), Dial()
+    np = _np()
+    p = make_proxy(resolver=Resolver({"git.corp.example": ["10.20.1.2"],
+                                      "pub.example": ["8.8.4.4"]}),
+                   allow=[ipaddress.ip_network("10.20.0.0/16")], dial=dial,
+                   upstream=np.Upstream("127.0.0.1", up.port, ""))
+    try:
+        line, rest = ask(p, "git.corp.example:443", read_more=True)
+        assert _status(line) == 200 and b"FAKE-PT-0001" in rest, (line, rest)
+        assert dial.calls == [("10.20.1.2", 443)] and up.heads == [], (dial.calls, up.heads)
+        line, _ = ask(p, "pub.example:443", read_more=True)
+        assert _status(line) == 200 and len(up.heads) == 1, (line, up.heads)
+        assert dial.calls == [("10.20.1.2", 443)], dial.calls
+    finally:
+        up.close()
+        dial.close()
 
 
 @pytest.mark.parametrize("value", ["https://proxy.example:3128", "socks5://proxy.example:1080",
@@ -795,6 +841,28 @@ def test_4_a_refusal_after_the_proxy_starts_closes_it(tree, monkeypatch):
 
 
 @needs_confine
+@pytest.mark.skipif(not sys.platform.startswith("linux"), reason="bubblewrap's steps")
+@pytest.mark.parametrize("step", ["tool_seccomp_program", "TemporaryFile"])
+def test_4_a_failed_step_before_bwrap_closes_the_proxy(tree, monkeypatch, step):
+    """The steps between the proxy's start and bwrap's command (the seccomp program's pipe, the
+    checks' file) failing: the proxy is closed too."""
+    import tempfile
+    from phiward import wholetool
+    made = _record_proxies(monkeypatch)
+
+    def fail(*a, **k):
+        raise OSError(errno.EMFILE, "made-up failed step")
+    monkeypatch.setattr(wholetool if step == "tool_seccomp_program" else tempfile, step, fail)
+    monkeypatch.setattr(wholetool, "already_confined", lambda env: False)
+    monkeypatch.chdir(tree / "repo")
+    run = wholetool._Run()
+    code = wholetool._launch("generic", False, ["--", PY, "-c", "print('RAN')"],
+                             dict(os.environ), run, "")
+    assert code != 0 and not run.ran, run.notes
+    assert len(made) == 1 and made[0]._closed.is_set(), made
+
+
+@needs_confine
 def test_4_an_upstream_that_cannot_be_chained_stops_launch(tree):
     code, out = launch(tree, "print('RAN')", env_extra={"HTTPS_PROXY": "socks5://proxy.example:1"})
     assert code != 0 and "RAN" not in out and "proxy" in out, out
@@ -964,6 +1032,46 @@ def test_1_the_profiles_one_port_is_tcp_only(tree):
     assert got == [], (got, out)
     assert "TCP ::1 PROXY-PORT" in out and "TCP-REFUSED ::ffff:127.0.0.1" in out, out
 
+
+
+@macos
+def test_1_the_session_binds_no_ip_address(tree):
+    """No inbound from the network: a process in the profile cannot bind 0.0.0.0, :: or this
+    machine's own address (a LAN host would connect in and read the project, as with
+    `python -m http.server`). Loopback is refused too: the profile's localhost filter also
+    matches 0.0.0.0 and ::, so it cannot be kept alone. A unix socket in the session's own
+    folder still binds."""
+    from phiward import config, confine, netproxy, wholetool
+    if confine.backend() != "seatbelt":
+        pytest.skip("no sandbox-exec")
+    lan = sorted(a for a in (str(x[0]) if isinstance(x, tuple) else str(x)
+                             for x in netproxy.own_addresses())
+                 if ":" not in a and not a.startswith("127."))
+    cfg = config.load(str(tree / "repo"))
+    folder = tree / "home" / ".phiward" / "tools" / "generic"
+    run = folder / "runs" / "r1"
+    (run / "tmp").mkdir(parents=True)
+    prof = wholetool.seatbelt_tool_profile(cfg, [str(tree / "repo"), str(run)],
+                                           str(tree / "repo"), dict(os.environ), str(folder),
+                                           str(tree / "home" / ".phiward" / "canary"),
+                                           proxy_port=40999)
+    hosts = ["0.0.0.0", "::", "127.0.0.1", "::1"] + lan[:1]
+    code = ("import os, socket, sys\n"
+            f"u = socket.socket(socket.AF_UNIX); u.bind(os.path.join({str(run / 'tmp')!r}, 's'))\n"
+            "print('UNIX-BOUND')\n"
+            "for host in sys.argv[1:]:\n"
+            "    s = socket.socket(socket.AF_INET6 if ':' in host else socket.AF_INET)\n"
+            "    try:\n"
+            "        s.bind((host, 0)); s.listen(1)\n"
+            "        print('BOUND', host)\n"
+            "    except OSError as e:\n"
+            "        print('REFUSED', host, e.errno)\n")
+    r = subprocess.run([confine.SANDBOX_EXEC, "-p", prof, PY, "-c", code] + hosts,
+                       capture_output=True, text=True, timeout=60)
+    out = r.stdout + r.stderr
+    for host in hosts:
+        assert f"REFUSED {host} {errno.EPERM}" in out, (host, out)
+    assert "UNIX-BOUND" in out, out
 
 # --- 13: limits at launch level: tunnels held while carry-over runs ------------------------------
 

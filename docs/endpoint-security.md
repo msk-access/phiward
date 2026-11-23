@@ -230,15 +230,16 @@ of its own, and it ends with the session.
 
 | What | Where | When | What it does |
 |---|---|---|---|
-| A listening port | `127.0.0.1` and `[::1]`, one random port held on both, TCP | while a launched session runs | takes the tool's `CONNECT` requests; each needs the session's token |
+| A listening port | `127.0.0.1` and `[::1]`, one random port held on both, TCP | while a launched session runs | takes the tool's `CONNECT` requests (a tunnel to any port); each needs the session's token |
 | Outgoing connections | the addresses a name resolves to, public ranges only | each `CONNECT` of the tool | connects the tool to the host it asked for, from the launcher's process; a range in `[launch] private_networks` may be reached too |
-| Outgoing connections to a proxy | the proxy `HTTPS_PROXY` names in the user's terminal | each `CONNECT`, when that is set | asks that proxy for the checked address, never the name |
+| Outgoing connections to a proxy | the proxy `HTTPS_PROXY` names in the user's terminal | each `CONNECT` to a public address, when that is set | asks that proxy for the checked address, never the name; an address in `[launch] private_networks` is connected to directly |
 | Name lookups | the system's resolver | each `CONNECT` with a host name | one lookup in the launcher, before any connection |
 | A read of the machine's addresses | libc's `getifaddrs`, called in the launcher's process (Python `ctypes`) | each `CONNECT` | lists this machine's own addresses, which the proxy refuses; no process is started and no file is written |
 
 The proxy refuses this machine, the local link and the private ranges. On macOS, the tool's
 profile allows it only the proxy's port on loopback. On Linux, the session has a network
-namespace of its own, and a relay inside it hands each connection to the launcher.
+namespace of its own, and a relay inside it hands each connection to the launcher. On macOS the
+session itself cannot listen on an IP address.
 
 ## Who signed what
 
