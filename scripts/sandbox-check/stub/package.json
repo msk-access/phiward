@@ -1,0 +1,5 @@
+{
+  "name": "@anthropic-ai/claude-code",
+  "version": "2.1.327",
+  "description": "not Claude Code: the stand-in of scripts/sandbox-check/stub/claude, for check.sh --stub; launch reads a script's version from the package.json beside it, as for the npm build"
+}

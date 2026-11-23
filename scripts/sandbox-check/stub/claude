@@ -2,11 +2,17 @@
 # A stand-in for `claude -p`, for `check.sh --stub` (the plumbing, never Claude Code itself): no
 # model, no network, no sandbox of its own. It writes a stream-json transcript as Claude Code
 # does: the init event (after it starts the wrapped MCP server from the config Claude Code would
-# read), a Read of the protected file (refused if a PreToolUse hook refuses it, as Claude Code
-# runs the hooks, else read for real), and one Bash call of `sh ./probes.sh`, run with the
-# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
+# read), the UserPromptSubmit hooks on its prompt (a block ends the session there, with no turn,
+# as Claude Code does), then what the prompt asks: a Read of ./target.txt and a Read of the
+# protected file whose path it holds (each refused if a PreToolUse hook refuses it, as Claude
+# Code runs the hooks, else read for real), then one Bash call of `sh ./probes.sh`, run with the
+# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does); on Linux, while it
+# runs, the mount points Claude Code's sandbox leaves on the host stand (an empty read-only file
+# at the first missing part of each deny path). So in Mode A, where
 # nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
 # probes meet the real boundary. It cannot test the terminal prompt.
+# launch reads its version from the package.json beside it (as for the npm build; it starts no
+# script to ask), so it passes the Claude Code floor like the real one.
 # Claude Code's native build is also its seccomp filter, run as itself with ARGV0=apply-seccomp
 # (phiward launch probes it so on Linux): the stand-in's filter is the made-up one beside it
 if [ "${ARGV0:-}" = apply-seccomp ]; then
@@ -64,6 +70,32 @@ def matches(matcher, tool):
         return tool in matcher.split("|")
 
 
+def run_hook(h, payload):
+    """One hook as Claude Code runs it: the exec form (`command` and its `args`), else the
+    command through a shell. Returns (exit code, stdout, stderr)."""
+    if isinstance(h.get("args"), list):
+        argv = [str(h["command"])] + [str(a) for a in h["args"]]
+    else:
+        argv = ["sh", "-c", h["command"]]
+    try:
+        r = subprocess.run(argv, input=payload.encode(), capture_output=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return 1, b"", str(exc).encode()
+    return r.returncode, r.stdout, r.stderr
+
+
+def hooks_for(event, tool=None):
+    for src in settings + [user]:
+        for g in (load(src).get("hooks") or {}).get(event) or []:
+            m = (g.get("matcher") or "") if isinstance(g, dict) else ""
+            if tool is not None and not matches(m, tool):
+                continue
+            for h in (g.get("hooks") or []) if isinstance(g, dict) else []:
+                if isinstance(h, dict) and h.get("command"):
+                    yield h
+
+
+prompt = next((args[i + 1] for i, a in enumerate(args[:-1]) if a == "-p"), "")
 home = os.environ.get("HOME", "")
 conf = os.environ.get("CLAUDE_CONFIG_DIR")
 main = os.path.join(conf, ".claude.json") if conf else os.path.join(home, ".claude.json")
@@ -85,52 +117,70 @@ for name, entry in (load(main).get("mcpServers") or {}).items():
 emit({"type": "system", "subtype": "init", "cwd": cwd, "model": "stub", "mcp_servers": servers,
       "tools": ["Bash", "Read"]})
 
-prot = ""
-try:
-    with open(os.path.join(cwd, "paths.txt")) as fh:
-        for ln in fh:
-            if ln.startswith("protected-file "):
-                prot = ln.split(" ", 1)[1].strip()
-except OSError:
-    pass
+# the prompt: every UserPromptSubmit hook; exit 2 or a "block" decision stops it unsent
+payload = json.dumps({"session_id": "stub", "hook_event_name": "UserPromptSubmit",
+                      "prompt": prompt, "cwd": cwd, "transcript_path": ""})
+for h in hooks_for("UserPromptSubmit"):
+    code, out, err = run_hook(h, payload)
+    reason = err.decode(errors="replace").strip() if code == 2 else None
+    if reason is None:
+        try:
+            got = json.loads(out or b"{}")
+        except ValueError:
+            got = {}
+        if isinstance(got, dict) and got.get("decision") == "block":
+            reason = str(got.get("reason", "blocked"))
+    if reason is not None:
+        emit({"type": "system", "subtype": "informational", "level": "warning",
+              "content": "UserPromptSubmit operation blocked by hook:\n" + reason,
+              "prevent_continuation": True})
+        emit({"type": "result", "subtype": "success", "is_error": False, "num_turns": 0,
+              "result": ""})
+        sys.exit(0)
 
-# the Read: every PreToolUse hook whose matcher covers Read, from each settings source
-payload = json.dumps({"session_id": "stub", "hook_event_name": "PreToolUse", "tool_name": "Read",
-                      "tool_input": {"file_path": prot}, "cwd": cwd, "transcript_path": ""})
-refusal = None
-for src in settings + [user]:
-    for g in (load(src).get("hooks") or {}).get("PreToolUse") or []:
-        m = (g.get("matcher") or "") if isinstance(g, dict) else ""
-        if not matches(m, "Read"):
+def read_tool(path, tid):
+    """A Read as Claude Code makes it: every PreToolUse hook whose matcher covers Read, from each
+    settings source, then the file. Returns the text read, or "" when refused or missing."""
+    payload = json.dumps({"session_id": "stub", "hook_event_name": "PreToolUse",
+                          "tool_name": "Read", "tool_input": {"file_path": path}, "cwd": cwd,
+                          "transcript_path": ""})
+    refusal = None
+    for h in hooks_for("PreToolUse", "Read"):
+        if refusal is not None:
+            break
+        code, out, err = run_hook(h, payload)
+        if code == 2:
+            refusal = err.decode(errors="replace").strip()
             continue
-        for h in g.get("hooks") or []:
-            if refusal is not None or not isinstance(h, dict) or not h.get("command"):
-                continue
-            r = subprocess.run(["sh", "-c", h["command"]], input=payload.encode(),
-                               capture_output=True, timeout=30)
-            if r.returncode == 2:
-                refusal = r.stderr.decode(errors="replace").strip()
-                continue
-            try:
-                out = json.loads(r.stdout or b"{}")
-            except ValueError:
-                out = {}
-            spec = out.get("hookSpecificOutput") if isinstance(out, dict) else None
-            if isinstance(spec, dict) and spec.get("permissionDecision") == "deny":
-                refusal = str(spec.get("permissionDecisionReason", "denied"))
-emit({"type": "assistant", "message": {"content": [
-    {"type": "tool_use", "id": "stub-read", "name": "Read", "input": {"file_path": prot}}]}})
-if refusal is not None:
-    result, err = "PreToolUse:Read hook error: " + refusal, True
-else:
-    try:
-        with open(prot) as fh:
-            result, err = fh.read(), False
-    except OSError as exc:
-        result, err = ("File does not exist." if isinstance(exc, FileNotFoundError)
-                       else f"Error: {exc.strerror}"), True
-emit({"type": "user", "message": {"content": [
-    {"type": "tool_result", "tool_use_id": "stub-read", "is_error": err, "content": result}]}})
+        try:
+            got = json.loads(out or b"{}")
+        except ValueError:
+            got = {}
+        spec = got.get("hookSpecificOutput") if isinstance(got, dict) else None
+        if isinstance(spec, dict) and spec.get("permissionDecision") == "deny":
+            refusal = str(spec.get("permissionDecisionReason", "denied"))
+    emit({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": tid, "name": "Read", "input": {"file_path": path}}]}})
+    text = ""
+    if refusal is not None:
+        result, err = "PreToolUse:Read hook error: " + refusal, True
+    else:
+        try:
+            with open(path) as fh:
+                text = fh.read()
+            result, err = text, False
+        except OSError as exc:
+            result, err = ("File does not exist." if isinstance(exc, FileNotFoundError)
+                           else f"Error: {exc.strerror}"), True
+    emit({"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": tid, "is_error": err, "content": result}]}})
+    return text
+
+
+# as the prompt asks: a Read of ./target.txt and one of the path it holds (the prompt names
+# no protected path), then the Bash call
+target = read_tool(os.path.join(cwd, "target.txt"), "stub-target").strip()
+read_tool(target, "stub-read")
 
 # the Bash call, with the credentials scrubbed from its environment
 emit({"type": "assistant", "message": {"content": [
@@ -138,7 +188,47 @@ emit({"type": "assistant", "message": {"content": [
      "input": {"command": "sh ./probes.sh"}}]}})
 env = {k: v for k, v in os.environ.items()
        if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
-r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=240)
+
+
+def mount_points():
+    """What Claude Code's sandbox leaves on the host while a command runs, on Linux: for a
+    sandbox.filesystem deny path that does not exist, its first missing part, made as an empty
+    read-only file (the mount point that blocks its creation), where the host lets it be made.
+    Removed after the command, as Claude Code removes them. The paths made."""
+    if not sys.platform.startswith("linux"):
+        return []
+    deny = []
+    for path in [user] + settings:
+        fs = (load(path).get("sandbox") or {}).get("filesystem") or {}
+        for key in ("denyRead", "denyWrite"):
+            deny += [str(p) for p in fs.get(key) or [] if isinstance(p, str)]
+    made = []
+    for p in deny:
+        p = home + p[1:] if p == "~" or p.startswith("~/") else p
+        if not p.startswith("/") or any(c in p for c in "*?["):
+            continue
+        part = ""
+        for name in p.strip("/").split("/"):
+            part += "/" + name
+            if not os.path.lexists(part):
+                try:
+                    os.close(os.open(part, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444))
+                    made.append(part)
+                except OSError:
+                    pass
+                break
+    return made
+
+
+made = mount_points()
+try:
+    r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=240)
+finally:
+    for part in made:
+        try:
+            os.unlink(part)
+        except OSError:
+            pass
 emit({"type": "user", "message": {"content": [
     {"type": "tool_result", "tool_use_id": "stub-bash", "is_error": r.returncode != 0,
      "content": (r.stdout + r.stderr).decode(errors="replace")[-2000:]}]}})

@@ -70,6 +70,7 @@ FIELD = {
     ("remote", "hosts"): "remote_hosts", ("remote", "commands"): "remote_commands",
     ("remote", "roots"): "remote_roots", ("remote", "use_shared_connection"): "use_shared_connection",
     ("launch", "pass_env"): "launch_pass_env",
+    ("launch", "private_networks"): "launch_private_networks",
     ("broker", "write_to"): "write_to", ("broker", "net"): "net",
     ("broker", "commands"): "user_commands", ("broker", "max_output_lines"): "max_output_lines",
     ("network", "limit"): "network_limit", ("network", "allowed_domains"): "allowed_domains",

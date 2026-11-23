@@ -101,7 +101,7 @@ if [ "$r" = "BAD other" ]; then
   fi
   echo "gateway-why $why" >> results.txt
   # its exit code, and one error class matched in its output (the OS's words for an errno, the
-  # gateway's own refusals in confine.py, a Python failure); never any text of the output
+  # gateway's own refusals in confine.py, a Python failure); no text of the output (but below)
   case $out in
     *[Ll]andlock*) err=landlock ;;
     *"bwrap:"*) err=bwrap ;;
@@ -117,6 +117,21 @@ if [ "$r" = "BAD other" ]; then
   case $code in ''|*[!0-9]*) code=unknown ;; esac
   echo "gateway-exit $code" >> results.txt
   echo "gateway-error $err" >> results.txt
+  # an unclassified failure: the first line of its output in words of letters only (phiward's
+  # own words); a word with anything else in it (a digit, a path, an ID, a sign) becomes <x>,
+  # so no path, ID or name in another spelling is kept; "-" for no output
+  if [ "$why" = other ]; then
+    line=$(printf '%s\n' "$out" | sed -n 1p | cut -c1-300 | awk '{
+      s = ""
+      for (i = 1; i <= NF && i <= 30; i++) {
+        w = $i; pre = ""; post = ""
+        while (w ~ /^[(]/) { pre = pre "("; w = substr(w, 2) }
+        while (w ~ /[):,;.]$/) { post = substr(w, length(w)) post; w = substr(w, 1, length(w) - 1) }
+        s = s (i > 1 ? " " : "") (w ~ /^[A-Za-z]+$/ ? pre w post : "<x>")
+      }
+      print s }')
+    echo "gateway-line ${line:--}" >> results.txt
+  fi
 fi
 
 # git: a plain commit must work; a line with a made-up identifier must be refused by the

@@ -10,8 +10,10 @@ phiward keeps protected health information (PHI) out of what an AI coding agent 
 model provider. It runs the agent's commands in a kernel profile (`sandbox-exec`) and masks the
 output. It is a Python package that runs as the user.
 
-It needs no admin rights, no kernel extension and no network service. It opens no listening
-port: the agent and the broker talk through files in a private folder.
+It needs no admin rights, no kernel extension and no network service. The agent and the
+broker talk through files in a private folder. phiward's one listening port is the proxy of a
+`phiward launch` session, on loopback only, while that session runs
+([Network](#network-the-launch-proxy)).
 
 ## What it installs and writes
 
@@ -219,6 +221,25 @@ R5 regex ^git [^ ]
 
 A test records every process phiward starts on macOS and checks that this list holds the same
 command lines, both ways (`tests/test_macos_processes.py`).
+
+## Network: the launch proxy
+
+Under `phiward launch`, the agent tool has no direct outbound IP connection. Its HTTPS goes through a proxy
+that runs in the launcher's own process (`phiward launch`, the Python): it starts no process
+of its own, and it ends with the session.
+
+| What | Where | When | What it does |
+|---|---|---|---|
+| A listening port | `127.0.0.1` and `[::1]`, one random port held on both, TCP | while a launched session runs | takes the tool's `CONNECT` requests (a tunnel to any port); each needs the session's token |
+| Outgoing connections | the addresses a name resolves to, public ranges only | each `CONNECT` of the tool | connects the tool to the host it asked for, from the launcher's process; a range in `[launch] private_networks` may be reached too |
+| Outgoing connections to a proxy | the proxy `HTTPS_PROXY` names in the user's terminal | each `CONNECT` to a public address, when that is set | asks that proxy for the checked address, never the name; an address in `[launch] private_networks` is connected to directly |
+| Name lookups | the system's resolver | each `CONNECT` with a host name | one lookup in the launcher, before any connection |
+| A read of the machine's addresses | libc's `getifaddrs`, called in the launcher's process (Python `ctypes`) | each `CONNECT` | lists this machine's own addresses, which the proxy refuses; no process is started and no file is written |
+
+The proxy refuses this machine, the local link and the private ranges. On macOS, the tool's
+profile allows it only the proxy's port on loopback. On Linux, the session has a network
+namespace of its own, and a relay inside it hands each connection to the launcher. On macOS a server
+the session starts can still listen on any address (see the threat model).
 
 ## Who signed what
 

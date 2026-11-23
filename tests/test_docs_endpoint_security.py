@@ -174,3 +174,21 @@ def test_a_line_with_phiwards_fixed_ssh_options_gets_no_regex():
         assert shapes()[i]["regex"] is None, i
         for s in shapes()[i]["argv"]:  # the shape spells out every fixed option, in order
             assert " ".join(remote.SSH_OPTIONS) in s, (i, s)
+
+
+def test_the_page_says_what_launchs_proxy_listens_on_and_reads_as_the_code_does():
+    """The launch proxy (in the launcher's process): the page names its loopback addresses, its
+    token, and the getifaddrs call that lists this machine's addresses; the code does what the
+    page says. No row of the process table is added: it starts no process."""
+    import inspect
+    from phiward import netproxy
+    text = PAGE.read_text(encoding="utf-8")
+    sec = text[text.index("## Network: the launch proxy"):text.index("## Who signed what")]
+    for words in ("`127.0.0.1` and `[::1]`", "token", "`getifaddrs`", "starts no process",
+                  "`HTTPS_PROXY`", "private ranges"):
+        assert words in sec, words
+    assert "no listening\nport" not in text and "opens no listening port" not in text
+    src = inspect.getsource(netproxy.Proxy.listen_loopback)
+    assert '("127.0.0.1", port)' in src and '("::1", port)' in src
+    assert "getifaddrs" in inspect.getsource(netproxy.own_addresses)
+    assert not any(_ROW.match(ln) for ln in sec.splitlines()), "the section's rows are no IDs"

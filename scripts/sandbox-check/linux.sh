@@ -11,6 +11,7 @@
 #            Claude Code. This is the only form an agent may run.
 #   CLAUDE_VERSION   builds another Claude Code version than the lock (unlocked; the report says so)
 #   SBX_SH=bash      makes the image's /bin/sh bash, as on RHEL and macOS (default: dash)
+#   SBX_MODEL        the session's model (default haiku; e.g. sonnet when Haiku declines)
 # Usage, from the repository: sh scripts/sandbox-check/linux.sh [--stub]
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
@@ -55,7 +56,7 @@ code=0
 # handled at once
 docker run --rm $tty --user tester --privileged --security-opt no-new-privileges \
   --label "$label" \
-  -e "SBX_IMAGE=$id" -e "MODES=$modes" \
+  -e "SBX_IMAGE=$id" -e "MODES=$modes" -e "SBX_MODEL=${SBX_MODEL:-haiku}" \
   -v "$work/src:/repo:ro" -v "$work/out:/out" \
   "$image" sh /repo/scripts/sandbox-check/inside.sh $stub < "$input" &
 wait $! || code=$?

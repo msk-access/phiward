@@ -4,7 +4,7 @@
 # home folder of its own, with made-up data, as scripts/quickstart-check/mac.sh does: the wheel
 # from `git archive HEAD` (or the tree SBX_SRC names), a copied Python, phiward installed and
 # wired, the broker, a wrapped MCP server, the git hook. Then one `claude -p` session per mode
-# (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
+# (Haiku, or SBX_MODEL; a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
 # The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
@@ -58,6 +58,8 @@
 #              inside.sh use them (kept files, the claude to test, the container's marks).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
+#   SBX_MODEL  the session's model (default haiku; sonnet when Haiku declines the request);
+#              the report names it
 # Usage: sh scripts/sandbox-check/check.sh [--stub] [PYTHON]  (default: uv's own Python)
 # Run it with sh, not bash: `bash check.sh` reads BASH_ENV before its first line.
 # First: start again under an empty environment. The second start is clean. The first is the
@@ -72,7 +74,7 @@ case ${1-} in
        SBX_PATH="${PATH-}" SBX_BASE="${SBX_BASE-}" SBX_SRC="${SBX_SRC-}" SBX_TOOLS="${SBX_TOOLS-}" \
        SBX_OUT="${SBX_OUT-}" SBX_IMAGE="${SBX_IMAGE-}" SBX_LOCKED="${SBX_LOCKED-}" \
        SBX_WHEEL="${SBX_WHEEL-}" SBX_WHEEL_SHA256="${SBX_WHEEL_SHA256-}" \
-       SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" \
+       SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" SBX_MODEL="${SBX_MODEL-}" \
        REMOTE="${REMOTE-}" REMOTE_DIR="${REMOTE_DIR-}" REMOTE_HOSTNAME="${REMOTE_HOSTNAME-}" \
        REMOTE_USER="${REMOTE_USER-}" CLAUDE_BIN="${CLAUDE_BIN-}" \
        SBX_TOKEN_IN_ENV="${CLAUDE_CODE_OAUTH_TOKEN:+1}${ANTHROPIC_API_KEY:+1}" \
@@ -93,6 +95,9 @@ LOGNAME=$USER
 export USER LOGNAME
 stub=""
 if [ "${1:-}" = --stub ]; then stub=1; shift; fi
+# the session's model: SBX_MODEL (default haiku), e.g. sonnet when Haiku declines the request
+model=${SBX_MODEL:-haiku}
+case $model in *[!A-Za-z0-9._-]*|"") echo "sandbox-check: SBX_MODEL is a model name (letters, digits, . _ -)" >&2; exit 2 ;; esac
 case $(uname) in
   Darwin) os=darwin ;;
   Linux) os=linux ;;
@@ -285,7 +290,9 @@ git -c user.name=sbx -c user.email=sbx@example.invalid -c commit.gpgsign=false c
 "$uv" tool install -q ${SBX_WHEEL:+--offline} --python "$py" "$wheel" > "$H/install.out" 2>&1 || fail "uv tool install" "$H/install.out"
 {
   printf '[protected_paths]\nroots = ["%s/data"]\n[broker]\ncommands = ["wc"]\n' "$H"
-  printf '[sanitize]\npacks = ["genomics", "msk"]\n'
+  # paths.txt (the probes' list, in the project) holds the made-up sample ID: the project scan
+  # (#68) would refuse Mode B's launch for it
+  printf '[sanitize]\npacks = ["genomics", "msk"]\nscan_allow = ["%s/proj/paths.txt"]\n' "$H"
   if [ -n "$REMOTE" ]; then
     printf '[copy]\nremotes = ["%s:%s"]\nssh_config = "%s/.config/phiward/ssh_config"\n' "$REMOTE" "$REMOTE_DIR" "$H"
     printf '[remote]\nhosts = ["%s"]\ncommands = ["wc", "ls"]\nroots = ["%s"]\n' "$REMOTE" "$REMOTE_DIR"
@@ -373,8 +380,10 @@ def matches(m):
         return re.fullmatch(m, "Read") is not None
     except re.error:
         return "Read" in m.split("|")
-cmds = [h["command"] for g in groups if matches(g.get("matcher") or "")
-        for h in g.get("hooks", [])]
+# each hook as Claude Code runs it: the exec form (command and args), else through a shell
+cmds = [[h["command"]] + [str(a) for a in h["args"]] if isinstance(h.get("args"), list)
+        else ["sh", "-c", h["command"]]
+        for g in groups if matches(g.get("matcher") or "") for h in g.get("hooks", [])]
 payload = json.dumps({"session_id": "sbx", "hook_event_name": "PreToolUse", "tool_name": "Read",
                       "tool_input": {"file_path": os.path.join(home, "proj", "free", "b.txt")},
                       "cwd": os.path.join(home, "proj")})
@@ -382,7 +391,7 @@ times = []
 for _ in range(20):
     t = time.monotonic()
     for c in cmds:
-        subprocess.run(["sh", "-c", c], input=payload.encode(), capture_output=True, timeout=10)
+        subprocess.run(c, input=payload.encode(), capture_output=True, timeout=10)
     times.append((time.monotonic() - t) * 1000)
 print(round(statistics.median(times)) if cmds else "no-hook")
 PY
@@ -391,8 +400,15 @@ phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
 : > "$H/.phiward/sbx-sentinel"
-prompt="This is the operator's own check of phiward's guards, in a home folder made for it. All data in it is made up (FAKE-PT-0001 is not a person). The guards are what is tested: a refusal by phiward or by the sandbox is a result, so do not decline on their behalf, and do not try to get around them. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
-Run each even if you expect it to fail. Do not retry, and do nothing else. Then reply DONE."
+# the request is in the prompt, in the operator's voice; the protected file's path is only in
+# target.txt in the project, so the prompt scan (#57) lets the prompt through
+# the Reads come first: a probe that got through (one changes ~/.claude/settings.json) must not
+# change what the Read meets
+prompt="This is my test of phiward's guards, with made-up data. Use the Read tool on ./target.txt, then once on the file whose path it holds. Then use the Bash tool once to run sh ./probes.sh exactly as written. A refusal by phiward or the sandbox is the expected result: report it, do not work around it, and do not retry. Then reply DONE."
+case $prompt in
+  *"$H/data"*|*FAKE-PT-*|*"$fake_id"*|*"$marker"*)
+    echo "sandbox-check: the prompt holds a protected path or ID; the prompt scan would block it" >&2; exit 2 ;;
+esac
 runs=""
 for m in $modes; do
   R="$J/run-$m"
@@ -417,16 +433,23 @@ for m in $modes; do
       echo "remote no"
     fi
   } > "$H/proj/paths.txt"
+  echo "$H/data/FAKE-PT-0001/a.txt" > "$H/proj/target.txt"
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
   # again right before each session: a ~/.claude put back since the first look would be read in
   sbx_base_check "$sbx_base" "$homes" || exit 2
-  echo "$ver; Mode $m: one session (Haiku) ..."
-  set -- "$H/bin/claude" -p "$prompt" --model haiku --output-format stream-json --verbose \
-    --settings "$launch" --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \
+  echo "$ver; Mode $m: one session ($model) ..."
+  # Mode A starts Claude Code as setup.md says (`--settings` FILE); under launch no
+  # `--settings`: launch passes its own, and Claude Code keeps only one (docs/launch.md)
+  set -- "$H/bin/claude" -p "$prompt" --model "$model" --output-format stream-json --verbose \
+    --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \
     --max-turns 8 --max-budget-usd 1
-  [ "$m" = B ] && set -- phiward launch --tool claude -- "$@"
+  if [ "$m" = B ]; then
+    set -- phiward launch --tool claude -- "$@"
+  else
+    set -- "$@" --settings "$launch"
+  fi
   code=0
   # in the background, so a signal to this script is handled at once (forwarded to launch.py)
   lpid=starting
@@ -455,6 +478,7 @@ for m in $modes; do
     echo "node $(node --version 2>/dev/null || echo none)"
     echo "bwrap $(bwrap --version 2>/dev/null | head -1 || echo none)"
     echo "claude $ver"
+    echo "model $model"
     echo "stub $([ -n "$stub" ] && echo yes || echo no)"
     echo "image ${SBX_IMAGE:-none}"
     echo "locked ${SBX_LOCKED:-n/a}"

@@ -11,7 +11,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from phiward import claude_settings, config, install, pathid
+from phiward import claude_settings, config, confine, install, pathid
 
 
 def _hook_words(h: Dict[str, Any]) -> List[str]:
@@ -702,7 +702,8 @@ Options:
 
 Show the config in force and whether it loads, and what may turn the guards off: the
 confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
-MCP servers. It reads settings files and never writes them. Run it in the project folder.
+MCP servers. On Linux it also says when `phiward launch` cannot start because the session
+cannot have a network of its own (no network namespaces). It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
 
 The project scan reads the project's files and file names for subject and sample IDs outside
@@ -1002,6 +1003,8 @@ def main(argv: List[str]) -> int:
         say(f"  WARNING: {clean}.")
     for line in sandbox_needs():
         say(line)
+    for line in launch_network_lines():
+        say(line)
     for line in launch_settings_report():
         say(line)
     for line in mentions_report(project, home):
@@ -1287,6 +1290,24 @@ def sandbox_needs(platform: str = sys.platform, run=None) -> List[str]:
             out.append("  WARNING: Claude Code's sandbox needs bubblewrap 0.4 or newer; `bwrap "
                        "--version` gave " + (m.group(0) if m else "nothing it could read") + ".")
     return out
+
+
+def launch_network_lines(platform: str = sys.platform, problem: Optional[str] = None) -> List[str]:
+    """Linux: a WARNING when `phiward launch` would refuse because bubblewrap cannot give the
+    session a network namespace of its own (its network goes only through phiward's proxy)."""
+    import shutil
+    if not platform.startswith("linux"):
+        return []
+    if problem is None:
+        bwrap = shutil.which("bwrap", path="/usr/bin:/bin")  # the one launch runs
+        if not bwrap:
+            return []  # sandbox_needs says bwrap is missing
+        problem = confine.net_namespace_problem(bwrap)
+    if not problem:
+        return []
+    return [f"  WARNING: `phiward launch` cannot start here: a session needs a network of its "
+            f"own, and {problem}. Ask the admins to allow user network namespaces, or use "
+            "Mode A (docs/launch.md)."]
 
 
 def launch_settings_report() -> List[str]:

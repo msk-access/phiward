@@ -57,6 +57,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[remote] roots`](#remote) | list of absolute paths | none: every push is refused | ignored | Protected paths there: masked, and a push goes only under one. |
 | [`[remote] use_shared_connection`](#remote) | true or false | true | ignored | Join your shared SSH connection, so no request reads a key or ticket. |
 | [`[launch] pass_env`](#launch) | list | none | ignored | More environment variables for `phiward launch` (the agent can read them). |
+| [`[launch] private_networks`](#launch) | list | none | ignored | Private ranges that `phiward launch`'s network proxy may reach. |
 | [`[broker] write_to`](#broker) | list of folders | none | ignored | The folders where gateway commands may write. |
 | [`[broker] net`](#broker) | true or false | false | ignored | Whether `phiward run --net` gets the network. |
 | [`[broker] commands`](#broker) | list | not set: any program may run | narrows: a program must be in every list that is set | The programs gateway commands may run. **Set it for real patient data.** |
@@ -291,7 +292,14 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 ### `[launch]`
 
 - **`pass_env`** (list): environment variables passed to a launched tool besides the built-in
-  allow-list. The agent can read whatever you pass.
+  allow-list. The agent can read whatever you pass. The proxy variables are always the session's
+  own proxy ([launch.md](launch.md#the-network)).
+- **`private_networks`** (list of networks; default none): private ranges the session's network
+  proxy may reach, for example `["10.20.0.0/16"]` for an internal Git server or an HPC web
+  service. Each entry must be a network with its prefix length inside `10.0.0.0/8`,
+  `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`; anything else is a problem.
+  This machine's own addresses, loopback and the local link stay refused. Every service in a
+  listed range is reachable from the session.
 
 ### `[broker]`
 
@@ -399,7 +407,8 @@ wildcard forms. List only the hosts you need, and as narrowly as you can.
   for each level that has one.
 
 What it does not limit: Claude Code's own connection to the model provider, the WebFetch and
-WebSearch tools, MCP servers, hooks, and Mode B (`phiward launch`). With `limit = true`,
+WebSearch tools, MCP servers, hooks, and Mode B (`phiward launch`, whose own proxy allows only
+public addresses: [launch.md](launch.md#the-network)). With `limit = true`,
 `install` replaces `sandbox.network.allowedDomains` in your user settings with exactly
 `allowed_domains`, and prints each host it removes. To open the network again, set
 `limit = false` and edit `sandbox.network` in `~/.claude/settings.json` yourself. `phiward

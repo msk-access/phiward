@@ -125,6 +125,22 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux: the broker makes its cache folder (`~/.cache/phiward`) when it starts. While a
+  command runs, Claude Code's own sandbox puts an empty read-only file at each denied path
+  that does not exist, and the cache folder is denied: a first `phiward run` from a session
+  (no `launch`) failed with `run failed (FileExistsError)`. A file left at that place (or
+  above it) is never removed: the broker refuses to start, names it and says to remove it.
+  The sandbox check's stand-in
+  now leaves the same files, and an unclassified gateway failure notes its first line
+  (words of letters only; any other word shown as `<x>`).
+- Linux: under `phiward launch` the session's `TMPDIR`, `TMUX_TMPDIR` and
+  `CLAUDE_CODE_TMPDIR` are `/tmp`, the name the session's view gives its own temp folder, not
+  that folder's full path under `~/.phiward`. A unix socket's path holds at most 107 bytes, and
+  under the full path Claude Code's sandbox could not make its bridge sockets
+  (`Failed to create bridge sockets after 5 attempts`: Bash did not run under
+  `launch --tool claude`), nor tmux its socket. So `launch` on Linux refuses a project or
+  spool that is `/tmp` (it would cover the session's own `/tmp` with the shared one); a folder
+  below `/tmp` works.
 - A config with a relative `[remote] roots` entry (`~/data`, `data`) now refuses, as other
   invalid entries do; it was never masked. The message names the entry by number. Write the
   remote's absolute path (`/data1/me/data`).
@@ -176,6 +192,31 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- `phiward launch` routes the tool's network through a proxy that allows only public addresses.
+  The tool has no direct outbound IP connection: on macOS its profile allows only the proxy's random port on
+  loopback, TCP only (held on both 127.0.0.1 and [::1]); on Linux the session has a network namespace of
+  its own, and a relay on the session's own 127.0.0.1 gets each connection to the proxy as one end
+  of a socket pair from the launcher (no socket with a path leads to the proxy, so this works
+  also where the tool cannot make unix sockets; a pair that cannot be passed is a refusal). The
+  proxy runs in the launcher, outside the profile. It takes CONNECT tunnels only (to any port), needs a token
+  for the session, looks a name up once, checks every address, and connects to the checked addresses in turn
+  (a short timeout each, so broken IPv6 does not stop a connection). It refuses this
+  machine, the local link and the private ranges; `[launch] private_networks` in the user config
+  (never a project's) lists private ranges it may reach, connected to directly. A `HTTPS_PROXY`
+  in the terminal is chained by checked address only, for public addresses. The tool's proxy variables all name the session's proxy and
+  `NO_PROXY` is empty. What this breaks is in docs/launch.md (servers on this machine, also on
+  macOS one the session starts; tools that ignore the proxy variables; UDP; on Linux, name
+  lookups inside the session). `launch` refuses to start when the proxy cannot start, and on
+  Linux where network namespaces are not available, which `doctor` reports. On macOS the
+  profile no longer allows the `nsurlsessiond`, `networkd`, `ocspd` and system `trustd`
+  services (the user's `trustd` agent stays: it reads the OS trust store). On macOS a session can still
+  listen on any address (Seatbelt cannot limit binds to loopback): bind local servers to
+  `127.0.0.1`. The launcher raises
+  its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
+  held. On Linux the session's network namespace keeps abstract unix sockets apart, on every
+  kernel.
+- On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
+  false`: a Bash command is not retried outside Claude Code's own sandbox.
 - `phiward launch` and the broker may now refuse a config they used to accept: when the masking
   check fails, launch refuses to start (`the masking check failed: ...; run phiward doctor`),
   and the broker refuses every request until the config is fixed and the broker restarted.

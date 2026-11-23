@@ -67,7 +67,7 @@ class Stopped(Exception):
     """What the hook raises to stop an exec, which would replace this test process."""
 
 
-_STATE = {"rec": None, "installed": False, "bad": []}
+_STATE = {"rec": None, "installed": False, "bad": [], "binds": []}
 # starts phiward must never use: a shell line, or a fork or spawn outside subprocess
 _FORBIDDEN = ("os.system", "os.fork", "os.forkpty", "os.spawn")
 
@@ -92,6 +92,9 @@ def _audit(event, args):
         _STATE["bad"].append((event, repr(args)[:200]))
         if event == "os.system":
             raise Stopped(event)  # never run it here
+        return
+    if event == "socket.bind":
+        _STATE["binds"].append(args[1])  # the address a socket of phiward's is bound to
         return
     if event == "subprocess.Popen":
         words = _words(args[1])
@@ -295,8 +298,10 @@ def _record(tree, hpc_home, monkeypatch):  # noqa: C901 - one scenario after ano
     # launch, up to the tool's start, and the hooks it writes for a session
     with monkeypatch.context() as m:
         m.setattr(wholetool, "already_confined", lambda env: False)
+        _STATE["binds"] = []
         with _Recording(started):
             assert wholetool.main(["--", str(tool)]) == 0
+        launch_binds = list(_STATE["binds"])
     # the launched hook, as Claude Code starts it under launch: with its roots, and without
     for roots in ("", None):
         with monkeypatch.context() as m:
@@ -374,6 +379,7 @@ def _record(tree, hpc_home, monkeypatch):  # noqa: C901 - one scenario after ano
         written.append([str(f)])
         written += _trace([str(f)], dict(os.environ))
     ctx = {"tree": str(tree), "homes": [home, hpc_home], "launcher": str(launcher),
+           "launch_binds": launch_binds,
            "claude": str(claude), "fake_sx": str(fake_sx), "tool": str(tool),
            "ssh_cfg": str(tree / "home" / "phiward-ssh"), "host": "hpc-test",
            "socket": os.path.join(hpc_home, ".ssh", "cm"), "record": os.path.join(
@@ -643,3 +649,17 @@ def test_the_page_lists_exactly_the_shapes_phiward_starts(tree, hpc, monkeypatch
         if rx is not None and not re.search(rx, line):
             missed.append((rx, line))
     assert not missed, "\n".join(f"{rx}\n  does not match: {line}" for rx, line in missed)
+
+
+def test_launch_listens_on_loopback_only_as_the_page_says(tree, hpc, monkeypatch):  # noqa: F811
+    """The page says phiward's one listening port is launch's proxy, one random port held on
+    127.0.0.1 and [::1] in the launcher's own process. What launch binds, up to the tool's
+    start, is that and nothing else."""
+    got, ctx = _recorded(tree, str(hpc["home"]), monkeypatch)
+    binds = ctx["launch_binds"]
+    hosts = sorted({a[0] for a in binds if isinstance(a, tuple)})
+    ports = {a[1] for a in binds if isinstance(a, tuple)}
+    assert hosts == ["127.0.0.1", "::1"] and len(ports) == 1, binds
+    assert all(isinstance(a, tuple) for a in binds), binds  # no socket with a path
+    text = PAGE.read_text(encoding="utf-8")
+    assert "127.0.0.1" in text and "[::1]" in text, "the page names the proxy's addresses"

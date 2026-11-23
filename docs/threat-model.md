@@ -9,11 +9,14 @@ This page says what is protected, against whom, and where the limits are.
 - **What leaves the machine:** what the agent tool sends to its model provider: your prompts, the
   files and output the agent reads, and the masked output of gateway commands. phiward keeps
   protected files, credentials and unmasked gateway output out of that.
-- **The network is open by default in both modes.** phiward does not stop the agent from sending
-  what it can read. It stops the agent from reading protected data. In Mode A, `[network] limit`
-  lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it. The
-  WebFetch tool, MCP servers, commands a project excludes from the sandbox, and Mode B stay open.
-  Each listed host is itself a way out (a push, a gist, a host behind a shared CDN).
+- **The network reaches public hosts in both modes.** phiward does not stop the agent from
+  sending what it can read. It stops the agent from reading protected data. In Mode A, `[network]
+  limit` lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it.
+  The WebFetch tool, MCP servers and commands a project excludes from the sandbox stay open.
+  In Mode B the tool has no direct outbound network: every connection goes through phiward's proxy, which allows
+  only public addresses (not this machine, its link or private ranges, unless the user config
+  lists a private range). Each host that can be reached is itself a way out (a push, a gist, a
+  host behind a shared CDN).
 - **Trusted:** the operator, the operator's terminal, the user config, the broker, the operating
   system and its sandbox (Seatbelt on macOS; bubblewrap, seccomp and Landlock on Linux), and Claude
   Code's own sandbox and permission rules in Mode A.
@@ -32,7 +35,7 @@ This page says what is protected, against whom, and where the limits are.
 | A file tool (Read, Grep, Glob, Edit) reads them | the hook and Claude Code's permission rules, not the kernel | the kernel | a spelling that both miss ([Mode A](#mode-a-a-claude-code-session)) |
 | An MCP server or a hook of the tool reads them | nothing, unless the server is wrapped in `phiward launch --` | the kernel | not wrapped, they run with your rights ([gaps of the hook alone](#gaps-of-the-hook-alone)) |
 | A gateway command prints protected data | masking of names and identifiers | the same | other content, and a command written to leak ([the gateway](#the-gateway-a-controlled-opening)) |
-| It sends out what it can read | nothing by default; `[network] limit` for shell commands only | nothing: the network is open | each listed host is itself a way out |
+| It sends out what it can read | nothing by default; `[network] limit` for shell commands only | its proxy: public addresses only, not this machine's services | each host that can be reached is itself a way out |
 | It uses credentials that are not files (the Keychain, tokens in the environment) | nothing: a file list does not hide them | Linux: the kernel keyrings are blocked; macOS: the Keychain stays reachable. Only a short list of environment variables is passed | [Mode A](#mode-a-a-claude-code-session), [Mode B](#mode-b-phiward-launch) |
 
 - **What was tested**, on made-up data:
@@ -54,7 +57,10 @@ This page says what is protected, against whom, and where the limits are.
   - a protected folder on a mounted HPC volume;
   - `[network] limit` in a live Claude Code session (the settings it writes are tested; Claude
     Code enforces them);
-  - other agent tools than Claude Code.
+  - other agent tools than Claude Code;
+  - the real Claude Code under `launch` with its network through phiward's proxy (the test
+    suite checks the proxy and the profiles with made-up servers; the sandbox check with the
+    real tool is the operator's).
 - **Independent reviews:** each part had adversarial reviews before this release, and each finding
   was fixed or is listed on this page as a limit.
 
@@ -1209,9 +1215,40 @@ Run project commands inside `launch` (`phiward launch -- git status`, `phiward l
 test`), or read the change before you run it outside.
 
 **Known open items in this phase:**
-- <a id="open-network"></a>the network is open under `launch` (a proxy for listed hosts is planned; `[network] limit` covers
-  Mode A's shell commands only). The agent cannot read protected data under `launch`, so this
-  matters for credentials and for gateway output;
+- <a id="open-network"></a>the network under `launch` goes only through phiward's proxy, outside
+  the profile, and only to public addresses ([launch.md](launch.md#the-network)). The tool has no
+  direct outbound IP connection: on macOS the profile allows only the proxy's port on loopback, which the
+  launcher holds on both 127.0.0.1 and [::1] until it exits; on Linux the session has a network
+  namespace of its own, and a relay on its own 127.0.0.1 gets each connection to the proxy as one
+  end of a socket pair from the launcher: no socket with a path leads to the proxy, and a pair
+  that cannot be passed is a refusal, never a direct connection. The proxy needs the session's token,
+  looks a name up once, judges every address it gets (an embedded IPv4 address unwrapped first),
+  and connects to the checked address. It refuses this machine (its names, and its addresses
+  read again for each connection), the local link and the private ranges. What stays open:
+  - any public host: the agent cannot read protected data under `launch`, so this matters for
+    credentials and for gateway output (`[network] limit` covers Mode A's shell commands only;
+    a list of hosts for the proxy is not built yet);
+  - a private range you list in `[launch] private_networks` (user config only): every service
+    of another machine there is reachable (this machine's own addresses stay refused);
+  - a service on this machine reached through another machine (a public host or listed private
+    host that forwards back), or a public address of this machine that `getifaddrs` does not
+    list (a NAT in front of it), and this machine's name when it resolves to such an address;
+  - an upstream proxy (your `HTTPS_PROXY` when `launch` starts) gets only checked public
+    addresses, but decides itself what it forwards; an address in `[launch] private_networks`
+    is connected to directly;
+  - the proxy tunnels to any port of a checked address, not only 443;
+  - inbound, macOS: a session can listen on any address, and Seatbelt cannot limit that to
+    loopback (its `localhost` filter also matches `0.0.0.0` and `::`). A server the session
+    starts on every interface is reachable from the LAN. What it can serve is what the session
+    can read, never a protected root. Linux is not
+    affected: the session has a network namespace of its own;
+  - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
+    lookups fail inside the session too;
+  - macOS: the user's `trustd` agent stays reachable, as the OS trust store is read through it
+    (Claude Code trusts that store by default). It runs outside the profile and may fetch the
+    URLs a certificate names (issuer, OCSP, CRL) when a program asks it to check a certificate,
+    one the session made too: a way to reach a host the proxy refuses. Not tested. The system
+    `trustd` and `ocspd` are not reachable;
 - <a id="open-environment"></a>the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
   `ANTHROPIC_`/`CLAUDE_` ones); add more with `[launch] pass_env` in the user config, knowing that
   whatever you pass is readable by the agent;
@@ -1229,6 +1266,8 @@ test`), or read the change before you run it outside.
   ask again" answers, `--worktree` and `/loop` durable tasks do not stay in the project under
   `launch`;
 - <a id="open-unix-sockets"></a>Linux: unix sockets are limited by the kernel, not by their names.
+  The session's network namespace is its own, so no abstract unix socket outside is reachable,
+  on every kernel.
   From Landlock ABI 9 (Linux 7.1) the whole tool reaches only the sockets made in the session
   and the name-service folders (sssd, nscd, userdb); a helper that cannot apply this stops the
   start. Below ABI 9, `--tool generic` and a wrapped MCP server cannot make unix sockets at all
@@ -1274,7 +1313,7 @@ run later" or to the macOS process model:
 | <a id="l2"></a>L2 | Linux: a name of the list that is missing at the start can be made and written in the session: `.cursor`, `.gemini`, `.codex`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron` at the top, and any of them, `.claude`, `.vscode` and `.idea` too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are not walked, and the names of the list inside them stay writable; the links in `.claude/worktrees` are not followed. A `git pull`, `checkout` or `switch` that changes a tracked file in a `.claude`, `.vscode` or `.idea` folder fails partway inside `launch`: run it in your own terminal. | The rule above. |
 | <a id="l3"></a>L3 | `.claude/settings.local.json` is read-only, but a plain run outside `launch` still reads whatever was in it before the session. | Read it once before the first `launch`. |
 | <a id="l4"></a>L4 | macOS: the per-user temp folder is writable, and it is also your own TMPDIR. A file planted there can be used by a later plain run. A session can also **read** `/private/tmp` (except Kerberos caches) and the per-user temp folder, where your own tools leave files (R's `RtmpXXXX`, Python temp files, other Claude Code sessions' scratch). | Do not run tools that load code from TMPDIR; keep protected data out of temp folders. |
-| <a id="l5"></a>L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |
+| <a id="l5"></a>L5 | macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; `launch` never ends a process. Its session folder is moved to `trash/` and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). Its profile still allows its session's one proxy port on loopback, which the launcher no longer holds: a process that binds that port later (by chance or on purpose) can talk to it. The port is random for each launch, and a later session has its own port and token. | Close the terminal after a session; a separate macOS user for the agent (not part of this release). |
 | <a id="l6"></a>L6 | Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions: no transcripts, no login, no caches, no history. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain `claude` uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of `.claude.json`, go to quarantine; only what you accept (`phiward carryover accept`) or add yourself (`phiward carryover add PATH`) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild ([launch.md](launch.md)). Login: a fresh folder means a new login each time, unless you set `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) or `ANTHROPIC_API_KEY`, which the agent can read. Project memory (`CLAUDE.md`, `AGENTS.md`, `.claude/rules/` in the project) is reported, not put back. | Read the quarantine and the project report before you accept or run anything. |
 | <a id="l7"></a>L7 | Names that a gateway command makes while it runs are not in that run's inventory, so they are not masked in its own output. The next call sees them. | Print aggregates, not names (rule 3 of the agent rules in a project's `AGENTS.md`). |
 | <a id="l9"></a>L9 | `claude --bare` and an Agent SDK app with `settingSources: []` load none of phiward's wiring (hook, sandbox block, deny rules), and nothing says so. | Do not use `--bare` on protected work; load the user settings in an SDK app or pass `phiward install claude --json` as its settings, or run it under `phiward launch` ([unattended.md](unattended.md)). |

@@ -132,8 +132,16 @@ def test_w1_shared_tmp_is_not_a_write_place(tree):
     finally:
         if os.path.exists(target):
             os.unlink(target)
-    _, out = launch(tree, "import tempfile; print(tempfile.mkstemp()[1])")
-    assert "/.phiward/tools/" in out, out
+    # the temp folder is the session's own: by its full path on macOS; on Linux by /tmp, the name
+    # the view gives the run folder's tmp (a unix socket's path must fit under it)
+    _, out = launch(tree, "import os, tempfile\nt = tempfile.mkstemp()[1]\nprint('TEMP', t)\n"
+                          "own = os.path.join(os.path.dirname(os.environ['XDG_CACHE_HOME']), 'tmp')\n"
+                          "print('OWN', os.path.samefile(os.path.dirname(t), own))\n")
+    if sys.platform == "darwin":
+        assert "/.phiward/tools/" in out, out
+    else:
+        assert "TEMP /tmp/" in out, out
+    assert "OWN True" in out, out
 
 
 # macOS: the launch inside looks for the session's run folder under the account's home folder,

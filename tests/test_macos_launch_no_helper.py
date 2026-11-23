@@ -52,8 +52,12 @@ def recorder(tree, monkeypatch, seatbelt):
 
 
 def _build(tree, argv, env=None):
+    """build's command, environment, descriptors, project and last step; the session's proxy,
+    which these tests do not use, is closed."""
     env = dict(os.environ) if env is None else env
-    return wholetool.build(argv, str(tree / "repo"), env, wholetool.ADAPTERS["generic"])
+    *got, proxy = wholetool.build(argv, str(tree / "repo"), env, wholetool.ADAPTERS["generic"])
+    proxy.close()
+    return tuple(got)
 
 
 def _profiles(tree) -> Path:
