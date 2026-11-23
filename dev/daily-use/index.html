@@ -1934,7 +1934,9 @@ anything: the broker's log has the reason.</p>
   also needs <code>$CLAUDE_PROJECT_DIR</code>; Claude Code sets it.) The hook then refuses shell commands
   other than gateway calls, <code>doctor</code> and <code>check</code>. With <code>[shell] best_effort</code> on,
   the hook checks shell command text instead, which is best effort
-  (<a href="../configuration/#shell">configuration.md</a>).</li>
+  (<a href="../configuration/#shell">configuration.md</a>). When <code>excludedCommands</code> is the only cause, the
+  hook checks the text of every command in the same way, and refuses one that names protected
+  data or a path it cannot see; the refusal names the file that holds the entry.</li>
 <li><strong><code>doctor</code> says the broker uses another config.</strong> The broker and the agent tool were started
   with a different <code>HOME</code>, <code>PHIWARD_CONFIG</code> or <code>XDG_*</code> variable. Start both from the same
   environment.</li>

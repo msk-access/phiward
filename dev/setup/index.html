@@ -2173,13 +2173,20 @@ block of <code>~/.claude/settings.json</code>; phiward works the same either way
 <p>The shell counts as confined only when all of these hold:</p>
 <ul>
 <li>the settings in the table above are in force;</li>
-<li><code>excludedCommands</code> is empty;</li>
+<li><code>excludedCommands</code> is empty. With an entry set, the hook does not refuse the whole shell: it
+  checks the text of every command, as with <code>[shell] best_effort</code>, because Claude Code decides
+  by its own matcher which calls run outside the sandbox. A command that names protected data,
+  or that builds a path the guard cannot see (<code>$(...)</code>, a variable it does not know), is
+  refused, and the refusal names the file that holds the entry; the rest run. <code>ls</code>, <code>pytest</code>
+  and <code>git status</code> pass. <code>phiward doctor</code> says so;</li>
 <li><code>network.allowAllUnixSockets</code> is not true, and <code>network.allowUnixSockets</code> is empty (a socket
   such as Docker's reaches a process outside the sandbox);</li>
 <li>no other project settings file that Claude Code may read turns part of the sandbox off;</li>
 <li>none of these is set, because each lets a command reach past the sandbox:
   <code>filesystem.disabled</code>, <code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code>,
-  <code>allowNestedUserNamespaces</code>, <code>network.allowLocalBinding</code>, <code>network.allowMachLookup</code>;</li>
+  <code>allowNestedUserNamespaces</code>, <code>network.allowMachLookup</code>, and on macOS only
+  <code>network.allowLocalBinding</code> (there a sandboxed command can reach every service on localhost;
+  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal;</li>
 <li>no <code>allowRead</code> entry re-opens a root;</li>
 <li>no protected patterns are configured.</li>
 </ul>
