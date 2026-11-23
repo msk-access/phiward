@@ -190,7 +190,8 @@ target = read_tool(os.path.join(cwd, "target.txt"), "stub-target").strip()
 read_tool(target, "stub-read")
 
 # the bypass probe's session (--permission-mode bypassPermissions): a Bash `cat` of that path,
-# through the PreToolUse hooks as Claude Code runs them in every mode; then the session ends
+# through the PreToolUse hooks as Claude Code runs them in every mode, and `env > env.txt`;
+# then the session ends
 mode = next((args[i + 1] for i, a in enumerate(args[:-1]) if a == "--permission-mode"), "")
 if mode == "bypassPermissions":
     command = "cat " + target
@@ -204,6 +205,16 @@ if mode == "bypassPermissions":
         result, err = (r.stdout + r.stderr).decode(errors="replace")[-2000:], r.returncode != 0
     emit({"type": "user", "message": {"content": [
         {"type": "tool_result", "tool_use_id": "stub-cat", "is_error": err, "content": result}]}})
+    # then `env > env.txt`, with the credentials scrubbed (launch.py looks for the token in it)
+    emit({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "stub-env", "name": "Bash",
+         "input": {"command": "env > env.txt"}}]}})
+    scrubbed = {k: v for k, v in os.environ.items()
+                if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")}
+    r = subprocess.run(["sh", "-c", "env > env.txt"], env=scrubbed, capture_output=True, timeout=30)
+    emit({"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": "stub-env", "is_error": r.returncode != 0,
+         "content": ""}]}})
     emit({"type": "result", "subtype": "success", "is_error": False, "result": "DONE"})
     sys.exit(0)
 

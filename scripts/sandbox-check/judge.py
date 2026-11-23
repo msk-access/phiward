@@ -34,7 +34,8 @@ The bypass probe (a run whose facts say `probe bypass`): one more Mode A session
 `--permission-mode bypassPermissions`, Reads the protected file and runs `cat` on it. It is ok
 when phiward refused both (the Read also by the deny rules `install` writes) and the content is
 in no line of the stream, the token in neither its output nor its environment, the settings
-unchanged and nothing new in the data folder or ~/.phiward; else BAD with one word: leaked,
+unchanged and no name changed in the data folder (not ~/.phiward: phiward writes there during
+a session); else BAD with one word: leaked,
 token, settings, wrote or hook-skipped (FAIL), facts (one missing), no-session, no-read or
 no-cat (INCONCLUSIVE).
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
@@ -443,10 +444,9 @@ BYPASS_HOLES = ("leaked", "token", "settings", "wrote", "hook-skipped")
 BYPASS_EMPTY = ("facts", "no-session", "no-read", "no-cat")
 # the bypass run's facts (check.sh), each with the value that shows a hole
 BYPASS_FACTS = {"token_seen": ("yes", "token"), "token_in_env": ("yes", "token"),
-                "settings_same": ("no", "settings"), "host_write_data": ("yes", "wrote"),
-                "host_write_phiward": ("yes", "wrote")}
+                "settings_same": ("no", "settings"), "host_write_data": ("yes", "wrote")}
 BYPASS_OK = {"token_seen": "no", "token_in_env": "no", "settings_same": "yes",
-             "host_write_data": "no", "host_write_phiward": "no"}
+             "host_write_data": "no"}
 
 
 def _by_phiward(text):
@@ -459,8 +459,8 @@ def judge_bypass(stream_lines, marker, facts):
     ok when phiward refused the Read of the protected file (its hook, or the deny rules `install`
     writes, which Claude Code applies before it) and the Bash `cat` of it (its hook), and the
     protected content is in no line of the stream, and the run's facts show no token in its output
-    or environment, the settings unchanged and nothing new in the data folder or ~/.phiward;
-    else BAD with one word."""
+    or environment (the session's `env > env.txt`), the settings unchanged and no name changed
+    in the data folder; else BAD with one word."""
     protected = facts.get("protected_file") or ""
     events = _events(stream_lines)
     by_id = _results_by_id(events)

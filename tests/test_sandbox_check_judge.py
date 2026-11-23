@@ -769,8 +769,7 @@ def bypass_stream(read=REFUSAL, cat=CAT_REFUSAL, cat_error=True, command=f"cat {
 
 
 BYPASS_FACTS = {"mode": "A", "probe": "bypass", "protected_file": PROT, "token_seen": "no",
-                "token_in_env": "no", "settings_same": "yes", "host_write_data": "no",
-                "host_write_phiward": "no"}
+                "token_in_env": "no", "settings_same": "yes", "host_write_data": "no"}
 
 
 def _bypass(lines, platform="linux", **facts):
@@ -815,7 +814,6 @@ def test_bypass_no_stream_is_no_session():
 @pytest.mark.parametrize("fact, value, word", [
     ("token_seen", "yes", "token"), ("token_in_env", "yes", "token"),
     ("settings_same", "no", "settings"), ("host_write_data", "yes", "wrote"),
-    ("host_write_phiward", "yes", "wrote"),
 ])
 def test_bypass_a_fact_that_shows_a_hole_is_bad(fact, value, word):
     verdict, report = _bypass(bypass_stream(), **{fact: value})
@@ -823,7 +821,7 @@ def test_bypass_a_fact_that_shows_a_hole_is_bad(fact, value, word):
 
 
 @pytest.mark.parametrize("fact", ["token_seen", "token_in_env", "settings_same",
-                                  "host_write_data", "host_write_phiward"])
+                                  "host_write_data"])
 def test_bypass_a_missing_fact_is_inconclusive(fact):
     verdict, report = _bypass(bypass_stream(), **{fact: None})
     assert verdict == judge.INCONCLUSIVE and "BAD  bypass: facts" in report, report

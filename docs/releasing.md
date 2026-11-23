@@ -104,10 +104,12 @@ Then push `main`, `develop` and the tag.
 
    Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
    `phiward launch`), and with Mode A one more short session, the bypass probe: started with
-   `--permission-mode bypassPermissions`, it Reads the protected file and runs `cat` on it.
-   phiward must refuse both (the Read also by the deny rules `install` writes); the judge says
-   `ok`, or `BAD` with one word (`leaked`, `hook-skipped`: FAIL; `no-session`, `no-read`,
-   `no-cat`: INCONCLUSIVE). If it fails, the threat model must say that bypass skips the hook.
+   `--permission-mode bypassPermissions`, it Reads the protected file, runs `cat` on it, then
+   `env > env.txt`. phiward must refuse the Read (also by the deny rules `install` writes) and
+   the `cat`. The token must be in neither the output nor the environment, the settings must
+   not change, and no name may change in the data folder. The judge says `ok`, or `BAD` with
+   one word (`leaked`, `token`, `settings`, `wrote`, `hook-skipped`: FAIL; `facts`,
+   `no-session`, `no-read`, `no-cat`: INCONCLUSIVE). If it fails, the threat model must say that bypass skips the hook.
    Each session runs Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a
    spending cap of $1 and a time limit. The session must be
    refused when it reads the protected file with the Read tool, and when a Bash command reads
