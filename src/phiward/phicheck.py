@@ -113,7 +113,9 @@ def _check(cfg: config.Config, cwd: str) -> Result:
         path = f"{folder}/{CANARY}"
         # positions are text mode only, so a path is checked in text mode only
         if not value_masked(gate, path, table=False) or not blocked(path):
-            failed.append(f"a made-up path below {label} came out unmasked")
+            hint = (" (write the remote's absolute path)"
+                    if label.startswith("remote") and not folder.startswith("/") else "")
+            failed.append(f"a made-up path below {label} came out unmasked{hint}")
     if failed:
         return Result(failed, notes, f"masking check: {_plural(len(failed), 'problem')}")
     what = ([_plural(len(cfg.sanitize_examples), "example")] if cfg.sanitize_examples else []) \

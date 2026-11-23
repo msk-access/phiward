@@ -529,7 +529,11 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - <a id="known-masking-check"></a>**The masking check tests only what its examples show.**
   Doctor, launch and the broker's start check that each `[sanitize] examples` value is fully
   masked, and that a made-up path below each root is
-  ([configuration.md](configuration.md#sanitize)). What it cannot see:
+  ([configuration.md](configuration.md#sanitize)). It covers the user config's rules, examples
+  and roots. Built-in packs that a repo's `.phiward.toml` adds are covered by the self-check,
+  which hashes the installed packs, not by the masking check. It builds the sanitizer with no
+  inventory entries, so it errs toward failing: an entry name that would mask a value at run
+  time does not help it pass. What it cannot see:
   - a rule too narrow for real forms that its examples do not show (an example of one form
     passes while another real form leaks);
   - a rule with no example (doctor's NOTE says which, by number);
