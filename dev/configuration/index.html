@@ -1727,6 +1727,13 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>More column headers whose cells <code>phiward run --table</code> masks whole.</td>
 </tr>
 <tr>
+<td><a href="#sanitize"><code>[sanitize] examples</code></a></td>
+<td>list</td>
+<td>none</td>
+<td>ignored</td>
+<td>Made-up values in the form of your own rules, for the masking check. Never a real value.</td>
+</tr>
+<tr>
 <td><a href="#copy"><code>[copy] remotes</code></a></td>
 <td>list of <code>host:/absolute/prefix</code></td>
 <td>none</td>
@@ -1988,6 +1995,20 @@ listed in the
   --check</code> counts it. To check that your rules match your data, run a command over it: the
   note at the end of <code>phiward run</code> counts the placeholders shown and says when no identifier
   placeholder was shown.</li>
+<li><strong><code>examples</code></strong> (list; user config only). Made-up values in the same form as the IDs your
+  own rules mask (<code>[sanitize] patterns</code> and the <code>paths</code> and <code>identifiers</code> rules of your pack
+  files). Never a real ID: the agent can read the config. For example, with the pattern
+  <code>FAKE-PT-\d{4} =&gt; &lt;SUBJECT&gt;</code>, write <code>examples = ["FAKE-PT-0001"]</code>. The masking check (run
+  by <code>phiward doctor</code>, <code>phiward launch</code> and the broker at its start) puts each value in a line
+  and cleans it as the gateway does, in text mode and in table mode. A value passes only when
+  nothing but placeholders is left of it (<code>P-&lt;NUM&gt;-T01-IM6</code> fails), and when the prompt scan
+  blocks it. A rule that matches no example is not tested: doctor says so in a NOTE. The check
+  also cleans a made-up path below each protected root, each protected pattern and each
+  <code>[remote] roots</code> entry. What it says names only index numbers ("examples entry 2", "pack
+  file 1, rule 3", "remote root 1"), never a value, a rule, a pack path or a root. On a
+  failure, doctor warns, launch refuses to start, and the broker refuses every request until
+  the config is fixed and the broker restarted. phiward never makes examples from a regex:
+  such a value only proves that the regex matches itself.</li>
 <li><strong><code>subjects</code></strong> (user config only). Only <code>"none"</code>: your record that the protected data holds no
   subject or sample identifiers beyond the names under the roots. Without it, and without a
   rule that masks them (the <code>msk</code> pack, a pack file of your own with an identifier rule whose

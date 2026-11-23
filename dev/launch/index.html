@@ -1347,6 +1347,11 @@ team.</p>
   changes go to quarantine like any other instruction.</li>
 <li><code>launch</code> refuses to start in <code>/</code>, your home, a folder above or inside protected data, a dot
   folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder.</li>
+<li><code>launch</code> refuses to start when the masking check fails: <code>the masking check failed: ...; run
+  phiward doctor</code>. A value of <code>[sanitize] examples</code> is not fully masked by your own rules, or a
+  made-up path below a root came out unmasked
+  (<a href="../configuration/#sanitize">configuration.md</a>). Fix the rule, the example or the root, then
+  start again. A wrapped MCP server (<code>launch --server</code>) is not checked.</li>
 <li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
   threat model).</li>
 <li>On macOS the tool starts as <code>/usr/bin/sandbox-exec -f FILE TOOL ARGS...</code>, with nothing in

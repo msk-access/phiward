@@ -1884,6 +1884,11 @@ anything: the broker's log has the reason.</p>
 <td>Try again later.</td>
 </tr>
 <tr>
+<td><code>refused: the masking check failed when the broker started</code></td>
+<td>A value of <code>[sanitize] examples</code> is not fully masked by the operator's rules, or a made-up path below a root came out unmasked.</td>
+<td>The operator runs <code>phiward doctor</code>, which names the entry or the root by number, fixes the config and restarts the broker.</td>
+</tr>
+<tr>
 <td><code>refused: the phiward config changed since the broker started</code></td>
 <td>The config, the approved programs or a names file changed while the broker ran.</td>
 <td>The operator reads the change and restarts the broker.</td>
@@ -1933,6 +1938,11 @@ anything: the broker's log has the reason.</p>
 <li><strong><code>doctor</code> says the broker uses another config.</strong> The broker and the agent tool were started
   with a different <code>HOME</code>, <code>PHIWARD_CONFIG</code> or <code>XDG_*</code> variable. Start both from the same
   environment.</li>
+<li><strong><code>doctor</code> warns that the masking check failed, and <code>launch</code> refuses.</strong> A value of
+  <code>[sanitize] examples</code> is not fully masked, or a made-up path below a root came out unmasked.
+  The warning names the entry, the rule or the root by number. Fix the rule (often an edit
+  that narrowed it), or the example if it is not in the rule's form; then restart the broker
+  (<a href="../configuration/#sanitize">configuration.md</a>).</li>
 <li><strong>A write place is skipped.</strong> <code>doctor</code> says why: it does not exist yet, or a link is on its
   path. Name the real folder in <code>write_to</code>.</li>
 <li><strong>A gateway command fails to write to <code>/tmp</code>.</strong> The gateway sees <code>/tmp</code> read-only. It writes

@@ -1775,6 +1775,10 @@ Guide: <a href="../setup/#5-start-the-broker">Start the broker</a>.</p>
 </tr>
 </tbody>
 </table>
+<p>At its start the broker runs the masking check once
+(<a href="../configuration/#sanitize">configuration.md</a>). While it fails, the broker refuses every
+request (<code>refused: the masking check failed when the broker started</code>); fix the config and
+restart the broker.</p>
 <h3 id="phiward-carryover">phiward carryover<a class="headerlink" href="#phiward-carryover" title="Permanent link">&para;</a></h3>
 <p>Read and keep what <code>phiward launch</code> sessions put in quarantine.
 Guide: <a href="../launch/#when-a-session-ends">When a session ends</a>.</p>
@@ -1993,6 +1997,11 @@ Guide: <a href="../setup/#7-check-with-doctor">Check with doctor</a>.</p>
 </tr>
 </tbody>
 </table>
+<p>After the sanitizer line, doctor prints the masking check: <code>masking check: ok (...)</code>, or a
+WARNING for each value of <code>[sanitize] examples</code> that is not fully masked and each root whose
+made-up path came out unmasked, and a NOTE for each of your rules that no example tests
+(<a href="../configuration/#sanitize">configuration.md</a>). It names index numbers only. A failure does
+not change the exit status; <code>--headless</code> lists it as a reason.</p>
 <h3 id="phiward-mcp-list-wrap-and-unwrap">phiward mcp list, wrap and unwrap<a class="headerlink" href="#phiward-mcp-list-wrap-and-unwrap" title="Permanent link">&para;</a></h3>
 <p>Show your MCP servers, and run each one in phiward's kernel profile (wrap) or as it was (unwrap).
 Guide: <a href="../modes/#wrap-an-mcp-server-mode-a">Wrap an MCP server</a>.</p>

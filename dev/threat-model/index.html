@@ -2092,6 +2092,23 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     <code>onFailure</code>).</p>
 </li>
 <li>
+<p><a id="known-masking-check"></a><strong>The masking check tests only what its examples show.</strong>
+  Doctor, launch and the broker's start check that each <code>[sanitize] examples</code> value is fully
+  masked, and that a made-up path below each root is
+  (<a href="../configuration/#sanitize">configuration.md</a>). It covers the user config's rules, examples
+  and roots. Built-in packs that a repo's <code>.phiward.toml</code> adds are covered by the self-check,
+  which hashes the installed packs, not by the masking check. It builds the sanitizer with no
+  inventory entries, so it errs toward failing: an entry name that would mask a value at run
+  time does not help it pass. What it cannot see:</p>
+</li>
+<li>a rule too narrow for real forms that its examples do not show (an example of one form
+    passes while another real form leaks);</li>
+<li>a rule with no example (doctor's NOTE says which, by number);</li>
+<li>entry names under the roots and <code>names_from</code> (the check reads neither);</li>
+<li>
+<p>the built-in packs, which the self-check covers as installed files, not the check.</p>
+</li>
+<li>
 <p><a id="known-leftover-processes"></a><strong>A gateway command's leftover processes (macOS).</strong> A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
   removes its scratch folder. A process that leaves the group (<code>setsid</code>, a daemon) keeps running on
@@ -2541,7 +2558,8 @@ verified</strong> or <strong>from reading the code</strong> means it was not sho
 17. <a id="gap-17"></a>Each smaller, all real:
     - grant checks compare paths as raw text, so a case twin of <code>~/.ssh</code> or of a root's parent
       passes the <code>write_to</code> check (confirmed);
-    - a root written in NFD Unicode form is not masked by the sanitizer (confirmed);
+    - a root written in NFD Unicode form is masked now, in that form and in NFC (tested:
+      <code>test_phicheck.py</code>), so it is no longer a gap;
     - entry names that are not valid UTF-8 are not masked on Linux (confirmed);
     - a <code>.git</code> file (worktree, submodule) makes the gitfile, not the real object store, the derived
       root (from reading the code);
