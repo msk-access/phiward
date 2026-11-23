@@ -97,9 +97,10 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
   built-in packs in force (a repo's `.phiward.toml` may add one, such as `msk`). Not file
   names, read names, positions, numbers, dates, protected paths or the entry names under the
   roots: a project holds those everywhere. With no subject rule, there is no scan.
-- **What it reads:** one walk of the project folder, git-ignored files too: first every
-  entry's name, breadth first; then the files' content, the instruction files first
-  (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/`), then the smallest files. Of each
+- **What it reads:** one walk of the project folder, git-ignored files too: first the
+  instruction files Claude Code sends at the start (`CLAUDE.md`, `CLAUDE.local.md`,
+  `AGENTS.md`, `.claude/`), names and content; then every other name, breadth first; then the
+  other files' content, the smallest first. Of each
   regular file it reads the first 64 KiB (`phiward doctor`: 1 MiB): of its decompressed form
   for gzip and BGZF (`.csv.gz`, `.vcf.gz`), and as UTF-16 with a BOM (Excel's "Unicode text").
   A folder named after an ID is one finding, not one for each file below it.
@@ -122,7 +123,9 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
   2 MiB tables), the scan read all of them in 1.6 s on the maintainer's Mac. A larger project starts
   anyway, after one line: `phiward launch: NOTE: the project scan stopped at its 2 s limit
   after N files; run phiward doctor for the full scan`. An ID found before the limit still
-  refuses. `phiward doctor` scans with no limit.
+  refuses. `phiward doctor` scans with no limit. A scan that finished but left part of the
+  project unread (files past their head, long lines, folders over the entry cap, files it
+  cannot open) starts with one NOTE of those counts.
 - **A scan that cannot run** refuses: `the project scan could not run; run phiward doctor`.
 - A wrapped MCP server (`--entry`) is not scanned: its folder is not the agent's project.
 - **Mode A** has no launch: the SessionStart note runs the same scan within 2 s and, on a

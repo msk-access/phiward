@@ -274,7 +274,9 @@ project scan found <SUBJECT> in 3 files: move the data under a protected root, p
 (phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward doctor --show-paths
 lists them; nothing runs`. When it stops at its limit, the tool starts after one line: `phiward
 launch: NOTE: the project scan stopped at its 2 s limit after N files; run phiward doctor for
-the full scan`.
+the full scan`. When it finished but left part unread: `phiward launch: NOTE: the project scan
+did not read all of the project (3 files read only to their head); phiward doctor gives the
+counts`.
 
 ### phiward check
 

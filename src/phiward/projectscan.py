@@ -4,8 +4,9 @@ gateway: the hook decides by path, and Claude Code sends `CLAUDE.md` and the fil
 
 - The rules: subject identifiers only (`sanitize.subject_sanitizer`): no positions, numbers,
   file or read names, dates, roots or entry names, which a project holds everywhere.
-- The walk: one `os.scandir` walk of the project, never through a link: every name first,
-  breadth first; then the content, the instruction files first and then the smallest files.
+- The walk: one `os.scandir` walk of the project, never through a link: the instruction files
+  (names and content) first; then every other name, breadth first; then the other files'
+  content, the smallest first.
   It runs no program: git would read the project's `.git/config` (`core.fsmonitor`) and run
   what it names. It skips `wholetool.SKIP_TREES`, the protected and hidden paths, the
   `[sanitize] scan_allow` paths, and more than ENTRY_CAP entries of a folder.
@@ -128,19 +129,31 @@ class _Scan:
         return sorted(ents, key=lambda e: e.name)
 
     def walk(self) -> None:
-        """First every entry's name, breadth first; then the files' content: the instruction
-        files first, then the smallest (a copied table is small or medium; a large head is
+        """The instruction files Claude Code sends at the start (FIRST), names and content,
+        before anything else; then every other name, breadth first; then the other files'
+        content, the smallest first (a copied table is small or medium; a large head is
         slow)."""
-        queue = collections.deque([(self.top, len(FIRST), False)])
+        top = self.listing(self.top)
+        for part in ([e for e in top if e.name in FIRST], [e for e in top if e.name not in FIRST]):
+            self.names(part)
+            self.contents()
+
+    def names(self, entries: List[os.DirEntry]) -> None:
+        queue: collections.deque = collections.deque()
+        for e in entries:
+            self.over()
+            self.entry(e, FIRST.index(e.name) if e.name in FIRST else len(FIRST), False, queue)
         while queue:
             folder, rank, held = queue.popleft()
             for e in self.listing(folder):
                 self.over()
-                if folder == self.top:
-                    rank = FIRST.index(e.name) if e.name in FIRST else len(FIRST)
                 self.entry(e, rank, held, queue)
-        for rank, _size, path, rel in sorted(self.found):
+
+    def contents(self) -> None:
+        self.found.sort(reverse=True)  # read from the end: the smallest first
+        while self.found:
             self.over()
+            rank, _size, path, rel = self.found.pop()
             self.files += 1
             self.content(path, rel, rank)
 
@@ -268,7 +281,7 @@ def scan(cfg: config.Config, project: str, until: Optional[float] = None) -> Res
         except _Stop:
             complete = False
         hits = [h[1:] for h in sorted(s.hits)]  # the instruction files first, then by path
-        return Result(hits, dict(s.skipped), s.files, complete, "", listed=len(s.found))
+        return Result(hits, dict(s.skipped), s.files, complete, "", listed=s.files + len(s.found))
     except Exception:  # noqa: BLE001 - fail closed on anything
         return Result([], {}, 0, False, "the project scan could not run")
 
@@ -287,8 +300,14 @@ def found_text(r: Result) -> str:
                      + [f"{k} in {_plural(n, 'file name')}" for k, n in sorted(names.items())])
 
 
-def skipped_text(r: Result) -> str:
-    return ", ".join(f"{n} {why}" for why, n in sorted(r.skipped.items()) if n)
+def skipped_text(r: Result, reasons: Optional[Tuple[str, ...]] = None) -> str:
+    return ", ".join(f"{n} {why}" for why, n in sorted(r.skipped.items())
+                     if n and (reasons is None or why in reasons))
+
+
+# the skips that leave part of the project unread (the others are by choice: binary files,
+# installed code, protected and allowed paths)
+PARTIAL = (HEAD_ONLY, CAPPED, LONG, UNREADABLE)
 
 
 def place_problem(cfg: config.Config, project: str) -> str:

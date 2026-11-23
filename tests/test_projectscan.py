@@ -356,8 +356,9 @@ def test_launch_notes_what_a_finished_scan_did_not_read(tree, capsys):
     (tree / "repo" / "min.js").write_text("x" * (run.MAX_LINE + 1) + "\n")
     assert "project scan" not in _try_build(tree)
     err = capsys.readouterr().err
-    assert ("phiward launch: NOTE: the project scan did not read all of the project (1 long "
-            "lines); phiward doctor gives the counts") in err, err
+    # under launch's 64 KiB head, the long line is cut by the head first
+    assert ("phiward launch: NOTE: the project scan did not read all of the project (1 files "
+            "read only to their head); phiward doctor gives the counts") in err, err
 
 
 @pytest.mark.parametrize("raised", [sanitize.SanitizerError("FAKE-PT-0001"),

@@ -1855,6 +1855,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             sys.stderr.write(f"phiward launch: NOTE: the project scan stopped at its "
                              f"{projectscan.BUDGET:g} s limit after {scanned.files} files; run "
                              "phiward doctor for the full scan\n")
+        elif projectscan.skipped_text(scanned, projectscan.PARTIAL):
+            sys.stderr.write("phiward launch: NOTE: the project scan did not read all of the "
+                             f"project ({projectscan.skipped_text(scanned, projectscan.PARTIAL)});"
+                             " phiward doctor gives the counts\n")
     folder = tool_folder(adapter, env)
     _fixed_folders(folder)
     # this session's own folder: its config folder, built from the trusted copy, and its
