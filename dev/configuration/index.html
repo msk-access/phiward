@@ -2055,7 +2055,8 @@ and the derived protected folders. Details and limits:
 - <strong><code>commands</code></strong> (list): the programs it may run there, as bare names. The default is empty,
   which refuses every remote run. Nothing confines a command on the remote side: this list is
   what limits its effects.
-- <strong><code>roots</code></strong> (list of absolute paths on the remote): masked in the output as <code>&lt;PROTECTED&gt;</code>. A
+- <strong><code>roots</code></strong> (list of absolute paths on the remote host; a <code>~/</code> or relative entry is refused
+  when the config loads): masked in the output as <code>&lt;PROTECTED&gt;</code>. A
   push (<code>phiward copy</code> to a remote) goes only under one of these; with none, every push is
   refused. <code>phiward setup</code> makes each new copy remote's folder one.
 - <strong><code>use_shared_connection</code></strong> (<code>true</code> or <code>false</code>; default <code>true</code>). Every HPC request joins your
