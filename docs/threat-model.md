@@ -568,8 +568,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     `.git/config` names. The pre-commit hook (`phiward init`) refuses a new commit that adds an
     ID;
   - binary formats (xlsx, parquet, BAM, pickles: a NUL byte in the first 8 KiB), anything past a
-    file's first 1 MiB (after gzip), lines over 64 KiB, and more than 10000 entries of one
-    folder;
+    file's first 64 KiB at launch and in the note (1 MiB in doctor; after gzip), lines over
+    64 KiB, and more than 10000 entries of one folder;
   - IDs known only as entry names under the roots, with no rule for their form, and positions,
     numbers, dates, file and read names (the rules are subject IDs only);
   - the targets of links, files outside the project that Claude Code also sends at the start

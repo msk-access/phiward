@@ -4,7 +4,8 @@ Claude Code runs it as a SessionStart hook and adds what it prints to the sessio
 every session knows, before its first refusal, that protected data goes through the gateway and
 that the gateway is the intended route, not a way around the guards. It names no protected
 path: only the rules, and the HPC hosts and programs the operator listed. When the project scan
-(within its 2 s budget) finds subject IDs in the project's files, it says so by kind and count.
+(within its 2 s budget) finds subject IDs in the project's files, it says so by kind and count
+(not under `phiward launch`, which scanned the project before the session).
 It never fails a session: on any error it prints nothing.
 """
 # Without this note, a test session called `phiward run` "a way around the protection".
@@ -58,9 +59,11 @@ def _scan_line(cfg: config.Config, project: str) -> str:
     found, or "". A warning only: it never stops a session."""
     if not project:
         return ""
-    from phiward import projectscan
+    from phiward import projectscan, wholetool
     try:
-        if projectscan.place_problem(cfg, project):
+        # under `phiward launch`, which scanned the project just before (it refuses on a
+        # finding); its proof is the kernel profile, not a variable a settings file could set
+        if wholetool.already_confined(dict(os.environ)) or projectscan.place_problem(cfg, project):
             return ""
         r = projectscan.scan(cfg, project, projectscan.deadline())
     except Exception:  # noqa: BLE001 - a note must never stop a session

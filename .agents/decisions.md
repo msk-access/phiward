@@ -18,7 +18,11 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   limit and warns, `--headless` fails; in Mode A the SessionStart note warns within 2 s and
   never stops a session. Output: kinds, counts, and masked paths only with `--show-paths`.
   `[sanitize] scan_allow` is user config only, by absolute path (a hash was turned down: test
-  fixtures change often).
+  fixtures change often). Under a budget the walk lists every name first, then reads the
+  instruction files and then the smallest files, 64 KiB each: the rules' regexes are most of
+  the cost (about 0.4 us per 40-character line per rule), so a line no rule matches as written
+  skips the sanitizer's other steps only when it is plain (ASCII, no control character, `\` or
+  `%`), where that skip is exact (a test checks it).
 - **The masking check tests the user's own rules by their own examples.** `[sanitize]
   examples` is user config only and holds made-up values; phiward never makes examples from a
   regex (such a value only proves the regex matches itself), and the built-in packs' values live

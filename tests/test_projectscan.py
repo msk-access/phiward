@@ -191,6 +191,46 @@ def test_gzip_bgzf_and_utf16_are_read_and_the_head_is_1_mib(tree):
     assert r.skipped[projectscan.HEAD_ONLY] == 1
 
 
+def test_under_a_budget_the_head_is_64_kib(tree):
+    scan_cfg()
+    (tree / "repo" / "mid.csv").write_text("a\n" * (projectscan.HEAD_BUDGET // 2)
+                                           + "FAKE-PT-0001\n")
+    r = scan(tree, time.monotonic() + 600)
+    assert r.hits == [] and r.skipped[projectscan.HEAD_ONLY] == 1, r
+    assert hits(scan(tree)) == {("mid.csv", projectscan.HEAD_BUDGET // 2 + 1): ("<SUBJECT>",)}
+
+
+def test_a_folder_named_after_an_id_counts_once(tree):
+    scan_cfg()
+    d = tree / "repo" / "FAKE-PT-0001" / "sub"
+    d.mkdir(parents=True)
+    for i in range(5):
+        (d / f"f{i}.txt").write_text("x\n")
+    (d / "FAKE-PT-0002.txt").write_text("x\n")
+    assert sorted(p for p, _n, _k in scan(tree).hits) == [
+        "<SUBJECT>", "<SUBJECT>/sub/<SUBJECT>.txt"]
+
+
+def test_the_plain_skip_is_exact(tree):
+    """A plain line that no rule matches as written is one `clean` leaves as it is, over made-up
+    lines built from pieces of IDs, separators, escapes and other characters."""
+    import random
+    scan_cfg(packs=["genomics", "msk", "dates"], patterns=(PATTERN, r"^ZQ\d{3}$ => <CODE>"))
+    san = sanitize.subject_sanitizer(config.load(str(tree / "repo")))
+    searches = [rx.search for rx, _r in san.path_rules + san.id_rules]
+    pieces = ["FAKE", "-", "PT", "0001", "P-", "9990001", "-T01", "-IM6", "C-", "FAKE01", "s_C_",
+              "AB123456", "-T", "Donor", "x7", "ZQ", "123", " ", "\t", "_", ".", "/", ",", "a",
+              "‐", "Ｆ", "\\x2d", "%2D", "\\u002d", "\x1b[0m", "​", "\x00", "\x7f"]
+    rnd = random.Random(7)
+    skipped = 0
+    for _ in range(20000):
+        line = "".join(rnd.choice(pieces) for _k in range(rnd.randint(1, 8)))
+        if projectscan.plain(line) and not any(s(line) for s in searches):
+            skipped += 1
+            assert san.clean(line) == sanitize.normalize(line) == line, repr(line)
+    assert 1000 < skipped < 20000, skipped
+
+
 def test_an_escaped_id_is_found(tree):
     scan_cfg()
     (tree / "repo" / "x.json").write_text('{"id": "FAKE\\u002dPT-0001"}\n')
@@ -376,6 +416,17 @@ def test_the_session_note_says_nothing_of_a_clean_project(tree, capsys, monkeypa
     assert "project scan" not in _note(tree, capsys, monkeypatch)
 
 
+def test_under_launch_the_note_does_not_scan_again(tree, capsys, monkeypatch):
+    scan_cfg()
+    _plant(tree)
+
+    called = []
+    monkeypatch.setattr(wholetool, "already_confined", lambda env: True)
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: called.append(a))
+    ctx = _note(tree, capsys, monkeypatch)
+    assert "Rules for this session" in ctx and "project scan" not in ctx and not called
+
+
 def test_a_scan_error_never_stops_the_session_note(tree, capsys, monkeypatch):
     scan_cfg()
     _plant(tree)
@@ -424,6 +475,31 @@ SOURCE = "".join(f"def f{i}(x):\n    return x + {i}  # a made-up module line\n"
                  for i in range(50))  # about 4 KB
 
 
+def test_where_the_time_goes(tree):
+    """A measurement, printed: the cost per line of the scan's steps on made-up source lines."""
+    scan_cfg()
+    san = sanitize.subject_sanitizer(config.load(str(tree / "repo")))
+    lines = SOURCE.split("\n") * 500
+    text = "\n".join(lines)
+
+    def per_line(f):
+        start = time.perf_counter()
+        f()
+        return (time.perf_counter() - start) / len(lines) * 1e6
+
+    rules = san.path_rules + san.id_rules
+    print(f"\n{len(lines)} lines, {len(rules)} rules; us per line:")
+    print(f"  normalize: {per_line(lambda: [sanitize.normalize(x) for x in lines]):.2f}")
+    print(f"  clean: {per_line(lambda: [san.clean(x) for x in lines]):.2f}")
+    print(f"  any rule, per line: "
+          f"{per_line(lambda: [any(rx.search(x) for rx, _r in rules) for x in lines]):.2f}")
+    for rx, r in rules:
+        print(f"  {r} over the whole text: {per_line(lambda rx=rx: rx.search(text)):.3f}")
+    s = projectscan._Scan(san, str(tree / "repo"), config.load(str(tree / "repo")), None)
+    print(f"  the scan's check (plain skip, else clean): "
+          f"{per_line(lambda: [s.kinds(x) for x in lines]):.2f}")
+
+
 def test_a_large_made_up_project_keeps_the_launch_budget(tree):
     scan_cfg()
     repo = tree / "repo"
@@ -444,7 +520,9 @@ def test_a_large_made_up_project_keeps_the_launch_budget(tree):
     r = projectscan.scan(cfg, str(repo), projectscan.deadline())
     took = time.monotonic() - start
     print(f"\nproject scan: full {full.files} files in {took_full:.2f} s; with the budget "
-          f"{r.files} files in {took:.2f} s (complete: {r.complete})")
+          f"{r.files} of {r.listed} listed files in {took:.2f} s (complete: {r.complete})")
     assert full.complete and full.hits == [] and full.files == 5000 + 10 + 2, full.files
     assert took <= projectscan.BUDGET + 0.5, took
     assert r.complete or r.files < full.files
+    # the small files come first: most of the project is read within the budget
+    assert r.files >= 0.9 * full.files, (r.files, full.files)

@@ -97,13 +97,14 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
   built-in packs in force (a repo's `.phiward.toml` may add one, such as `msk`). Not file
   names, read names, positions, numbers, dates, protected paths or the entry names under the
   roots: a project holds those everywhere. With no subject rule, there is no scan.
-- **What it reads:** one walk of the project folder, the instruction files first (`CLAUDE.md`,
-  `CLAUDE.local.md`, `AGENTS.md`, `.claude/`), then the rest, git-ignored files too. Each
-  entry's name, relative to the project, and the first 1 MiB of each regular file: of its
-  decompressed form for gzip and BGZF (`.csv.gz`, `.vcf.gz`), and as UTF-16 with a BOM (Excel's
-  "Unicode text").
+- **What it reads:** one walk of the project folder, git-ignored files too: first every
+  entry's name, breadth first; then the files' content, the instruction files first
+  (`CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude/`), then the smallest files. Of each
+  regular file it reads the first 64 KiB (`phiward doctor`: 1 MiB): of its decompressed form
+  for gzip and BGZF (`.csv.gz`, `.vcf.gz`), and as UTF-16 with a BOM (Excel's "Unicode text").
+  A folder named after an ID is one finding, not one for each file below it.
 - **What it does not read:** binary files (a NUL byte in the first 8 KiB: xlsx, parquet, BAM),
-  lines over 64 KiB, anything past the first 1 MiB, the targets of links, files it cannot open,
+  lines over 64 KiB, anything past the first 64 KiB (doctor: 1 MiB), the targets of links, files it cannot open,
   more than 10000 entries of one folder, the protected and hidden paths, the folders of
   installed code and caches (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`,
   `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`,
@@ -117,14 +118,16 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
   pseudonymized copy (`phiward pseudonymize`), or, for made-up IDs only, add the files to
   `[sanitize] scan_allow` in your user config
   ([configuration.md](configuration.md#sanitize)).
-- **The budget:** 2 s. A larger project starts anyway, after one line: `phiward launch: NOTE:
-  the project scan stopped at its 2 s limit after N files; run phiward doctor for the full
-  scan`. An ID found before the limit still refuses. `phiward doctor` scans with no limit.
+- **The budget:** 2 s. On a made-up project of 5,012 files (5,000 source files of 4 KB and ten
+  2 MiB tables), the scan read all of them in 1.6 s on the maintainer's Mac. A larger project starts
+  anyway, after one line: `phiward launch: NOTE: the project scan stopped at its 2 s limit
+  after N files; run phiward doctor for the full scan`. An ID found before the limit still
+  refuses. `phiward doctor` scans with no limit.
 - **A scan that cannot run** refuses: `the project scan could not run; run phiward doctor`.
 - A wrapped MCP server (`--entry`) is not scanned: its folder is not the agent's project.
 - **Mode A** has no launch: the SessionStart note runs the same scan within 2 s and, on a
   finding, tells the session the kinds and counts (it never stops the session), and
-  `phiward doctor` warns. `phiward doctor --headless` lists a finding as a reason.
+  `phiward doctor` warns. Under `launch` the note does not scan again. `phiward doctor --headless` lists a finding as a reason.
 
 ## What a session can and cannot do
 

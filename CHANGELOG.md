@@ -22,14 +22,15 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   a pattern edited or a root removed in the config must be found. What it does not cover is in
   the threat model (`known-leak-test`).
 - The project scan: subject and sample IDs in the project's own files and file names, outside
-  the protected roots. One walk of the project, with no git, following no link: the
-  instruction files first, git-ignored files too, the first 1 MiB of each text file (gzip,
-  BGZF and UTF-16 read too). It uses the subject rules only (your patterns and pack files, and
+  the protected roots. One walk of the project, with no git, following no link: every name
+  first, then the content, the instruction files first and then the smallest files,
+  git-ignored files too; the first 64 KiB of each text file (doctor: 1 MiB; gzip, BGZF and
+  UTF-16 read too). A folder named after an ID is one finding. It uses the subject rules only (your patterns and pack files, and
   the built-in packs in force), never positions, numbers, dates or roots, and names kinds,
   counts and masked paths only. `phiward launch` refuses on a finding (2 s budget; over it, it
   starts with a NOTE); `phiward doctor` scans with no limit and warns (`--show-paths` lists the
   files, `--headless` lists a finding as a reason); in Mode A the SessionStart note warns within
-  2 s. `[sanitize] scan_allow` (user config only, absolute paths) allows files of made-up IDs.
+  2 s (under launch it does not scan again). `[sanitize] scan_allow` (user config only, absolute paths) allows files of made-up IDs.
   The leak test's launch leg allows its own `notes.md`, and a new step expects the refusal.
 - `phiward pseudonymize` (the operator's, in a terminal) makes a copy of one CSV/TSV table with
   the identifier columns you name coded (`S0042`: drawn at random, the same code for the same ID
