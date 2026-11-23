@@ -273,7 +273,8 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 - **`commands`** (list): the programs it may run there, as bare names. The default is empty,
   which refuses every remote run. Nothing confines a command on the remote side: this list is
   what limits its effects.
-- **`roots`** (list of absolute paths on the remote): masked in the output as `<PROTECTED>`. A
+- **`roots`** (list of absolute paths on the remote host; a `~/` or relative entry is refused
+  when the config loads): masked in the output as `<PROTECTED>`. A
   push (`phiward copy` to a remote) goes only under one of these; with none, every push is
   refused. `phiward setup` makes each new copy remote's folder one.
 - **`use_shared_connection`** (`true` or `false`; default `true`). Every HPC request joins your

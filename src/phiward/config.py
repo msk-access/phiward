@@ -633,6 +633,10 @@ def _check_paths(cfg: Config) -> str:
     for p in cfg.roots:
         if any(ch in p for ch in "*?["):
             return f"root '{p}' has a wildcard; put it under 'patterns'"
+    for i, p in enumerate(cfg.remote_roots, 1):
+        if not p.startswith("/"):  # a path on the remote host: no ~ or $HOME to expand here
+            return (f"[remote] roots entry {i} must be an absolute path on the remote host: "
+                    "write the remote's absolute path")
     for d in cfg.allowed_domains:
         why = domain_problem(d)
         if why:
