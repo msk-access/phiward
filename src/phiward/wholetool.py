@@ -2053,6 +2053,12 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if why:
             raise LaunchError(f"the session needs a network of its own, and {why} (phiward "
                               "doctor says so too)")
+        # the temp folders by the name the view gives the run's tmp, /tmp: a unix socket's path
+        # holds at most 107 bytes, and Claude Code's sandbox bridges (`claude-http-<hex>.sock`)
+        # and tmux's sockets do not fit under the run folder's full path
+        for k in ("TMPDIR", "TMUX_TMPDIR", "CLAUDE_CODE_TMPDIR"):
+            if k in child_env:
+                child_env[k] = "/tmp"
         made = _make_folders(project, MADE_ON_LINUX)
         if made:
             sys.stderr.write("phiward launch: made empty, read-only folders in the project: "

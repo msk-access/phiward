@@ -100,6 +100,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux: under `phiward launch` the session's `TMPDIR`, `TMUX_TMPDIR` and
+  `CLAUDE_CODE_TMPDIR` are `/tmp`, the name the session's view gives its own temp folder, not
+  that folder's full path under `~/.phiward`. A unix socket's path holds at most 107 bytes, and
+  under the full path Claude Code's sandbox could not make its bridge sockets
+  (`Failed to create bridge sockets after 5 attempts`: Bash did not run under
+  `launch --tool claude`), nor tmux its socket.
 - macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
   systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
