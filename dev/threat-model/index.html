@@ -1506,11 +1506,14 @@
 <li><strong>What leaves the machine:</strong> what the agent tool sends to its model provider: your prompts, the
   files and output the agent reads, and the masked output of gateway commands. phiward keeps
   protected files, credentials and unmasked gateway output out of that.</li>
-<li><strong>The network is open by default in both modes.</strong> phiward does not stop the agent from sending
-  what it can read. It stops the agent from reading protected data. In Mode A, <code>[network] limit</code>
-  lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it. The
-  WebFetch tool, MCP servers, commands a project excludes from the sandbox, and Mode B stay open.
-  Each listed host is itself a way out (a push, a gist, a host behind a shared CDN).</li>
+<li><strong>The network reaches public hosts in both modes.</strong> phiward does not stop the agent from
+  sending what it can read. It stops the agent from reading protected data. In Mode A, <code>[network]
+  limit</code> lets the shell commands reach only listed hosts. Claude Code's own sandbox enforces it.
+  The WebFetch tool, MCP servers and commands a project excludes from the sandbox stay open.
+  In Mode B the tool has no direct outbound network: every connection goes through phiward's proxy, which allows
+  only public addresses (not this machine, its link or private ranges, unless the user config
+  lists a private range). Each host that can be reached is itself a way out (a push, a gist, a
+  host behind a shared CDN).</li>
 <li><strong>Trusted:</strong> the operator, the operator's terminal, the user config, the broker, the operating
   system and its sandbox (Seatbelt on macOS; bubblewrap, seccomp and Landlock on Linux), and Claude
   Code's own sandbox and permission rules in Mode A.</li>
@@ -1560,8 +1563,8 @@
 <tr>
 <td>It sends out what it can read</td>
 <td>nothing by default; <code>[network] limit</code> for shell commands only</td>
-<td>nothing: the network is open</td>
-<td>each listed host is itself a way out</td>
+<td>its proxy: public addresses only, not this machine's services</td>
+<td>each host that can be reached is itself a way out</td>
 </tr>
 <tr>
 <td>It uses credentials that are not files (the Keychain, tokens in the environment)</td>
@@ -1628,7 +1631,10 @@
 <li>a protected folder on a mounted HPC volume;</li>
 <li><code>[network] limit</code> in a live Claude Code session (the settings it writes are tested; Claude
     Code enforces them);</li>
-<li>other agent tools than Claude Code.</li>
+<li>other agent tools than Claude Code;</li>
+<li>the real Claude Code under <code>launch</code> with its network through phiward's proxy (the test
+    suite checks the proxy and the profiles with made-up servers; the sandbox check with the
+    real tool is the operator's).</li>
 <li><strong>Independent reviews:</strong> each part had adversarial reviews before this release, and each finding
   was fixed or is listed on this page as a limit.</li>
 </ul>
@@ -2776,9 +2782,40 @@ also reports git control files a session changed. But the class cannot be closed
 Run project commands inside <code>launch</code> (<code>phiward launch -- git status</code>, <code>phiward launch -- make
 test</code>), or read the change before you run it outside.</p>
 <p><strong>Known open items in this phase:</strong>
-- <a id="open-network"></a>the network is open under <code>launch</code> (a proxy for listed hosts is planned; <code>[network] limit</code> covers
-  Mode A's shell commands only). The agent cannot read protected data under <code>launch</code>, so this
-  matters for credentials and for gateway output;
+- <a id="open-network"></a>the network under <code>launch</code> goes only through phiward's proxy, outside
+  the profile, and only to public addresses (<a href="../launch/#the-network">launch.md</a>). The tool has no
+  direct outbound IP connection: on macOS the profile allows only the proxy's port on loopback, which the
+  launcher holds on both 127.0.0.1 and [::1] until it exits; on Linux the session has a network
+  namespace of its own, and a relay on its own 127.0.0.1 gets each connection to the proxy as one
+  end of a socket pair from the launcher: no socket with a path leads to the proxy, and a pair
+  that cannot be passed is a refusal, never a direct connection. The proxy needs the session's token,
+  looks a name up once, judges every address it gets (an embedded IPv4 address unwrapped first),
+  and connects to the checked address. It refuses this machine (its names, and its addresses
+  read again for each connection), the local link and the private ranges. What stays open:
+  - any public host: the agent cannot read protected data under <code>launch</code>, so this matters for
+    credentials and for gateway output (<code>[network] limit</code> covers Mode A's shell commands only;
+    a list of hosts for the proxy is not built yet);
+  - a private range you list in <code>[launch] private_networks</code> (user config only): every service
+    of another machine there is reachable (this machine's own addresses stay refused);
+  - a service on this machine reached through another machine (a public host or listed private
+    host that forwards back), or a public address of this machine that <code>getifaddrs</code> does not
+    list (a NAT in front of it), and this machine's name when it resolves to such an address;
+  - an upstream proxy (your <code>HTTPS_PROXY</code> when <code>launch</code> starts) gets only checked public
+    addresses, but decides itself what it forwards; an address in <code>[launch] private_networks</code>
+    is connected to directly;
+  - the proxy tunnels to any port of a checked address, not only 443;
+  - inbound, macOS: a session can listen on any address, and Seatbelt cannot limit that to
+    loopback (its <code>localhost</code> filter also matches <code>0.0.0.0</code> and <code>::</code>). A server the session
+    starts on every interface is reachable from the LAN. What it can serve is what the session
+    can read, never a protected root. Linux is not
+    affected: the session has a network namespace of its own;
+  - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
+    lookups fail inside the session too;
+  - macOS: the user's <code>trustd</code> agent stays reachable, as the OS trust store is read through it
+    (Claude Code trusts that store by default). It runs outside the profile and may fetch the
+    URLs a certificate names (issuer, OCSP, CRL) when a program asks it to check a certificate,
+    one the session made too: a way to reach a host the proxy refuses. Not tested. The system
+    <code>trustd</code> and <code>ocspd</code> are not reachable;
 - <a id="open-environment"></a>the tool's environment is an allow-list (proxy, CA and locale variables, the tool's own
   <code>ANTHROPIC_</code>/<code>CLAUDE_</code> ones); add more with <code>[launch] pass_env</code> in the user config, knowing that
   whatever you pass is readable by the agent;
@@ -2796,6 +2833,8 @@ test</code>), or read the change before you run it outside.</p>
   ask again" answers, <code>--worktree</code> and <code>/loop</code> durable tasks do not stay in the project under
   <code>launch</code>;
 - <a id="open-unix-sockets"></a>Linux: unix sockets are limited by the kernel, not by their names.
+  The session's network namespace is its own, so no abstract unix socket outside is reachable,
+  on every kernel.
   From Landlock ABI 9 (Linux 7.1) the whole tool reaches only the sockets made in the session
   and the name-service folders (sssd, nscd, userdb); a helper that cannot apply this stops the
   start. Below ABI 9, <code>--tool generic</code> and a wrapped MCP server cannot make unix sockets at all
@@ -2864,7 +2903,7 @@ run later" or to the macOS process model:</p>
 </tr>
 <tr>
 <td><a id="l5"></a>L5</td>
-<td>macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; <code>launch</code> never ends a process. Its session folder is moved to <code>trash/</code> and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read).</td>
+<td>macOS: a process that leaves the tool's process tree (a new session, a double fork) keeps running after the tool exits; <code>launch</code> never ends a process. Its session folder is moved to <code>trash/</code> and thrown away, and a later session's folder is new, so nothing it writes there reaches a later session. It can still write the project (after the report, not reported), the spool and the per-user temp folder, and can make a folder again at its old run path (never read). Its profile still allows its session's one proxy port on loopback, which the launcher no longer holds: a process that binds that port later (by chance or on purpose) can talk to it. The port is random for each launch, and a later session has its own port and token.</td>
 <td>Close the terminal after a session; a separate macOS user for the agent (not part of this release).</td>
 </tr>
 <tr>

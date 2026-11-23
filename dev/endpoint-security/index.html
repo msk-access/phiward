@@ -909,6 +909,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#network-the-launch-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network: the launch proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#who-signed-what" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1269,6 +1280,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#network-the-launch-proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Network: the launch proxy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#who-signed-what" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1364,8 +1386,10 @@
 <p>phiward keeps protected health information (PHI) out of what an AI coding agent sends to its
 model provider. It runs the agent's commands in a kernel profile (<code>sandbox-exec</code>) and masks the
 output. It is a Python package that runs as the user.</p>
-<p>It needs no admin rights, no kernel extension and no network service. It opens no listening
-port: the agent and the broker talk through files in a private folder.</p>
+<p>It needs no admin rights, no kernel extension and no network service. The agent and the
+broker talk through files in a private folder. phiward's one listening port is the proxy of a
+<code>phiward launch</code> session, on loopback only, while that session runs
+(<a href="#network-the-launch-proxy">Network</a>).</p>
 <h2 id="what-it-installs-and-writes">What it installs and writes<a class="headerlink" href="#what-it-installs-and-writes" title="Permanent link">&para;</a></h2>
 <p>All of it is in the user's home folder, written by the user's own account:</p>
 <ul>
@@ -1776,6 +1800,56 @@ R5 regex ^git [^ ]
 </code></pre></div>
 <p>A test records every process phiward starts on macOS and checks that this list holds the same
 command lines, both ways (<code>tests/test_macos_processes.py</code>).</p>
+<h2 id="network-the-launch-proxy">Network: the launch proxy<a class="headerlink" href="#network-the-launch-proxy" title="Permanent link">&para;</a></h2>
+<p>Under <code>phiward launch</code>, the agent tool has no direct outbound IP connection. Its HTTPS goes through a proxy
+that runs in the launcher's own process (<code>phiward launch</code>, the Python): it starts no process
+of its own, and it ends with the session.</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Where</th>
+<th>When</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A listening port</td>
+<td><code>127.0.0.1</code> and <code>[::1]</code>, one random port held on both, TCP</td>
+<td>while a launched session runs</td>
+<td>takes the tool's <code>CONNECT</code> requests (a tunnel to any port); each needs the session's token</td>
+</tr>
+<tr>
+<td>Outgoing connections</td>
+<td>the addresses a name resolves to, public ranges only</td>
+<td>each <code>CONNECT</code> of the tool</td>
+<td>connects the tool to the host it asked for, from the launcher's process; a range in <code>[launch] private_networks</code> may be reached too</td>
+</tr>
+<tr>
+<td>Outgoing connections to a proxy</td>
+<td>the proxy <code>HTTPS_PROXY</code> names in the user's terminal</td>
+<td>each <code>CONNECT</code> to a public address, when that is set</td>
+<td>asks that proxy for the checked address, never the name; an address in <code>[launch] private_networks</code> is connected to directly</td>
+</tr>
+<tr>
+<td>Name lookups</td>
+<td>the system's resolver</td>
+<td>each <code>CONNECT</code> with a host name</td>
+<td>one lookup in the launcher, before any connection</td>
+</tr>
+<tr>
+<td>A read of the machine's addresses</td>
+<td>libc's <code>getifaddrs</code>, called in the launcher's process (Python <code>ctypes</code>)</td>
+<td>each <code>CONNECT</code></td>
+<td>lists this machine's own addresses, which the proxy refuses; no process is started and no file is written</td>
+</tr>
+</tbody>
+</table>
+<p>The proxy refuses this machine, the local link and the private ranges. On macOS, the tool's
+profile allows it only the proxy's port on loopback. On Linux, the session has a network
+namespace of its own, and a relay inside it hands each connection to the launcher. On macOS a server
+the session starts can still listen on any address (see the threat model).</p>
 <h2 id="who-signed-what">Who signed what<a class="headerlink" href="#who-signed-what" title="Permanent link">&para;</a></h2>
 <p><code>sandbox-exec</code>, <code>sh</code>, <code>awk</code>, <code>ssh</code>, <code>mkdir</code>, <code>rsync</code>, <code>getconf</code> and <code>launchctl</code> are Apple's
 platform binaries. The Python is the one the user installed, signed by whoever built it (the

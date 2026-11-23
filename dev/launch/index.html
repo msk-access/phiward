@@ -620,6 +620,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The network
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-a-session-ends" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1246,6 +1257,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The network
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#when-a-session-ends" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1368,7 +1390,9 @@ team.</p>
 <li><code>--memory</code>: turn Claude Code's auto memory on. It then lives in the session's folder, and its
   changes go to quarantine like any other instruction.</li>
 <li><code>launch</code> refuses to start in <code>/</code>, your home, a folder above or inside protected data, a dot
-  folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder.</li>
+  folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder. On Linux it also refuses
+  <code>/tmp</code> itself (as the project or the spool): the session's own <code>/tmp</code> would be the shared one.
+  A folder below <code>/tmp</code> works.</li>
 <li><code>launch</code> refuses to start when the masking check fails: <code>the masking check failed: ...; run
   phiward doctor</code>. A value of <code>[sanitize] examples</code> is not fully masked by your own rules, or a
   made-up path below a root came out unmasked
@@ -1467,8 +1491,8 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
 </tr>
 <tr>
 <td>Network</td>
-<td>open in this release (see Limits)</td>
-<td>reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox</td>
+<td>tunnels (CONNECT) to public addresses, through phiward's proxy (<a href="#the-network">below</a>)</td>
+<td>reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox</td>
 </tr>
 <tr>
 <td>Protected data</td>
@@ -1477,6 +1501,50 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
 </tr>
 </tbody>
 </table>
+<h2 id="the-network">The network<a class="headerlink" href="#the-network" title="Permanent link">&para;</a></h2>
+<p>The session has no direct outbound network. <code>launch</code> runs a proxy outside the profile, and the tool's
+<code>HTTPS_PROXY</code>, <code>HTTP_PROXY</code> and <code>ALL_PROXY</code> (and their lowercase forms) name it, with a token for
+this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm and curl use it.</p>
+<ul>
+<li><strong>Only public addresses.</strong> The proxy looks the name up once, checks every address it gets
+  back, and connects to the checked addresses in turn (so broken IPv6 falls back to IPv4). It refuses this machine (<code>localhost</code>,
+  <code>127.0.0.1</code> in any spelling, <code>[::1]</code>, this machine's names and addresses, which it reads again
+  for each connection), the local link (<code>169.254.x</code>, <code>fe80::</code>) and the private ranges (<code>10.x</code>,
+  <code>172.16-31.x</code>, <code>192.168.x</code>, <code>100.64.x</code>, <code>fc00::/7</code>).</li>
+<li><strong>Private ranges you need</strong> (an HPC web service, an internal Git server): list them in
+  <code>[launch] private_networks</code> in your user config (<a href="../configuration/#launch">configuration.md</a>).
+  A project's <code>.phiward.toml</code> cannot.</li>
+<li><strong>Tunnels only</strong> (CONNECT), to any port of a checked address: HTTPS, and whatever else a tool
+  sends through a CONNECT tunnel. Plain HTTP requests through the proxy are refused.</li>
+<li><strong>A proxy of your own:</strong> when the terminal you start <code>launch</code> from sets <code>HTTPS_PROXY</code> (or
+  <code>ALL_PROXY</code>) to an <code>http://</code> proxy, phiward's proxy goes through it, by the checked address
+  only (<code>CONNECT &lt;address&gt;:443</code>). A name that does not resolve on this machine is refused, not
+  sent on. An address in your <code>[launch] private_networks</code> is connected to directly, not through
+  that proxy (it does not reach your internal network). Any other kind of proxy there
+  (<code>https://</code>, <code>socks5://</code>) stops the start.</li>
+<li><strong>At most 64 connections at once.</strong> One more is refused, not queued.</li>
+<li><code>launch</code> refuses to start when the proxy cannot start.</li>
+</ul>
+<p>What this breaks:
+- MCP servers over HTTP on this machine, IDE integrations (the IDE's WebSocket on localhost),
+  and <code>/login</code> with a localhost callback (use <code>CLAUDE_CODE_OAUTH_TOKEN</code>, above). Stdio MCP
+  servers the session starts work.
+- Tools that ignore the proxy variables (raw sockets, <code>ssh</code> to port 22, some Go and Java tools),
+  and all UDP. They fail visibly.
+- Docker over TCP (<code>DOCKER_HOST=tcp://localhost</code>); the Docker socket is blocked already.
+- <strong>macOS:</strong> the session cannot reach a server on this machine, also one it started itself: test
+  suites with local HTTP fixtures, dev servers, Jupyter kernels (ZMQ over TCP by default) and Dask
+  local clusters. Use unix sockets in the project or the session's temp folder, or an IPC
+  transport (<code>jupyter ... --transport ipc</code>). Name lookups still work. A server the session
+  starts can listen on every address, and the LAN can reach it: bind local servers to
+  <code>127.0.0.1</code> (<code>python -m http.server --bind 127.0.0.1</code>) (<a href="../threat-model/#open-network">the limit</a>).
+- <strong>Linux:</strong> the session has a network of its own, with its own <code>localhost</code>: servers it starts
+  itself work. The proxy variables name a relay on that <code>localhost</code>, which gets each connection
+  to the proxy as a socket pair from <code>launch</code> (no socket file; it works also where the tool
+  cannot make unix sockets). Name lookups inside the session fail (<code>ping</code>, <code>dig</code>, <code>ssh</code> to a name); tools that
+  use the proxy do not need them. <code>launch</code> refuses to start where network namespaces are not
+  available: it says so when <code>user.max_net_namespaces</code> is 0, and bubblewrap stops the start
+  when it cannot make one for another reason. Nothing runs then; <code>phiward doctor</code> checks both.</p>
 <h2 id="when-a-session-ends">When a session ends<a class="headerlink" href="#when-a-session-ends" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>The session's folder is thrown away.</strong> Each session starts from a trusted copy in
@@ -1589,7 +1657,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
 <li><strong>Linux: Claude Code's own sandbox runs inside launch.</strong> phiward turns it off only on macOS.
   On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
   inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
-  runs unconfined).</li>
+  runs unconfined). The session's settings set <code>sandbox.allowUnsandboxedCommands: false</code>, so a
+  Bash command is not retried outside it. Bash reaches the network through Claude Code's own
+  proxy, which then goes through phiward's; that a given Claude Code version does this is for
+  the real-tool check to confirm.</li>
 <li><strong>Linux: unix sockets.</strong> <code>launch</code> does not mask sockets by name; the kernel limits them.</li>
 <li>From Linux 7.1 (Landlock ABI 9): the session reaches only the unix sockets it made itself,
     and the system's name-service sockets (sssd, nscd).</li>
@@ -1646,11 +1717,13 @@ when in doubt, reinstall: the step names the command for the tool that installed
   profile; where <code>~/.phiward</code> cannot be written, that launch refuses and nothing runs.</li>
 </ul>
 <p>Read <a href="../threat-model/">threat-model.md</a> (Mode B, <a href="../threat-model/#l1">limits L1–L10</a>). In short:
-- <strong>The network is open.</strong> A session cannot read protected data, so it cannot send it. But it
-  can carry out what it can read: gateway output (masked), the login token, the project.
+- <strong>The network goes only to public addresses, through phiward's proxy</strong> (<a href="#the-network">above</a>).
+  A session cannot read protected data, so it cannot send it. But it can carry out what it can
+  read, to any public host: gateway output (masked), the login token, the project.
 - <strong>macOS:</strong> a process that leaves the tool's process tree keeps running after the session
-  (L5). It can no longer change what a later session reads, but it can write the project. Close
-  the terminal after a session.
+  (L5). It can no longer change what a later session reads, but it can write the project, and
+  it keeps its session's one allowed port after the proxy is gone. Close the terminal after a
+  session.
 - <strong>macOS:</strong> the Keychain and the per-user temp folder are shared with your own tools.
 - <strong>Masking covers names and identifiers, not content.</strong> Through the gateway, print counts and
   summaries, not records, and hide small counts (<a href="../daily-use/#small-counts">Small counts</a>) (rule 3 of the agent rules that <code>phiward init</code> adds to <code>AGENTS.md</code>). Dates can be masked with the <code>dates</code> pack.

@@ -1797,6 +1797,13 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>More environment variables for <code>phiward launch</code> (the agent can read them).</td>
 </tr>
 <tr>
+<td><a href="#launch"><code>[launch] private_networks</code></a></td>
+<td>list</td>
+<td>none</td>
+<td>ignored</td>
+<td>Private ranges that <code>phiward launch</code>'s network proxy may reach.</td>
+</tr>
+<tr>
 <td><a href="#broker"><code>[broker] write_to</code></a></td>
 <td>list of folders</td>
 <td>none</td>
@@ -2078,7 +2085,14 @@ and the derived protected folders. Details and limits:
 <h3 id="launch"><code>[launch]</code><a class="headerlink" href="#launch" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong><code>pass_env</code></strong> (list): environment variables passed to a launched tool besides the built-in
-  allow-list. The agent can read whatever you pass.</li>
+  allow-list. The agent can read whatever you pass. The proxy variables are always the session's
+  own proxy (<a href="../launch/#the-network">launch.md</a>).</li>
+<li><strong><code>private_networks</code></strong> (list of networks; default none): private ranges the session's network
+  proxy may reach, for example <code>["10.20.0.0/16"]</code> for an internal Git server or an HPC web
+  service. Each entry must be a network with its prefix length inside <code>10.0.0.0/8</code>,
+  <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>100.64.0.0/10</code> or <code>fc00::/7</code>; anything else is a problem.
+  This machine's own addresses, loopback and the local link stay refused. Every service in a
+  listed range is reachable from the session.</li>
 </ul>
 <h3 id="broker"><code>[broker]</code><a class="headerlink" href="#broker" title="Permanent link">&para;</a></h3>
 <p>The grants. Nothing asks the operator at run time: what is not written here is refused.</p>
@@ -2180,7 +2194,8 @@ wildcard forms. List only the hosts you need, and as narrowly as you can.</p>
   for each level that has one.</li>
 </ul>
 <p>What it does not limit: Claude Code's own connection to the model provider, the WebFetch and
-WebSearch tools, MCP servers, hooks, and Mode B (<code>phiward launch</code>). With <code>limit = true</code>,
+WebSearch tools, MCP servers, hooks, and Mode B (<code>phiward launch</code>, whose own proxy allows only
+public addresses: <a href="../launch/#the-network">launch.md</a>). With <code>limit = true</code>,
 <code>install</code> replaces <code>sandbox.network.allowedDomains</code> in your user settings with exactly
 <code>allowed_domains</code>, and prints each host it removes. To open the network again, set
 <code>limit = false</code> and edit <code>sandbox.network</code> in <code>~/.claude/settings.json</code> yourself. <code>phiward
