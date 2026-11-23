@@ -155,7 +155,8 @@ def test_the_roots_and_a_pattern_root_pass(tree):
 def test_a_remote_root_the_sanitizer_does_not_match_as_written_fails(tree):
     user_cfg('[remote]\nroots = ["~/fakedata"]\n')
     r = check(tree)
-    assert r.failed == ["a made-up path below remote root 1 came out unmasked"], r
+    assert r.failed == ["a made-up path below remote root 1 came out unmasked (write the "
+                        "remote's absolute path)"], r
     assert_never_shown(" ".join(r.failed), ["fakedata"])
 
 
