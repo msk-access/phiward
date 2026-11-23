@@ -78,7 +78,8 @@ def build(tree, monkeypatch, capsys):
     # on this Mac the test's folder may be in the per-user temp folder, a write place
     monkeypatch.setattr(wholetool, "_darwin_user_dir", lambda name: "")
 
-    def run(args, env=None):
+    def run(args, env=None, look=None):
+        """`look`: called with the child's environment while the session's folder stands."""
         env = dict(os.environ) if env is None else env
         store = _store(tree)
         capsys.readouterr()
@@ -90,7 +91,11 @@ def build(tree, monkeypatch, capsys):
             os.close(fd)
         proxy.close()
         confine.release_profile(cmd)
-        store.end(str(base(tree)))
+        try:
+            if look is not None:
+                look(child_env)
+        finally:
+            store.end(str(base(tree)))
         return child_env, err
     return run
 
@@ -134,7 +139,16 @@ def test_a1b_the_operators_own_value_does_not_win(tree, build):
 @needs_confine
 def test_a1b_transcripts_off_keeps_nothing(tree, build):
     _user_config("[launch]\nkeep_transcripts = false\n")
-    build([])
+    (kept(tree) / _key(tree)).mkdir(parents=True)
+    (kept(tree) / _key(tree) / "old.jsonl").write_text("old\n")
+    seen = []
+
+    def look(child_env):
+        conf = Path(child_env["CLAUDE_CONFIG_DIR"])
+        assert conf.is_dir(), conf
+        seen.append(sorted(str(p.relative_to(conf)) for p in conf.rglob("*.jsonl")))
+    build([], look=look)
+    assert seen == [[]], seen  # the existing store stays out of the session
     rec = [json.loads(p.read_text()) for p in
            (tree / "home" / ".phiward" / "carryover" / "claude" / "sessions").glob("*.json")]
     assert all(not r.get("transcripts") for r in rec), rec
@@ -272,6 +286,43 @@ def test_a1b_past_the_cap_the_oldest_session_goes_first(tree, monkeypatch):
     (run / "config" / "projects" / key / "new.jsonl").write_text("abcde\n")
     s.end(str(base(tree)))
     assert sorted(os.listdir(kept(tree) / key)) == ["new.jsonl"]
+
+
+def test_a1b_the_left_out_folders_in_other_letter_case_are_left_out_too(tree):
+    """macOS ignores case: `Memory/` is the tool's `memory/` there."""
+    key = _key(tree)
+    s, run, _ = _session(tree, "one", key)
+    p = run / "config" / "projects" / key
+    (p / "abc" / "MCP-Tasks").mkdir(parents=True)
+    (p / "abc" / "MCP-Tasks" / "m.json").write_text("{}\n")
+    (p / "Memory").mkdir()
+    (p / "Memory" / "MEMORY.md").write_text("planted\n")
+    (p / "abc.jsonl").write_text("a\n")
+    s.end(str(base(tree)))
+    assert sorted(os.listdir(kept(tree) / key)) == ["abc", "abc.jsonl"]
+    assert os.listdir(kept(tree) / key / "abc") == []
+
+
+def test_a1b_a_session_trimmed_whole_gets_a_note(tree, monkeypatch):
+    key = _key(tree)
+    monkeypatch.setattr(carryover, "MAX_BYTES", 4)
+    s, run, _ = _session(tree, "one", key)
+    (run / "config" / "projects" / key / "new.jsonl").write_text("abcdefgh\n")
+    msgs = s.end(str(base(tree)))
+    assert any("NOTE" in m and "cap" in m for m in msgs), msgs
+
+
+def test_a1b_a_session_kept_past_the_cap_gets_no_note(tree, monkeypatch):
+    key = _key(tree)
+    (kept(tree) / key).mkdir(parents=True)
+    (kept(tree) / key / "old.jsonl").write_text("12345\n")
+    os.utime(kept(tree) / key / "old.jsonl", (1_000_000, 1_000_000))
+    monkeypatch.setattr(carryover, "MAX_BYTES", 8)
+    s, run, _ = _session(tree, "one", key)
+    (run / "config" / "projects" / key / "new.jsonl").write_text("abcde\n")
+    msgs = s.end(str(base(tree)))
+    assert sorted(os.listdir(kept(tree) / key)) == ["new.jsonl"]
+    assert not any("cap" in m for m in msgs), msgs
 
 
 def test_a1b_status_lists_the_transcripts(tree):
