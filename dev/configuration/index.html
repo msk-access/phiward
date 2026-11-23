@@ -1804,6 +1804,13 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>Private ranges that <code>phiward launch</code>'s network proxy may reach.</td>
 </tr>
 <tr>
+<td><a href="#launch"><code>[launch] keep_transcripts</code></a></td>
+<td>true or false</td>
+<td>true</td>
+<td>ignored</td>
+<td>Keep this project's Claude Code transcripts between <code>launch</code> sessions, for <code>--resume</code> and <code>-c</code>.</td>
+</tr>
+<tr>
 <td><a href="#broker"><code>[broker] write_to</code></a></td>
 <td>list of folders</td>
 <td>none</td>
@@ -2093,6 +2100,12 @@ and the derived protected folders. Details and limits:
   <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>100.64.0.0/10</code> or <code>fc00::/7</code>; anything else is a problem.
   This machine's own addresses, loopback and the local link stay refused. Every service in a
   listed range is reachable from the session.</li>
+<li><strong><code>keep_transcripts</code></strong> (<code>true</code> or <code>false</code>; default <code>true</code>): keep this project's Claude Code
+  transcripts between <code>launch --tool claude</code> sessions, so <code>--resume</code> and <code>-c</code> find earlier
+  sessions. phiward never reads them. A resumed session reads what an earlier session wrote, as
+  its history (<a href="../threat-model/#open-transcripts">the limit</a>). With <code>false</code>, each session starts
+  with no history, and a resume flag gets a NOTE. Where they are and how to delete them:
+  <a href="../launch/#when-a-session-ends">launch.md</a>.</li>
 </ul>
 <h3 id="broker"><code>[broker]</code><a class="headerlink" href="#broker" title="Permanent link">&para;</a></h3>
 <p>The grants. Nothing asks the operator at run time: what is not written here is refused.</p>

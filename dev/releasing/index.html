@@ -1282,9 +1282,19 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
 <li><code>sh scripts/sandbox-check/linux.sh</code> on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that <code>scripts/sandbox-check/docker/package-lock.json</code>
      pins (<code>CLAUDE_VERSION=2.1.295</code> builds the lowest version phiward supports instead, unlocked).</li>
+<li>Re-read "Permission mode on resume" in Claude Code's sessions docs. <code>launch</code> keeps
+     transcripts on its word that a resumed bypass session starts in the mode a new one starts
+     in. If a release restores bypass, <code>launch</code> must add <code>--permission-mode default</code> to a resume.</li>
 </ol>
 <p>Each runs one <code>claude -p</code> session per mode (<code>MODES</code>, default <code>A B</code>; Mode B runs under
-   <code>phiward launch</code>), Haiku (or <code>SBX_MODEL=sonnet</code>, when Haiku declines the request) with a
+   <code>phiward launch</code>), and with Mode A one more short session, the bypass probe: started with
+   <code>--permission-mode bypassPermissions</code>, it Reads the protected file, runs <code>cat</code> on it, then
+   <code>env &gt; env.txt</code>. phiward must refuse the Read (also by the deny rules <code>install</code> writes) and
+   the <code>cat</code>. The token must be in neither the output nor the environment, the settings must
+   not change, and no name may change in the data folder. The judge says <code>ok</code>, or <code>BAD</code> with
+   one word (<code>leaked</code>, <code>token</code>, <code>settings</code>, <code>wrote</code>, <code>hook-skipped</code>: FAIL; <code>facts</code>,
+   <code>no-session</code>, <code>no-read</code>, <code>no-cat</code>: INCONCLUSIVE). If it fails, the threat model must say that bypass skips the hook.
+   Each session runs Haiku (or <code>SBX_MODEL=sonnet</code>, when Haiku declines the request) with a
    spending cap of $1 and a time limit. The session must be
    refused when it reads the protected file with the Read tool, and when a Bash command reads
    it, writes the data folder, <code>~/.phiward</code> or <code>~/.claude/settings.json</code>; <code>phiward run</code> from the

@@ -2884,11 +2884,24 @@ test</code>), or read the change before you run it outside.</p>
   (<a href="../hpc/">hpc.md</a>): <code>phiward run --remote</code> and <code>phiward copy</code> (tested against a real cluster).
   Protected data on HPC storage mounted on the Mac needs its mount path in the protected roots.
 - <a id="open-carry-over"></a>carry-over: each session gets a fresh config folder, built from a trusted copy and thrown away at
-  exit. Nothing is shared between sessions. Instruction changes go to quarantine (<code>phiward carryover
+  exit. Only this project's transcripts are shared between sessions (below). Instruction changes go to quarantine (<code>phiward carryover
   show | accept ID</code>, <code>add PATH</code>). Every file the session changed in the project is listed,
   instructions for models first. Auto memory is off unless <code>--memory</code>. Nothing is ever killed: on
   macOS a process a session leaves behind keeps running, but what it writes does not reach a later
   session (tests/test_v2_s17.py, test_18);
+- <a id="open-transcripts"></a>kept transcripts (<code>--resume</code>, <code>-c</code>; on by default, <code>[launch]
+  keep_transcripts = false</code> turns it off): <code>launch</code> keeps one folder of transcripts for each
+  project, copied whole at the end into a store no session can read or write, and back at the
+  next start; plain files and real folders only, never <code>memory/</code> or <code>mcp-tasks/</code>. A resume
+  restores the conversation, the model, the agent, a permission mode other than bypass (Claude
+  Code starts a resumed bypass session in the mode a new one starts in), an active goal and
+  scheduled tasks, inside the kernel profile and <code>launch</code>'s hooks; deny rules hold in every
+  mode. A transcript holds what the session could read (masked output only under <code>launch</code>):
+  its <code>tool-results/</code> keep whole outputs, more than was sent to the provider, and a resume
+  can send them. A transcript a session wrote is an instruction carried
+  across sessions; phiward does not read it (its format is Claude Code's own), so unlike auto
+  memory it is not quarantined. Delete the store, or one project's folder in it, to forget
+  (<a href="../launch/#when-a-session-ends">launch.md</a>);
 - <a id="open-fresh-config"></a>a fresh config folder for the tool: your normal Claude Code memory, skills, plugins and MCP
   servers are not there until you add them (<code>phiward carryover add</code>), and a login token is needed
   (<a href="../launch/">launch.md</a>).</p>
@@ -2930,7 +2943,7 @@ run later" or to the macOS process model:</p>
 </tr>
 <tr>
 <td><a id="l6"></a>L6</td>
-<td>Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions: no transcripts, no login, no caches, no history. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain <code>claude</code> uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of <code>.claude.json</code>, go to quarantine; only what you accept (<code>phiward carryover accept</code>) or add yourself (<code>phiward carryover add PATH</code>) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild (<a href="../launch/">launch.md</a>). Login: a fresh folder means a new login each time, unless you set <code>CLAUDE_CODE_OAUTH_TOKEN</code> (from <code>claude setup-token</code>) or <code>ANTHROPIC_API_KEY</code>, which the agent can read. Project memory (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/rules/</code> in the project) is reported, not put back.</td>
+<td>Carry-over (stateless): each session runs in a config folder built from a trusted copy that no session can read or write, and thrown away after it. Nothing in the tool folder is shared between sessions but this project's transcripts (<a href="#open-transcripts">open-transcripts</a>): no login, no caches. On macOS two things outside it still are: the Keychain (Claude Code keeps its login there, so a session may add or change login items, including the one your plain <code>claude</code> uses) and the per-user temp folder, which your own tools also use. Instruction files a session changes, and the MCP and permission keys of <code>.claude.json</code>, go to quarantine; only what you accept (<code>phiward carryover accept</code>) or add yourself (<code>phiward carryover add PATH</code>) is trusted. A session cannot read another session's folder. Everything phiward keeps for this may be deleted at any time; you lose only what it costs to rebuild (<a href="../launch/">launch.md</a>). Login: a fresh folder means a new login each time, unless you set <code>CLAUDE_CODE_OAUTH_TOKEN</code> (from <code>claude setup-token</code>) or <code>ANTHROPIC_API_KEY</code>, which the agent can read. Project memory (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/rules/</code> in the project) is reported, not put back.</td>
 <td>Read the quarantine and the project report before you accept or run anything.</td>
 </tr>
 <tr>

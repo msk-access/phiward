@@ -1393,6 +1393,13 @@ team.</p>
   folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder. On Linux it also refuses
   <code>/tmp</code> itself (as the project or the spool): the session's own <code>/tmp</code> would be the shared one.
   A folder below <code>/tmp</code> works.</li>
+<li><strong>Python environments:</strong> an activated <code>.venv</code> puts a folder of the project on your <code>PATH</code>, so
+  <code>launch</code> refuses: your own shell would run what the session wrote there. The refusal names the
+  entry: <code>PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
+  it off PATH), then start again</code>. Run <code>deactivate</code> before <code>launch</code>; inside the session, use
+  <code>.venv/bin/python</code> or <code>uv run</code>. For another entry (direnv), take it off <code>PATH</code> (<code>direnv deny</code>).</li>
+<li><code>--resume</code> and <code>-c</code> find this project's earlier <code>launch</code> sessions
+  (<a href="#when-a-session-ends">When a session ends</a>).</li>
 <li><code>launch</code> refuses to start when the masking check fails: <code>the masking check failed: ...; run
   phiward doctor</code>. A value of <code>[sanitize] examples</code> is not fully masked by your own rules, or a
   made-up path below a root came out unmasked
@@ -1523,6 +1530,18 @@ this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm an
   that proxy (it does not reach your internal network). Any other kind of proxy there
   (<code>https://</code>, <code>socks5://</code>) stops the start.</li>
 <li><strong>At most 64 connections at once.</strong> One more is refused, not queued.</li>
+<li><strong>A refusal says why.</strong> The proxy answers <code>403 phiward: &lt;why&gt;</code> in the status line and the
+  body; most tools print only the status line (<code>pip</code>: "Tunnel connection failed: 403 phiward:
+  ..."). For a private address it reads <code>git.example.internal is a private address; the operator
+  lists its range in [launch] private_networks (user config)</code>. At exit, <code>launch</code> prints the hosts
+  it refused (the first 20), also into <code>--report</code>: <code>phiward launch: the proxy refused 2
+  connection(s): git.example.internal (a private address), ...; private ranges go in [launch]
+  private_networks (user config)</code>.</li>
+<li><strong><code>ANTHROPIC_BASE_URL</code></strong> (<code>--tool claude</code>): checked at the start with the proxy's rules. A
+  URL that is not <code>https://</code>, or whose host is this machine, its link, or a private range you
+  have not listed, stops the start, since the session could not reach its model: for example
+  <code>ANTHROPIC_BASE_URL (http://127.0.0.1:4000) is not an https:// URL; ...: run Claude Code in
+  Mode A</code>. A name that does not resolve at the start is left to the proxy.</li>
 <li><code>launch</code> refuses to start when the proxy cannot start.</li>
 </ul>
 <p>What this breaks:
@@ -1548,8 +1567,30 @@ this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm an
 <h2 id="when-a-session-ends">When a session ends<a class="headerlink" href="#when-a-session-ends" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>The session's folder is thrown away.</strong> Each session starts from a trusted copy in
-  <code>~/.phiward/carryover/claude/</code>, which no session can read or write. Nothing is shared
-  between sessions: no transcripts, no login, no caches.</li>
+  <code>~/.phiward/carryover/claude/</code>, which no session can read or write. Only this project's
+  transcripts are shared between sessions: no login, no caches, no other project's history.</li>
+<li><strong>This project's transcripts are kept</strong>, so <code>claude --resume</code> and <code>claude -c</code> work under
+  <code>launch</code>. <code>launch</code> names the session's transcript folder (<code>CLAUDE_CODE_PROJECT_DIR_NAME</code>, the
+  first 16 hex digits of the sha256 of the project's real path). At the end it copies that folder
+  whole into <code>~/.phiward/carryover/claude/transcripts/&lt;16 hex&gt;/</code>, and at the next start back
+  into the new session's folder. phiward never reads a transcript: their format is Claude Code's
+  own.</li>
+<li>Only plain files and real folders are kept. Links are dropped with a NOTE. <code>memory/</code> (auto
+    memory, an instruction) and <code>mcp-tasks/</code> are never kept, in any letter case.</li>
+<li>Sessions that end one after the other are merged; a file is replaced only by a newer one.</li>
+<li>At most 500 MB and 20,000 entries for each project; past that, the oldest sessions go first.
+    A session larger than that on its own is not kept, and its end says so with a NOTE.</li>
+<li>A resumed session restores what Claude Code restores (the conversation, the model, the
+    agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
+    kernel profile and <code>launch</code>'s hooks. What an earlier session wrote is read as history
+    (<a href="../threat-model/#open-transcripts">the limit</a>).</li>
+<li><strong>To delete them:</strong> delete <code>~/.phiward/carryover/claude/transcripts/</code> (all projects) or one
+    <code>&lt;16 hex&gt;/</code> folder in it, when no session runs. <code>phiward carryover status --tool claude</code>
+    lists each project's folder and its size. Claude Code's own commands do not reach them
+    (under <code>launch</code> they see only the session's folder).</li>
+<li><strong>To turn it off:</strong> <code>[launch] keep_transcripts = false</code> in your user config
+    (<a href="../configuration/#launch">configuration.md</a>). Each session then starts with no history,
+    and <code>--resume</code> or <code>-c</code> gets a NOTE.</li>
 <li><strong>Instruction changes go to quarantine.</strong> These are files Claude Code reads as instructions
   or settings (<code>CLAUDE.md</code>, <code>rules/</code>, <code>skills/</code>, <code>agents/</code>, <code>commands/</code>, <code>plugins</code> you install,
   <code>settings.json</code>), and the MCP and permission keys of <code>.claude.json</code>. The exit message lists
@@ -1558,7 +1599,7 @@ this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm an
 <div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>carryover<span class="w"> </span>show<span class="w"> </span>--tool<span class="w"> </span>claude
 phiward<span class="w"> </span>carryover<span class="w"> </span>accept<span class="w"> </span>ID<span class="w"> </span><span class="o">[</span>ITEM...<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude
 phiward<span class="w"> </span>carryover<span class="w"> </span>add<span class="w"> </span>PATH<span class="w"> </span><span class="o">[</span>--as<span class="w"> </span>NAME<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">   </span><span class="c1"># your own CLAUDE.md, a skill</span>
-phiward<span class="w"> </span>carryover<span class="w"> </span>status<span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">                 </span><span class="c1"># sizes; what is safe to delete</span>
+phiward<span class="w"> </span>carryover<span class="w"> </span>status<span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">                 </span><span class="c1"># sizes; what is safe to delete (kept transcripts too)</span>
 </code></pre></div>
 <p><code>accept ID settings.json</code> takes the whole <code>settings.json</code> as the session left it; <code>show</code> lists
   the keys that changed, and for <code>.claude.json</code> the value <code>accept</code> writes, so read it first.
