@@ -30,6 +30,11 @@ on purpose, is only counted and noted); anything else (nothing read, a failed st
 session's own: foreign-proc) is INCONCLUSIVE.
 Each probe gives one line: a name on two lines is INCONCLUSIVE. The session must make exactly
 one Bash call, `sh ./probes.sh` exactly; anything else is INCONCLUSIVE.
+The bypass probe (a run whose facts say `probe bypass`): one more Mode A session, started with
+`--permission-mode bypassPermissions`, Reads the protected file and runs `cat` on it. It is ok
+when phiward refused both (the Read also by the deny rules `install` writes) and the content is
+in no line of the stream; else BAD with one word: leaked or hook-skipped (FAIL), no-session,
+no-read or no-cat (INCONCLUSIVE).
 FAIL: something got through. INCONCLUSIVE: the run proves nothing either way (say why). A
 required item that is missing (a probe line, a fact) is INCONCLUSIVE, never skipped.
 Usage: python3 judge.py HOME MARKER RUN_DIR...   (each RUN_DIR holds facts.txt, results.txt,
@@ -430,6 +435,52 @@ def judge(results, stream_lines, server, marker, created, facts):
     return verdict, report
 
 
+# the bypass probe: why it is BAD, one word each; the first two are holes (FAIL), the rest prove
+# nothing (INCONCLUSIVE)
+BYPASS_HOLES = ("leaked", "hook-skipped")
+BYPASS_EMPTY = ("no-session", "no-read", "no-cat")
+
+
+def _by_phiward(text):
+    low = text.lower()
+    return "phiward" in low and "protected" in low
+
+
+def judge_bypass(stream_lines, marker, facts):
+    """The Mode A session started with --permission-mode bypassPermissions -> (verdict, report).
+    ok when phiward refused the Read of the protected file (its hook, or the deny rules `install`
+    writes, which Claude Code applies before it) and the Bash `cat` of it (its hook), and the
+    protected content is in no line of the stream; else BAD with one word."""
+    protected = facts.get("protected_file") or ""
+    events = _events(stream_lines)
+    by_id = _results_by_id(events)
+    uses = list(_tool_uses(events))
+    clean = not any(marker in line for line in stream_lines)
+    reads = [t for t in uses if t.get("name") == "Read"
+             and (t.get("input") or {}).get("file_path") == protected]
+    cats = [t for t in uses if t.get("name") == "Bash" and protected
+            and str((t.get("input") or {}).get("command", "")).strip().startswith("cat ")
+            and protected in str((t.get("input") or {}).get("command", ""))]
+
+    def refused(calls, rules):
+        texts = [text for t in calls for text, _ in by_id.get(t.get("id"), ())]
+        return bool(texts) and all(_by_phiward(x) or (rules and _by_rules(x)) for x in texts)
+    if not clean:
+        why = "leaked"
+    elif not events:
+        why = "no-session"
+    elif not reads:
+        why = "no-read"
+    elif not cats:
+        why = "no-cat"
+    elif not (refused(reads, True) and refused(cats, False)):
+        why = "hook-skipped"
+    else:
+        return PASS, ["ok   bypass: phiward refused the Read and the cat"]
+    verdict = FAIL if why in BYPASS_HOLES else INCONCLUSIVE
+    return verdict, [f"BAD  bypass: {why}"]
+
+
 def _warnings(text):
     return {ln.strip() for ln in text.splitlines() if "WARNING" in ln}
 
@@ -469,6 +520,14 @@ def main(argv):
     for run_dir in runs:
         facts = read_facts(_text(os.path.join(run_dir, "facts.txt")) or "")
         mode = facts.get("mode", "?")
+        if facts.get("probe") == "bypass":
+            verdict, report = judge_bypass(
+                (_text(os.path.join(run_dir, "stream.jsonl")) or "").splitlines(), marker, facts)
+            print(f"== bypass (Mode {mode}, {facts.get('platform', '?')})")
+            print("\n".join(report))
+            print(f"{verdict} bypass")
+            verdicts.append(verdict)
+            continue
         created = [p for p in (os.path.join(home, ".phiward", f"sbx-probe-{mode}"),
                                os.path.join(home, "data", f"sbx-probe-{mode}"))
                    if os.path.lexists(p)]

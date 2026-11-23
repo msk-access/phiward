@@ -29,7 +29,7 @@ if { [ "$#" = 1 ] && [ "$1" = --help ]; } || { [ "$#" = 2 ] && [ "$2" = --help ]
   echo
   echo "Options:"
   for f in -p --model --output-format --verbose --settings --add-dir --allowedTools \
-    --permission-prompts --max-turns --max-budget-usd; do echo "  $f"; done
+    --permission-prompts --permission-mode --max-turns --max-budget-usd; do echo "  $f"; done
   echo
   echo "Commands:"
   echo "  doctor                      Check the installation"
@@ -138,14 +138,14 @@ for h in hooks_for("UserPromptSubmit"):
               "result": ""})
         sys.exit(0)
 
-def read_tool(path, tid):
-    """A Read as Claude Code makes it: every PreToolUse hook whose matcher covers Read, from each
-    settings source, then the file. Returns the text read, or "" when refused or missing."""
+def refusal_of(tool, tool_input):
+    """Every PreToolUse hook whose matcher covers `tool`, from each settings source, as Claude
+    Code runs them: the first refusal's reason, or None."""
     payload = json.dumps({"session_id": "stub", "hook_event_name": "PreToolUse",
-                          "tool_name": "Read", "tool_input": {"file_path": path}, "cwd": cwd,
+                          "tool_name": tool, "tool_input": tool_input, "cwd": cwd,
                           "transcript_path": ""})
     refusal = None
-    for h in hooks_for("PreToolUse", "Read"):
+    for h in hooks_for("PreToolUse", tool):
         if refusal is not None:
             break
         code, out, err = run_hook(h, payload)
@@ -159,6 +159,13 @@ def read_tool(path, tid):
         spec = got.get("hookSpecificOutput") if isinstance(got, dict) else None
         if isinstance(spec, dict) and spec.get("permissionDecision") == "deny":
             refusal = str(spec.get("permissionDecisionReason", "denied"))
+    return refusal
+
+
+def read_tool(path, tid):
+    """A Read as Claude Code makes it: the PreToolUse hooks, then the file. Returns the text
+    read, or "" when refused or missing."""
+    refusal = refusal_of("Read", {"file_path": path})
     emit({"type": "assistant", "message": {"content": [
         {"type": "tool_use", "id": tid, "name": "Read", "input": {"file_path": path}}]}})
     text = ""
@@ -181,6 +188,24 @@ def read_tool(path, tid):
 # no protected path), then the Bash call
 target = read_tool(os.path.join(cwd, "target.txt"), "stub-target").strip()
 read_tool(target, "stub-read")
+
+# the bypass probe's session (--permission-mode bypassPermissions): a Bash `cat` of that path,
+# through the PreToolUse hooks as Claude Code runs them in every mode; then the session ends
+mode = next((args[i + 1] for i, a in enumerate(args[:-1]) if a == "--permission-mode"), "")
+if mode == "bypassPermissions":
+    command = "cat " + target
+    refusal = refusal_of("Bash", {"command": command})
+    emit({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": "stub-cat", "name": "Bash", "input": {"command": command}}]}})
+    if refusal is not None:
+        result, err = "PreToolUse:Bash hook error: " + refusal, True
+    else:
+        r = subprocess.run(["cat", target], capture_output=True, timeout=30)
+        result, err = (r.stdout + r.stderr).decode(errors="replace")[-2000:], r.returncode != 0
+    emit({"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": "stub-cat", "is_error": err, "content": result}]}})
+    emit({"type": "result", "subtype": "success", "is_error": False, "result": "DONE"})
+    sys.exit(0)
 
 # the Bash call, with the credentials scrubbed from its environment
 emit({"type": "assistant", "message": {"content": [
