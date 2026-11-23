@@ -474,9 +474,25 @@ The shell counts as confined only when all of these hold:
   `filesystem.disabled`, `enableWeakerNestedSandbox`, `allowAppleEvents`,
   `allowNestedUserNamespaces`, `network.allowMachLookup`, and on macOS only
   `network.allowLocalBinding` (there a sandboxed command can reach every service on localhost;
-  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal;
+  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal,
+  or list its folder in `[no_phi] folders` (below);
 - no `allowRead` entry re-opens a root;
 - no protected patterns are configured.
+
+**No PHI here.** For a folder you are sure holds no PHI (a website, a tool's code), list it in
+your user config:
+
+```toml
+[no_phi]
+folders = ["/Users/me/code/website"]   # exact folders; not their subfolders
+```
+
+A session whose project is that folder then gets the text check of `[shell] best_effort` for
+a shell that is not confined, in place of the refusal. Protected roots are still denied, and
+prompts, the project and files that run later are still checked. The session's start message
+says the folder is relaxed (or why not), and `phiward doctor` lists the folders.
+[Configuration](configuration.md#no_phi) has the rules, and the
+[threat model](threat-model.md#known-no-phi-folders) the limits.
 
 The hook reads the merged settings: managed settings and their `managed-settings.d` drop-ins,
 the project settings, and the user settings in `$CLAUDE_CONFIG_DIR` (or `~/.claude`). The

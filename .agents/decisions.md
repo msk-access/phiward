@@ -6,6 +6,19 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **`[no_phi] folders`: the operator's opt-out for folders with no PHI, Mode A only.** User
+  config only, exact absolute folders (not their subfolders). Where the session's project is a
+  listed folder that passes its check, the hook acts as with `[shell] best_effort`; nothing
+  else changes (no Claude Code setting, the sandbox stays on). Load checks only the text (a
+  relative entry is a problem); the hook checks the one matching entry: no link on its path, a
+  real folder, launch's project rule without PATH, not inside or above a protected path; a
+  failing entry is not relaxed, and a missing one relaxes nothing. Kept on: protected roots,
+  the prompt scan, the project scan (it warns and does not stop), the asks for files that run
+  later, the guard files. `launch` runs as usual there, with a NOTE (it stays all or nothing).
+  Shown at start and in doctor, not at the end (phiward has no step there in Mode A). (Why:
+  the operator asked for a way to work where there is no PHI, not a refusal of the tool. Turned
+  down with it: dropping the asks for files that run later there, and making launch refuse a
+  listed folder.)
 - **Mode A: an `excludedCommands` entry gives every shell call the text check.** While the
   merged list phiward reads (`claude_settings.excluded_entries`, every `confining_folders`
   folder) is not empty, every Bash and Monitor call gets `[shell] best_effort`'s text check,

@@ -553,8 +553,10 @@ OPENERS = (("filesystem", "disabled"), ("enableWeakerNestedSandbox",), ("allowAp
 # on localhost; on Linux a sandboxed command's localhost is its own and the key has no effect
 # (Claude Code's docs, sandboxing)
 LOCAL_BINDING = ("network", "allowLocalBinding")
-LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, not in the session's shell (on "
-                      "macOS this key lets a sandboxed command reach every local service): ")
+LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, or in a folder with no PHI that "
+                      "the operator lists in [no_phi] folders (user config), not in the "
+                      "session's shell (on macOS this key lets a sandboxed command reach every "
+                      "local service): ")
 
 
 def _opened(lv, excluded_opens: bool = True) -> Optional[Tuple[str, Tuple[str, ...], bool]]:

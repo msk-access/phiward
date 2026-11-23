@@ -817,10 +817,30 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
 - <a id="known-local-binding"></a>**`sandbox.network.allowLocalBinding` on macOS.** There it
   lets a sandboxed command listen on ports and connect to any port on localhost, so a local
   service without authentication can act for it outside the sandbox. The shell does not count
-  as confined with it; run a dev server in your own terminal. On Linux a sandboxed command's
+  as confined with it; run a dev server in your own terminal, or in a folder with no PHI that
+  you list in `[no_phi] folders` (below). On Linux a sandboxed command's
   localhost is its own and the key has no effect (Claude Code's docs), so it is not counted. If
   a Linux Claude Code ever gives it an effect, this is wrong: the release check reads the docs
   again.
+- <a id="known-no-phi-folders"></a>**No-PHI folders (`[no_phi] folders`).** In a folder you
+  list (user config only, exact folders), the hook acts as with `[shell] best_effort`: a shell
+  that a sandbox setting opens gets the text check, with its limits
+  ([gaps of the hook alone](#gaps-of-the-hook-alone)), not the refusal. It is your record that
+  the folder holds no PHI; phiward cannot prove it.
+  - Protected roots and the hidden list stay denied (the text check, `permissions.deny`, and
+    `denyRead` while the sandbox is on), and the prompt scan, the asks for files that run later
+    and the guard files stay. But a sandbox setting you turned on there (`allowLocalBinding` on
+    macOS: every local service) is open to every command, and a command can reach a root
+    through a path its text does not show (a program's own config, a local service).
+  - The project scan at the start of a session is the check that "no PHI" still holds. It
+    warns and does not stop: an agent in another session, or a copy you make, can put data in a
+    listed folder, and the folder stays relaxed until you take it off the list.
+  - No environment variable or flag of its own sets it. `PHIWARD_CONFIG` and `XDG_CONFIG_HOME`
+    choose which file is the user config, as for every user-only key; the agent cannot write
+    that file or set those variables for the hook (above).
+  - A relaxed session is shown at its start (Claude Code's start message) and by `phiward
+    doctor`, not at its end: phiward has no step at the end of a session in Mode A.
+  - `phiward launch` is not relaxed: it confines the whole tool in a listed folder too.
 - <a id="known-hooks-fail-open"></a>**Hooks fail open** in most tools by default. Claude Code (`onFailure: "block"`) and Cursor
   (`failClosed`) have a switch. No tool documents whether a hook deny still applies in its bypass or
   auto-approve mode.

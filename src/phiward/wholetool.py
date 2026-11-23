@@ -1986,6 +1986,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             sys.stderr.write("phiward launch: NOTE: the project scan did not read all of the "
                              f"project ({projectscan.skipped_text(scanned, projectscan.PARTIAL)});"
                              " phiward doctor gives the counts\n")
+    if project in cfg.no_phi_folders:  # Mode A's opt-out; launch stays all or nothing
+        sys.stderr.write("phiward launch: NOTE: the operator lists this folder in [no_phi] "
+                         "folders; launch confines it all the same (plain claude here is "
+                         "relaxed).\n")
     folder = tool_folder(adapter, env)
     _fixed_folders(folder)
     # this session's own folder: its config folder, built from the trusted copy, and its

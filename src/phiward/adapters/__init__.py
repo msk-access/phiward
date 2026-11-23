@@ -20,6 +20,13 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
     """`claude_sandbox`: the call may run in Claude Code's sandbox (the only thing that confines
     a shell call; phiward does not confine the shell itself)."""
     cfg = config.load(action.cwd)
+    if cfg.no_phi_folders and not cfg.problem:
+        # a no-PHI folder: the session's project is a listed folder that passes its check, and
+        # the call runs inside it; the hook then acts as with `[shell] best_effort`
+        from phiward import claude_settings
+        if claude_settings.named_project_holds(action.cwd):
+            entry, why = config.no_phi_match(cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""))
+            cfg.no_phi_here = bool(entry) and not why
     # only Claude Code's own shell tools run in its sandbox
     claude_sandbox = claude_sandbox and action.tool in ("Bash", "Monitor")
     # also before protected paths exist: the hidden list is guarded the same way

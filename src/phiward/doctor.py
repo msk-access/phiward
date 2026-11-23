@@ -969,6 +969,8 @@ def main(argv: List[str]) -> int:
               "do not trust, leave write_to and remotes empty and net false.")
     # the operator runs doctor in the project folder; a hook gets $CLAUDE_PROJECT_DIR
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
+    for line in no_phi_lines(cfg, project):
+        print(line)
     for line in install_lines():
         print(line)
     print("Claude Code:")
@@ -1181,6 +1183,29 @@ def masking_lines(cfg: config.Config, cwd: str) -> List[str]:
     return ([r.summary] if not r.failed else []) + \
         [f"WARNING: masking check: {f}." for f in r.failed] + \
         [f"NOTE: masking check: {n}." for n in r.notes]
+
+
+def no_phi_lines(cfg: config.Config, project: str) -> List[str]:
+    """`[no_phi] folders`: the list, whether this folder is relaxed (the hook's own test,
+    `config.no_phi_match`), and a NOTE for an entry that is gone or that this folder is only
+    inside."""
+    if not cfg.no_phi_folders:
+        return []
+    from phiward import session_note
+    entry, why = config.no_phi_match(cfg, project)
+    out = ["no-PHI folders (user config): " + ", ".join(cfg.no_phi_folders)
+           + (" (this folder: relaxed)" if entry and not why else "")]
+    if why:
+        out.append("WARNING: " + session_note.no_phi_refused(why))
+    for e in cfg.no_phi_folders:
+        if not os.path.exists(e):
+            out.append(f"NOTE: [no_phi] folders entry {e} does not exist (moved or removed?); "
+                       "it relaxes nothing")
+        elif not entry and config.inside(os.path.realpath(project), e) and \
+                os.path.realpath(project) != e:
+            out.append(f"NOTE: inside the no-PHI folder {e}, but not {e} itself: not relaxed "
+                       "(entries are exact)")
+    return out
 
 
 def project_scan_lines(cfg: config.Config, project: str, show: bool) -> List[str]:

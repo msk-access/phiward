@@ -68,6 +68,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[shell] best_effort`](#shell) | true or false | false | ignored | The hook's text check, in place of a refusal, for a shell that no kernel confines. |
 | [`[shell] strict`](#shell) | true or false | not set | loads, does nothing | Removed before release. Remove it. |
 | [`[shell] commands`](#shell) | list | not set | ignored; does nothing | Removed before release. Remove it. |
+| [`[no_phi] folders`](#no_phi) | list of absolute folders | none | ignored | Exact folders you are sure hold no PHI: there the hook gives a shell that a sandbox setting opens the text check, not the refusal (Mode A). |
 
 A repo config that sets an ignored key is not an error. `phiward doctor` lists the ignored
 keys. A key that is not in this table is a bad config ([Fail closed](#fail-closed)).
@@ -463,6 +464,44 @@ bubblewrap). For real data there, prefer `phiward launch`. `doctor` warns while 
 
 `[shell] strict` and `[shell] commands` (strict mode, removed before release) still load and
 do nothing: the default refusal replaces strict mode. Remove them when you next edit the file.
+
+### `[no_phi]`
+
+```toml
+[no_phi]
+# exact folders you are sure hold no PHI; not their subfolders. User config only
+folders = ["/Users/me/code/website", "~/code/tool-x"]
+```
+
+A way to work in a folder that holds no PHI when a sandbox setting you need there (on macOS,
+`network.allowLocalBinding` for a dev server) makes the shell count as not confined. In a
+listed folder, the hook acts as with [`[shell] best_effort`](#shell), for sessions there only:
+a shell command gets the text check, not the refusal. Claude Code's sandbox stays on, and no
+Claude Code setting is written.
+
+- **Exact folders.** The session's project (`$CLAUDE_PROJECT_DIR`) must be the entry itself;
+  a subfolder is not relaxed. Each entry is an absolute path (or starts with `~/`); a relative
+  one is a bad config.
+- **Checked in the hook,** only the entry that matches the session's project. It is not
+  relaxed when there is a link on its path, when it is a place `phiward launch` refuses as a
+  project (`/`, the home folder or above it, a dot-folder in it, `~/Library`, a folder that
+  holds phiward's own files), or when it is inside or above a protected path. The session's
+  start message says why. An entry that does not exist relaxes nothing; `phiward doctor` notes
+  it.
+- **What stays on:** protected roots and the hidden list (the text check, `permissions.deny`
+  and `denyRead`), the prompt scan, the project scan at the start of a session, the asks for
+  files that run later and for writes outside the project, and the guard files. When the
+  project scan finds identifiers in a listed folder, the start message warns; the folder stays
+  relaxed, so take it off the list.
+- **`phiward launch`** runs as usual in a listed folder, with a NOTE: it confines the whole
+  tool all the same.
+- **Shown** at the start of each session there (Claude Code's start message) and by `phiward
+  doctor`. Nothing is shown at the session's end: phiward has no step there in Mode A.
+
+No variable or flag of its own sets it. Which file is the user config is chosen as for every
+user-only key: `PHIWARD_CONFIG`, else `XDG_CONFIG_HOME`, else `~/.config/phiward/config.toml`
+([Where the files are](#where-the-files-are)). The limits are in the
+[threat model](threat-model.md#known-no-phi-folders).
 
 ## MCP servers
 

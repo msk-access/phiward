@@ -13,7 +13,8 @@ broker, confined by confine.py, output sanitized) can read them. This guard:
   cannot see (best effort, docs/threat-model.md). A shell that is not confined only because
   `sandbox.excludedCommands` is not empty (`Action.text_checked`) gets that same text check for
   every call: Claude Code decides which calls run outside the sandbox, and phiward does not
-  guess;
+  guess. In a folder the operator lists in `[no_phi] folders` (`cfg.no_phi_here`) the hook acts
+  as with best_effort;
 - refuses file tools (read, search, write) on a protected path, and searches from above one.
   No shell sandbox covers the file tools, so this check always applies;
 - refuses file-tool writes to the files that turn the guards off or widen the gateway: the
@@ -137,12 +138,14 @@ def check(action: Action, cfg: Config) -> Decision:
                                 ask=action.can_ask, tool=action.tool)
                 if d.verdict == DENY:
                     return d
-            if other and action.shape and not cfg.shell_best_effort:
+            # a no-PHI folder (`cfg.no_phi_here`, set by the hook) acts as best_effort
+            best_effort = cfg.shell_best_effort or cfg.no_phi_here
+            if other and action.shape and not best_effort:
                 return deny(UNSANDBOXED_TOOL.format(why=action.shape, advice=action.advice),
                             step="")
             # text_checked: unconfined only by an excludedCommands entry; the text check below
             # stands in for the blanket refusal, as with best_effort
-            if not action.confined and not cfg.shell_best_effort and not action.text_checked:
+            if not action.confined and not best_effort and not action.text_checked:
                 kind = _kernel_route(action.command)
                 if kind is None:
                     if other:

@@ -16,8 +16,7 @@ from pathlib import Path
 import pytest
 
 from helpers import protect
-from phiward import config, doctor, session_note, wholetool
-from phiward.adapters import claude
+from phiward import config, session_note, wholetool
 from test_v2_excluded_per_call import _hook, _wired
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
