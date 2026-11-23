@@ -1817,6 +1817,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
     if not cfg.has_protected_paths:
         raise LaunchError("no protected paths are configured: there is nothing to confine")
+    from phiward import phicheck
+    masking = None if server else phicheck.check(cfg, cwd)
+    if masking and masking.failed:
+        raise LaunchError(f"the masking check failed: {masking.failed[0]}; run phiward doctor")
     from phiward import paths
     project = os.path.realpath(cwd)
     # only the configured roots count for "above": a derived git folder inside the project

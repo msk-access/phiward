@@ -6,6 +6,16 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **The masking check tests the user's own rules by their own examples.** `[sanitize]
+  examples` is user config only and holds made-up values; phiward never makes examples from a
+  regex (such a value only proves the regex matches itself), and the built-in packs' values live
+  in the tests (the self-check covers the installed packs). A value passes only when nothing but
+  placeholders is left of it, in text and table mode, and the prompt scan blocks it; a made-up
+  path below each root, protected pattern and remote root is cleaned too. The words name
+  indexes only. Doctor warns, launch refuses, `--headless` lists it; the broker checks once at
+  its start and refuses every request while it fails (a fixed config is a changed config, so
+  the restart checks again). Any error is a failure. (Why: a rule edited or weakened still
+  loads, and nothing else would notice. Cost: a config that started before may be refused.)
 - **`phiward pseudonymize` is the operator's own command.** It joins `gateway.OPERATOR_ONLY` and
   refuses without a tty on stdin and stdout; the boundary is the key folder,
   `~/.phiward/backups/keys`, below a folder hidden in all three modes and made at install (it

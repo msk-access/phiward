@@ -49,6 +49,7 @@ says what it holds. By feature:
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, Markdown, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
 | The prompt scan (the core, `prompt-scan claude`, the wiring in both modes, doctor, the corpus of ordinary prompts, speed) | test_promptscan |
+| The masking check (`[sanitize] examples` and the roots, at doctor, launch and the broker's start; the prompt scan's build and check) | test_phicheck |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta, test_macos_profile_mount_jobs, test_macos_launch_no_helper |
 | Unix sockets under `launch` on Linux (Landlock ABI 9; below it Claude Code's seccomp filter for `--tool claude`, and no unix sockets for other tools). `conftest.py` plants a made-up native Claude Code that runs as Python (`helpers.tool_py`) | test_v2_launch_sockets, test_v2_nested_launch |

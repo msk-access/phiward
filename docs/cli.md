@@ -65,6 +65,11 @@ usage: phiward broker [--max-jobs N]
 | `--write` | With `--service`: write the service file. |
 | `-h`, `--help` | Show the help. |
 
+At its start the broker runs the masking check once
+([configuration.md](configuration.md#sanitize)). While it fails, the broker refuses every
+request (`refused: the masking check failed when the broker started`); fix the config and
+restart the broker.
+
 ### phiward carryover
 
 Read and keep what `phiward launch` sessions put in quarantine.
@@ -172,6 +177,12 @@ usage: phiward doctor [--verbose] [--show-paths | --headless]
 | `--show-paths` | Also print the protected paths (by default only their counts). |
 | `--headless` | A short check before an unattended run: exit 0 when the session would be guarded. See [unattended.md](unattended.md). |
 | `-h`, `--help` | Show the help. |
+
+After the sanitizer line, doctor prints the masking check: `masking check: ok (...)`, or a
+WARNING for each value of `[sanitize] examples` that is not fully masked and each root whose
+made-up path came out unmasked, and a NOTE for each of your rules that no example tests
+([configuration.md](configuration.md#sanitize)). It names index numbers only. A failure does
+not change the exit status; `--headless` lists it as a reason.
 
 ### phiward mcp list, wrap and unwrap
 

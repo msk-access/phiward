@@ -252,7 +252,7 @@ def test_inv2_with_no_user_list_a_repo_list_does_not_choose_the_path(tree, monke
 
 def _stub_broker():
     """A Broker as `Broker.__init__` makes it, without a spool."""
-    from phiward import broker, config, pin
+    from phiward import broker, config, phicheck, pin
 
     class _Spool:
         def exists(self, name):
@@ -261,6 +261,7 @@ def _stub_broker():
     b.spool, b.log = _Spool(), io.StringIO()
     b.config_print = broker.config_print()
     b.unapproved = pin.unapproved(config.load("/"))
+    b.masking = phicheck.check(config.load("/"), "/")
     return b
 
 

@@ -532,6 +532,10 @@ class Broker:
                                              path=command_env().get("PATH", ""))
         except Exception:  # noqa: BLE001 - when in doubt, nothing runs
             self.unapproved = ["unreadable"]
+        # the user's rules mask their examples, and the roots a made-up path (phicheck): checked
+        # once; a fixed config is a changed config, so the restart checks again
+        from phiward import phicheck
+        self.masking = phicheck.check(config.load("/"), "/")
         # claimed jobs wait here for one of `max_jobs` workers; the main loop never blocks, so
         # the heartbeat goes on while every worker is busy
         self.jobs: queue.Queue[Any] = queue.Queue()
@@ -556,6 +560,9 @@ class Broker:
         if self.unapproved:
             self.say(f"ready, but {len(self.unapproved)} listed program(s) are not approved: "
                      "every request is refused until `phiward pin` and a restart")
+        elif self.masking.failed:
+            self.say("ready, but the masking check failed: every request is refused until the "
+                     "config is fixed (`phiward doctor`) and the broker restarted")
         else:
             self.say("ready; requests are read from the spool folder")
         while not self.stop.is_set():
@@ -648,6 +655,13 @@ class Broker:
                       "from what the operator approved, or were never approved. The operator "
                       "runs `phiward doctor`, which names them, checks them, runs `phiward pin` "
                       f"in their own terminal, and restarts the broker: {restart_hint()}.\n")
+            return 3
+        if self.masking.failed:
+            self.say(f"request {rid[:8]} refused: the masking check failed")
+            out.write("refused: the masking check failed when the broker started: a rule of the "
+                      "phiward config does not mask its example, or a made-up path below a root "
+                      "came out unmasked. The operator runs `phiward doctor`, fixes the config "
+                      f"and restarts the broker: {restart_hint()}.\n")
             return 3
         if config_print() != self.config_print:
             self.say(f"request {rid[:8]} refused: the config changed since the broker started")

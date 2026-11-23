@@ -816,6 +816,8 @@ def main(argv: List[str]) -> int:
         return 1
     if _subjects_unmasked(cfg):
         print(SUBJECTS_WARNING)
+    for line in masking_lines(cfg, cwd):
+        print(line)
     rel = None
     if cfg.has_protected_paths:
         from phiward import paths
@@ -1137,6 +1139,8 @@ def headless_problems(project: str, home: str) -> List[str]:
                    + " (their command tools may make only gateway calls)")
     if not broker.running(config.spool_dir()):
         out.append("the broker is not running (gateway calls would fail)")
+    from phiward import phicheck
+    out += [f"masking check: {f}" for f in phicheck.check(cfg, project).failed]
     return out
 
 
@@ -1148,6 +1152,16 @@ SUBJECTS_WARNING = (
     "your institution's forms ([sanitize] packs, for example \"msk\"), your own [sanitize] "
     "patterns or names_from, or record that your data has none: [sanitize] subjects = \"none\" "
     "(a repo's .phiward.toml cannot do this). `(cd ~ && phiward setup)` asks.")
+
+
+def masking_lines(cfg: config.Config, cwd: str) -> List[str]:
+    """The masking check (phicheck): the ok line, or a WARNING for each failure; a NOTE for each
+    rule or pattern it does not test. A failure does not change doctor's exit status."""
+    from phiward import phicheck
+    r = phicheck.check(cfg, cwd)
+    return ([r.summary] if not r.failed else []) + \
+        [f"WARNING: masking check: {f}." for f in r.failed] + \
+        [f"NOTE: masking check: {n}." for n in r.notes]
 
 
 def _subjects_unmasked(cfg: config.Config) -> bool:
