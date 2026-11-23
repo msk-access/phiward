@@ -485,6 +485,16 @@ def test_10_a_plain_request_is_refused(make_proxy):
     assert _status(line) == 405 and not dial.calls, line
 
 
+def test_10_a_plain_request_names_https_in_its_status_line(make_proxy):
+    dial = Dial()
+    p = make_proxy(dial=dial)
+    try:
+        line, _ = ask(p, "http://pub.example/", method="GET")
+    finally:
+        dial.close()
+    assert _status(line) == 405 and b"https://" in line, line
+
+
 def test_10_bytes_after_a_connect_go_only_to_the_checked_host(make_proxy):
     dial, res = Dial(), Resolver({"pub.example": ["8.8.4.4"]})
     p = make_proxy(dial=dial, resolver=res)
