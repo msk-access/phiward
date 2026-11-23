@@ -178,7 +178,7 @@ def read_tool(path, tid):
 # the instructions the prompt points to (task.txt), and from them the protected file's path:
 # the prompt itself names none
 task = read_tool(os.path.join(cwd, "task.txt"), "stub-task")
-m = re.search(r"Use the Read tool once on (\S+)\.\s*$", task, re.M)
+m = re.search(r"Use the Read tool once on (\S+?)\.(?:\s|$)", task)
 read_tool(m.group(1) if m else "", "stub-read")
 
 # the Bash call, with the credentials scrubbed from its environment
