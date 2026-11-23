@@ -802,10 +802,11 @@ def _seatbelt_failure(code: int, why: List[str]) -> str:
 
 def self_test() -> Optional[str]:
     """Why the gateway's confinement does not work here, or None. It runs `true` in the
-    gateway profile."""
+    gateway profile (on macOS by its full path: no program is found on PATH)."""
     try:
         b = backend()
-        cmd, fds = gateway_command(["true"], [], [], False)
+        cmd, fds = gateway_command(["/usr/bin/true" if b == "seatbelt" else "true"], [], [],
+                                   False)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=30, pass_fds=fds)
         finally:

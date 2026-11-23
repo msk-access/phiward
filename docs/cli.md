@@ -65,6 +65,11 @@ usage: phiward broker [--max-jobs N]
 | `--write` | With `--service`: write the service file. |
 | `-h`, `--help` | Show the help. |
 
+At its start the broker runs the masking check once
+([configuration.md](configuration.md#sanitize)). While it fails, the broker refuses every
+request (`refused: the masking check failed when the broker started`); fix the config and
+restart the broker.
+
 ### phiward carryover
 
 Read and keep what `phiward launch` sessions put in quarantine.
@@ -170,9 +175,23 @@ usage: phiward doctor [--verbose] [--show-paths | --headless]
 | Option | What it does |
 |---|---|
 | `--verbose`, `-v` | Every check on its own line, and the detail counts. |
-| `--show-paths` | Also print the protected paths (by default only their counts). |
+| `--show-paths` | Also print the protected paths (by default only their counts), and the project files the project scan found (masked, with line numbers). |
 | `--headless` | A short check before an unattended run: exit 0 when the session would be guarded. See [unattended.md](unattended.md). |
 | `-h`, `--help` | Show the help. |
+
+After the sanitizer line, doctor prints the masking check: `masking check: ok (...)`, or a
+WARNING for each value of `[sanitize] examples` that is not fully masked and each root whose
+made-up path came out unmasked, and a NOTE for each of your rules that no example tests
+([configuration.md](configuration.md#sanitize)). It names index numbers only. A failure does
+not change the exit status; `--headless` lists it as a reason.
+
+Then doctor prints the project scan ([launch.md](launch.md#the-project-scan)), with no time
+limit: `project scan: ok (N files)`, or `WARNING: project scan: found <SUBJECT> in 3 files,
+<SAMPLEID> in 1 file name; ...`. With `--show-paths`, it lists each file as
+`data/<SUBJECT>.csv: line 2: <SUBJECT>` (the path masked, at most 50 files). A NOTE counts
+what it did not read. In `/`, the home folder or above it, it says `project scan: skipped (not
+a project folder)`; with no rule for subject IDs, `project scan: off`. A finding does not
+change the exit status; `--headless` lists it as a reason (it scans for 2 s at most).
 
 ### phiward mcp list, wrap and unwrap
 
@@ -249,6 +268,16 @@ usage: phiward launch [--tool NAME] [--memory] [--report FILE] [--entry ID] [--]
 | `--entry ID` | Written by `phiward mcp wrap` into a wrapped server's entry. Not for you to type. |
 | `--` | End the options. PROGRAM and its arguments follow. |
 | `-h`, `--help` | Show the help. |
+
+Before the tool starts, launch runs the project scan for 2 s at most
+([launch.md](launch.md#the-project-scan)). On a finding it refuses: `phiward launch: the
+project scan found <SUBJECT> in 3 files: move the data under a protected root, pseudonymize it
+(phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward doctor --show-paths
+lists them; nothing runs`. When it stops at its limit, the tool starts after one line: `phiward
+launch: NOTE: the project scan stopped at its 2 s limit after N files; run phiward doctor for
+the full scan`. When it finished but left part unread: `phiward launch: NOTE: the project scan
+did not read all of the project (3 files read only to their head); phiward doctor gives the
+counts`.
 
 ### phiward check
 

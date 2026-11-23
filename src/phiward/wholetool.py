@@ -667,9 +667,11 @@ def _gitdir_of(dot_git: str) -> str:
 # reads as a project's settings: the walks for files that run later (runs_later_in and the link
 # walk) do not enter them, and on macOS the names of the list inside them stay writable
 # (`npm install` unpacks packages that ship a `.vscode`). `.claude/worktrees` is read-only with
-# `.claude` as a whole; only its links are not followed
+# `.claude` as a whole; only its links are not followed. The project scan (projectscan) does not
+# read them either
 SKIP_TREES = ("node_modules", ".venv", "venv", "site-packages", "renv/library", ".tox", "target",
-              ".git", "__pycache__", ".mypy_cache", ".claude/worktrees")
+              ".git", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+              ".claude/worktrees")
 RUNS_LATER_WALK = 50000  # entries runs_later_in looks at, past SKIP_TREES
 # where runs_later_in stopped at its bound, said at the start and again in the exit report
 WALK_NOTES: List[str] = []
@@ -1941,6 +1943,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
     if not cfg.has_protected_paths:
         raise LaunchError("no protected paths are configured: there is nothing to confine")
+    from phiward import phicheck
+    masking = None if server else phicheck.check(cfg, cwd)
+    if masking and masking.failed:
+        raise LaunchError(f"the masking check failed: {masking.failed[0]}; run phiward doctor")
     from phiward import paths
     project = os.path.realpath(cwd)
     # only the configured roots count for "above": a derived git folder inside the project
@@ -1959,6 +1965,24 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if os.path.islink(os.path.join(project, rel)):
             raise LaunchError(f"{rel} in the project is a link; replace it with a real file or "
                               "folder")
+    if not server:  # a wrapped MCP server's folder is not the agent's project
+        from phiward import projectscan
+        scanned = projectscan.scan(cfg, project, projectscan.deadline())
+        if scanned.error:
+            raise LaunchError("the project scan could not run; run phiward doctor")
+        if scanned.hits:
+            raise LaunchError(f"the project scan found {projectscan.found_text(scanned)}: move the "
+                              "data under a protected root, pseudonymize it (phiward "
+                              "pseudonymize), or allow the files ([sanitize] scan_allow); phiward "
+                              "doctor --show-paths lists them")
+        if not scanned.complete:
+            sys.stderr.write(f"phiward launch: NOTE: the project scan stopped at its "
+                             f"{projectscan.BUDGET:g} s limit after {scanned.files} files; run "
+                             "phiward doctor for the full scan\n")
+        elif projectscan.skipped_text(scanned, projectscan.PARTIAL):
+            sys.stderr.write("phiward launch: NOTE: the project scan did not read all of the "
+                             f"project ({projectscan.skipped_text(scanned, projectscan.PARTIAL)});"
+                             " phiward doctor gives the counts\n")
     folder = tool_folder(adapter, env)
     _fixed_folders(folder)
     # this session's own folder: its config folder, built from the trusted copy, and its

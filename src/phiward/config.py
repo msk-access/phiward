@@ -46,7 +46,7 @@ SCHEMA: Dict[str, Dict[str, str]] = {
                         "snapshot_names": "list"},
     "sanitize": {"packs": "list", "names_from": "list", "patterns": "list",
                  "inventory_limit": "int", "table": "bool", "subjects": "str",
-                 "id_columns": "list"},
+                 "id_columns": "list", "examples": "list", "scan_allow": "list"},
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
@@ -110,6 +110,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("remote", "hosts"), ("remote", "commands"), ("remote", "roots"),
              ("sanitize", "names_from"), ("sanitize", "table"), ("sanitize", "subjects"),
              ("sanitize", "id_columns"),
+             ("sanitize", "examples"), ("sanitize", "scan_allow"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
              ("launch", "private_networks"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
@@ -187,6 +188,10 @@ class Config:
     sanitize_subjects: str = ""
     names_from: List[str] = field(default_factory=list)
     sanitize_patterns: List[str] = field(default_factory=list)  # "REGEX => <PLACEHOLDER>"
+    # made-up values of the user's own rules, for the masking check (phicheck; user config only)
+    sanitize_examples: List[str] = field(default_factory=list)
+    # files and folders the project scan does not read (projectscan; user config only, absolute)
+    sanitize_scan_allow: List[str] = field(default_factory=list)
     # table mode lets numbers through (an MRN in a column whose header is not an identifier
     # would pass): the operator's choice only
     sanitize_table: bool = False
@@ -635,6 +640,10 @@ def _check_paths(cfg: Config) -> str:
     for p in cfg.roots:
         if any(ch in p for ch in "*?["):
             return f"root '{p}' has a wildcard; put it under 'patterns'"
+    for i, p in enumerate(cfg.remote_roots, 1):
+        if not p.startswith("/"):  # a path on the remote host: no ~ or $HOME to expand here
+            return (f"[remote] roots entry {i} must be an absolute path on the remote host: "
+                    "write the remote's absolute path")
     for d in cfg.allowed_domains:
         why = domain_problem(d)
         if why:
@@ -644,6 +653,9 @@ def _check_paths(cfg: Config) -> str:
         why = netproxy.private_network_problem(n)
         if why:
             return f"[launch] private_networks entry '{n}' {why}"
+    for p in cfg.sanitize_scan_allow:
+        if not p.startswith("/"):
+            return f"[sanitize] scan_allow entry '{p}' must be absolute (or start with ~/)"
     if cfg.ssh_config and not cfg.ssh_config.startswith("/"):
         return "[copy] ssh_config must be absolute (or start with ~/)"  # else the agent's folder
     from phiward import pathmatch
@@ -810,6 +822,12 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
         for v in san["id_columns"]:
             if col_key(v) not in cfg.sanitize_id_columns:
                 cfg.sanitize_id_columns.append(col_key(v))
+    cfg.sanitize_examples.extend(san.get("examples", []))  # USER_ONLY: made-up values
+    for v in san.get("scan_allow", []):  # USER_ONLY; absolute (checked in _check_paths)
+        v = _expand_root(v, home)
+        v = os.path.normpath(v) if v.startswith("/") else v
+        if v not in cfg.sanitize_scan_allow:
+            cfg.sanitize_scan_allow.append(v)
     if "inventory_limit" in san:
         # tighten only: a repo file can lower the limit, never raise it
         lim = san["inventory_limit"]

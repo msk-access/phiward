@@ -7,6 +7,31 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Added
 
+- The masking check, and `[sanitize] examples` (user config only): made-up values in the form
+  of your own rules (`FAKE-PT-0001` for `FAKE-PT-\d{4} => <SUBJECT>`), never real ones.
+  `phiward doctor`, `phiward launch` and the broker at its start check that each value is fully
+  masked (only placeholders left, in text and table mode) and blocked by the prompt scan, and
+  that a made-up path below each root, protected pattern and `[remote] roots` entry comes out
+  masked. It names index numbers only. Doctor warns (the exit status is unchanged) and notes
+  each rule no example tests; `doctor --headless` lists a failure.
+- A leak test for typical sessions (`tests/test_leak_typical.py`; no change to phiward itself):
+  a scripted session is replayed through the session note, the prompt scan, the hook, the
+  gateway and `phiward mcp`, in Mode A with a full and a default config, and under `phiward
+  launch` on Linux. Made-up values planted under a root, in the project and in pasted prompts
+  must come out refused, masked, blocked or sent as the threat model says; a pack file weakened,
+  a pattern edited or a root removed in the config must be found. What it does not cover is in
+  the threat model (`known-leak-test`).
+- The project scan: subject and sample IDs in the project's own files and file names, outside
+  the protected roots. One walk of the project, with no git, following no link: every name
+  first, then the content, the instruction files first and then the smallest files,
+  git-ignored files too; the first 64 KiB of each text file (doctor: 1 MiB; gzip, BGZF and
+  UTF-16 read too). A folder named after an ID is one finding. It uses the subject rules only (your patterns and pack files, and
+  the built-in packs in force), never positions, numbers, dates or roots, and names kinds,
+  counts and masked paths only. `phiward launch` refuses on a finding (2 s budget; over it, it
+  starts with a NOTE); `phiward doctor` scans with no limit and warns (`--show-paths` lists the
+  files, `--headless` lists a finding as a reason); in Mode A the SessionStart note warns within
+  2 s (under launch it does not scan again). `[sanitize] scan_allow` (user config only, absolute paths) allows files of made-up IDs.
+  The leak test's launch leg allows its own `notes.md`, and a new step expects the refusal.
 - `phiward pseudonymize` (the operator's, in a terminal) makes a copy of one CSV/TSV table with
   the identifier columns you name coded (`S0042`: drawn at random, the same code for the same ID
   in every table of one key). The key stays in `~/.phiward/backups/keys`, hidden from every
@@ -116,6 +141,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   `launch --tool claude`), nor tmux its socket. So `launch` on Linux refuses a project or
   spool that is `/tmp` (it would cover the session's own `/tmp` with the shared one); a folder
   below `/tmp` works.
+- A config with a relative `[remote] roots` entry (`~/data`, `data`) now refuses, as other
+  invalid entries do; it was never masked. The message names the entry by number. Write the
+  remote's absolute path (`/data1/me/data`).
+- macOS: `doctor`'s gateway self-test runs `/usr/bin/true` by its full path, not `true`
+  from `PATH`.
 - macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
   systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,
@@ -150,6 +180,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Docs
 
+- `docs/endpoint-security.md`, for IT and security teams: what phiward installs and writes,
+  and every process it starts on macOS, with its parent, image, how often it runs, its exact
+  command line and a command-line regex of at most 256 characters. A test records what phiward
+  starts and checks the page's list both ways. setup.md, launch.md, the troubleshooting list and
+  the threat model link to it.
+
 - A "Small counts" section in `docs/daily-use.md`: masking hides identifiers, not small counts;
   suppress counts of 7 or fewer, round the rest to 5, and watch for differencing (after
   OpenSAFELY's rules). phiward does not enforce it. The rules that `phiward init` adds now say so.
@@ -179,6 +215,19 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   kernel.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
+- `phiward launch` and the broker may now refuse a config they used to accept: when the masking
+  check fails, launch refuses to start (`the masking check failed: ...; run phiward doctor`),
+  and the broker refuses every request until the config is fixed and the broker restarted.
+  With no `[sanitize] examples`, only the roots are checked. The check now catches a
+  `[remote] roots` entry that is not absolute (`~/data`): the sanitizer never masked it as
+  written. Write the remote's absolute path instead (`/home/me/data`). To fix any failure, run `phiward doctor`: it names
+  the entry, the rule or the root by number.
+- `phiward launch` may now refuse a project it used to start: when the project scan finds a
+  subject or sample ID in a project file or a file name (`the project scan found <SUBJECT> in
+  3 files: ...`). To fix it, run `phiward doctor --show-paths` in your own terminal (it lists the
+  files, masked, with line numbers), then move the data under a protected root or pseudonymize
+  it (`phiward pseudonymize`). For files of made-up IDs, add them to `[sanitize] scan_allow` in
+  your user config. A project too large for the scan's 2 s starts with a NOTE.
 - The hooks phiward writes run from files in its package, with no inline code. The user
   wiring's hooks are in Claude Code's exec form: the command is `data/clean-exec.sh` (it clears
   the Python and loader variables, listed in `data/clean-env.awk`), and phiward's own Python

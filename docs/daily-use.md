@@ -422,6 +422,7 @@ anything: the broker's log has the reason.
 | ``copy refused: a local path holds `..` or starts with `~` `` | A local source or destination was written with `..` or a quoted `~`. | Give the full path. |
 | `copy refused: options are not accepted` | `copy` picks its own options. | Remove the options (only `--dry-run` first is allowed). |
 | `refused: the broker is busy` | Too many requests wait. | Try again later. |
+| `refused: the masking check failed when the broker started` | A value of `[sanitize] examples` is not fully masked by the operator's rules, or a made-up path below a root came out unmasked. | The operator runs `phiward doctor`, which names the entry or the root by number, fixes the config and restarts the broker. |
 | `refused: the phiward config changed since the broker started` | The config, the approved programs or a names file changed while the broker ran. | The operator reads the change and restarts the broker. |
 | `refused: N program(s) of [broker] commands differ from what the operator approved` | A listed program changed, is new, cannot be read or is a link. | The operator runs `phiward doctor`, checks the programs, runs `phiward pin` and restarts the broker. |
 | `run refused: the sanitizer cannot start` | A pack, a names file or the entry limit is wrong. | The operator runs `phiward doctor`. |
@@ -443,11 +444,25 @@ anything: the broker's log has the reason.
 - **`doctor` says the broker uses another config.** The broker and the agent tool were started
   with a different `HOME`, `PHIWARD_CONFIG` or `XDG_*` variable. Start both from the same
   environment.
+- **`doctor` warns that the masking check failed, and `launch` refuses.** A value of
+  `[sanitize] examples` is not fully masked, or a made-up path below a root came out unmasked.
+  The warning names the entry, the rule or the root by number. Fix the rule (often an edit
+  that narrowed it), or the example if it is not in the rule's form; then restart the broker
+  ([configuration.md](configuration.md#sanitize)).
+- **`launch` refuses: `the project scan found <SUBJECT> in 3 files`.** A project file, or a
+  file name, holds a subject or sample ID outside the protected roots. Run `phiward doctor
+  --show-paths` in your own terminal: it lists the files (masked) and line numbers. Move the
+  data under a protected root, or make a pseudonymized copy (`phiward pseudonymize`). For
+  made-up IDs (test fixtures), add the files or their folder to `[sanitize] scan_allow` in your
+  user config ([launch.md](launch.md#the-project-scan)).
 - **A write place is skipped.** `doctor` says why: it does not exist yet, or a link is on its
   path. Name the real folder in `write_to`.
 - **A gateway command fails to write to `/tmp`.** The gateway sees `/tmp` read-only. It writes
   temporary files to `$TMPDIR`, its private scratch folder.
 - **git does not work in a repository.** A protected root sits in that work tree, so its `.git`
   is protected. Move the data out of the repository.
+- **Your endpoint tool stops or reports a phiward process.** Send your IT or security team
+  [endpoint-security.md](endpoint-security.md): it lists every process phiward starts on a Mac,
+  with its command line and a regex for an exception.
 - **Every shell command fails after an upgrade.** An older phiward's shell prefix is still set:
   run `(cd ~ && phiward install claude --user --write)` again (`doctor` warns about it).

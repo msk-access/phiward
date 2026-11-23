@@ -47,6 +47,8 @@ what a repo config may do with it. Each key links to its section below.
 | [`[sanitize] inventory_limit`](#sanitize) | whole number | 200000 | only lower | The most entries under the roots. With more, the sanitizer stops (fails closed). |
 | [`[sanitize] table`](#sanitize) | true or false | false | ignored | Whether `phiward run --table` may be used (it lets numbers through). |
 | [`[sanitize] id_columns`](#sanitize) | list | none | ignored | More column headers whose cells `phiward run --table` masks whole. |
+| [`[sanitize] examples`](#sanitize) | list | none | ignored | Made-up values in the form of your own rules, for the masking check. Never a real value. |
+| [`[sanitize] scan_allow`](#sanitize) | list of absolute paths | none | ignored | Files and folders the project scan does not read. Only for made-up data. |
 | [`[copy] remotes`](#copy) | list of `host:/absolute/prefix` | none | ignored | Places on other machines that `phiward copy` may use. |
 | [`[copy] ssh_config`](#copy) | text: a file | none | ignored | The ssh config that every HPC request uses. |
 | [`[copy] push_limit_gib`](#copy) | whole number | 5 | ignored | A larger push is refused. |
@@ -209,6 +211,26 @@ listed in the
   --check` counts it. To check that your rules match your data, run a command over it: the
   note at the end of `phiward run` counts the placeholders shown and says when no identifier
   placeholder was shown.
+- **`examples`** (list; user config only). Made-up values in the same form as the IDs your
+  own rules mask (`[sanitize] patterns` and the `paths` and `identifiers` rules of your pack
+  files). Never a real ID: the agent can read the config. For example, with the pattern
+  `FAKE-PT-\d{4} => <SUBJECT>`, write `examples = ["FAKE-PT-0001"]`. The masking check (run
+  by `phiward doctor`, `phiward launch` and the broker at its start) puts each value in a line
+  and cleans it as the gateway does, in text mode and in table mode. A value passes only when
+  nothing but placeholders is left of it (`P-<NUM>-T01-IM6` fails), and when the prompt scan
+  blocks it. A rule that matches no example is not tested: doctor says so in a NOTE. The check
+  also cleans a made-up path below each protected root, each protected pattern and each
+  `[remote] roots` entry. What it says names only index numbers ("examples entry 2", "pack
+  file 1, rule 3", "remote root 1"), never a value, a rule, a pack path or a root. On a
+  failure, doctor warns, launch refuses to start, and the broker refuses every request until
+  the config is fixed and the broker restarted. phiward never makes examples from a regex:
+  such a value only proves that the regex matches itself.
+- **`scan_allow`** (list of absolute paths, or starting with `~/`; user config only). Files and
+  folders the project scan does not read, name or content ([launch.md](launch.md#the-project-scan)).
+  A path is allowed when it, as resolved, is an entry or lies below one. No globs. Allow only
+  files of made-up IDs, such as a `tests/` or `fixtures/` folder: an allowed file that later
+  gets a real ID is not seen. A relative entry is a bad config; a repo config's value is
+  ignored. `phiward doctor` counts the allowed entries.
 - **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
   subject or sample identifiers beyond the names under the roots. Without it, and without a
   rule that masks them (the `msk` pack, a pack file of your own with an identifier rule whose
@@ -259,7 +281,8 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 - **`commands`** (list): the programs it may run there, as bare names. The default is empty,
   which refuses every remote run. Nothing confines a command on the remote side: this list is
   what limits its effects.
-- **`roots`** (list of absolute paths on the remote): masked in the output as `<PROTECTED>`. A
+- **`roots`** (list of absolute paths on the remote host; a `~/` or relative entry is refused
+  when the config loads): masked in the output as `<PROTECTED>`. A
   push (`phiward copy` to a remote) goes only under one of these; with none, every push is
   refused. `phiward setup` makes each new copy remote's folder one.
 - **`use_shared_connection`** (`true` or `false`; default `true`). Every HPC request joins your

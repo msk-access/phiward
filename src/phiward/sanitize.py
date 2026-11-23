@@ -237,6 +237,18 @@ def masks_subjects(cfg: "config.Config") -> bool:
     return False
 
 
+def subject_sanitizer(cfg: "config.Config") -> "Sanitizer":
+    """The project scan's sanitizer: the path and identifier rules of the effective packs (a
+    repo file's built-in packs too: it can only add) and of `[sanitize] patterns`, less details
+    and the placeholders that name no subject (NOT_SUBJECTS); no positions, names, entries or
+    protected paths. Raises SanitizerError."""
+    import dataclasses
+    base = Sanitizer.from_config(dataclasses.replace(cfg, names_from=[]), identifiers_only=True)
+    return Sanitizer(None, [r for r in base.path_rules if r[1] not in NOT_SUBJECTS],
+                     [r for r in base.id_rules if r[1] not in NOT_SUBJECTS],
+                     keep_files=base.keep_files)
+
+
 # ---- name tokens -------------------------------------------------------------------------------
 
 def name_tokens(lines: Iterable[str], stop: Optional[Iterable[str]] = None) -> "set[str]":

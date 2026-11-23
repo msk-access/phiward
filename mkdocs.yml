@@ -65,6 +65,7 @@ nav:
       - Why phiward: why.md
       - The two modes: modes.md
       - Threat model and limits: threat-model.md
+      - "For IT and security teams": endpoint-security.md
   - Change phiward:
       - For contributors: developer.md
       - Releasing: releasing.md

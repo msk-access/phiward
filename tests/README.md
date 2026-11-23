@@ -49,6 +49,9 @@ says what it holds. By feature:
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
 | `phiward pseudonymize` (codes, the key folder hidden also when made later, the places, the messages; the kinds, gzip and BGZF, MAF, VCF, JSON, Markdown, the scan of the output) | test_pseudonymize, test_pseudonymize_formats |
 | The prompt scan (the core, `prompt-scan claude`, the wiring in both modes, doctor, the corpus of ordinary prompts, speed) | test_promptscan |
+| The masking check (`[sanitize] examples` and the roots, at doctor, launch and the broker's start; the prompt scan's build and check) | test_phicheck |
+| The leak test for typical sessions: a scripted session (`data/leak_session.jsonl`, stream-json shape) replayed through the session note, the prompt scan, the hook, the gateway and `phiward mcp`, in Mode A with two configs and under launch (Linux; `notes.md` allowed by `[sanitize] scan_allow`); planted values (`leak_values.py`) checked by kind and place; a control session; faults made through the config; launch refused by the project scan for the `notes.md` plant. The driver is `leak_session.py`. Not covered (the test's docstring, and the threat model's `known-leak-test`): `CLAUDE.md` and other instruction files, the git status in the system prompt, `!` commands, MCP servers that are not wrapped, compaction, Claude Code's own sandbox in Mode A, IDs in project files outside the roots in Mode A (sent; the note warns), and Claude Code's own file tools (the replay's Read, Grep and Glob are models of them) | test_leak_typical |
+| The project scan (subject rules only, the walk without git, what is read and skipped, `[sanitize] scan_allow`, launch, doctor and `--headless`, the SessionStart note, never the matched text, speed on a large made-up project) | test_projectscan |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta, test_macos_profile_mount_jobs, test_macos_launch_no_helper |
 | `launch`'s network: the proxy (token, the address check, an upstream proxy, limits), the macOS profile's one port, Linux's network namespace and relay | test_v2_launch_network |
@@ -64,6 +67,7 @@ says what it holds. By feature:
 | The command reference (docs/cli.md) against each command's help | test_docs_cli |
 | The configuration table (docs/configuration.md) against the loader's keys | test_docs_config |
 | The threat model's limit anchors against tests/limit_ids.txt | test_docs_limits |
+| The page for security teams (docs/endpoint-security.md): its command lines and regexes, and on macOS every process phiward starts, recorded and checked against the rule and the page | test_docs_endpoint_security, test_macos_processes |
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
 | The judge of the real Claude Code check (scripts/sandbox-check: per platform and mode, the facts, the token redaction) | test_sandbox_check_judge |
 | Fixes from the first CI runs on GitHub (bubblewrap mounts, two launches at once, deep scratch folders) | test_v2_github_ci |
