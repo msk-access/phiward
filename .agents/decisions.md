@@ -22,6 +22,19 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   (most clients print only that), a private address names `[launch] private_networks`, refused
   hosts are listed at exit, and an `ANTHROPIC_BASE_URL` the proxy would refuse stops the start.
   Nothing is allowed that was refused before.
+- **Mode A: an `excludedCommands` entry gives every shell call the text check.** While the
+  merged list phiward reads (`claude_settings.excluded_entries`, every `confining_folders`
+  folder) is not empty, every Bash and Monitor call gets `[shell] best_effort`'s text check,
+  not the blanket refusal; `confinement_reason` keeps its meaning (doctor, launch's inner mode).
+  (Why: Claude Code matches entries by its own text matcher. Three review rounds of predicting
+  which calls it excludes (`maybe_excluded`) each found a bypass: quotes, wrappers and
+  assignments, `:*`, backslash-newline, `*` inside a word. The guess was removed. Cost: while
+  an entry is set, D8 refuses paths built from what the guard cannot see; entries from an MDM
+  profile, server-managed settings or `--settings` are not seen.)
+- **`sandbox.network.allowLocalBinding` opens the sandbox on macOS only,** decided when the
+  check runs (`sys.platform`), not at import. (Why: Claude Code's docs say it reaches every
+  local service on macOS and has no effect on Linux. Cost: if a Linux release gives it an
+  effect, this is wrong; the release check reads the docs again.)
 - **macOS `launch` allows binds, and states the limit.** A session can listen on any address,
   so a server it starts on every interface is reachable from the LAN; it can serve what the
   session can read, never a protected root. (Why not a deny: Seatbelt's `localhost` filter

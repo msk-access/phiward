@@ -5,12 +5,14 @@ Confined means all of these hold, from the merged settings:
 - `sandbox.enabled` is true;
 - `sandbox.allowUnsandboxedCommands` is false (so the model cannot retry outside the sandbox);
 - `sandbox.failIfUnavailable` is true (else commands run unsandboxed when the sandbox cannot
-  start), and none of the settings in OPENERS is true, and `network.allowMachLookup` is empty;
+  start), and none of the settings in OPENERS is true (on macOS, `network.allowLocalBinding`
+  too), and `network.allowMachLookup` is empty;
 - `sandbox.filesystem.denyRead` and `denyWrite` cover every protected root (the root or a
   folder above it);
 - `sandbox.filesystem.denyWrite` covers the phiward config and code (config.guard_files);
 - `sandbox.excludedCommands` is empty (gateway calls are clients of the broker; they run in the
-  sandbox like any command);
+  sandbox like any command). `shell_reason`, the hook's reading, leaves this one out: while the
+  list is non-empty (`excluded_entries`), the hook checks the text of every shell call instead;
 - `sandbox.network.allowAllUnixSockets` is not true and `allowUnixSockets` is empty (a socket
   such as Docker's reaches a process outside the sandbox);
 - no `sandbox.filesystem.allowRead` entry re-opens any part of a root. Claude Code applies the
@@ -546,16 +548,23 @@ def _reopened(root: str, deny: Sequence[str], allow: Sequence[str]) -> bool:
 # sandbox settings that let a sandboxed command reach past the sandbox: with any of them true,
 # the shell does not count as confined
 OPENERS = (("filesystem", "disabled"), ("enableWeakerNestedSandbox",), ("allowAppleEvents",),
-           ("allowNestedUserNamespaces",), ("network", "allowLocalBinding"))
+           ("allowNestedUserNamespaces",))
+# macOS only (read when the check runs): there it lets a sandboxed command reach every service
+# on localhost; on Linux a sandboxed command's localhost is its own and the key has no effect
+# (Claude Code's docs, sandboxing)
+LOCAL_BINDING = ("network", "allowLocalBinding")
+LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, not in the session's shell (on "
+                      "macOS this key lets a sandboxed command reach every local service): ")
 
 
-def _opened(lv) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
+def _opened(lv, excluded_opens: bool = True) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
     """Why these settings let a sandboxed command reach past the sandbox: (the reason, the keys
-    under `sandbox`, whether it is a list), or None."""
-    for keys in OPENERS:
+    under `sandbox`, whether it is a list), or None. `excluded_opens`: whether a non-empty
+    `excludedCommands` counts (`shell_reason` leaves it to the hook's text check)."""
+    for keys in OPENERS + ((LOCAL_BINDING,) if sys.platform == "darwin" else ()):
         if _first(lv, "sandbox", *keys) is True:
             return f"sandbox.{'.'.join(keys)} is true (it opens the sandbox)", tuple(keys), False
-    if _merged_list(lv, "sandbox", "excludedCommands"):
+    if excluded_opens and _merged_list(lv, "sandbox", "excludedCommands"):
         return "sandbox.excludedCommands is not empty", ("excludedCommands",), True
     if _first(lv, "sandbox", "network", "allowAllUnixSockets") is True:
         return ("sandbox.network.allowAllUnixSockets is true",
@@ -771,8 +780,10 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
                 guard: Sequence[str] = (), env: Optional[Mapping[str, str]] = None,
                 hidden: Sequence[str] = (),
                 user_data: Optional[Dict[str, Any]] = None,
-                version: Optional[Tuple[int, int, int]] = None) -> Optional[Reason]:
-    """Why the shell is not confined, with its step, or None. `user_data`: the user settings to take in place of the file (what
+                version: Optional[Tuple[int, int, int]] = None,
+                excluded_opens: bool = True) -> Optional[Reason]:
+    """Why the shell is not confined, with its step, or None. `excluded_opens`: whether a
+    non-empty `excludedCommands` counts (`shell_reason`). `user_data`: the user settings to take in place of the file (what
     `install claude --user --write` would write, for doctor), in every level whose file is the user
     file (a session started from the home folder reads it as its project file too). `version`:
     the Claude Code version when it is known (doctor; the hook cannot run `claude --version`),
@@ -804,13 +815,53 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
         if user_data is not None:
             mine = os.path.normpath(_user_file(home, env))  # install replaces the file there
             lv = [(lvl, f, user_data if os.path.normpath(f) == mine else d) for lvl, f, d in lv]
-        r = _confined_with(lv, project, home, roots, patterns, guard, env, hidden, version)
+        r = _confined_with(lv, project, home, roots, patterns, guard, env, hidden, version,
+                           excluded_opens)
         if r is not None:
             if local != candidates[0]:  # not the file Claude Code is thought to read
                 r = Reason(f"{r.text}, with {local} as the settings.local.json Claude Code may "
                            "read", r.step)
             return r
     return None
+
+
+def shell_reason(project: Optional[str], home: str, roots: Sequence[str],
+                 patterns: Sequence[str], guard: Sequence[str] = (),
+                 env: Optional[Mapping[str, str]] = None,
+                 hidden: Sequence[str] = ()) -> Optional[Reason]:
+    """For the hook only: `confinement_reason` without `excludedCommands`. Claude Code matches
+    an entry against each call's text with its own parser, which phiward does not copy; while
+    the list is non-empty (`excluded_entries`), the hook checks the text of every shell call
+    instead of refusing the whole shell. Every other cause still means not confined."""
+    return confinement_reason(project, home, roots, patterns, guard, env, hidden,
+                              excluded_opens=False)
+
+
+def excluded_entries(project: Optional[str], home: str,
+                     env: Optional[Mapping[str, str]] = None) -> List[str]:
+    """The merged `sandbox.excludedCommands` of every level phiward reads, with each
+    `settings.local.json` Claude Code may read (`local_candidates`). Only "non-empty" is used.
+    An MDM profile, server-managed settings and `--settings` are not read here
+    (docs/threat-model.md)."""
+    out: List[str] = []
+    for local in (local_candidates(project, home) if project else [""]):
+        out += [e for e in _merged_list(levels(project, home, env, local), "sandbox",
+                                        "excludedCommands") if e not in out]
+    return out
+
+
+def excluded_step(project: Optional[str], home: str,
+                  env: Optional[Mapping[str, str]] = None) -> Tuple[str, str]:
+    """(the file that holds an `excludedCommands` entry, as the operator knows it; the step that
+    empties it), from the first level with a non-empty list, or ("", "")."""
+    for local in (local_candidates(project, home) if project else [""]):
+        lv = levels(project, home, env, local)
+        for level in lv:
+            if _merged_list([level], "sandbox", "excludedCommands"):
+                return (_shown_file(level[1], project or "", home),
+                        _step_for(lv, project or "", home, env, ("sandbox", "excludedCommands"),
+                                  _only_old_excludes, True))
+    return "", ""
 
 
 def launch_sandbox_reason(project: str, home: str, env: Optional[Mapping[str, str]],
@@ -844,7 +895,8 @@ OUTSIDE_PROJECT_STEP = "run the command inside the project folder ($CLAUDE_PROJE
 def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: Sequence[str],
                    guard: Sequence[str], env: Optional[Mapping[str, str]],
                    hidden: Sequence[str],
-                   version: Optional[Tuple[int, int, int]] = None) -> Optional[Reason]:
+                   version: Optional[Tuple[int, int, int]] = None,
+                   excluded_opens: bool = True) -> Optional[Reason]:
     """`confinement_reason` for one set of settings files (`levels`)."""
     for _l, f, data in lv:
         if data is None and os.path.lexists(f):
@@ -859,11 +911,12 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
         if _first(lv, "sandbox", key) is not want:
             # install sets these three in the user file
             return Reason(text, _step_for(lv, project, home, env, ("sandbox", key), True))
-    opened = _opened(lv)
+    opened = _opened(lv, excluded_opens)
     if opened:
         text, keys, merged = opened
         fixes = _only_old_excludes if keys == ("excludedCommands",) else False
-        return Reason(text, _step_for(lv, project, home, env, ("sandbox",) + keys, fixes, merged))
+        step = _step_for(lv, project, home, env, ("sandbox",) + keys, fixes, merged)
+        return Reason(text, LOCAL_BINDING_STEP + step if keys == LOCAL_BINDING else step)
     r = _patterns_unconfined(lv, project, home, env, patterns, version)
     if r is not None:
         return r

@@ -165,11 +165,20 @@ def test_without_fail_if_unavailable_the_shell_is_not_confined(tree):
 @pytest.mark.parametrize("key,value", [
     ("filesystem.disabled", True), ("enableWeakerNestedSandbox", True),
     ("allowAppleEvents", True), ("allowNestedUserNamespaces", True),
-    ("network.allowLocalBinding", True), ("network.allowMachLookup", ["com.example.*"]),
+    ("network.allowMachLookup", ["com.example.*"]),
 ])
 def test_a_setting_that_opens_the_sandbox_means_not_confined(tree, key, value):
     ok, why = _confined(tree, {key: value})
     assert not ok and key.split(".")[-1] in why
+
+
+@pytest.mark.parametrize("platform,opens", [("darwin", True), ("linux", False)])
+def test_allow_local_binding_opens_the_sandbox_on_macos_only(tree, monkeypatch, platform, opens):
+    # Claude Code's docs: on Linux a sandboxed command's localhost is its own, and the key has
+    # no effect there (b2); the platform is read when the check runs
+    monkeypatch.setattr(sys, "platform", platform)
+    ok, why = _confined(tree, {"network.allowLocalBinding": True})
+    assert ok is not opens and ("allowLocalBinding" in why) is opens, why
 
 
 def test_doctor_names_what_the_sandbox_needs_on_linux(monkeypatch):

@@ -37,10 +37,11 @@ def _reason(tree, project=None, version=None):
                                               version=version)
 
 
-def _hook(tree, monkeypatch):
+def _hook(tree, monkeypatch, command="ls", tool="Bash"):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tree / "repo"))
     payload = {"session_id": "s", "hook_event_name": "PreToolUse", "cwd": str(tree / "repo"),
-               "permission_mode": "default", "tool_name": "Bash", "tool_input": {"command": "ls"}}
+               "permission_mode": "default", "tool_name": tool,
+               "tool_input": {"command": command}}
     out, err = io.StringIO(), io.StringIO()
     assert claude.main(io.StringIO(json.dumps(payload)), out, err) == 2
     return out.getvalue() + err.getvalue()
@@ -59,7 +60,13 @@ def test_old_excludes_in_the_user_file_get_the_install_step(tree, monkeypatch):
     _wired(tree, excludedCommands=OLD)
     r = _reason(tree)
     assert "excludedCommands" in r.text and r.step.endswith(INSTALL + ")`"), r
-    assert INSTALL in _hook(tree, monkeypatch)
+    # b1: only excludedCommands open: the text check, not the blanket refusal, so `ls` runs
+    # and a call that names the root is refused, in Bash and Monitor alike
+    for tool in ("Bash", "Monitor"):
+        text = _hook(tree, monkeypatch, f"cat {tree}/phi/FAKE-PT-0001.bam", tool)
+        assert "names a protected path" in text, text
+    # a path it cannot see: the refusal gives the install step, which removes these entries
+    assert INSTALL in _hook(tree, monkeypatch, "cat $UNSEEN")
 
 
 def test_an_entry_install_keeps_gets_the_remove_step(tree):

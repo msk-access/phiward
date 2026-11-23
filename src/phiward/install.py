@@ -889,7 +889,8 @@ def main(argv: List[str]) -> int:
         "set allowUnsandboxedCommands to false.",
     ]
     notes.append("sandbox.excludedCommands must be empty, and sandbox.network.allowAllUnixSockets "
-                 "off and allowUnixSockets empty, for the shell to count as confined.")
+                 "off and allowUnixSockets empty, for the shell to count as confined (with an "
+                 "excludedCommands entry, the hook checks the text of every shell command).")
     notes.append("Start the broker outside the agent (`phiward broker` in a terminal, or once "
                  "`(cd ~ && phiward broker --service --write)` for every login): it runs the "
                  "gateway commands, with the grants of your user config.")
