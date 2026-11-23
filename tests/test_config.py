@@ -108,3 +108,28 @@ def test_tilde_and_home_in_roots(tmp_path, monkeypatch):
     monkeypatch.setenv("PHIWARD_CONFIG", str(write(
         tmp_path / "u.toml", '[protected_paths]\nroots = ["~/x", "$HOME/y"]\n')))
     assert config.load(str(tmp_path)).roots == ["/fake/home/x", "/fake/home/y"]
+
+
+@pytest.mark.parametrize("entry,ok", [("~/x", False), ("x", False), ("/x", True)])
+def test_a_remote_root_must_be_absolute(tmp_path, monkeypatch, entry, ok):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PHIWARD_CONFIG", str(write(
+        tmp_path / "c.toml", f'[remote]\nroots = ["/ok", "{entry}"]\n')))
+    cfg = config.load(str(tmp_path))
+    if ok:
+        assert not cfg.problem and cfg.remote_roots == ["/ok", "/x"]
+        return
+    assert cfg.active and cfg.problem
+    assert "[remote] roots entry 2" in cfg.problem and "absolute path" in cfg.problem
+    assert entry not in cfg.problem.replace("[remote] roots entry 2", "")  # no value shown
+
+
+def test_doctor_reports_a_relative_remote_root(tmp_path, monkeypatch, capsys):
+    from phiward.cli import main
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("PHIWARD_CONFIG", str(write(
+        tmp_path / "c.toml", '[remote]\nroots = ["~/fakedata"]\n')))
+    monkeypatch.chdir(tmp_path)
+    main(["doctor"])
+    out = capsys.readouterr().out
+    assert "PROBLEM: [remote] roots entry 1" in out and "fakedata" not in out, out
