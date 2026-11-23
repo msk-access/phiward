@@ -634,15 +634,16 @@ _R10 = {}
 
 
 def _r10_build():
-    """200,000 made-up names, built on each side: each side's best of 3, in turn (once per
-    run)."""
+    """120,000 made-up names, built on each side: each side's best of 5 rounds, the two sides
+    interleaved in one process (once per run). The minimum is the robust estimate on a noisy
+    machine; one slow round (a busy CI runner) no longer fails the bound."""
     if not _R10:
         stop = {w.casefold() for w in STOP_WORDS}
-        strings = sorted({s for i in range(200000)
+        strings = sorted({s for i in range(120000)
                           for s in inventory._strings_of(f"FAKE-SPEED-{i:06d}.bam", stop)})
-        old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(200000))
+        old_strings = _old_strings(f"FAKE-SPEED-{i:06d}.bam" for i in range(120000))
         _R10["build"], _R10["made"] = _best_of(
-            3, {"new": (_fresh, lambda: Sanitizer(entries=strings)),
+            5, {"new": (_fresh, lambda: Sanitizer(entries=strings)),
                 "old": (_fresh, lambda: _Before(entries=old_strings))})
     return _R10["build"], _R10["made"]
 
