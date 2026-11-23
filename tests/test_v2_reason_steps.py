@@ -64,7 +64,10 @@ def test_excluded_commands_in_the_user_file_name_that_file_not_install(tree, mon
     # b1: with only excludedCommands open, every call gets the text check, not the blanket
     # refusal: a call that names the root is refused, `ls` runs
     text = _hook(tree, monkeypatch, f"cat {tree}/phi/FAKE-PT-0001.bam")
-    assert "names a protected path" in text and INSTALL not in text, text
+    assert "names a protected path" in text, text
+    # a path the guard cannot see: the refusal gives the same step as doctor
+    text = _hook(tree, monkeypatch, "cat $UNSEEN")
+    assert r.step in text and INSTALL not in text, text
     _hook(tree, monkeypatch, "ls", code=0)
 
 

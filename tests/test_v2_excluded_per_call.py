@@ -96,6 +96,12 @@ def test_a_path_the_guard_cannot_see_names_the_entry_and_the_way_out(tree, monke
     assert USER_FILE in text and "removes" in text, text
 
 
+def test_a_folder_above_a_root_names_the_entry_and_the_way_out(tree, monkeypatch, docker):
+    code, text = _hook(tree, monkeypatch, f"cd {tree} && ls")
+    assert code == 2 and "folder that holds protected data" in text, text
+    assert "sandbox.excludedCommands" in text and USER_FILE in text and "removes" in text, text
+
+
 def test_without_an_entry_the_same_call_is_allowed(tree, monkeypatch):
     protect(tree, [], best_effort=False)
     _wired(tree)
