@@ -64,6 +64,7 @@ FIELD = {
     ("sanitize", "patterns"): "sanitize_patterns", ("sanitize", "subjects"): "sanitize_subjects",
     ("sanitize", "inventory_limit"): "inventory_limit", ("sanitize", "table"): "sanitize_table",
     ("sanitize", "id_columns"): "sanitize_id_columns", ("sanitize", "examples"): "sanitize_examples",
+    ("sanitize", "scan_allow"): "sanitize_scan_allow",
     ("copy", "remotes"): "remotes", ("copy", "ssh_config"): "ssh_config",
     ("copy", "push_limit_gib"): "push_limit_gib",
     ("remote", "hosts"): "remote_hosts", ("remote", "commands"): "remote_commands",
