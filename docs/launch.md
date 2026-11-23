@@ -62,6 +62,13 @@ phiward launch --tool claude
   folder, `~/Library`, a folder on your `PATH`, or a phiward folder. On Linux it also refuses
   `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared one.
   A folder below `/tmp` works.
+- **Python environments:** an activated `.venv` puts a folder of the project on your `PATH`, so
+  `launch` refuses: your own shell would run what the session wrote there. The refusal names the
+  entry: `PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
+  it off PATH), then start again`. Run `deactivate` before `launch`; inside the session, use
+  `.venv/bin/python` or `uv run`. For another entry (direnv), take it off `PATH` (`direnv deny`).
+- `--resume` and `-c` find this project's earlier `launch` sessions
+  ([When a session ends](#when-a-session-ends)).
 - `launch` refuses to start when the masking check fails: `the masking check failed: ...; run
   phiward doctor`. A value of `[sanitize] examples` is not fully masked by your own rules, or a
   made-up path below a root came out unmasked
@@ -167,6 +174,18 @@ this session only; `NO_PROXY` is empty. Claude Code, git, pip, npm and curl use 
   that proxy (it does not reach your internal network). Any other kind of proxy there
   (`https://`, `socks5://`) stops the start.
 - **At most 64 connections at once.** One more is refused, not queued.
+- **A refusal says why.** The proxy answers `403 phiward: <why>` in the status line and the
+  body; most tools print only the status line (`pip`: "Tunnel connection failed: 403 phiward:
+  ..."). For a private address it reads `git.example.internal is a private address; the operator
+  lists its range in [launch] private_networks (user config)`. At exit, `launch` prints the hosts
+  it refused (the first 20), also into `--report`: `phiward launch: the proxy refused 2
+  connection(s): git.example.internal (a private address), ...; private ranges go in [launch]
+  private_networks (user config)`.
+- **`ANTHROPIC_BASE_URL`** (`--tool claude`): checked at the start with the proxy's rules. A
+  URL that is not `https://`, or whose host is this machine, its link, or a private range you
+  have not listed, stops the start, since the session could not reach its model: for example
+  `ANTHROPIC_BASE_URL (http://127.0.0.1:4000) is not an https:// URL; ...: run Claude Code in
+  Mode A`. A name that does not resolve at the start is left to the proxy.
 - `launch` refuses to start when the proxy cannot start.
 
 What this breaks:
@@ -193,8 +212,29 @@ What this breaks:
 ## When a session ends
 
 - **The session's folder is thrown away.** Each session starts from a trusted copy in
-  `~/.phiward/carryover/claude/`, which no session can read or write. Nothing is shared
-  between sessions: no transcripts, no login, no caches.
+  `~/.phiward/carryover/claude/`, which no session can read or write. Only this project's
+  transcripts are shared between sessions: no login, no caches, no other project's history.
+- **This project's transcripts are kept**, so `claude --resume` and `claude -c` work under
+  `launch`. `launch` names the session's transcript folder (`CLAUDE_CODE_PROJECT_DIR_NAME`, the
+  first 16 hex digits of the sha256 of the project's real path). At the end it copies that folder
+  whole into `~/.phiward/carryover/claude/transcripts/<16 hex>/`, and at the next start back
+  into the new session's folder. phiward never reads a transcript: their format is Claude Code's
+  own.
+  - Only plain files and real folders are kept. Links are dropped with a NOTE. `memory/` (auto
+    memory, an instruction) and `mcp-tasks/` are never kept.
+  - Sessions that end one after the other are merged; a file is replaced only by a newer one.
+  - At most 500 MB and 20,000 entries for each project; past that, the oldest sessions go first.
+  - A resumed session restores what Claude Code restores (the conversation, the model, the
+    agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
+    kernel profile and `launch`'s hooks. What an earlier session wrote is read as history
+    ([the limit](threat-model.md#open-transcripts)).
+  - **To delete them:** delete `~/.phiward/carryover/claude/transcripts/` (all projects) or one
+    `<16 hex>/` folder in it, when no session runs. `phiward carryover status --tool claude`
+    lists each project's folder and its size. Claude Code's own commands do not reach them
+    (under `launch` they see only the session's folder).
+  - **To turn it off:** `[launch] keep_transcripts = false` in your user config
+    ([configuration.md](configuration.md#launch)). Each session then starts with no history,
+    and `--resume` or `-c` gets a NOTE.
 - **Instruction changes go to quarantine.** These are files Claude Code reads as instructions
   or settings (`CLAUDE.md`, `rules/`, `skills/`, `agents/`, `commands/`, `plugins` you install,
   `settings.json`), and the MCP and permission keys of `.claude.json`. The exit message lists
@@ -204,7 +244,7 @@ What this breaks:
   phiward carryover show --tool claude
   phiward carryover accept ID [ITEM...] --tool claude
   phiward carryover add PATH [--as NAME] --tool claude   # your own CLAUDE.md, a skill
-  phiward carryover status --tool claude                 # sizes; what is safe to delete
+  phiward carryover status --tool claude                 # sizes; what is safe to delete (kept transcripts too)
   ```
 
   `accept ID settings.json` takes the whole `settings.json` as the session left it; `show` lists

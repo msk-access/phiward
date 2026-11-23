@@ -261,6 +261,19 @@ def test_a1b_without_a_key_nothing_is_kept(tree):
     assert not (kept(tree) / key).exists()
 
 
+def test_a1b_past_the_cap_the_oldest_session_goes_first(tree, monkeypatch):
+    key = _key(tree)
+    (kept(tree) / key / "old").mkdir(parents=True)
+    (kept(tree) / key / "old.jsonl").write_text("12345\n")
+    (kept(tree) / key / "old" / "r.txt").write_text("1\n")
+    os.utime(kept(tree) / key / "old.jsonl", (1_000_000, 1_000_000))
+    monkeypatch.setattr(carryover, "MAX_BYTES", 12)
+    s, run, _ = _session(tree, "one", key)
+    (run / "config" / "projects" / key / "new.jsonl").write_text("abcde\n")
+    s.end(str(base(tree)))
+    assert sorted(os.listdir(kept(tree) / key)) == ["new.jsonl"]
+
+
 def test_a1b_status_lists_the_transcripts(tree):
     key = _key(tree)
     (kept(tree) / key).mkdir(parents=True)

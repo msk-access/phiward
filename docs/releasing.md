@@ -98,6 +98,9 @@ Then push `main`, `develop` and the tag.
    - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
+   - Re-read "Permission mode on resume" in Claude Code's sessions docs. `launch` keeps
+     transcripts on its word that a resumed bypass session starts in the mode a new one starts
+     in. If a release restores bypass, `launch` must add `--permission-mode default` to a resume.
 
    Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
    `phiward launch`), Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a

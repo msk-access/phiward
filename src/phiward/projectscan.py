@@ -317,4 +317,6 @@ def place_problem(cfg: config.Config, project: str) -> str:
     real = os.path.realpath(project)
     if paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(real):
         return "inside or above a protected path"
-    return wholetool._project_problem(real, dict(os.environ))
+    env = dict(os.environ)
+    return wholetool._project_problem(real, env) or (
+        wholetool.PATH_INSIDE if wholetool._path_entry_inside(real, env) else "")
