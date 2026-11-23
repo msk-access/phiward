@@ -152,12 +152,20 @@ def test_the_roots_and_a_pattern_root_pass(tree):
     assert r.summary == "masking check: ok (2 roots; no rules of your own)"
 
 
-def test_a_remote_root_the_sanitizer_does_not_match_as_written_fails(tree):
+def test_a_relative_remote_root_is_refused_when_the_config_loads(tree):
+    # it asserted: the masking check fails for "~/fakedata" with the "write the remote's absolute
+    # path" hint. The loader refuses such an entry now, so the check never sees one; the config's
+    # problem names the entry by index. The next test keeps the check itself covered.
     user_cfg('[remote]\nroots = ["~/fakedata"]\n')
+    cfg = config.load(str(tree / "repo"))
+    assert "[remote] roots entry 1" in cfg.problem, cfg.problem
+    assert_never_shown(cfg.problem, ["fakedata"])
+
+
+def test_an_absolute_remote_root_the_sanitizer_cannot_match_still_fails(tree):
+    user_cfg('[remote]\nroots = ["/"]\n')  # absolute, but its pattern has no parts: matches nothing
     r = check(tree)
-    assert r.failed == ["a made-up path below remote root 1 came out unmasked (write the "
-                        "remote's absolute path)"], r
-    assert_never_shown(" ".join(r.failed), ["fakedata"])
+    assert r.failed == ["a made-up path below remote root 1 came out unmasked"], r
 
 
 def test_a_root_written_in_nfd_is_masked_in_both_forms(tree):

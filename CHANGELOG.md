@@ -114,6 +114,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- A config with a relative `[remote] roots` entry (`~/data`, `data`) now refuses, as other
+  invalid entries do; it was never masked. The message names the entry by number. Write the
+  remote's absolute path (`/data1/me/data`).
 - macOS: `doctor`'s gateway self-test runs `/usr/bin/true` by its full path, not `true`
   from `PATH`.
 - macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
