@@ -44,6 +44,7 @@ This page says what is protected, against whom, and where the limits are.
 | Mode B: the real Claude Code under `phiward launch` | macOS | file tools and shell refused protected data; gateway output masked; skills and an MCP server carried over |
 | An MCP server wrapped in `phiward launch`: a small stdio server driven the way Claude Code drives one, and on Linux the published `@modelcontextprotocol/server-filesystem` 2.3.0 | macOS, Linux | works; refused protected data and credentials. Wrapped, the published server read ordinary files and could neither read nor list a protected folder; unwrapped, it read both |
 | HPC through the shared SSH connection | macOS to a real cluster | remote runs, push, pull, refused push of `~/.ssh`, refusal without the connection |
+| A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, `phiward mcp`), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under `phiward launch` ([what it does not cover](#known-leak-test)) | macOS, Linux (launch: Linux) | under the root: refused or masked (only placeholders left; `--table` keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent. A pack file weakened, a pattern edited or a root removed in the config is found |
 | The full test suite (over 1,000 tests) | macOS; Linux (bubblewrap) | passes |
 
 - **Not tested:**
@@ -539,6 +540,23 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   - a rule with no example (doctor's NOTE says which, by number);
   - entry names under the roots and `names_from` (the check reads neither);
   - the built-in packs, which the self-check covers as installed files, not the check.
+
+- <a id="known-leak-test"></a>**The leak test replays a typical session; it does not see
+  everything Claude Code sends.** The test (`tests/test_leak_typical.py`) captures what phiward's
+  entry points let through. What it does not cover:
+  - `CLAUDE.md` and other instruction files: Claude Code sends them at the start, and no hook
+    sees them;
+  - the git status and the file names in the system prompt;
+  - your own `!` commands: their output is sent, and no PreToolUse hook runs;
+  - MCP servers that are not wrapped in `phiward launch --` (doctor warns);
+  - compaction and summaries, which rephrase only what was already sent;
+  - Claude Code's own sandbox in Mode A: the replay cannot run it (the launch leg and the
+    sandbox check cover the kernel);
+  - identifiers in project files outside the roots (a `notes.md` with a study ID): the hook
+    decides by path, so a Read, a Grep or a shell command in the project sends them. Keep such files under a
+    protected root, or pseudonymize them;
+  - Claude Code's own Read, Grep and Glob: the replay uses models of them. A hook's ask is
+    played as a yes, so the test sees what a yes would send.
 
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and

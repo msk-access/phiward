@@ -31,6 +31,7 @@ known-pseudonymized-tables
 known-file-mentions
 known-prompt-scan
 known-masking-check
+known-leak-test
 known-git-control-files
 known-claude-code-path
 known-only-output-masked

@@ -14,6 +14,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   that a made-up path below each root, protected pattern and `[remote] roots` entry comes out
   masked. It names index numbers only. Doctor warns (the exit status is unchanged) and notes
   each rule no example tests; `doctor --headless` lists a failure.
+- A leak test for typical sessions (`tests/test_leak_typical.py`; no change to phiward itself):
+  a scripted session is replayed through the session note, the prompt scan, the hook, the
+  gateway and `phiward mcp`, in Mode A with a full and a default config, and under `phiward
+  launch` on Linux. Made-up values planted under a root, in the project and in pasted prompts
+  must come out refused, masked, blocked or sent as the threat model says; a pack file weakened,
+  a pattern edited or a root removed in the config must be found. What it does not cover is in
+  the threat model (`known-leak-test`).
 - `phiward pseudonymize` (the operator's, in a terminal) makes a copy of one CSV/TSV table with
   the identifier columns you name coded (`S0042`: drawn at random, the same code for the same ID
   in every table of one key). The key stays in `~/.phiward/backups/keys`, hidden from every
