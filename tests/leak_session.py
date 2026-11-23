@@ -10,6 +10,11 @@ Each step goes through phiward's own entry point, the way Claude Code would call
 would reach the model is captured as an `Item`: the session note, a prompt (or the reason it was
 not sent), a file tool's result (or the hook's reason), a shell command's output, an MCP tool's
 answer. `launched` plays the steps inside `phiward launch` (Mode B) with the standard library only.
+
+A hook "ask" is played as allowed, as if the person said yes: that is the conservative choice,
+since the capture then holds everything a yes would send. Read, Grep and Glob are models of
+Claude Code's tools (a file's text; matching lines as `path:n:line`; the paths a pattern lists),
+not the tools themselves.
 """
 
 import io
@@ -189,6 +194,10 @@ def replay(steps: List[Step], repo: str, data: str, env: Dict[str, str]) -> List
                     text = open(s.input["file_path"], encoding="utf-8").read()
                 elif s.name == "Grep":
                     text = _grep(s.input)
+                elif s.name == "Glob":
+                    import glob
+                    text = "\n".join(sorted(glob.glob(os.path.join(
+                        s.input["path"], s.input["pattern"]), recursive=True)))
                 elif s.name == "Bash":
                     r = subprocess.run(["sh", "-c", s.input["command"]], cwd=repo, env=env,
                                        capture_output=True, text=True, timeout=180,

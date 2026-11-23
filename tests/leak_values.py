@@ -13,6 +13,7 @@ is also an entry name counts as an entry in a config without its rule. A built-i
 least one value here (`test_each_built_in_rule_masks_a_planted_value`).
 """
 
+import re
 from typing import Dict, FrozenSet, NamedTuple, Optional, Tuple
 
 ROOT, PROJECT, PROMPT = "root", "project", "prompt"
@@ -87,12 +88,29 @@ PLANTS = [
     _p("FAKE-PT-0003", "identifier", "pattern", ROOT, PROMPT, entry=True),
     _p("FAKE-PT-0004", "identifier", "pattern", ROOT, column="id", entry=True),
     _p("FAKE-PT-0005", "identifier", "pattern", ROOT, column="id", entry=True),
-    # the pack file; ZQ-777001 sits in the project (the step-3 plant)
+    # not an entry name: only the user pattern masks it
+    _p("FAKE-PT-0007", "identifier", "pattern", ROOT),
+    # the pack file; ZQ-777001 sits in the project (the step-3 plant). The genomics numbers
+    # rule masks the digits of the 6-digit form too; only the pack file masks ZQ-ABC12
     _p("ZQ-777001", "identifier", "packfile", PROJECT),
     _p("ZQ-777002", "identifier", "packfile", ROOT, PROMPT, column="id"),
     _p("ZQ-777003", "identifier", "packfile", ROOT),
+    _p("ZQ-ABC12", "identifier", "packfile", ROOT),
 ]
 BY_VALUE: Dict[str, Plant] = {p.value: p for p in PLANTS}
+
+
+def placeholder(p: Plant) -> str:
+    """The placeholder that masks `p` under the full config."""
+    by_needs = {"dates": "<DATE>", "pattern": "<SUBJECT>", "packfile": "<STUDYID>"}
+    if p.needs in by_needs:
+        return by_needs[p.needs]
+    if p.needs == "msk":
+        return {"P": "<SAMPLEID>", "C": "<CMOID>", "s": "<CMOID>", "Z": "<BAMID>",
+                "D": "<DONOR>"}[p.value[0]]
+    if p.kind == "detail":
+        return "<READ>" if ":" in p.value or p.value.startswith("m5") else "<BAMFILE>"
+    return "<NUM>" if re.fullmatch(r"[\d,]+", p.value) else "<LOCUS>"
 
 # what stands in a value's place in the control project (no plant left): a CSV cell keeps its
 # kind, so the table still reads as one
@@ -127,11 +145,11 @@ variants «1_1234_A_C» and «chr7-55249071-C-T»
 «1\t1234567»\tlow
 total «12,345,678» reads, «9876543» kept
 dates «2024-03-05T14:22:01Z» «20240305T1422» «03/05/2024»
-dates «05.03.2024» «5 March 2024» «Mar 5, 2024»
+more dates «05.03.2024» «5 March 2024» «Mar 5, 2024»
 listed «Mar  5 14:22»
 samples «s_C_FAKE01_P001_d» «ZZ999999-T» «DonorFake-7»
-study «ZQ-777003»
-done
+study «ZQ-777003» and «ZQ-ABC12»
+done for «FAKE-PT-0007»
 """
 CALLS = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\n"
 NOTES = "# Notes\n\nStudy «ZQ-777001» looks at «chr12:25398284» (KRAS) first.\n"
@@ -147,7 +165,8 @@ print("first:", ",".join(rows[0].values()))
 # the user's own rules, and their made-up examples (not planted values: the agent can read the
 # config)
 PATTERN = r"FAKE-PT-\d{4} => <SUBJECT>"
-PACK_RULE = r"ZQ-\d{6} => <STUDYID>"
-EXAMPLES = ("FAKE-PT-0009", "ZQ-777009")
+PACK_RULES = (r"ZQ-\d{6} => <STUDYID>", r"ZQ-[A-Z]{3}\d{2} => <STUDYID>")
+WEAK_RULES = (r"ZQ-\d{7} => <STUDYID>",)  # fault (a): it masks no ZQ- value
+EXAMPLES = ("FAKE-PT-0009", "ZQ-777009", "ZQ-XYZ09")
 FULL = frozenset({"genomics", "msk", "dates", "pattern", "packfile", "table"})
 DEFAULT = frozenset({"genomics"})  # the gateway's default pack; no table mode

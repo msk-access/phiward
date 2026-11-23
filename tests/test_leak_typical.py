@@ -32,7 +32,9 @@ What the replay does not cover (docs/threat-model.md says each one):
 - compaction and summaries (they rephrase only what was already sent);
 - Claude Code's own sandbox in Mode A (the launch leg and the operator's sandbox check cover
   the kernel);
-- IDs in project files outside the roots: sent until step 3 (the `notes.md` row).
+- IDs in project files outside the roots: sent until step 3 (the `notes.md` row);
+- Claude Code's own file tools: the replay's Read, Grep and Glob are models of them.
+A hook "ask" is played as allowed (a yes), so the capture holds all that a yes would send.
 """
 
 import json
@@ -44,6 +46,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+import re
 
 import pytest
 
@@ -81,8 +85,9 @@ def _build(base: Path, value) -> Path:
     for args in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@example.invalid",
                                  "commit", "-qm", "add the cohort analysis"]):
         subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
-    for name, rule in (("study-pack.toml", lv.PACK_RULE), ("weak-pack.toml", r"ZQ-\d{7} => <STUDYID>")):
-        (h / name).write_text(f"[pack]\nidentifiers = ['{rule}']\n")
+    for name, rules in (("study-pack.toml", lv.PACK_RULES), ("weak-pack.toml", lv.WEAK_RULES)):
+        (h / name).write_text("[pack]\nidentifiers = [" + ", ".join(f"'{r}'" for r in rules)
+                              + "]\n")
     shim = h / "bin" / "phiward"
     shim.parent.mkdir()
     shim.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -c "
@@ -113,7 +118,7 @@ def config_text(h: Path, name: str) -> str:
     if name == "a-pack-file-weakened":  # it masks no ZQ- value, and has no example
         pack, examples = h / "weak-pack.toml", ["FAKE-PT-0009"]
     elif name == "b-pattern-edited":  # \d{4} to \d{5}, its example removed
-        pattern, examples = pattern.replace(r"\d{4}", r"\d{5}"), ["ZQ-777009"]
+        pattern, examples = pattern.replace(r"\d{4}", r"\d{5}"), ["ZQ-777009", "ZQ-XYZ09"]
     elif name == "c-root-removed":
         roots = "[protected_paths]\nroots = []\n"
     return (roots + f'[sanitize]\npacks = ["genomics", "msk", "dates", "{pack}"]\n'
@@ -171,11 +176,13 @@ def _subs(h: Path) -> dict:
     return {"REPO": str(h / "repo"), "DATA": str(h / "data"), "PY": sys.executable}
 
 
-def play(h: Path, serve, name: str, value=lambda v: v):
-    """Replay the session in Mode A under config NAME; (items, seconds)."""
+def play(h: Path, serve, name: str, value=lambda v: v, tools=None):
+    """Replay the session in Mode A under config NAME (the prompts and, when `tools` names
+    them, only those tool steps); (items, seconds)."""
     from phiward import config, install
     env = serve(h, name)
-    steps = leak_session.load(_subs(h), value)
+    steps = [s for s in leak_session.load(_subs(h), value)
+             if tools is None or s.kind != "tool" or s.id in tools]
     start = time.monotonic()
     with pytest.MonkeyPatch.context() as mp:
         for k in [k for k in os.environ if k not in env]:
@@ -191,14 +198,47 @@ def play(h: Path, serve, name: str, value=lambda v: v):
     return items, took
 
 
-def leaks(h: Path, serve, name: str, features=lv.FULL, value=lambda v: v):
+def leaks(h: Path, serve, name: str, features=lv.FULL, value=lambda v: v, tools=None):
     """The leaks and the missing values of a Mode A replay under config NAME."""
-    items, _took = play(h, serve, name, value)
+    items, _took = play(h, serve, name, value, tools)
     return leak_session.findings(items, lv.PLANTS, features)
 
 
 def _show(items):
     return "\n".join(f"--- step {it.step} {it.channel} {it.verdict}\n{it.text}" for it in items)
+
+
+_HOLE = r"((?:<[A-Z][A-Z0-9_]*>|[^A-Za-z0-9<>])+)"
+
+
+def shown_masked(text: str, template: str, table: bool = False) -> list:
+    """What is wrong with `text`, a gateway output of `template` under the full config: each
+    template line must come out, in order, with its text kept and each planted value replaced
+    by placeholders that hold its own (a gateway that drops or garbles lines fails). With
+    `table`, a value in a column that is not an identifier column is kept as it is, and one in
+    an identifier column needs a placeholder of any kind."""
+    out, i, bad = text.splitlines(), 0, []
+    for line in template.splitlines():
+        parts = leak_session.PLANT.split(line)
+        rx, want = "", []
+        for k, part in enumerate(parts):
+            p = lv.BY_VALUE.get(part) if k % 2 else None
+            if p is None or (table and p.column == "other"):
+                rx += re.escape(part)
+            else:
+                rx += _HOLE
+                want.append("<" if table and p.column == "id" else lv.placeholder(p))
+        pat = re.compile(rx)
+        while i < len(out) and not pat.fullmatch(out[i]):
+            i += 1
+        if i == len(out):
+            bad.append(f"no line of the output is the masked form of: {line!r}")
+            i = 0
+            continue
+        m = pat.fullmatch(out[i])
+        bad += [f"{w} missing in {out[i]!r}" for g, w in zip(m.groups(), want) if w not in g]
+        i += 1
+    return bad
 
 
 # --- the legs --------------------------------------------------------------------------------
@@ -212,9 +252,10 @@ def test_mode_a_a_typical_session_leaks_nothing(leak_tree, leak_broker, name, fe
     steps = leak_session.load(_subs(leak_tree))
     by = {it.step: it for it in items}
     tool = {s.id: by[s.n] for s in steps if s.kind == "tool"}
-    # the hook refused the Read below the root and allowed the rest
-    assert [it.verdict for it in tool.values()].count("deny") == 1, _show(items)
+    # the hook refused the Read and the Glob below the root and allowed the rest
+    assert [it.verdict for it in tool.values()].count("deny") == 2, _show(items)
     assert tool["t05"].verdict == "deny" and tool["t05"].channel == "file"
+    assert tool["t11c"].verdict == "deny" and "analysis.py" in tool["t11b"].text
     # the gateway ran (a gateway that fails would hide every value)
     for t in ("t06", "t07", "t08", "t09", "t10"):
         assert "exit=0" in tool[t].text, _show([tool[t]])
@@ -227,6 +268,23 @@ def test_mode_a_a_typical_session_leaks_nothing(leak_tree, leak_broker, name, fe
     settings = json.loads((leak_tree / ".claude" / "settings.json").read_text())
     assert settings["env"][install.MENTIONS_OFF] == "1"  # `@` mentions are off
     assert took < 120, took
+    if name != "full":
+        return
+    # what came back is the data with each value masked by its own rule, line by line
+    first = lv.COHORT.splitlines()[1]
+    for t, template, table in (("t07", lv.COHORT, False), ("t07b", lv.COHORT, True),
+                               ("t08", lv.RUN_LOG, False), ("t14", lv.COHORT, False),
+                               ("t09", f"rows: 4\ngenes: 4\nfirst: {first}", False)):
+        bad = shown_masked(tool[t].text, template, table)
+        assert not bad, "\n".join(bad) + "\n" + _show([tool[t]])
+    # names only (`ls`, `grep -l`): every line is placeholders alone, or the gateway's own note
+    # in brackets (a fold of repeated lines, the counts), or its exit line
+    for t in ("t06", "t10"):
+        lines = tool[t].text.splitlines()
+        names = [ln for ln in lines if "<" in ln and re.fullmatch(_HOLE, ln)]
+        other = [ln for ln in lines if ln and ln not in names and not ln.startswith("[")
+                 and not ln.startswith("run done: exit=0")]
+        assert names and not other, _show([tool[t]])
 
 
 @needs_confine
@@ -238,10 +296,18 @@ def test_a_control_session_with_no_plants_finds_nothing(control_tree, leak_broke
 
 
 @needs_confine
-@pytest.mark.parametrize("fault", ["a-pack-file-weakened", "b-pattern-edited", "c-root-removed"])
-def test_a_fault_made_through_the_config_is_found(leak_tree, leak_broker, fault):
-    found, _missing = leaks(leak_tree, leak_broker, fault)
-    assert found, fault
+@pytest.mark.parametrize("fault,tools,channel", [
+    # the pack file and the user pattern are found in the gateway's output, not only by the
+    # prompt scan: ZQ-ABC12 and FAKE-PT-0007 in the log are masked by no other rule
+    ("a-pack-file-weakened", {"t08"}, "gateway"),
+    ("b-pattern-edited", {"t08"}, "gateway"),
+    # with no root the gateway refuses every request: the hook lets the Read through
+    ("c-root-removed", {"t05"}, "file"),
+])
+def test_a_fault_made_through_the_config_is_found(leak_tree, leak_broker, fault, tools,
+                                                  channel):
+    found, _missing = leaks(leak_tree, leak_broker, fault, tools=tools)
+    assert any(f", {channel}: " in f for f in found), "\n".join(found) or fault
     print("\n".join(found[:5]))
 
 

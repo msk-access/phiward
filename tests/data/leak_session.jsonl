@@ -13,6 +13,8 @@
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t09", "name": "Bash", "input": {"command": "phiward run -- {PY} analysis.py ~/data/cohort.csv"}}]}}
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t10", "name": "Bash", "input": {"command": "phiward run -- grep -rl ERROR ~/data"}}]}}
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t11", "name": "Grep", "input": {"pattern": "KRAS", "path": "{REPO}", "output_mode": "content"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t11b", "name": "Glob", "input": {"pattern": "**/*.py", "path": "{REPO}"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t11c", "name": "Glob", "input": {"pattern": "*.csv", "path": "{DATA}"}}]}}
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t12", "name": "Bash", "input": {"command": "git log --oneline"}}]}}
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t13", "name": "Read", "input": {"file_path": "{REPO}/notes.md"}}]}}
 {"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t14", "name": "mcp__phiward__phiward_run", "input": {"command": ["head", "-5", "{DATA}/cohort.csv"]}}]}}

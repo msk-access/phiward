@@ -554,7 +554,9 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     sandbox check cover the kernel);
   - identifiers in project files outside the roots (a `notes.md` with a study ID): the hook
     decides by path, so a Read, a Grep or a shell command in the project sends them. Keep such files under a
-    protected root, or pseudonymize them.
+    protected root, or pseudonymize them;
+  - Claude Code's own Read, Grep and Glob: the replay uses models of them. A hook's ask is
+    played as a yes, so the test sees what a yes would send.
 
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
