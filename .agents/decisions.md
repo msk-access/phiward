@@ -6,6 +6,22 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **`launch` keeps this project's transcripts, by default.** `--resume` and `-c` are daily use.
+  `[launch] keep_transcripts = false` (user config only) turns it off. phiward never parses a
+  transcript (Claude Code's format is internal): launch names one folder
+  (`CLAUDE_CODE_PROJECT_DIR_NAME`, 16 hex of the project path's sha256) and moves it whole,
+  plain files and real folders only, without `memory/` (an instruction, kept under `--memory`
+  and quarantine) and `mcp-tasks/`; it merges into a copy under the carry-over lock and renames
+  it into place. A planted transcript is an instruction carried across sessions: a stated limit
+  (`open-transcripts`), not quarantined. The permission mode is not pinned: Claude Code does not
+  restore bypass on resume (re-read at each release, docs/releasing.md).
+- **An activated `.venv` is still refused under `launch`, with its own step.** Rejected: making
+  the PATH folders read-only and starting anyway (pip, uv and npm write `.venv/bin` on nearly
+  every install).
+- **`launch`'s proxy refusals name the way out.** The reason goes in the 403 status line too
+  (most clients print only that), a private address names `[launch] private_networks`, refused
+  hosts are listed at exit, and an `ANTHROPIC_BASE_URL` the proxy would refuse stops the start.
+  Nothing is allowed that was refused before.
 - **Mode A: an `excludedCommands` entry gives every shell call the text check.** While the
   merged list phiward reads (`claude_settings.excluded_entries`, every `confining_folders`
   folder) is not empty, every Bash and Monitor call gets `[shell] best_effort`'s text check,

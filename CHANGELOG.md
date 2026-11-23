@@ -226,6 +226,22 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   its own soft limit of open files, so carry-over and the report still run while 64 tunnels are
   held. On Linux the session's network namespace keeps abstract unix sockets apart, on every
   kernel.
+- `phiward launch --tool claude` keeps this project's transcripts between sessions, so
+  `--resume` and `-c` work. Before, nothing was shared between sessions. `launch` sets
+  `CLAUDE_CODE_PROJECT_DIR_NAME` (16 hex digits of the project's path hash) and copies only that
+  folder, whole and never read, to `~/.phiward/carryover/claude/transcripts/` at the end and
+  back at the start: plain files and real folders only, never `memory/` or `mcp-tasks/`, merged
+  under the carry-over lock, at most 500 MB for each project. `[launch] keep_transcripts =
+  false` (user config only) turns it off, and a resume flag then gets a NOTE. `carryover
+  status` lists the store. A resumed session reads what an earlier one wrote as its history: a
+  stated limit (threat model, `open-transcripts`).
+- `phiward launch` with an activated `.venv` (a project folder on `PATH`) still refuses, but now
+  names the entry and says to run `deactivate` (or take it off `PATH`), not "start the tool in a
+  project folder".
+- `launch`'s proxy says why in a refusal's status line (`403 phiward: <why>`), names `[launch]
+  private_networks` for a private address, and lists the refused hosts at exit (also in
+  `--report`). With `--tool claude`, an `ANTHROPIC_BASE_URL` the proxy would refuse (not
+  `https://`, this machine, a private range not listed) stops the start.
 - On Linux, a `launch` session's Claude Code settings set `sandbox.allowUnsandboxedCommands:
   false`: a Bash command is not retried outside Claude Code's own sandbox.
 - `phiward launch` and the broker may now refuse a config they used to accept: when the masking

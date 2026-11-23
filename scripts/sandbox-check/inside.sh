@@ -131,11 +131,16 @@ done
 if grep -q "^???? doctor: a warning before" /out/report.txt; then
   echo "== MISSING a clean doctor before the sessions"; status=1
 else echo "== ok    doctor clean before the sessions"; fi
+# the bypass probe: the stand-in runs the PreToolUse hooks in every permission mode, as Claude
+# Code does, so phiward refuses its Read and its cat
+expect "== bypass (Mode A, linux)"
+expect "ok   bypass: phiward refused the Read and the cat"
+expect "PASS bypass"
 expect "FAIL doctor"
 expect "FAIL"
 # only the redacted files are kept; the token in none of them; the check's home removed
 kept=$(cd /out && ls -A | grep -vxE 'console.txt|rc' | tr '\n' ' ')
-if [ "$kept" = "facts-A.txt facts-B.txt report.txt stream-A.jsonl stream-B.jsonl " ]; then
+if [ "$kept" = "facts-A.txt facts-B.txt facts-bypass.txt report.txt stream-A.jsonl stream-B.jsonl stream-bypass.jsonl " ]; then
   echo "== ok    kept: $kept"
 else echo "== WRONG kept files: $kept"; status=1; fi
 if grep -rqs "FAKE-TOKEN-" /out; then echo "== FOUND the made-up token in /out"; status=1
