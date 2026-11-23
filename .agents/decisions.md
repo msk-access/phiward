@@ -6,6 +6,23 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **The project scan walks the project itself, with no git.** One `os.scandir` walk, following
+  no link, covers tracked, untracked and git-ignored files alike (a copied CSV sits in an
+  ignored `data/`). (Why no git: `git ls-files` reads the project's `.git/config`
+  (`core.fsmonitor`) and `git log -p` runs its diff drivers and textconv; both run code an
+  agent may have written, outside any sandbox. Cost: no history and no commit messages; the
+  pre-commit hook covers new commits.) It uses subject kinds only (`sanitize.subject_sanitizer`:
+  the effective packs, so a repo file can only add refusals, and the user's patterns; no
+  dates, positions, numbers, roots, entry names or `names_from`, which a project holds
+  everywhere). Launch refuses on a finding (2 s; over it, warn and start); doctor scans with no
+  limit and warns, `--headless` fails; in Mode A the SessionStart note warns within 2 s and
+  never stops a session. Output: kinds, counts, and masked paths only with `--show-paths`.
+  `[sanitize] scan_allow` is user config only, by absolute path (a hash was turned down: test
+  fixtures change often). Under a budget the walk lists every name first, then reads the
+  instruction files and then the smallest files, 64 KiB each: the rules' regexes are most of
+  the cost (about 0.4 us per 40-character line per rule), so a line no rule matches as written
+  skips the sanitizer's other steps only when it is plain (ASCII, no control character, `\` or
+  `%`), where that skip is exact (a test checks it).
 - **The masking check tests the user's own rules by their own examples.** `[sanitize]
   examples` is user config only and holds made-up values; phiward never makes examples from a
   regex (such a value only proves the regex matches itself), and the built-in packs' values live

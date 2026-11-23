@@ -27,7 +27,7 @@ What each layer covers, and what no layer covers, is in
   that never follow a link, process facts.
 - `core.py`: the `Action` every guard judges. `cli.py`: the commands. `fasthook.py`: the hook
   under `phiward launch`, a quick first layer before the kernel. `session_note.py`: the note at the start of a session. `promptscan.py`: the
-  check of each prompt before it is sent (`prompt-scan claude`, a UserPromptSubmit hook). `phicheck.py`: the masking check (the user's rules against their `[sanitize] examples`, and the roots) at doctor, launch and the broker's start. `githooks.py`: the git hooks
+  check of each prompt before it is sent (`prompt-scan claude`, a UserPromptSubmit hook). `phicheck.py`: the masking check (the user's rules against their `[sanitize] examples`, and the roots) at doctor, launch and the broker's start. `projectscan.py`: the project scan (subject IDs in the project's own files and names, no git) at launch, doctor and the SessionStart note. `githooks.py`: the git hooks
   `init` installs in users' repositories. `_toml.py`: the config file reader (Python 3.9 has no
 TOML reader). `names.py`: phiward's own program and module names (`agent-guards` stays an alias
 during the beta).

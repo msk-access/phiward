@@ -17,7 +17,10 @@ outcome by where it sits and the channel (`leak_session.outcome`):
   identifier column is allowed by `--table`;
 - in a prompt: an identifier of the user's packs and rules is blocked; entry names, details and
   positions are sent;
-- in the project (`notes.md`): sent, since the hook decides by path.
+- in the project (`notes.md`): sent in Mode A, since the hook decides by path, and the session
+  note warns of it (the project scan, step 3); under launch the scan refuses the start, so the
+  launch leg allows `notes.md` by `[sanitize] scan_allow` and a step of its own expects the
+  refusal.
 "Absent" means absent in every form (raw, casefolded, NFKC, unescaped, letters and digits only,
 and each run of 3 or more letters and digits that holds a digit). A control session over the same
 project with the plants left out must find nothing, and each fault made through the config alone
@@ -25,14 +28,14 @@ must be found.
 
 What the replay does not cover (docs/threat-model.md says each one):
 - `CLAUDE.md` and other instruction files: Claude Code sends them at the start, with no hook
-  (step 3, the project scan, covers IDs in them);
-- the git status and file names in the system prompt (step 3 scans file names too);
+  (the project scan, tests/test_projectscan.py, reads them);
+- the git status and file names in the system prompt (the project scan reads file names too);
 - the user's own `!` commands: their output is sent, and no PreToolUse hook runs;
 - MCP servers that are not wrapped (doctor warns);
 - compaction and summaries (they rephrase only what was already sent);
 - Claude Code's own sandbox in Mode A (the launch leg and the operator's sandbox check cover
   the kernel);
-- IDs in project files outside the roots: sent until step 3 (the `notes.md` row);
+- IDs in project files outside the roots in Mode A: sent (the `notes.md` row; the note warns);
 - Claude Code's own file tools: the replay's Read, Grep and Glob are models of them.
 A hook "ask" is played as allowed (a yes), so the capture holds all that a yes would send.
 """
@@ -57,6 +60,7 @@ from helpers import fake_native_claude, git_repo, needs_confine, tool_py
 
 linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux")
 SUBJECTS = "WARNING: your user config enables no pack that masks subject or sample identifiers"
+SCAN_NOTE = "phiward's project scan found <STUDYID> in 1 file"
 
 
 def _plant(text: str, value) -> str:
@@ -110,10 +114,13 @@ def control_tree(tmp_path_factory):
 
 def config_text(h: Path, name: str) -> str:
     """The user config: `full` (packs, a pack file, a user pattern, their examples, table mode),
+    `full-allow` (`full`, and `notes.md` allowed by `[sanitize] scan_allow`, so launch starts),
     `default` (no packs, no patterns), or a fault made through the config alone."""
     roots = f'[protected_paths]\nroots = ["{h / "data"}"]\n'
     if name == "default":
         return roots
+    if name == "full-allow":
+        return config_text(h, "full") + f'scan_allow = ["{h / "repo" / "notes.md"}"]\n'
     pack, pattern, examples = h / "study-pack.toml", lv.PATTERN, list(lv.EXAMPLES)
     if name == "a-pack-file-weakened":  # it masks no ZQ- value, and has no example
         pack, examples = h / "weak-pack.toml", ["FAKE-PT-0009"]
@@ -264,6 +271,10 @@ def test_mode_a_a_typical_session_leaks_nothing(leak_tree, leak_broker, name, fe
     assert len(mention) == 1 and mention[0].verdict == "block"
     assert "below a protected root" in mention[0].text
     assert (SUBJECTS in tool["t14b"].text) is (name == "default"), _show([tool["t14b"]])
+    # the project scan (step 3): the note warns of notes.md, by kind and count; the default
+    # config has no subject rule, so its scan is off
+    note = [it for it in items if it.channel == "note"]
+    assert len(note) == 1 and (SCAN_NOTE in note[0].text) is (name == "full"), _show(note)
     from phiward import install
     settings = json.loads((leak_tree / ".claude" / "settings.json").read_text())
     assert settings["env"][install.MENTIONS_OFF] == "1"  # `@` mentions are off
@@ -315,12 +326,14 @@ def test_a_fault_made_through_the_config_is_found(leak_tree, leak_broker, fault,
 @linux
 def test_launch_a_typical_session_leaks_nothing(leak_tree, leak_broker):
     """Mode B: the same steps inside `phiward launch --tool claude`, where the kernel refuses
-    plain reads of the root (open, listdir, `ls`, `cat`, a wrapped MCP server)."""
+    plain reads of the root (open, listdir, `ls`, `cat`, a wrapped MCP server). `notes.md` is
+    allowed by `[sanitize] scan_allow` (`full-allow`), or the project scan would refuse the
+    launch (test_launch_refuses_a_project_file_that_holds_an_id)."""
     if str(leak_tree).startswith("/tmp/"):
         pytest.skip("Linux: the tree is under the session's own /tmp; run with --basetemp")
     from phiward import config, install
     h = leak_tree
-    env = leak_broker(h, "full")
+    env = leak_broker(h, "full-allow")
     env = {k: v for k, v in env.items() if k != "CLAUDE_PROJECT_DIR"}
     with pytest.MonkeyPatch.context() as mp:
         for k, v in env.items():
@@ -362,6 +375,23 @@ def test_launch_a_typical_session_leaks_nothing(leak_tree, leak_broker):
     assert gate and all("exit=0" in it.text for it in gate), _show(gate)
     kernel = [it for it in items if it.channel == "kernel"]
     assert len(kernel) == 5 and not any("patient_id" in it.text for it in kernel), _show(kernel)
+
+
+@needs_confine
+def test_launch_refuses_a_project_file_that_holds_an_id(leak_tree, leak_broker):
+    """The project scan (step 3): `notes.md` holds a study ID outside the root, so `phiward
+    launch` refuses at the start, before the tool runs, and says only the kind and the count."""
+    h = leak_tree
+    env = {k: v for k, v in leak_broker(h, "full").items() if k != "CLAUDE_PROJECT_DIR"}
+    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--tool", "claude", "--",
+                        tool_py(h.parent), "-c", "print('TOOL RAN')"], cwd=str(h / "repo"),
+                       env=env, capture_output=True, text=True, timeout=120,
+                       stdin=subprocess.DEVNULL)
+    assert r.returncode == 126 and "TOOL RAN" not in r.stdout, r.stdout + r.stderr
+    assert "phiward launch: the project scan found <STUDYID> in 1 file:" in r.stderr, r.stderr
+    item = leak_session.Item(0, "kernel", r.stdout + r.stderr, "deny", ("root",))
+    found, _missing = leak_session.findings([item], lv.PLANTS, lv.FULL)
+    assert not found, "\n".join(found)
 
 
 # --- the values and the session ------------------------------------------------------------

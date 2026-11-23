@@ -3,8 +3,10 @@
 Claude Code runs it as a SessionStart hook and adds what it prints to the session's context, so
 every session knows, before its first refusal, that protected data goes through the gateway and
 that the gateway is the intended route, not a way around the guards. It names no protected
-path: only the rules, and the HPC hosts and programs the operator listed. It never fails a
-session: on any error it prints nothing.
+path: only the rules, and the HPC hosts and programs the operator listed. When the project scan
+(within its 2 s budget) finds subject IDs in the project's files, it says so by kind and count
+(not under `phiward launch`, which scanned the project before the session).
+It never fails a session: on any error it prints nothing.
 """
 # Without this note, a test session called `phiward run` "a way around the protection".
 
@@ -16,7 +18,7 @@ from typing import List
 from phiward import config
 
 
-def note(cfg: config.Config) -> str:
+def note(cfg: config.Config, project: str = "") -> str:
     lines: List[str] = [
         "phiward protects data on this machine (patient data and the operator's credentials).",
         "Rules for this session:",
@@ -46,7 +48,31 @@ def note(cfg: config.Config) -> str:
     broken = _selfcheck_line()
     if broken:
         lines.append(f"{len(lines) - 1}. {broken}")
+    found = _scan_line(cfg, project)
+    if found:
+        lines.append(f"{len(lines) - 1}. {found}")
     return "\n".join(lines)
+
+
+def _scan_line(cfg: config.Config, project: str) -> str:
+    """The project scan (projectscan) within launch's time budget: kinds and counts of what it
+    found, or "". A warning only: it never stops a session."""
+    if not project:
+        return ""
+    from phiward import projectscan, wholetool
+    try:
+        # under `phiward launch`, which scanned the project just before (it refuses on a
+        # finding); its proof is the kernel profile, not a variable a settings file could set
+        if wholetool.already_confined(dict(os.environ)) or projectscan.place_problem(cfg, project):
+            return ""
+        r = projectscan.scan(cfg, project, projectscan.deadline())
+    except Exception:  # noqa: BLE001 - a note must never stop a session
+        return ""
+    if not r.hits:
+        return ""
+    return (f"phiward's project scan found {projectscan.found_text(r)} in this project, outside "
+            "the protected roots: do not read, quote or copy those files; tell the operator to "
+            "run `phiward doctor --show-paths` in their own terminal.")
 
 
 def _selfcheck_line() -> str:
@@ -76,11 +102,12 @@ def main(argv: List[str]) -> int:
         payload = {}
     try:
         cwd = payload.get("cwd") if isinstance(payload, dict) else None
-        cfg = config.load(cwd or os.getcwd())
+        project = cwd if isinstance(cwd, str) and cwd else os.getcwd()
+        cfg = config.load(project)
         if cfg.problem or not cfg.has_protected_paths:
             return 0
         out = {"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                      "additionalContext": note(cfg)}}
+                                      "additionalContext": note(cfg, project)}}
         sys.stdout.write(json.dumps(out))
     except Exception:  # noqa: BLE001 - a note must never stop a session
         return 0

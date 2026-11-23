@@ -44,7 +44,7 @@ This page says what is protected, against whom, and where the limits are.
 | Mode B: the real Claude Code under `phiward launch` | macOS | file tools and shell refused protected data; gateway output masked; skills and an MCP server carried over |
 | An MCP server wrapped in `phiward launch`: a small stdio server driven the way Claude Code drives one, and on Linux the published `@modelcontextprotocol/server-filesystem` 2.3.0 | macOS, Linux | works; refused protected data and credentials. Wrapped, the published server read ordinary files and could neither read nor list a protected folder; unwrapped, it read both |
 | HPC through the shared SSH connection | macOS to a real cluster | remote runs, push, pull, refused push of `~/.ssh`, refusal without the connection |
-| A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, `phiward mcp`), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under `phiward launch` ([what it does not cover](#known-leak-test)) | macOS, Linux (launch: Linux) | under the root: refused or masked (only placeholders left; `--table` keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent. A pack file weakened, a pattern edited or a root removed in the config is found |
+| A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, `phiward mcp`), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under `phiward launch` ([what it does not cover](#known-leak-test)) | macOS, Linux (launch: Linux) | under the root: refused or masked (only placeholders left; `--table` keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent in Mode A (the session note warns), refused at the start under `phiward launch` (the project scan). A pack file weakened, a pattern edited or a root removed in the config is found |
 | The full test suite (over 1,000 tests) | macOS; Linux (bubblewrap) | passes |
 
 - **Not tested:**
@@ -545,18 +545,39 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   everything Claude Code sends.** The test (`tests/test_leak_typical.py`) captures what phiward's
   entry points let through. What it does not cover:
   - `CLAUDE.md` and other instruction files: Claude Code sends them at the start, and no hook
-    sees them;
-  - the git status and the file names in the system prompt;
+    sees them (the [project scan](#known-project-scan) reads them);
+  - the git status and the file names in the system prompt (the project scan reads the file
+    names);
   - your own `!` commands: their output is sent, and no PreToolUse hook runs;
   - MCP servers that are not wrapped in `phiward launch --` (doctor warns);
   - compaction and summaries, which rephrase only what was already sent;
   - Claude Code's own sandbox in Mode A: the replay cannot run it (the launch leg and the
     sandbox check cover the kernel);
-  - identifiers in project files outside the roots (a `notes.md` with a study ID): the hook
-    decides by path, so a Read, a Grep or a shell command in the project sends them. Keep such files under a
-    protected root, or pseudonymize them;
+  - identifiers in project files outside the roots (a `notes.md` with a study ID) in Mode A: the
+    hook decides by path, so a Read, a Grep or a shell command in the project sends them; the
+    session note and doctor warn. Under `phiward launch` the project scan refuses the start (the
+    test's launch step checks it). Keep such files under a protected root, or pseudonymize them;
   - Claude Code's own Read, Grep and Glob: the replay uses models of them. A hook's ask is
     played as a yes, so the test sees what a yes would send.
+
+- <a id="known-project-scan"></a>**The project scan reads the project as it is at the start.**
+  `phiward launch` refuses a project whose files or file names hold a subject or sample ID
+  outside the roots; in Mode A the SessionStart note and `phiward doctor` warn, and nothing
+  refuses ([launch.md](launch.md#the-project-scan)). What it does not see:
+  - git history and commit messages: reading them needs git, which runs programs the project's
+    `.git/config` names. The pre-commit hook (`phiward init`) refuses a new commit that adds an
+    ID;
+  - binary formats (xlsx, parquet, BAM, pickles: a NUL byte in the first 8 KiB), anything past a
+    file's first 64 KiB at launch and in the note (1 MiB in doctor; after gzip), lines over
+    64 KiB, and more than 10000 entries of one folder;
+  - IDs known only as entry names under the roots, with no rule for their form, and positions,
+    numbers, dates, file and read names (the rules are subject IDs only);
+  - the targets of links, files outside the project that Claude Code also sends at the start
+    (`~/.claude/CLAUDE.md`, the memory folder), and files that arrive during a session;
+  - the folders of installed code and caches it skips by name, and the `[sanitize] scan_allow`
+    paths (an allowed file that later gets a real ID is not seen);
+  - under `launch`, a project larger than its 2 s budget is read only in part, and starts with a
+    NOTE; in Mode A an ID is found only within the note's 2 s, or when someone runs doctor.
 
 - <a id="known-leftover-processes"></a>**A gateway command's leftover processes (macOS).** A request ends when its command ends, and the
   broker ends the command's process group; a stop of the broker ends every running request and
