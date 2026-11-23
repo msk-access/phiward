@@ -633,10 +633,11 @@ def _check_shell(action: Action, cfg: Config, pset: paths.ProtectedSet, home: st
     if action.confined:
         return ALLOWED  # the kernel denies whatever the text missed
     if touch.relation == paths.ABOVE:
-        return deny("This command runs in, or names, a folder that holds protected data, so a "
-                    "listing or a recursive search from there reaches it (this tool's shell is "
-                    "not sandboxed, so the guard must refuse it).")
-    d = _unresolved(touch, cfg)
+        d = deny("This command runs in, or names, a folder that holds protected data, so a "
+                 "listing or a recursive search from there reaches it (this tool's shell is "
+                 "not sandboxed, so the guard must refuse it).")
+    else:
+        d = _unresolved(touch, cfg)
     if action.text_checked and d.verdict != ALLOW:
         # the cause is the entry, not the command: say which file holds it and the way out
         d = Decision(d.verdict, f"{d.reason} This shell is text-checked because "
