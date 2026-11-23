@@ -461,13 +461,20 @@ block of `~/.claude/settings.json`; phiward works the same either way.
 The shell counts as confined only when all of these hold:
 
 - the settings in the table above are in force;
-- `excludedCommands` is empty;
+- `excludedCommands` is empty. With an entry set, the hook does not refuse the whole shell: it
+  checks the text of every command, as with `[shell] best_effort`, because Claude Code decides
+  by its own matcher which calls run outside the sandbox. A command that names protected data,
+  or that builds a path the guard cannot see (`$(...)`, a variable it does not know), is
+  refused, and the refusal names the file that holds the entry; the rest run. `ls`, `pytest`
+  and `git status` pass. `phiward doctor` says so;
 - `network.allowAllUnixSockets` is not true, and `network.allowUnixSockets` is empty (a socket
   such as Docker's reaches a process outside the sandbox);
 - no other project settings file that Claude Code may read turns part of the sandbox off;
 - none of these is set, because each lets a command reach past the sandbox:
   `filesystem.disabled`, `enableWeakerNestedSandbox`, `allowAppleEvents`,
-  `allowNestedUserNamespaces`, `network.allowLocalBinding`, `network.allowMachLookup`;
+  `allowNestedUserNamespaces`, `network.allowMachLookup`, and on macOS only
+  `network.allowLocalBinding` (there a sandboxed command can reach every service on localhost;
+  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal;
 - no `allowRead` entry re-opens a root;
 - no protected patterns are configured.
 

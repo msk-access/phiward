@@ -163,6 +163,11 @@ Then push `main`, `develop` and the tag.
    Run the real check when phiward's Claude Code wiring (`install.py`, `claude_settings.py`,
    `fasthook.py`, `mcp.py`, `wholetool.py`) or the lowest Claude Code version it supports
    changed since the last release; otherwise skip it.
+   Read Claude Code's sandboxing page again: phiward counts `network.allowLocalBinding` as
+   opening the sandbox on macOS only, because the page says it has no effect on Linux
+   (`claude_settings.LOCAL_BINDING`); and it gives every shell call the text check while
+   `excludedCommands` is not empty, because the page says Claude Code matches its entries by
+   the call's text.
 4. Commit and tag: `git flow release finish` does both; the first release is tagged by hand on
    `main`. Then push the tag:
 

@@ -46,6 +46,8 @@ known-without-kernel-confinement
 known-patterns
 known-sandbox-on-linux
 known-unconfined-shell
+known-excluded-commands
+known-local-binding
 known-hooks-fail-open
 known-managed-settings
 known-long-lived-shells

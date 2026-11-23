@@ -793,6 +793,28 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     they source in turn (a plugin framework's folder), which changes the next session's snapshot.
   - **Before the first setup** (no protected path yet) the refusal does not apply: the hidden list
     is then guarded by the text check only, which is best effort.
+- <a id="known-excluded-commands"></a>**`sandbox.excludedCommands`.** Claude Code runs a call
+  outside its sandbox when every command in it matches an entry, by its own text matcher
+  (quotes, variables and backslashes are not documented, and the matcher may change between
+  releases). phiward does not guess which calls match. While the entries it reads are not
+  empty, every Bash and Monitor call gets the text check of `[shell] best_effort`, in place of
+  the blanket refusal: an excluded command runs outside the sandbox, guarded by that text
+  check only, with its limits ([gaps of the hook alone](#gaps-of-the-hook-alone)). A path built
+  at run time that the guard can see is refused (`$(...)`, unknown variables); one a program
+  reads from its own config is not seen. Not seen at all: an entry from an MDM profile (macOS
+  managed preferences), from server-managed settings (the claude.ai admin console) or from a
+  `--settings` file or JSON. phiward reads only the managed file and its drop-ins, the user file
+  and the project files, so such an entry gives no text check, and that command runs outside
+  the sandbox with only the confined-mode check (as before this change: the blanket refusal
+  could not see those layers either). Not checked: that PreToolUse runs for a call Claude Code
+  then excludes, and whether a skill's `` !`cmd` `` goes through PreToolUse.
+- <a id="known-local-binding"></a>**`sandbox.network.allowLocalBinding` on macOS.** There it
+  lets a sandboxed command listen on ports and connect to any port on localhost, so a local
+  service without authentication can act for it outside the sandbox. The shell does not count
+  as confined with it; run a dev server in your own terminal. On Linux a sandboxed command's
+  localhost is its own and the key has no effect (Claude Code's docs), so it is not counted. If
+  a Linux Claude Code ever gives it an effect, this is wrong: the release check reads the docs
+  again.
 - <a id="known-hooks-fail-open"></a>**Hooks fail open** in most tools by default. Claude Code (`onFailure: "block"`) and Cursor
   (`failClosed`) have a switch. No tool documents whether a hook deny still applies in its bypass or
   auto-approve mode.

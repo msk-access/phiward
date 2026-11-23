@@ -1028,9 +1028,17 @@ def main(argv: List[str]) -> int:
                f". To fix it: {still.step}" + ("" if still.text == why_not else
                                                  f" ({still.text})") + ".")
         show = say if ok or not fold or fixed else print
+        # not confined only by excludedCommands: the hook text-checks every call (b1), as its
+        # own reading (`shell_reason`) says
+        where = "" if ok or claude_settings.shell_reason(
+            project, home, cfg.all_roots, cfg.patterns, config.guard_files(),
+            hidden=hidden_now) is not None else claude_settings.excluded_step(project, home)[0]
         show("  sandbox confines the shell: yes" if ok else
              f"  WARNING: sandbox confines the shell: NO ({why_not})" +
-             ("; for shell commands only the hook's text check is left, which is best effort"
+             (f"; excludedCommands is not empty ({where}): the hook checks the text of every "
+              "command (as with [shell] best_effort), and refuses a path it cannot see"
+              if where else
+              "; for shell commands only the hook's text check is left, which is best effort"
               if cfg.shell_best_effort else
               "; so the hook refuses shell commands except gateway calls") + fix)
         if claude_settings._env_value(project, home, None, "CLAUDE_CODE_SHELL_PREFIX")[0] == \

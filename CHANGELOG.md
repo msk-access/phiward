@@ -176,6 +176,17 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Changed
 
+- Mode A: a `sandbox.excludedCommands` entry no longer stops the whole shell. Claude Code
+  matches entries against each call's text with its own matcher, which phiward does not copy;
+  so while the list it reads is not empty, every Bash and Monitor call gets the text check of
+  `[shell] best_effort`. A command that names protected data, or a path the guard cannot see
+  (`$(...)`, an unknown variable), is refused, and the refusal names the file that holds the
+  entry and the way out; `ls`, `pytest` and `git status` run. `phiward doctor` says so on its
+  "sandbox confines the shell" line. Not seen: an entry from an MDM profile, server-managed
+  settings or `--settings` (threat model: `known-excluded-commands`).
+- Mode A on Linux: `sandbox.network.allowLocalBinding` no longer counts as opening the sandbox
+  (Claude Code's docs: it has no effect there). On macOS it still does, and the step says to run
+  a dev server in your own terminal.
 - `phiward launch` and the broker may now refuse a config they used to accept: when the masking
   check fails, launch refuses to start (`the masking check failed: ...; run phiward doctor`),
   and the broker refuses every request until the config is fixed and the broker restarted.
