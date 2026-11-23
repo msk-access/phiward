@@ -1232,7 +1232,7 @@ test`), or read the change before you run it outside.
     of another machine there is reachable (this machine's own addresses stay refused);
   - a service on this machine reached through another machine (a public host or listed private
     host that forwards back), or a public address of this machine that `getifaddrs` does not
-    list (a NAT in front of it);
+    list (a NAT in front of it), and this machine's name when it resolves to such an address;
   - an upstream proxy (your `HTTPS_PROXY` when `launch` starts) gets only checked public
     addresses, but decides itself what it forwards; an address in `[launch] private_networks`
     is connected to directly;
@@ -1240,7 +1240,7 @@ test`), or read the change before you run it outside.
   - inbound, macOS: a session can listen on any address, and Seatbelt cannot limit that to
     loopback (its `localhost` filter also matches `0.0.0.0` and `::`). A server the session
     starts on every interface is reachable from the LAN. What it can serve is what the session
-    can read: the project and masked output; the protected roots stay unreadable. Linux is not
+    can read, never a protected root. Linux is not
     affected: the session has a network namespace of its own;
   - tools that ignore the proxy variables, and UDP, have no network (they fail); on Linux name
     lookups fail inside the session too;

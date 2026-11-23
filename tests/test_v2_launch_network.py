@@ -1,4 +1,4 @@
-"""The network of a `phiward launch` session: the tool has no direct IP network, only a CONNECT
+"""The network of a `phiward launch` session: the tool has no direct outbound IP network, only a CONNECT
 proxy that the launcher runs outside the profile, and that proxy allows only public addresses.
 
 - macOS: the profile denies every IP connection except the proxy's random port on loopback; the

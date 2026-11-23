@@ -7,8 +7,8 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 ## Decided
 
 - **macOS `launch` allows binds, and states the limit.** A session can listen on any address,
-  so a server it starts on every interface is reachable from the LAN; it can serve the project
-  and masked output only, never a protected root. (Why not a deny: Seatbelt's `localhost` filter
+  so a server it starts on every interface is reachable from the LAN; it can serve what the
+  session can read, never a protected root. (Why not a deny: Seatbelt's `localhost` filter
   for binds also matches `0.0.0.0` and `::`, and a literal address cannot be named, so loopback
   cannot be kept alone; a total deny breaks localhost dev servers, test fixtures and Claude
   Code's sign-in callback.) The threat model and launch.md say it, and advise
