@@ -217,6 +217,9 @@ def test_the_plain_skip_is_exact(tree):
     import random
     scan_cfg(packs=["genomics", "msk", "dates"], patterns=(PATTERN, r"^ZQ\d{3}$ => <CODE>"))
     san = sanitize.subject_sanitizer(config.load(str(tree / "repo")))
+    # what the skip rests on: no protected paths, entry names or name tokens in the scan's
+    # sanitizer, so only its rules can change a plain line
+    assert san.protected is None and san.entries is None and san.re_names is None
     searches = [rx.search for rx, _r in san.path_rules + san.id_rules]
     pieces = ["FAKE", "-", "PT", "0001", "P-", "9990001", "-T01", "-IM6", "C-", "FAKE01", "s_C_",
               "AB123456", "-T", "Donor", "x7", "ZQ", "123", " ", "\t", "_", ".", "/", ",", "a",
@@ -317,6 +320,44 @@ def test_launch_over_its_budget_warns_and_starts(tree, monkeypatch, capsys):
     err = capsys.readouterr().err
     assert ("phiward launch: NOTE: the project scan stopped at its 2 s limit after 0 files; run "
             "phiward doctor for the full scan") in err, err
+
+
+class _Clock:
+    """A clock that moves 1 ms each time it is read: a budget runs out after a known number of
+    looks, whatever the machine's speed."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def monotonic(self):
+        self.now += 0.001
+        return self.now
+
+
+def test_under_a_tiny_budget_claude_md_is_still_read_and_launch_refuses(tree, monkeypatch):
+    scan_cfg(packs=["msk"], patterns=())
+    repo = tree / "repo"
+    for i in range(3000):
+        d = repo / "pkg" / f"d{i // 100}"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"m{i}.py").write_text("x = 1\n")
+    (repo / "CLAUDE.md").write_text("# a\nP-9990001-T01-IM6\n")
+    monkeypatch.setattr(projectscan, "time", _Clock())
+    monkeypatch.setattr(projectscan, "BUDGET", 0.05)
+    r = scan(tree, projectscan.deadline())
+    assert not r.complete and ("CLAUDE.md", 2) in hits(r), r
+    with pytest.raises(wholetool.LaunchError) as exc:
+        _build(tree)
+    assert str(exc.value).startswith("the project scan found <SAMPLEID> in 1 file:")
+
+
+def test_launch_notes_what_a_finished_scan_did_not_read(tree, capsys):
+    scan_cfg()
+    (tree / "repo" / "min.js").write_text("x" * (run.MAX_LINE + 1) + "\n")
+    assert "project scan" not in _try_build(tree)
+    err = capsys.readouterr().err
+    assert ("phiward launch: NOTE: the project scan did not read all of the project (1 long "
+            "lines); phiward doctor gives the counts") in err, err
 
 
 @pytest.mark.parametrize("raised", [sanitize.SanitizerError("FAKE-PT-0001"),
