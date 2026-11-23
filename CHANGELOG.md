@@ -105,7 +105,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   that folder's full path under `~/.phiward`. A unix socket's path holds at most 107 bytes, and
   under the full path Claude Code's sandbox could not make its bridge sockets
   (`Failed to create bridge sockets after 5 attempts`: Bash did not run under
-  `launch --tool claude`), nor tmux its socket.
+  `launch --tool claude`), nor tmux its socket. So `launch` on Linux refuses a project or
+  spool that is `/tmp` (it would cover the session's own `/tmp` with the shared one); a folder
+  below `/tmp` works.
 - macOS: the gateway's profile and `phiward launch`'s tool profile also deny mounting file
   systems and creating launchd jobs.
 - `--help` after a subcommand prints the help and changes nothing (`carryover status --help`,

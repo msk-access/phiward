@@ -54,7 +54,9 @@ phiward launch --tool claude
 - `--memory`: turn Claude Code's auto memory on. It then lives in the session's folder, and its
   changes go to quarantine like any other instruction.
 - `launch` refuses to start in `/`, your home, a folder above or inside protected data, a dot
-  folder, `~/Library`, a folder on your `PATH`, or a phiward folder.
+  folder, `~/Library`, a folder on your `PATH`, or a phiward folder. On Linux it also refuses
+  `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared one.
+  A folder below `/tmp` works.
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
   threat model).
 - On macOS the tool starts as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with nothing in

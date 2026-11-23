@@ -2053,6 +2053,13 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if why:
             raise LaunchError(f"the session needs a network of its own, and {why} (phiward "
                               "doctor says so too)")
+        # a write place bound at /tmp or above it would cover the session's own /tmp (which the
+        # temp variables below name) with the host's shared one
+        for p in places:
+            if os.path.isdir(p) and _inside("/tmp", os.path.realpath(p)):
+                raise LaunchError(f"a write place ({p}) is /tmp or holds it, and on Linux the "
+                                  "session's own /tmp would be the shared one; start the tool in "
+                                  "a folder below /tmp, or elsewhere")
         # the temp folders by the name the view gives the run's tmp, /tmp: a unix socket's path
         # holds at most 107 bytes, and Claude Code's sandbox bridges (`claude-http-<hex>.sock`)
         # and tmux's sockets do not fit under the run folder's full path

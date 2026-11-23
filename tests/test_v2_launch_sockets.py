@@ -193,6 +193,23 @@ def test_the_sessions_temp_folders_take_claude_codes_bridge_and_tmuxs_socket_nam
     assert "BOUND claude" in out and "BOUND tmux" in out, out
 
 
+@pytest.mark.parametrize("where", ["project", "spool"])
+def test_a_write_place_that_is_tmp_is_refused(tree, where):
+    """A write place that is /tmp (or holds it) would cover the session's own /tmp, which its
+    temp variables name, with the host's shared one: nothing runs."""
+    cwd, extra = str(tree / "repo"), {}
+    if where == "project":
+        cwd = "/tmp"
+    else:
+        extra = {"PHIWARD_SPOOL": "/tmp"}
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--", PY, "-c", "print('RAN')"], cwd=cwd,
+                       capture_output=True, text=True, env=env(extra), timeout=120,
+                       stdin=subprocess.DEVNULL)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "RAN" not in out, out
+    assert "/tmp" in out and "below /tmp" in out, out
+
+
 @abi9
 def test_a_name_service_socket_stays_reachable(tree):
     d = Path("/var/lib/sss/pipes")
