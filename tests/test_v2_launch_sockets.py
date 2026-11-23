@@ -168,6 +168,48 @@ def test_a_cross_folder_move_and_a_git_commit_work(tree):
     assert "MOVED" in out and "RC 0" in out, out
 
 
+# Claude Code's sandbox bridges its proxies with `socat UNIX-LISTEN:$TMPDIR/claude-http-<16 hex>
+# .sock` (and claude-socks-...), tmux makes $TMUX_TMPDIR/tmux-UID/default: a socket's path holds
+# at most 107 bytes, so the session's temp folders must leave room for these names wherever the
+# run folder is (the real check: "Failed to create bridge sockets after 5 attempts")
+BRIDGE = r"""
+import os, socket, tempfile
+for name, d in (("claude", os.environ.get("CLAUDE_CODE_TMPDIR") or tempfile.gettempdir()),
+                ("tmux", os.path.join(os.environ.get("TMUX_TMPDIR", "/tmp"), "tmux-%d" % os.getuid()))):
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, "claude-http-0123456789abcdef.sock" if name == "claude" else "default")
+    try:
+        s = socket.socket(socket.AF_UNIX)
+        s.bind(p)
+        s.listen(1)
+        print("BOUND", name)
+    except OSError as e:
+        print("NOT-BOUND", name, len(p), e)
+"""
+
+
+def test_the_sessions_temp_folders_take_claude_codes_bridge_and_tmuxs_socket_names(tree):
+    _, out = launch(tree, "", "claude", program=["--", tool_py(tree), "-c", BRIDGE])
+    assert "BOUND claude" in out and "BOUND tmux" in out, out
+
+
+@pytest.mark.parametrize("where", ["project", "spool"])
+def test_a_write_place_that_is_tmp_is_refused(tree, where):
+    """A write place that is /tmp (or holds it) would cover the session's own /tmp, which its
+    temp variables name, with the host's shared one: nothing runs."""
+    cwd, extra = str(tree / "repo"), {}
+    if where == "project":
+        cwd = "/tmp"
+    else:
+        extra = {"PHIWARD_SPOOL": "/tmp"}
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--", PY, "-c", "print('RAN')"], cwd=cwd,
+                       capture_output=True, text=True, env=env(extra), timeout=120,
+                       stdin=subprocess.DEVNULL)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "RAN" not in out, out
+    assert "/tmp" in out and "below /tmp" in out, out
+
+
 @abi9
 def test_a_name_service_socket_stays_reachable(tree):
     d = Path("/var/lib/sss/pipes")

@@ -50,7 +50,9 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
-    "launch": {"pass_env": "list"},
+    # `phiward launch`: more variables for the tool; private networks its proxy may reach
+    # (USER_ONLY)
+    "launch": {"pass_env": "list", "private_networks": "list"},
     # commands on HPC through the broker; every key is the operator's own (USER_ONLY)
     "remote": {"hosts": "list", "commands": "list", "roots": "list",
                "use_shared_connection": "bool"},
@@ -110,6 +112,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("sanitize", "id_columns"),
              ("sanitize", "examples"), ("sanitize", "scan_allow"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
+             ("launch", "private_networks"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
              ("shell", "commands")}
 # an allowed_domains entry: a host name, `*.` and a host name, an IPv4 or bracketed IPv6
@@ -164,6 +167,8 @@ class Config:
     write_to_claude: int = 0  # write_to entries that hold a .claude folder (skipped)
     net: bool = False
     launch_pass_env: List[str] = field(default_factory=list)  # more variables for `launch`
+    # [launch] private_networks (USER_ONLY): private ranges launch's proxy may reach
+    launch_private_networks: List[str] = field(default_factory=list)
     max_output_lines: int = 2000  # gateway output lines shown; a repo file may only lower it
     # the programs gateway commands may run ([broker] commands): one list per config file that
     # sets one; a program must be in every list. Empty: no list, any program
@@ -643,6 +648,11 @@ def _check_paths(cfg: Config) -> str:
         why = domain_problem(d)
         if why:
             return f"[network] allowed_domains entry '{d}' {why}"
+    for n in cfg.launch_private_networks:
+        from phiward import netproxy
+        why = netproxy.private_network_problem(n)
+        if why:
+            return f"[launch] private_networks entry '{n}' {why}"
     for p in cfg.sanitize_scan_allow:
         if not p.startswith("/"):
             return f"[sanitize] scan_allow entry '{p}' must be absolute (or start with ~/)"
@@ -851,6 +861,9 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
     for v in data.get("launch", {}).get("pass_env", []):
         if v not in cfg.launch_pass_env:
             cfg.launch_pass_env.append(v)
+    for v in data.get("launch", {}).get("private_networks", []):  # USER_ONLY
+        if v not in cfg.launch_private_networks:
+            cfg.launch_private_networks.append(v)
     if "best_effort" in data.get("shell", {}):  # USER_ONLY
         cfg.shell_best_effort = bool(data["shell"]["best_effort"])
     nw = data.get("network", {})

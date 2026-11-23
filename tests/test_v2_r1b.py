@@ -129,7 +129,8 @@ def test_7_only_listed_variables_reach_the_tool(tree, var):
     assert "HAS False" in out, out
 
 
-@pytest.mark.parametrize("var", ["HTTPS_PROXY", "NO_PROXY", "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",
+# the proxy variables are launch's own now (test_v2_launch_network.py, test_4_*)
+@pytest.mark.parametrize("var", ["SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS",
                                  "LANG", "TERM", "EDITOR", "ANTHROPIC_API_KEY", "CLAUDE_CODE_USE_BEDROCK"])
 def test_7_ordinary_and_the_tools_own_variables_pass(tree, var):
     _, out = launch(tree, f"import os; print('HAS', {var!r} in os.environ)", env_extra={var: "x"})
@@ -160,8 +161,16 @@ def test_8_compiling_works_and_the_operators_python_stays_first(tree):
 
 
 def test_9_tmux_gets_its_own_folder(tree):
-    _, out = launch(tree, "import os; print('TMUX', os.environ.get('TMUX_TMPDIR', ''))")
-    assert "/.phiward/tools/" in out, out
+    # the session's own tmp: by its full path on macOS; on Linux by /tmp, the name the view gives
+    # it (tmux's socket path must fit under it)
+    _, out = launch(tree, "import os\nt = os.environ.get('TMUX_TMPDIR', '')\nprint('TMUX', t)\n"
+                          "own = os.path.join(os.path.dirname(os.environ['XDG_CACHE_HOME']), 'tmp')\n"
+                          "print('OWN', bool(t) and os.path.samefile(t, own))\n")
+    if sys.platform == "darwin":
+        assert "/.phiward/tools/" in out, out
+    else:
+        assert "TMUX /tmp\n" in out, out
+    assert "OWN True" in out, out
 
 
 def test_10_claude_folder_exists_and_is_read_only_as_a_whole(tree):

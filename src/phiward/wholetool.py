@@ -41,7 +41,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from phiward import carryover, claude_settings, config, confine, pathid, pathmatch, safeio
+from phiward import carryover, claude_settings, config, confine, netproxy, pathid, pathmatch, safeio
 from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
                             KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
                             _token_paths)
@@ -93,7 +93,14 @@ What the session can do:
 - Read: everything except the protected paths and credentials (~/.ssh, ~/.aws, tool logins,
   Kerberos tickets, and similar). Credential variables such as SSH_AUTH_SOCK are removed.
 - Other processes: no keystroke injection, no signals to processes outside, no scripting of
-  other apps. The network is open in this release.
+  other apps.
+- Network: only through phiward's proxy, which launch runs outside the profile, and only to
+  public addresses (not this machine, its link or private ranges; private ranges you list in
+  [launch] private_networks in the user config). It takes HTTPS (CONNECT) only, and chains to
+  the HTTPS_PROXY of your own environment by checked address. Tools that ignore the proxy
+  variables, and UDP, have no network. On Linux the session has a network of its own (launch
+  refuses where network namespaces are not available); on macOS it cannot reach servers on
+  this machine, its own too (use unix sockets or IPC transports).
 - Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
   (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
   --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
@@ -135,16 +142,20 @@ class Adapter:
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
         """The tool's settings in its own folder: its sandbox off on macOS (sandboxes do not
-        nest; this profile replaces it), the fast hook as a first layer, and the prompt scan
-        (the session can remove it: a stated limit)."""
+        nest; this profile replaces it), on Linux no retry of a Bash command outside it, the
+        fast hook as a first layer, and the prompt scan (the session can remove it: a stated
+        limit)."""
         if self.name != "claude":
             return
         data = _read_json_at(folder_fd, "settings.json")
         before = json.dumps(data, sort_keys=True)
+        sb = data.setdefault("sandbox", {})
+        if not isinstance(sb, dict):
+            sb = data["sandbox"] = {}
         if sys.platform == "darwin":
-            sb = data.setdefault("sandbox", {})
-            if isinstance(sb, dict):
-                sb["enabled"] = False
+            sb["enabled"] = False
+        else:
+            sb["allowUnsandboxedCommands"] = False
         # exec form, from a file in the package (entry.py): no inline code. A Claude Code that
         # ignores `args` would run the Python alone, so launch refuses one older than
         # VERSION_HOOK_ARGS on every platform (claude_version_problem)
@@ -196,15 +207,16 @@ ADAPTERS: Dict[str, Adapter] = {
 # the operator adds more with [launch] pass_env in the user config
 PASS_ENV = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TERM_PROGRAM",
             "TERM_PROGRAM_VERSION", "COLORTERM", "LANG", "TZ", "EDITOR", "VISUAL", "PAGER", "LESS",
-            "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "SHLVL", "PWD", "HTTP_PROXY",
-            "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy",
-            "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+            "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "SHLVL", "PWD", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
             "NODE_EXTRA_CA_CERTS", "JAVA_HOME", "GOPATH", "GOROOT", "CONDA_PREFIX",
             "CONDA_DEFAULT_ENV", "VIRTUAL_ENV", "__CF_USER_TEXT_ENCODING",
             # module systems on HPC (Lmod, Environment Modules) and build paths
             "LD_LIBRARY_PATH", "MODULEPATH", "MODULESHOME", "LOADEDMODULES", "PKG_CONFIG_PATH",
             "MANPATH", "CPATH", "LIBRARY_PATH", "_LMFILES_"}
 PASS_PREFIXES = ("LC_", "ANTHROPIC_", "CLAUDE_", "PHIWARD_", "LMOD_", "__LMOD_")
+# the tool's proxy variables: all name the session's own proxy (netproxy), and nothing bypasses it
+PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
+NO_PROXY_VARS = ("NO_PROXY", "no_proxy")
 
 
 def _keep_env(k: str, extra: Sequence[str] = ()) -> bool:
@@ -235,15 +247,18 @@ LINK_REFUSED = RUNS_LATER_DIRS + RUNS_LATER_FILES + (
     ".claude/settings.json", ".claude/settings.local.json", ".vscode/settings.json",
     ".vscode/tasks.json", ".vscode/launch.json")
 MACH_ALLOW = (
-    "com.apple.SecurityServer", "com.apple.securityd.xpc", "com.apple.trustd",
-    "com.apple.trustd.agent", "com.apple.ocspd", "com.apple.SystemConfiguration.configd",
+    # certificates: only the user's trustd agent, which reads the OS trust store (Claude Code
+    # trusts it by default); the system trustd and ocspd, which fetch certificate URLs outside
+    # the profile, are not needed for that
+    "com.apple.SecurityServer", "com.apple.securityd.xpc",
+    "com.apple.trustd.agent", "com.apple.SystemConfiguration.configd",
     "com.apple.SystemConfiguration.DNSConfiguration", "com.apple.dnssd.service",
     "com.apple.system.opendirectoryd.libinfo", "com.apple.system.DirectoryService.libinfo_v1",
     "com.apple.system.notification_center", "com.apple.system.logger", "com.apple.logd",
     "com.apple.diagnosticd", "com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent",
     "com.apple.bsd.dirhelper", "com.apple.FSEvents", "com.apple.CoreServices.coreservicesd",
-    "com.apple.lsd.mapdb", "com.apple.analyticsd", "com.apple.networkd",
-    "com.apple.nsurlsessiond", "com.apple.nesessionmanager.content-filter",
+    "com.apple.lsd.mapdb", "com.apple.analyticsd",
+    "com.apple.nesessionmanager.content-filter",
 )
 _TIOCSTI_MACOS = 0x80017472
 CANARY = "launch-canary"
@@ -394,7 +409,9 @@ def _rx(path: str) -> str:
 
 def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: str,
                           env: Dict[str, str], folder: str, canary: str,
-                          server: bool = False) -> str:
+                          server: bool = False, proxy_port: int = 0) -> str:
+    """The tool's Seatbelt profile. Its only IP connection is to `proxy_port` on loopback (the
+    session's proxy, which holds that port on 127.0.0.1 and [::1]); 0: none at all."""
     s = confine._sb_str
     rules = confine._sb_paths(cfg.all_roots, cfg.patterns)
     allow = [f"(subpath {s(p)})" for p in places]  # exactly as given: no resolved spellings
@@ -470,6 +487,15 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     p += "".join(f"(allow network-outbound (remote unix-socket (subpath {s(q)})))" for q in own)
     # name lookups go through mDNSResponder's socket
     p += '(allow network-outbound (remote unix-socket (subpath "/private/var/run/mDNSResponder")))'
+    # no IP connection except TCP to the session's proxy: an allow list (`localhost` here is
+    # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1); `tcp`, as the
+    # proxy holds only TCP on that port, and UDP to it would reach whoever binds it
+    p += '(deny network-outbound (remote ip "*:*"))'
+    # binds stay allowed: the profile's `(local ip "localhost:*")` also matches 0.0.0.0 and ::,
+    # so loopback cannot be kept alone, and a total deny breaks localhost servers and Claude
+    # Code's sign-in (the limit: threat-model.md)
+    if proxy_port:
+        p += f'(allow network-outbound (remote tcp "localhost:{int(proxy_port)}"))'
     p += "(deny lsopen)(deny appleevent-send)(deny user-preference-write)"
     p += "(deny mach-lookup)(allow mach-lookup " + " ".join(
         f"(global-name {s(m)})" for m in MACH_ALLOW) + ")"
@@ -1161,8 +1187,10 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
         elif now.get(op[1]) is not None:
             args += ["--ro-bind-try", op[1], op[1]]
             checks[op[1]] = (True, op[1])
+    # a network of its own: no way to this machine's loopback or any address but through the
+    # session's proxy (the relay's socket pair, inherited by the helper)
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
-             "--die-with-parent"]
+             "--unshare-net", "--die-with-parent"]
     # the tool's own temp folder as /tmp, then the write places on top (a project under /tmp
     # stays visible). Unix sockets are not masked by name (a name in /proc/net/unix is the one
     # a socket was bound with): the kernel limits them (HELPER, tool_seccomp_program)
@@ -1282,8 +1310,11 @@ def _raise_fd_limit(need: int) -> None:
 
 # the helper the tool starts through: on Linux it first checks that each bind in the session's
 # view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
-# a name in between), then it closes the launcher's descriptors and limits unix sockets as the
-# launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
+# a name in between), then it closes the launcher's descriptors, starts the relay to the proxy on
+# the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:FD`: FD is its end of the proxy's socket
+# pair; it dies with the tool, PR_SET_PDEATHSIG, and starts before the limits below, which are
+# the tool's), limits
+# unix sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
 # argv: CHK UNIX N FD... CMD [ARG]...
 # - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
 #   session are refused, the session's own are not), the name-service folders allowed, REFER
@@ -1342,6 +1373,7 @@ for c in close:
         os.close(int(c))
     except OSError:
         pass
+# RELAY (Linux: the relay to the proxy's socket, RELAY below)
 def stop(why):
     sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
     sys.stderr.flush()
@@ -1501,6 +1533,84 @@ try:
 except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
+
+# the relay, in the Linux helper, where the session reaches the proxy through it. macOS has no
+# helper: the profile lets the tool reach the proxy's one port directly
+RELAY = r"""
+relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
+if relay:
+    import socket, threading
+    rport, _, rfd = relay.partition(":")
+    try:
+        ctl = socket.socket(fileno=int(rfd))
+        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ls.bind(("127.0.0.1", int(rport)))
+        ls.listen(128)
+    except (OSError, ValueError) as e:
+        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
+        os._exit(126)
+    parent = os.getpid()
+    if os.fork() == 0:
+        try:
+            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
+            if os.getppid() != parent:
+                os._exit(0)
+            nul = os.open("/dev/null", os.O_RDWR)
+            os.dup2(nul, 0)
+            os.dup2(nul, 1)
+            keep = sorted((ls.fileno(), ctl.fileno()))
+            os.closerange(3, keep[0])
+            os.closerange(keep[0] + 1, keep[1])
+            os.closerange(keep[1] + 1, 65536)
+            asking = threading.Lock()
+
+            def pump(a, b):
+                try:
+                    while True:
+                        d = a.recv(65536)
+                        if not d:
+                            break
+                        b.sendall(d)
+                except OSError:
+                    pass
+                try:
+                    b.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+
+            def serve(c):
+                # one end of a new pair to the proxy, or the connection is closed: never a
+                # direct dial, and no socket with a path
+                try:
+                    with asking:
+                        ctl.sendall(b"c")
+                        msg, fds, _f, _a = socket.recv_fds(ctl, 1, 4)
+                except OSError:
+                    msg, fds = b"", []
+                for f in fds[1:]:
+                    os.close(f)
+                if msg != b"y" or not fds:
+                    if fds:
+                        os.close(fds[0])
+                    c.close()
+                    return
+                u = socket.socket(fileno=fds[0])
+                t = threading.Thread(target=pump, args=(u, c), daemon=True)
+                t.start()
+                pump(c, u)
+                t.join()
+                c.close()
+                u.close()
+            while True:
+                c, _ = ls.accept()
+                threading.Thread(target=serve, args=(c,), daemon=True).start()
+        finally:
+            os._exit(0)
+    ls.close()
+    ctl.close()
+"""
+HELPER_LINUX = HELPER.replace(
+    "# RELAY (Linux: the relay to the proxy's socket, RELAY below)\n", RELAY, 1)
 
 
 def _git_snapshot(project: str, limit: int = 20000) -> Dict[str, str]:
@@ -1810,10 +1920,27 @@ def _make_folders(project: str, names: Sequence[str]) -> List[str]:
     return made
 
 
+def _proxy_env(url: str) -> Dict[str, str]:
+    """The tool's proxy variables: each names the session's proxy, and nothing bypasses it."""
+    out = dict.fromkeys(PROXY_VARS, url)
+    out.update(dict.fromkeys(NO_PROXY_VARS, ""))
+    return out
+
+
+def _start_proxy(cfg: config.Config, env: Dict[str, str], pair: bool = False) -> "netproxy.Proxy":
+    try:
+        return netproxy.start(env, cfg.launch_private_networks, pair)
+    except netproxy.ProxyError as exc:
+        raise LaunchError(f"the session's network proxy cannot start: {exc}") from None
+
+
 def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
           memory: bool = False, store: Optional[carryover.Store] = None,
           server: bool = False
-          ) -> Tuple[List[str], Dict[str, str], List[int], str, Callable[[], None]]:
+          ) -> Tuple[List[str], Dict[str, str], List[int], str, Callable[[], None],
+                     "netproxy.Proxy"]:
+    """The tool's command, its environment, the descriptors it is given, the project, the last
+    step before it starts, and the session's proxy (serving; the caller closes it)."""
     cfg = config.load(cwd, env=env)
     if cfg.problem:
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
@@ -1922,7 +2049,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if why:
             raise LaunchError(why)
     backend = confine.backend()
-    helper = [sys.executable, "-I", "-S", "-c", HELPER]
+    helper = [sys.executable, "-I", "-S", "-c", HELPER_LINUX]  # bubblewrap only
     if backend == "seatbelt":
         # no helper: `sandbox-exec -f FILE TOOL ARGS...`, the tool by its full path, found on the
         # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
@@ -1931,15 +2058,41 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         # the session's own run folder: a launch inside the session checks it (already_confined)
         child_env["PHIWARD_RUN"] = run
         _make_folders(project, [".claude"])
-        confine.prune_profiles()
-        path = confine.write_profile(seatbelt_tool_profile(cfg, places, project, env, folder,
-                                                           canary, server))
+        proxy = _start_proxy(cfg, env)
+        try:
+            child_env.update(_proxy_env(proxy.url()))
+            child_env.pop("PHIWARD_PROXY_RELAY", None)  # no relay on macOS
+            confine.prune_profiles()
+            path = confine.write_profile(seatbelt_tool_profile(cfg, places, project, env, folder,
+                                                               canary, server,
+                                                               proxy_port=proxy.port))
+        except BaseException:
+            proxy.close()
+            raise
         return [confine.SANDBOX_EXEC, "-f", path, tool] + list(argv[1:]), child_env, \
-            [], project, lambda: None
+            [], project, lambda: None, proxy
     if backend == "bwrap":
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
                               "run phiward setup first")
+        bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
+        why = confine.net_namespace_problem(bwrap, probe=False)
+        if why:
+            raise LaunchError(f"the session needs a network of its own, and {why} (phiward "
+                              "doctor says so too)")
+        # a write place bound at /tmp or above it would cover the session's own /tmp (which the
+        # temp variables below name) with the host's shared one
+        for p in places:
+            if os.path.isdir(p) and _inside("/tmp", os.path.realpath(p)):
+                raise LaunchError(f"a write place ({p}) is /tmp or holds it, and on Linux the "
+                                  "session's own /tmp would be the shared one; start the tool in "
+                                  "a folder below /tmp, or elsewhere")
+        # the temp folders by the name the view gives the run's tmp, /tmp: a unix socket's path
+        # holds at most 107 bytes, and Claude Code's sandbox bridges (`claude-http-<hex>.sock`)
+        # and tmux's sockets do not fit under the run folder's full path
+        for k in ("TMPDIR", "TMUX_TMPDIR", "CLAUDE_CODE_TMPDIR"):
+            if k in child_env:
+                child_env[k] = "/tmp"
         made = _make_folders(project, MADE_ON_LINUX)
         if made:
             sys.stderr.write("phiward launch: made empty, read-only folders in the project: "
@@ -1967,26 +2120,41 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
             unix = "deny"
-        args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
-        r, w = os.pipe()
-        os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
-        os.close(w)
-        os.set_inheritable(r, True)
-        # the helper's checks, written by `ready` right before bwrap starts (an unlinked file:
-        # a pipe holds too little for a large view)
-        with tempfile.TemporaryFile() as fh:
-            chk = os.dup(fh.fileno())
-        os.set_inheritable(chk, True)
-        held = [str(fd) for fd in fds]
-        bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
+        # the session reaches the proxy through the relay on its own 127.0.0.1, which asks for
+        # each connection on its end of the proxy's socket pair (no socket with a path)
+        proxy = _start_proxy(cfg, env, pair=True)
+        opened: List[int] = []  # every descriptor made here: closed with the proxy on a refusal
         try:
+            relay = netproxy.random_port()
+            child_env.update(_proxy_env(proxy.url(relay)))
+            args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server)
+            opened += fds
+            end = proxy.take_session_end()
+            opened.append(end)
+            child_env["PHIWARD_PROXY_RELAY"] = f"{relay}:{end}"
+            r, w = os.pipe()
+            opened.append(r)
+            try:
+                os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
+            finally:
+                os.close(w)
+            os.set_inheritable(r, True)
+            # the helper's checks, written by `ready` right before bwrap starts (an unlinked
+            # file: a pipe holds too little for a large view)
+            with tempfile.TemporaryFile() as fh:
+                chk = os.dup(fh.fileno())
+            opened.append(chk)
+            os.set_inheritable(chk, True)
+            held = [str(fd) for fd in fds]
             cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
                                  argv)
-        except LaunchError:
-            for fd in fds + [r, chk]:
+        except BaseException:  # any refusal (also confine's): nothing is left open
+            for fd in opened:
                 os.close(fd)
+            proxy.close()
             raise
-        return cmd, child_env, fds + [r, chk], project, lambda: _write_checks(chk, checks)
+        return cmd, child_env, fds + [r, chk, end], project, \
+            lambda: _write_checks(chk, checks), proxy
     raise LaunchError("no confinement backend on this system")
 
 
@@ -2095,8 +2263,8 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
     store = carryover.Store(adapter.name, _real_home(env))
     folder = tool_folder(adapter, env)
     try:
-        cmd, child_env, fds, project, ready = build(rest, os.getcwd(), env, adapter, memory,
-                                                    store, server)
+        cmd, child_env, fds, project, ready, proxy = build(rest, os.getcwd(), env, adapter,
+                                                           memory, store, server)
     except (LaunchError, confine.ConfineError, OSError, RecursionError) as exc:
         run.say(f"phiward launch: {exc}; nothing runs")
         if store.run:  # only a session this launcher built: closed, it never ran
@@ -2106,9 +2274,28 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
                 pass
         return 127 if isinstance(exc, ToolNotFound) else 126
     try:
+        _raise_open_files()
         return _run_tool(cmd, child_env, fds, project, ready, store, folder, run)
     finally:
         confine.release_profile(cmd)  # macOS: the profile's file, once the tool has ended
+        proxy.close()  # after the tool, the carry-over and the report
+
+
+OPEN_FILES_CAP = 10240  # OPEN_MAX on macOS
+
+
+def _raise_open_files() -> None:
+    """The launcher's soft limit of open files, up to its hard limit (at most OPEN_FILES_CAP):
+    the proxy holds two descriptors for each of its 64 tunnels, and carry-over and the report
+    still need their own while a session (or a process it left behind) holds them."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = OPEN_FILES_CAP if hard == resource.RLIM_INFINITY else min(hard, OPEN_FILES_CAP)
+    if soft != resource.RLIM_INFINITY and soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+        except (OSError, ValueError):
+            pass  # the limit stays: the proxy refuses what it cannot hold
 
 
 def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project: str,

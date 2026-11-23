@@ -23,6 +23,7 @@ PLUGIN = ROOT / "plugin"
 LINUX = "Linux only"
 EXCEPTION = "a listed exception"
 KEPT = "kept: libproc's proc_pidinfo"
+KEPT_IFADDRS = "kept: libc's getifaddrs (the proxy refuses this machine's own addresses)"
 MESSAGE = "a refusal's text (it shows the agent `phiward run -- sh -c ...`); nothing runs it"
 
 # (file, scope, kind): why it is allowed. Scope is the function (Class.method) or the
@@ -45,6 +46,9 @@ ALLOWED = {
     ("src/phiward/install.py", "PROJECT_NOTE", "sh -c"): EXCEPTION,
     ("src/phiward/install.py", "CLEAN_ENV", "awk program"): EXCEPTION,
     ("src/phiward/procinfo.py", "_darwin", "ctypes"): KEPT,
+    # getifaddrs(3): a public libc function, called in the launcher's own process; no code in a
+    # command line and no private interface; the proxy needs it to refuse this machine's addresses
+    ("src/phiward/netproxy.py", "own_addresses", "ctypes"): KEPT_IFADDRS,
     ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
 }
 

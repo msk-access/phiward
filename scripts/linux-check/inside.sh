@@ -10,6 +10,13 @@ useradd -m tester
 # the /var/run -> /run link: the gateway must still start (it once failed on this)
 [ -L /var/run ] || { echo "linux-check: expected /var/run to be a link" >&2; exit 1; }
 python -c 'import socket; socket.socket(socket.AF_UNIX).bind("/run/docker.sock")'
+# a host service listening in /run, as on GitHub's runners (snapd, acpid): root's, outside every
+# session
+python -c 'import os, socket
+s = socket.socket(socket.AF_UNIX); s.bind("/run/fake-FAKE.socket"); os.chmod("/run/fake-FAKE.socket", 0o666); s.listen(8)
+if os.fork() == 0:
+    while True:
+        c, _ = s.accept(); c.sendall(b"PEER"); c.close()'
 pip install -q -c /repo/tests/constraints.txt pytest pytest-timeout
 v=$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')
 status=0

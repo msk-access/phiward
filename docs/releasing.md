@@ -100,7 +100,8 @@ Then push `main`, `develop` and the tag.
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
 
    Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
-   `phiward launch`), Haiku with a spending cap of $1 and a time limit. The session must be
+   `phiward launch`), Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a
+   spending cap of $1 and a time limit. The session must be
    refused when it reads the protected file with the Read tool, and when a Bash command reads
    it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the
    session must mask its output, a commit of a made-up identifier must be refused by the git
@@ -115,7 +116,9 @@ Then push `main`, `develop` and the tag.
    each session, of whether the probe file is on the host (for the settings, their hash before
    and after). When `phiward run` fails in the session for another reason, the report notes one
    word for why (for example `no-broker` or `refused`), its exit code and an error class (for
-   example `permission-denied` or `traceback`); no text of its output is kept. In Mode A, Claude
+   example `permission-denied` or `traceback`). When no word fits (`other`), it also notes the
+   first line of the output, with each word that holds anything but letters (a digit, a path,
+   an ID, a sign) shown as `<x>`; no other text of the output is kept. In Mode A, Claude
    Code's own refusal of the Read ("denied by your permission settings": the deny rules
    `install` writes) counts as a refusal. The session also reads the environment of every
    process it can see in `/proc`, and records only counts and PIDs: a credential variable's

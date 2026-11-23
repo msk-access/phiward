@@ -19,6 +19,13 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   check runs (`sys.platform`), not at import. (Why: Claude Code's docs say it reaches every
   local service on macOS and has no effect on Linux. Cost: if a Linux release gives it an
   effect, this is wrong; the release check reads the docs again.)
+- **macOS `launch` allows binds, and states the limit.** A session can listen on any address,
+  so a server it starts on every interface is reachable from the LAN; it can serve what the
+  session can read, never a protected root. (Why not a deny: Seatbelt's `localhost` filter
+  for binds also matches `0.0.0.0` and `::`, and a literal address cannot be named, so loopback
+  cannot be kept alone; a total deny breaks localhost dev servers, test fixtures and Claude
+  Code's sign-in callback.) The threat model and launch.md say it, and advise
+  `--bind 127.0.0.1`. Linux has its own network namespace and is not affected.
 - **The project scan walks the project itself, with no git.** One `os.scandir` walk, following
   no link, covers tracked, untracked and git-ignored files alike (a copied CSV sits in an
   ignored `data/`). (Why no git: `git ls-files` reads the project's `.git/config`
