@@ -450,6 +450,11 @@ phiward command written as the whole command runs there:
 The refusal says how to fix it. This applies once protected paths are set; before the first
 setup, only the hidden list is checked, by the text check (best effort).
 
+One cause is handled apart: when the shell is not confined only because Claude Code's
+`sandbox.excludedCommands` is not empty, every command gets the text check below, as with
+`best_effort`, with no setting needed. Claude Code decides which calls run outside the sandbox;
+phiward does not guess (threat model: `known-excluded-commands`).
+
 **`best_effort = true`** keeps the old behaviour: a shell command that no kernel confines gets
 the hook's text check instead of a refusal. That check cannot read shell text completely
 ([threat model](threat-model.md)), so use it only where Claude Code's sandbox cannot run

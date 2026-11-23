@@ -440,7 +440,9 @@ anything: the broker's log has the reason.
   also needs `$CLAUDE_PROJECT_DIR`; Claude Code sets it.) The hook then refuses shell commands
   other than gateway calls, `doctor` and `check`. With `[shell] best_effort` on,
   the hook checks shell command text instead, which is best effort
-  ([configuration.md](configuration.md#shell)).
+  ([configuration.md](configuration.md#shell)). When `excludedCommands` is the only cause, the
+  hook checks the text of every command in the same way, and refuses one that names protected
+  data or a path it cannot see; the refusal names the file that holds the entry.
 - **`doctor` says the broker uses another config.** The broker and the agent tool were started
   with a different `HOME`, `PHIWARD_CONFIG` or `XDG_*` variable. Start both from the same
   environment.
