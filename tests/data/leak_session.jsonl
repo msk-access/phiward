@@ -1,0 +1,19 @@
+{"type": "system", "subtype": "init", "cwd": "{REPO}"}
+{"type": "user", "message": {"role": "user", "content": "summarize the plan for the cohort analysis"}}
+{"type": "user", "message": {"role": "user", "content": "check «P-9990001-T01-IM6», it failed QC"}, "phiward_tag": "paste"}
+{"type": "user", "message": {"role": "user", "content": "is «FAKE-PT-0003» in the cohort?"}, "phiward_tag": "paste"}
+{"type": "user", "message": {"role": "user", "content": "which arm is study «ZQ-777002»?"}, "phiward_tag": "paste"}
+{"type": "user", "message": {"role": "user", "content": "the reads in «lane_9.fastq.gz» pile up at «chr7:55249071», why?"}, "phiward_tag": "paste"}
+{"type": "user", "message": {"role": "user", "content": "look at @~/data/cohort.csv"}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t05", "name": "Read", "input": {"file_path": "{DATA}/cohort.csv"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t06", "name": "Bash", "input": {"command": "phiward run -- ls ~/data"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t07", "name": "Bash", "input": {"command": "phiward run -- head -5 ~/data/cohort.csv"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t07b", "name": "Bash", "input": {"command": "phiward run --table -- head -5 ~/data/cohort.csv"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t08", "name": "Bash", "input": {"command": "phiward run -- head -20 ~/data/logs/run.log"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t09", "name": "Bash", "input": {"command": "phiward run -- {PY} analysis.py ~/data/cohort.csv"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t10", "name": "Bash", "input": {"command": "phiward run -- grep -rl ERROR ~/data"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t11", "name": "Grep", "input": {"pattern": "KRAS", "path": "{REPO}", "output_mode": "content"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t12", "name": "Bash", "input": {"command": "git log --oneline"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t13", "name": "Read", "input": {"file_path": "{REPO}/notes.md"}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t14", "name": "mcp__phiward__phiward_run", "input": {"command": ["head", "-5", "{DATA}/cohort.csv"]}}]}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "t14b", "name": "mcp__phiward__phiward_doctor", "input": {}}]}}

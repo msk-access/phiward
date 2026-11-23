@@ -1,0 +1,332 @@
+"""The leak test for typical sessions: a scripted session (tests/data/leak_session.jsonl) is
+replayed through phiward's real entry points over a made-up project with planted values, and
+everything that would reach the model provider is captured and checked (PLAN-PHI-TESTS step 2).
+
+The entry points: the session note (`session-note claude`), the prompt scan (`prompt-scan
+claude`), the PreToolUse hook (`hook claude`) before every tool call, the gateway (`phiward run`
+through a broker), and phiward's MCP server (`phiward mcp`). No Claude Code and no token are
+needed. The default `[shell] best_effort` (off) is kept: the made-up home holds the user settings
+`install claude` writes, so the hook sees a shell that Claude Code confines. The replay cannot
+run Claude Code's sandbox, so in Mode A plain shell steps stay in the project and the root is
+read through the gateway only; the launch leg (Linux) has the kernel refuse plain reads of it.
+
+Each planted value (tests/leak_values.py) has a kind from its rule's label, and an expected
+outcome by where it sits and the channel (`leak_session.outcome`):
+- under the root: refused (file tools, `@`, plain shell under launch), masked (gateway text, MCP:
+  only placeholders are left, in text and table mode), and a number in a column that is not an
+  identifier column is allowed by `--table`;
+- in a prompt: an identifier of the user's packs and rules is blocked; entry names, details and
+  positions are sent;
+- in the project (`notes.md`): sent, since the hook decides by path.
+"Absent" means absent in every form (raw, casefolded, NFKC, unescaped, letters and digits only,
+and each run of 3 or more letters and digits that holds a digit). A control session over the same
+project with the plants left out must find nothing, and each fault made through the config alone
+must be found.
+
+What the replay does not cover (docs/threat-model.md says each one):
+- `CLAUDE.md` and other instruction files: Claude Code sends them at the start, with no hook
+  (step 3, the project scan, covers IDs in them);
+- the git status and file names in the system prompt (step 3 scans file names too);
+- the user's own `!` commands: their output is sent, and no PreToolUse hook runs;
+- MCP servers that are not wrapped (doctor warns);
+- compaction and summaries (they rephrase only what was already sent);
+- Claude Code's own sandbox in Mode A (the launch leg and the operator's sandbox check cover
+  the kernel);
+- IDs in project files outside the roots: sent until step 3 (the `notes.md` row).
+"""
+
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import pytest
+
+import leak_session
+import leak_values as lv
+from helpers import fake_native_claude, git_repo, needs_confine, tool_py
+
+linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux")
+SUBJECTS = "WARNING: your user config enables no pack that masks subject or sample identifiers"
+
+
+def _plant(text: str, value) -> str:
+    return leak_session.PLANT.sub(lambda m: value(m.group(1)), text)
+
+
+def _build(base: Path, value) -> Path:
+    """The made-up home H: H/data (the root: cohort.csv, logs/run.log, a folder per patient),
+    H/repo (the project, a git repository with clean history), a pack file, and `phiward` on a
+    PATH folder (the source checkout's)."""
+    h = base / "h"
+    data = h / "data"
+    (data / "logs").mkdir(parents=True)
+    (data / "cohort.csv").write_text(_plant(lv.COHORT, value))
+    (data / "logs" / "run.log").write_text(_plant(lv.RUN_LOG, value))
+    for i in range(1, 6):
+        d = data / value(f"FAKE-PT-000{i}")
+        d.mkdir()
+        (d / "calls.vcf").write_text(lv.CALLS + ("##ERROR flagged\n" if i == 1 else ""))
+    (data / value("FAKE-PT-0002") / value("FAKECANARY7.sorted.bam")).write_text("ERROR\n")
+    repo = h / "repo"
+    git_repo(repo)
+    (repo / "analysis.py").write_text(lv.ANALYSIS)
+    (repo / "README.md").write_text(lv.README)
+    (repo / "notes.md").write_text(_plant(lv.NOTES, value))
+    for args in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                                 "commit", "-qm", "add the cohort analysis"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+    for name, rule in (("study-pack.toml", lv.PACK_RULE), ("weak-pack.toml", r"ZQ-\d{7} => <STUDYID>")):
+        (h / name).write_text(f"[pack]\nidentifiers = ['{rule}']\n")
+    shim = h / "bin" / "phiward"
+    shim.parent.mkdir()
+    shim.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -c "
+                    f"{shlex.quote(leak_session.LAUNCH)} \"$@\"\n")
+    shim.chmod(0o755)
+    fake_native_claude(base / "claude-py" / "claude", python=True)
+    os.chmod(h, 0o755)
+    return h
+
+
+@pytest.fixture(scope="module")
+def leak_tree(tmp_path_factory):
+    return _build(tmp_path_factory.mktemp("leak").resolve(), lambda v: v)
+
+
+@pytest.fixture(scope="module")
+def control_tree(tmp_path_factory):
+    return _build(tmp_path_factory.mktemp("control").resolve(), lv.neutral)
+
+
+def config_text(h: Path, name: str) -> str:
+    """The user config: `full` (packs, a pack file, a user pattern, their examples, table mode),
+    `default` (no packs, no patterns), or a fault made through the config alone."""
+    roots = f'[protected_paths]\nroots = ["{h / "data"}"]\n'
+    if name == "default":
+        return roots
+    pack, pattern, examples = h / "study-pack.toml", lv.PATTERN, list(lv.EXAMPLES)
+    if name == "a-pack-file-weakened":  # it masks no ZQ- value, and has no example
+        pack, examples = h / "weak-pack.toml", ["FAKE-PT-0009"]
+    elif name == "b-pattern-edited":  # \d{4} to \d{5}, its example removed
+        pattern, examples = pattern.replace(r"\d{4}", r"\d{5}"), ["ZQ-777009"]
+    elif name == "c-root-removed":
+        roots = "[protected_paths]\nroots = []\n"
+    return (roots + f'[sanitize]\npacks = ["genomics", "msk", "dates", "{pack}"]\n'
+            f"patterns = ['{pattern}']\nexamples = {json.dumps(examples)}\ntable = true\n")
+
+
+def _env(h: Path, name: str, spool: str) -> dict:
+    env = {k: v for k, v in os.environ.items()
+           if k not in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "CLAUDE_CONFIG_DIR")}
+    env.update(HOME=str(h), PHIWARD_CONFIG=str(h / f"config-{name}.toml"), PHIWARD_SPOOL=spool,
+               PHIWARD_BROKER_WAIT="10", PHIWARD_DIALOG="/nonexistent/phiward-test-dialog",
+               PHIWARD_DEV="1", PHIWARD_SERVICE_RUNNER="none", PYTHONPATH=leak_session.SRC,
+               CLAUDE_PROJECT_DIR=str(h / "repo"),
+               PATH=f"{h / 'bin'}:{os.environ.get('PATH', os.defpath)}")
+    return env
+
+
+@pytest.fixture(scope="module")
+def leak_broker():
+    """`serve(H, NAME)`: the environment of a run under config NAME, with a broker of its own
+    started for it (once per home and config; all are stopped at the end of the module)."""
+    running = {}
+
+    def serve(h: Path, name: str) -> dict:
+        if (h, name) in running:
+            return running[(h, name)][0]
+        (h / f"config-{name}.toml").write_text(config_text(h, name))
+        spool = tempfile.mkdtemp(prefix="plk-", dir="/tmp")
+        os.rmdir(spool)  # the broker makes it, mode 0700
+        env = _env(h, name, spool)
+        log = open(h / f"broker-{name}.log", "w")
+        p = subprocess.Popen([sys.executable, "-m", "phiward", "broker"], cwd=str(h),
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                             env=env)
+        running[(h, name)] = (env, p, log, spool)
+        for _ in range(200):
+            if os.path.exists(os.path.join(spool, "broker.alive")) or p.poll() is not None:
+                break
+            time.sleep(0.05)
+        assert p.poll() is None, (h / f"broker-{name}.log").read_text()
+        return env
+
+    yield serve
+    for _e, p, log, spool in running.values():
+        p.terminate()
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+        log.close()
+        shutil.rmtree(spool, ignore_errors=True)
+
+
+def _subs(h: Path) -> dict:
+    return {"REPO": str(h / "repo"), "DATA": str(h / "data"), "PY": sys.executable}
+
+
+def play(h: Path, serve, name: str, value=lambda v: v):
+    """Replay the session in Mode A under config NAME; (items, seconds)."""
+    from phiward import config, install
+    env = serve(h, name)
+    steps = leak_session.load(_subs(h), value)
+    start = time.monotonic()
+    with pytest.MonkeyPatch.context() as mp:
+        for k in [k for k in os.environ if k not in env]:
+            mp.delenv(k)
+        for k, v in env.items():
+            mp.setenv(k, v)
+        settings = h / ".claude" / "settings.json"
+        settings.parent.mkdir(exist_ok=True)
+        settings.write_text(json.dumps(install.wiring(config.load(str(h / "repo")))))
+        items = leak_session.replay(steps, str(h / "repo"), str(h / "data"), env)
+    took = time.monotonic() - start
+    print(f"\n{name}: {len(steps)} steps in {took:.1f} s")
+    return items, took
+
+
+def leaks(h: Path, serve, name: str, features=lv.FULL, value=lambda v: v):
+    """The leaks and the missing values of a Mode A replay under config NAME."""
+    items, _took = play(h, serve, name, value)
+    return leak_session.findings(items, lv.PLANTS, features)
+
+
+def _show(items):
+    return "\n".join(f"--- step {it.step} {it.channel} {it.verdict}\n{it.text}" for it in items)
+
+
+# --- the legs --------------------------------------------------------------------------------
+
+@needs_confine
+@pytest.mark.parametrize("name,features", [("full", lv.FULL), ("default", lv.DEFAULT)])
+def test_mode_a_a_typical_session_leaks_nothing(leak_tree, leak_broker, name, features):
+    items, took = play(leak_tree, leak_broker, name)
+    found, missing = leak_session.findings(items, lv.PLANTS, features)
+    assert not found and not missing, "\n".join(found + missing) + "\n" + _show(items)
+    steps = leak_session.load(_subs(leak_tree))
+    by = {it.step: it for it in items}
+    tool = {s.id: by[s.n] for s in steps if s.kind == "tool"}
+    # the hook refused the Read below the root and allowed the rest
+    assert [it.verdict for it in tool.values()].count("deny") == 1, _show(items)
+    assert tool["t05"].verdict == "deny" and tool["t05"].channel == "file"
+    # the gateway ran (a gateway that fails would hide every value)
+    for t in ("t06", "t07", "t08", "t09", "t10"):
+        assert "exit=0" in tool[t].text, _show([tool[t]])
+    assert ("exit=0" in tool["t07b"].text) is (name == "full"), _show([tool["t07b"]])
+    mention = [by[s.n] for s in steps if s.kind == "prompt" and "@~/data/" in s.input]
+    assert len(mention) == 1 and mention[0].verdict == "block"
+    assert "below a protected root" in mention[0].text
+    assert (SUBJECTS in tool["t14b"].text) is (name == "default"), _show([tool["t14b"]])
+    from phiward import install
+    settings = json.loads((leak_tree / ".claude" / "settings.json").read_text())
+    assert settings["env"][install.MENTIONS_OFF] == "1"  # `@` mentions are off
+    assert took < 120, took
+
+
+@needs_confine
+@pytest.mark.parametrize("name,features", [("full", lv.FULL), ("default", lv.DEFAULT)])
+def test_a_control_session_with_no_plants_finds_nothing(control_tree, leak_broker, name,
+                                                        features):
+    found, _missing = leaks(control_tree, leak_broker, name, features, lv.neutral)
+    assert not found, "\n".join(found)
+
+
+@needs_confine
+@pytest.mark.parametrize("fault", ["a-pack-file-weakened", "b-pattern-edited", "c-root-removed"])
+def test_a_fault_made_through_the_config_is_found(leak_tree, leak_broker, fault):
+    found, _missing = leaks(leak_tree, leak_broker, fault)
+    assert found, fault
+    print("\n".join(found[:5]))
+
+
+@needs_confine
+@linux
+def test_launch_a_typical_session_leaks_nothing(leak_tree, leak_broker):
+    """Mode B: the same steps inside `phiward launch --tool claude`, where the kernel refuses
+    plain reads of the root (open, listdir, `ls`, `cat`, a wrapped MCP server)."""
+    if str(leak_tree).startswith("/tmp/"):
+        pytest.skip("Linux: the tree is under the session's own /tmp; run with --basetemp")
+    from phiward import config, install
+    h = leak_tree
+    env = leak_broker(h, "full")
+    env = {k: v for k, v in env.items() if k != "CLAUDE_PROJECT_DIR"}
+    with pytest.MonkeyPatch.context() as mp:
+        for k, v in env.items():
+            mp.setenv(k, v)
+        (h / ".claude").mkdir(exist_ok=True)
+        (h / ".claude" / "settings.json").write_text(
+            json.dumps(install.wiring(config.load(str(h / "repo")))))
+    steps = leak_session.load(_subs(h))
+    played = [[s.n, s.kind, s.name, s.input] for s in steps
+              if s.kind == "prompt" or s.name in ("Bash", "Read")]
+    data = str(h / "data")
+    extra = [["shell", f"ls {data}"], ["shell", f"cat {data}/cohort.csv"], ["listdir", data],
+             ["open", f"{data}/cohort.csv"], ["wrapped", f"{data}/cohort.csv"]]
+    code = (f"import json, sys; sys.path.insert(0, {str(leak_session.TESTS)!r}); "
+            "import leak_session; "
+            f"leak_session.launched(json.loads({json.dumps(played)!r}), "
+            f"json.loads({json.dumps(extra)!r}))")
+    start = time.monotonic()
+    r = subprocess.run([sys.executable, "-m", "phiward", "launch", "--tool", "claude", "--",
+                        tool_py(h.parent), "-c", code], cwd=str(h / "repo"), env=env,
+                       capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
+    print(f"\nlaunch: {time.monotonic() - start:.1f} s")
+    got = [json.loads(ln[len("CAPTURE "):]) for ln in r.stdout.splitlines()
+           if ln.startswith("CAPTURE ")]
+    assert len(got) == 1, r.stdout[-3000:] + r.stderr[-3000:]
+    by_n = {s.n: s for s in steps}
+    items = []
+    for n, channel, text, verdict in got[0]:
+        s = by_n.get(n)
+        if s is None:  # the launch leg's own reads of the root
+            items.append(leak_session.Item(n, "kernel", text, verdict, ("root",)))
+            continue
+        ch = channel or leak_session.shell_channel(s.input["command"])
+        items.append(leak_session.Item(n, ch, text, verdict, leak_session.sees(s, data),
+                                       s.input if s.kind == "prompt" else ""))
+    found, missing = leak_session.findings(items, lv.PLANTS, lv.FULL)
+    assert not found and not missing, "\n".join(found + missing) + "\n" + _show(items)
+    gate = [it for it in items if it.channel == "gateway"]
+    assert gate and all("exit=0" in it.text for it in gate), _show(gate)
+    kernel = [it for it in items if it.channel == "kernel"]
+    assert len(kernel) == 5 and not any("patient_id" in it.text for it in kernel), _show(kernel)
+
+
+# --- the values and the session ------------------------------------------------------------
+
+def test_each_built_in_rule_masks_a_planted_value():
+    """Each rule of each built-in pack, with its pack alone, fully masks at least one planted
+    value, with its own placeholder: a new rule fails here until it has a value."""
+    from phiward import config, sanitize
+    packs = sorted(p.stem for p in (Path(sanitize.__file__).parent / "packs").glob("*.toml"))
+    assert packs == ["dates", "genomics", "msk"], packs  # a new pack needs values too
+    untested = []
+    for name in packs:
+        pack = sanitize.load_pack(name)
+        san = sanitize.Sanitizer.from_config(config.Config(packs=[name]))
+        for i, (rx, repl) in enumerate(pack.paths + pack.identifiers + pack.positions, 1):
+            if not any(rx.search(p.value) and repl in san.clean(p.value) and
+                       not any(c.isalnum() for c in sanitize._PLACEHOLDER.sub("",
+                                                                         san.clean(p.value)))
+                       for p in lv.PLANTS if p.needs == name):
+                untested.append(f"{name} rule {i} ({repl})")
+    assert not untested, untested
+
+
+def test_no_tool_input_holds_a_planted_value(tmp_path):
+    steps = leak_session.load({"REPO": "/r", "DATA": "/d", "PY": "py"})
+    pastes = [s for s in steps if s.kind == "prompt" and s.tag == "paste"]
+    assert len(pastes) == 4 and all(any(p.value in s.input for p in lv.PLANTS) for s in pastes)
+    others = json.dumps([s.input for s in steps if s.tag != "paste"], ensure_ascii=False)
+    assert not [p.value for p in lv.PLANTS if p.value in others]
+    bad = tmp_path / "s.jsonl"
+    bad.write_text(json.dumps({"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "name": "Read", "input": {"file_path": "/d/«FAKE-PT-0001»"}}]}}))
+    with pytest.raises(ValueError, match="planted value"):
+        leak_session.load({}, path=bad)
