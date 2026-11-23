@@ -17,7 +17,10 @@ outcome by where it sits and the channel (`leak_session.outcome`):
   identifier column is allowed by `--table`;
 - in a prompt: an identifier of the user's packs and rules is blocked; entry names, details and
   positions are sent;
-- in the project (`notes.md`): sent, since the hook decides by path.
+- in the project (`notes.md`): sent in Mode A, since the hook decides by path, and the session
+  note warns of it (the project scan, step 3); under launch the scan refuses the start, so the
+  launch leg allows `notes.md` by `[sanitize] scan_allow` and a step of its own expects the
+  refusal.
 "Absent" means absent in every form (raw, casefolded, NFKC, unescaped, letters and digits only,
 and each run of 3 or more letters and digits that holds a digit). A control session over the same
 project with the plants left out must find nothing, and each fault made through the config alone
@@ -25,14 +28,14 @@ must be found.
 
 What the replay does not cover (docs/threat-model.md says each one):
 - `CLAUDE.md` and other instruction files: Claude Code sends them at the start, with no hook
-  (step 3, the project scan, covers IDs in them);
-- the git status and file names in the system prompt (step 3 scans file names too);
+  (the project scan, tests/test_projectscan.py, reads them);
+- the git status and file names in the system prompt (the project scan reads file names too);
 - the user's own `!` commands: their output is sent, and no PreToolUse hook runs;
 - MCP servers that are not wrapped (doctor warns);
 - compaction and summaries (they rephrase only what was already sent);
 - Claude Code's own sandbox in Mode A (the launch leg and the operator's sandbox check cover
   the kernel);
-- IDs in project files outside the roots: sent until step 3 (the `notes.md` row);
+- IDs in project files outside the roots in Mode A: sent (the `notes.md` row; the note warns);
 - Claude Code's own file tools: the replay's Read, Grep and Glob are models of them.
 A hook "ask" is played as allowed (a yes), so the capture holds all that a yes would send.
 """

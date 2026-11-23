@@ -692,7 +692,8 @@ HELP = USAGE + """
 Options:
   --verbose, -v  every check on its own line (by default, before Claude Code is wired, its
                  parts are one next step), and the detail counts
-  --show-paths   also print the protected paths (by default only their counts)
+  --show-paths   also print the protected paths (by default only their counts), and the
+                 project files the project scan found (masked, with line numbers)
   --headless     a short check before an unattended run (`claude -p`, an Agent SDK app, a
                  scheduled agent): exit 0 when the session would be guarded, 1 with the
                  reasons when not (docs/unattended.md); a NOTE (for example: no rule masks
@@ -703,6 +704,10 @@ Show the config in force and whether it loads, and what may turn the guards off:
 confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
 MCP servers. It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
+
+The project scan reads the project's files and file names for subject and sample IDs outside
+the protected roots, with no time limit (`phiward launch` refuses such a project). It names
+only the kinds and counts.
 
 Its output may reach the model, so it shows paths only with --show-paths.
 """
@@ -817,6 +822,8 @@ def main(argv: List[str]) -> int:
     if _subjects_unmasked(cfg):
         print(SUBJECTS_WARNING)
     for line in masking_lines(cfg, cwd):
+        print(line)
+    for line in project_scan_lines(cfg, cwd, show):
         print(line)
     rel = None
     if cfg.has_protected_paths:
@@ -1141,6 +1148,7 @@ def headless_problems(project: str, home: str) -> List[str]:
         out.append("the broker is not running (gateway calls would fail)")
     from phiward import phicheck
     out += [f"masking check: {f}" for f in phicheck.check(cfg, project).failed]
+    out += project_scan_problems(cfg, project)
     return out
 
 
@@ -1162,6 +1170,47 @@ def masking_lines(cfg: config.Config, cwd: str) -> List[str]:
     return ([r.summary] if not r.failed else []) + \
         [f"WARNING: masking check: {f}." for f in r.failed] + \
         [f"NOTE: masking check: {n}." for n in r.notes]
+
+
+def project_scan_lines(cfg: config.Config, project: str, show: bool) -> List[str]:
+    """The project scan (projectscan) with no time limit: counts and kinds; with `show`, the
+    masked path, line number and kinds of each file found. A finding or an error is a WARNING,
+    and does not change doctor's exit status."""
+    from phiward import projectscan
+    why = projectscan.place_problem(cfg, project)
+    if why:
+        return ["project scan: skipped (not a project folder)"]
+    r = projectscan.scan(cfg, project)
+    if r.error:
+        return [f"WARNING: {r.error}."]
+    if r.off:
+        return ["project scan: off (no rule for subject or sample identifiers)"]
+    out = [f"project scan: ok ({r.files} files)"] if not r.hits else [
+        f"WARNING: project scan: found {projectscan.found_text(r)}; `phiward doctor "
+        "--show-paths` in your own terminal lists them."]
+    if r.hits and show:
+        out += [f"  {path}: " + (f"line {n}" if n else "name") + f": {', '.join(kinds)}"
+                for path, n, kinds in r.hits[:projectscan.SHOWN]]
+        if len(r.hits) > projectscan.SHOWN:
+            out.append(f"  ... and {len(r.hits) - projectscan.SHOWN} more")
+    if r.skipped:
+        out.append(f"NOTE: project scan: not read: {projectscan.skipped_text(r)}.")
+    return out
+
+
+def project_scan_problems(cfg: config.Config, project: str) -> List[str]:
+    """`--headless`: the project scan within launch's time budget; a finding or an error is a
+    problem (counts and kinds only), a scan that stops at the budget is not."""
+    from phiward import projectscan
+    if projectscan.place_problem(cfg, project):
+        return []
+    r = projectscan.scan(cfg, project, projectscan.deadline())
+    if r.error:
+        return [r.error + " (run phiward doctor)"]
+    if r.hits:
+        return [f"the project scan found {projectscan.found_text(r)} (`phiward doctor "
+                "--show-paths` in your own terminal lists them)"]
+    return []
 
 
 def _subjects_unmasked(cfg: config.Config) -> bool:

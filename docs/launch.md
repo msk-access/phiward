@@ -65,6 +65,8 @@ phiward launch --tool claude
   made-up path below a root came out unmasked
   ([configuration.md](configuration.md#sanitize)). Fix the rule, the example or the root, then
   start again. A wrapped MCP server (`launch --server`) is not checked.
+- `launch` refuses to start when the project scan finds a subject or sample ID in a project
+  file or a file name ([The project scan](#the-project-scan)).
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
   threat model).
 - On macOS the tool starts as `/usr/bin/sandbox-exec -f FILE TOOL ARGS...`, with nothing in
@@ -84,6 +86,45 @@ phiward launch --tool claude
   `package.json` of the script's npm package (`@anthropic-ai/claude-code`). A tool that gives
   no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
   start Claude Code's own program directly, or use `--tool generic` for another tool.
+
+## The project scan
+
+A file in the project is outside the protected roots, so the agent reads it with no gateway.
+Claude Code also sends `CLAUDE.md` and the list of file names at the start, with no tool call.
+So, before the tool starts, `launch` reads the project for subject and sample IDs.
+
+- **The rules:** the subject rules only: your `[sanitize] patterns`, your pack files, and the
+  built-in packs in force (a repo's `.phiward.toml` may add one, such as `msk`). Not file
+  names, read names, positions, numbers, dates, protected paths or the entry names under the
+  roots: a project holds those everywhere. With no subject rule, there is no scan.
+- **What it reads:** one walk of the project folder, the instruction files first (`CLAUDE.md`,
+  `CLAUDE.local.md`, `AGENTS.md`, `.claude/`), then the rest, git-ignored files too. Each
+  entry's name, relative to the project, and the first 1 MiB of each regular file: of its
+  decompressed form for gzip and BGZF (`.csv.gz`, `.vcf.gz`), and as UTF-16 with a BOM (Excel's
+  "Unicode text").
+- **What it does not read:** binary files (a NUL byte in the first 8 KiB: xlsx, parquet, BAM),
+  lines over 64 KiB, anything past the first 1 MiB, the targets of links, files it cannot open,
+  more than 10000 entries of one folder, the protected and hidden paths, the folders of
+  installed code and caches (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`,
+  `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`,
+  `.claude/worktrees`), and the paths in `[sanitize] scan_allow`. It runs no git command:
+  git would run programs that the project's `.git/config` names.
+- **On a finding:** `launch` refuses, and says the kinds and counts only:
+  `the project scan found <SUBJECT> in 3 files: move the data under a protected root,
+  pseudonymize it (phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward
+  doctor --show-paths lists them`. Run `phiward doctor --show-paths` in your own terminal to see
+  the files (masked paths and line numbers). Then move the data under a protected root, make a
+  pseudonymized copy (`phiward pseudonymize`), or, for made-up IDs only, add the files to
+  `[sanitize] scan_allow` in your user config
+  ([configuration.md](configuration.md#sanitize)).
+- **The budget:** 2 s. A larger project starts anyway, after one line: `phiward launch: NOTE:
+  the project scan stopped at its 2 s limit after N files; run phiward doctor for the full
+  scan`. An ID found before the limit still refuses. `phiward doctor` scans with no limit.
+- **A scan that cannot run** refuses: `the project scan could not run; run phiward doctor`.
+- A wrapped MCP server (`--entry`) is not scanned: its folder is not the agent's project.
+- **Mode A** has no launch: the SessionStart note runs the same scan within 2 s and, on a
+  finding, tells the session the kinds and counts (it never stops the session), and
+  `phiward doctor` warns. `phiward doctor --headless` lists a finding as a reason.
 
 ## What a session can and cannot do
 

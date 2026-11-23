@@ -48,6 +48,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[sanitize] table`](#sanitize) | true or false | false | ignored | Whether `phiward run --table` may be used (it lets numbers through). |
 | [`[sanitize] id_columns`](#sanitize) | list | none | ignored | More column headers whose cells `phiward run --table` masks whole. |
 | [`[sanitize] examples`](#sanitize) | list | none | ignored | Made-up values in the form of your own rules, for the masking check. Never a real value. |
+| [`[sanitize] scan_allow`](#sanitize) | list of absolute paths | none | ignored | Files and folders the project scan does not read. Only for made-up data. |
 | [`[copy] remotes`](#copy) | list of `host:/absolute/prefix` | none | ignored | Places on other machines that `phiward copy` may use. |
 | [`[copy] ssh_config`](#copy) | text: a file | none | ignored | The ssh config that every HPC request uses. |
 | [`[copy] push_limit_gib`](#copy) | whole number | 5 | ignored | A larger push is refused. |
@@ -223,6 +224,12 @@ listed in the
   failure, doctor warns, launch refuses to start, and the broker refuses every request until
   the config is fixed and the broker restarted. phiward never makes examples from a regex:
   such a value only proves that the regex matches itself.
+- **`scan_allow`** (list of absolute paths, or starting with `~/`; user config only). Files and
+  folders the project scan does not read, name or content ([launch.md](launch.md#the-project-scan)).
+  A path is allowed when it, as resolved, is an entry or lies below one. No globs. Allow only
+  files of made-up IDs, such as a `tests/` or `fixtures/` folder: an allowed file that later
+  gets a real ID is not seen. A relative entry is a bad config; a repo config's value is
+  ignored. `phiward doctor` counts the allowed entries.
 - **`subjects`** (user config only). Only `"none"`: your record that the protected data holds no
   subject or sample identifiers beyond the names under the roots. Without it, and without a
   rule that masks them (the `msk` pack, a pack file of your own with an identifier rule whose

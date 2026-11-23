@@ -314,7 +314,9 @@ def outcome(plant: Any, place: str, channel: str, features: FrozenSet[str]):
         return ABSENT  # refused (hook, kernel) or masked (gateway, MCP), or blocked (prompt)
     if place == "prompt":
         return ABSENT if kind == "identifier" else PRESENT  # entries, details, positions: sent
-    return PRESENT  # the project: sent (the hook decides by path; a stated gap until step 3)
+    # the project: sent in Mode A (the hook decides by path; the note and doctor warn), and
+    # under launch when scan_allow allows the file (else the project scan refuses the start)
+    return PRESENT
 
 
 def _forms(value: str, text: str) -> List[str]:

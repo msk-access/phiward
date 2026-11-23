@@ -449,6 +449,12 @@ anything: the broker's log has the reason.
   The warning names the entry, the rule or the root by number. Fix the rule (often an edit
   that narrowed it), or the example if it is not in the rule's form; then restart the broker
   ([configuration.md](configuration.md#sanitize)).
+- **`launch` refuses: `the project scan found <SUBJECT> in 3 files`.** A project file, or a
+  file name, holds a subject or sample ID outside the protected roots. Run `phiward doctor
+  --show-paths` in your own terminal: it lists the files (masked) and line numbers. Move the
+  data under a protected root, or make a pseudonymized copy (`phiward pseudonymize`). For
+  made-up IDs (test fixtures), add the files or their folder to `[sanitize] scan_allow` in your
+  user config ([launch.md](launch.md#the-project-scan)).
 - **A write place is skipped.** `doctor` says why: it does not exist yet, or a link is on its
   path. Name the real folder in `write_to`.
 - **A gateway command fails to write to `/tmp`.** The gateway sees `/tmp` read-only. It writes
