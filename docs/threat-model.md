@@ -983,7 +983,8 @@ verified** or **from reading the code** means it was not shown by a probe.
 17. <a id="gap-17"></a>Each smaller, all real:
     - grant checks compare paths as raw text, so a case twin of `~/.ssh` or of a root's parent
       passes the `write_to` check (confirmed);
-    - a root written in NFD Unicode form is not masked by the sanitizer (confirmed);
+    - a root written in NFD Unicode form is masked now, in that form and in NFC (tested:
+      `test_phicheck.py`), so it is no longer a gap;
     - entry names that are not valid UTF-8 are not masked on Linux (confirmed);
     - a `.git` file (worktree, submodule) makes the gitfile, not the real object store, the derived
       root (from reading the code);

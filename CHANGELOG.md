@@ -158,9 +158,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 - `phiward launch` and the broker may now refuse a config they used to accept: when the masking
   check fails, launch refuses to start (`the masking check failed: ...; run phiward doctor`),
   and the broker refuses every request until the config is fixed and the broker restarted.
-  With no `[sanitize] examples`, only the roots are checked. One case that now fails: a
-  `[remote] roots` entry that is not absolute (`~/data`), which the sanitizer never matched as
-  written; write the remote path in full. To fix any failure, run `phiward doctor`: it names
+  With no `[sanitize] examples`, only the roots are checked. The check now catches a
+  `[remote] roots` entry that is not absolute (`~/data`): the sanitizer never masked it as
+  written. Write the remote's absolute path instead (`/home/me/data`). To fix any failure, run `phiward doctor`: it names
   the entry, the rule or the root by number.
 - The hooks phiward writes run from files in its package, with no inline code. The user
   wiring's hooks are in Claude Code's exec form: the command is `data/clean-exec.sh` (it clears

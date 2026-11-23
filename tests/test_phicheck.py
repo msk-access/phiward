@@ -159,6 +159,20 @@ def test_a_remote_root_the_sanitizer_does_not_match_as_written_fails(tree):
     assert_never_shown(" ".join(r.failed), ["fakedata"])
 
 
+def test_a_root_written_in_nfd_is_masked_in_both_forms(tree):
+    import unicodedata
+    nfd = unicodedata.normalize("NFD", f"{tree}/caf\u00e9")
+    cfg = Path(os.environ["PHIWARD_CONFIG"])
+    cfg.write_text(cfg.read_text().replace(f'roots = ["{tree}/phi"]', f'roots = ["{nfd}"]'))
+    assert config.load(str(tree / "repo")).roots == [nfd]
+    r = check(tree)
+    assert r.failed == [], r
+    san = sanitize.Sanitizer.from_config(config.load(str(tree / "repo")))
+    for form in ("NFD", "NFC"):
+        line = "x " + unicodedata.normalize(form, nfd) + "/FAKE-PT-0001.txt y"
+        assert phicheck.fully_masked(san.clean(line)), form
+
+
 # --- 4. doctor -------------------------------------------------------------------------------
 
 def test_doctor_prints_the_ok_line(tree):
