@@ -1609,6 +1609,11 @@
 <td>remote runs, push, pull, refused push of <code>~/.ssh</code>, refusal without the connection</td>
 </tr>
 <tr>
+<td>A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, <code>phiward mcp</code>), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under <code>phiward launch</code> (<a href="#known-leak-test">what it does not cover</a>)</td>
+<td>macOS, Linux (launch: Linux)</td>
+<td>under the root: refused or masked (only placeholders left; <code>--table</code> keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent. A pack file weakened, a pattern edited or a root removed in the config is found</td>
+</tr>
+<tr>
 <td>The full test suite (over 1,000 tests)</td>
 <td>macOS; Linux (bubblewrap)</td>
 <td>passes</td>
@@ -2107,6 +2112,26 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
 <li>entry names under the roots and <code>names_from</code> (the check reads neither);</li>
 <li>
 <p>the built-in packs, which the self-check covers as installed files, not the check.</p>
+</li>
+<li>
+<p><a id="known-leak-test"></a><strong>The leak test replays a typical session; it does not see
+  everything Claude Code sends.</strong> The test (<code>tests/test_leak_typical.py</code>) captures what phiward's
+  entry points let through. What it does not cover:</p>
+</li>
+<li><code>CLAUDE.md</code> and other instruction files: Claude Code sends them at the start, and no hook
+    sees them;</li>
+<li>the git status and the file names in the system prompt;</li>
+<li>your own <code>!</code> commands: their output is sent, and no PreToolUse hook runs;</li>
+<li>MCP servers that are not wrapped in <code>phiward launch --</code> (doctor warns);</li>
+<li>compaction and summaries, which rephrase only what was already sent;</li>
+<li>Claude Code's own sandbox in Mode A: the replay cannot run it (the launch leg and the
+    sandbox check cover the kernel);</li>
+<li>identifiers in project files outside the roots (a <code>notes.md</code> with a study ID): the hook
+    decides by path, so a Read, a Grep or a shell command in the project sends them. Keep such files under a
+    protected root, or pseudonymize them;</li>
+<li>
+<p>Claude Code's own Read, Grep and Glob: the replay uses models of them. A hook's ask is
+    played as a yes, so the test sees what a yes would send.</p>
 </li>
 <li>
 <p><a id="known-leftover-processes"></a><strong>A gateway command's leftover processes (macOS).</strong> A request ends when its command ends, and the
