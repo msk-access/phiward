@@ -391,6 +391,8 @@ def judge(results, stream_lines, server, marker, created, facts):
     if facts.get("locked") == "no":
         report.append(f"note Claude Code {facts.get('claude', '?')} is not the locked version "
                       "(CLAUDE_VERSION): the run is unlocked")
+    if facts.get("model"):
+        report.append(f"note the session's model: {facts['model']}")
     if facts.get("hook_ms"):
         report.append(f"note the hook took {facts['hook_ms']} ms (median of 20 calls)")
     for path in created:

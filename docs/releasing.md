@@ -100,7 +100,8 @@ Then push `main`, `develop` and the tag.
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
 
    Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
-   `phiward launch`), Haiku with a spending cap of $1 and a time limit. The session must be
+   `phiward launch`), Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a
+   spending cap of $1 and a time limit. The session must be
    refused when it reads the protected file with the Read tool, and when a Bash command reads
    it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the
    session must mask its output, a commit of a made-up identifier must be refused by the git

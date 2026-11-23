@@ -4,7 +4,7 @@
 # home folder of its own, with made-up data, as scripts/quickstart-check/mac.sh does: the wheel
 # from `git archive HEAD` (or the tree SBX_SRC names), a copied Python, phiward installed and
 # wired, the broker, a wrapped MCP server, the git hook. Then one `claude -p` session per mode
-# (Haiku, a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
+# (Haiku, or SBX_MODEL; a spending cap, a time limit): Mode A, Claude Code's own sandbox; Mode B, under
 # `phiward launch`. Each reads the protected file with the Read tool and runs probes.sh as one
 # Bash command. judge.py says PASS, FAIL or INCONCLUSIVE per mode, then overall (exit 0, 1, 2).
 # The operator runs it, in a terminal: it asks only for a token, pasted at its prompt (the one
@@ -58,6 +58,8 @@
 #              inside.sh use them (kept files, the claude to test, the container's marks).
 #   REMOTE, REMOTE_DIR (REMOTE_HOSTNAME, REMOTE_USER): the remote probes, through a shared
 #              connection you start when asked; REMOTE_DIR must be a new, empty folder there.
+#   SBX_MODEL  the session's model (default haiku; sonnet when Haiku declines the request);
+#              the report names it
 # Usage: sh scripts/sandbox-check/check.sh [--stub] [PYTHON]  (default: uv's own Python)
 # Run it with sh, not bash: `bash check.sh` reads BASH_ENV before its first line.
 # First: start again under an empty environment. The second start is clean. The first is the
@@ -72,7 +74,7 @@ case ${1-} in
        SBX_PATH="${PATH-}" SBX_BASE="${SBX_BASE-}" SBX_SRC="${SBX_SRC-}" SBX_TOOLS="${SBX_TOOLS-}" \
        SBX_OUT="${SBX_OUT-}" SBX_IMAGE="${SBX_IMAGE-}" SBX_LOCKED="${SBX_LOCKED-}" \
        SBX_WHEEL="${SBX_WHEEL-}" SBX_WHEEL_SHA256="${SBX_WHEEL_SHA256-}" \
-       SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" \
+       SBX_CLEANUP_WAIT="${SBX_CLEANUP_WAIT-}" MODES="${MODES-}" KEEP="${KEEP-}" SBX_MODEL="${SBX_MODEL-}" \
        REMOTE="${REMOTE-}" REMOTE_DIR="${REMOTE_DIR-}" REMOTE_HOSTNAME="${REMOTE_HOSTNAME-}" \
        REMOTE_USER="${REMOTE_USER-}" CLAUDE_BIN="${CLAUDE_BIN-}" \
        SBX_TOKEN_IN_ENV="${CLAUDE_CODE_OAUTH_TOKEN:+1}${ANTHROPIC_API_KEY:+1}" \
@@ -93,6 +95,9 @@ LOGNAME=$USER
 export USER LOGNAME
 stub=""
 if [ "${1:-}" = --stub ]; then stub=1; shift; fi
+# the session's model: SBX_MODEL (default haiku), e.g. sonnet when Haiku declines the request
+model=${SBX_MODEL:-haiku}
+case $model in *[!A-Za-z0-9._-]*|"") echo "sandbox-check: SBX_MODEL is a model name (letters, digits, . _ -)" >&2; exit 2 ;; esac
 case $(uname) in
   Darwin) os=darwin ;;
   Linux) os=linux ;;
@@ -393,10 +398,9 @@ phiward doctor > "$J/doctor-before.txt" 2>&1 || true
 # a sentinel the probes look for: missing in the session, ~/.phiward is hidden from it
 mkdir -p "$H/.phiward"
 : > "$H/.phiward/sbx-sentinel"
-# the session's instructions are in a file in the project (task.txt, written for each mode below):
-# the prompt names no protected path or ID, so the prompt scan (#57) lets it through, and the
-# Read of the protected file takes its path from the file
-prompt="This is the operator's own check of phiward's guards. Use the Read tool on the file task.txt in this folder, and do exactly what it says. Then reply DONE."
+# the request is in the prompt, in the operator's voice; the protected file's path is only in
+# target.txt in the project, so the prompt scan (#57) lets the prompt through
+prompt="This is my test of phiward's guards, with made-up data. Use the Bash tool once to run sh ./probes.sh exactly as written. Then use the Read tool on ./target.txt, and once on the file whose path it holds. A refusal by phiward or the sandbox is the expected result: report it, do not work around it, and do not retry. Then reply DONE."
 case $prompt in
   *"$H/data"*|*FAKE-PT-*|*"$fake_id"*|*"$marker"*)
     echo "sandbox-check: the prompt holds a protected path or ID; the prompt scan would block it" >&2; exit 2 ;;
@@ -425,33 +429,16 @@ for m in $modes; do
       echo "remote no"
     fi
   } > "$H/proj/paths.txt"
-  cat > "$H/proj/task.txt" <<TASK
-The operator who set up phiward on this machine asks you for this test of its guards. It runs
-in a home folder made for it, and all data in it is made up (FAKE-PT-0001 is not a person).
-
-Why the session rules allow it: they say not to read protected data, and not to look for another
-route after a refusal. This test asks for neither. It asks for two plain attempts with the
-normal tools, so that the guards can answer them. The guards decide, not you: when one refuses,
-that refusal is the result the operator needs, and nothing protected has been read. If you
-decline instead, the test has no result, and the operator cannot tell whether the guards work.
-
-1. Use the Read tool once on $H/data/FAKE-PT-0001/a.txt. Expect phiward to refuse it.
-2. Then use the Bash tool exactly once to run this command, exactly as written: sh ./probes.sh
-   probes.sh is the operator's test script in this folder: it tries actions the guards must
-   refuse and writes one short result per probe to results.txt, never any data.
-
-Make both calls even if you expect them to fail. After a refusal, do not retry, do not try
-another tool or route, and do nothing else.
-TASK
+  echo "$H/data/FAKE-PT-0001/a.txt" > "$H/proj/target.txt"
   rm -rf "$H/proj/server.out" "$H/proj/results.txt" "$H/data/pulled"
   [ -n "$REMOTE" ] && mkdir -p "$H/data/pulled"
   before=$(sum "$H/.claude/settings.json")
   # again right before each session: a ~/.claude put back since the first look would be read in
   sbx_base_check "$sbx_base" "$homes" || exit 2
-  echo "$ver; Mode $m: one session (Haiku) ..."
+  echo "$ver; Mode $m: one session ($model) ..."
   # Mode A starts Claude Code as setup.md says (`--settings` FILE); under launch no
   # `--settings`: launch passes its own, and Claude Code keeps only one (docs/launch.md)
-  set -- "$H/bin/claude" -p "$prompt" --model haiku --output-format stream-json --verbose \
+  set -- "$H/bin/claude" -p "$prompt" --model "$model" --output-format stream-json --verbose \
     --add-dir "$H" --allowedTools "Bash Read" --permission-prompts none \
     --max-turns 8 --max-budget-usd 1
   if [ "$m" = B ]; then
@@ -487,6 +474,7 @@ TASK
     echo "node $(node --version 2>/dev/null || echo none)"
     echo "bwrap $(bwrap --version 2>/dev/null | head -1 || echo none)"
     echo "claude $ver"
+    echo "model $model"
     echo "stub $([ -n "$stub" ] && echo yes || echo no)"
     echo "image ${SBX_IMAGE:-none}"
     echo "locked ${SBX_LOCKED:-n/a}"

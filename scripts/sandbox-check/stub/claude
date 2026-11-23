@@ -3,10 +3,10 @@
 # model, no network, no sandbox of its own. It writes a stream-json transcript as Claude Code
 # does: the init event (after it starts the wrapped MCP server from the config Claude Code would
 # read), the UserPromptSubmit hooks on its prompt (a block ends the session there, with no turn,
-# as Claude Code does), a Read of task.txt, which the prompt names, then a Read of the protected
-# file whose path task.txt gives (refused if a PreToolUse hook refuses it, as Claude Code
-# runs the hooks, else read for real), and one Bash call of `sh ./probes.sh`, run with the
-# credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does). So in Mode A, where
+# as Claude Code does), then what the prompt asks: one Bash call of `sh ./probes.sh`, run with
+# the credential variables removed (as CLAUDE_CODE_SUBPROCESS_ENV_SCRUB does), a Read of
+# ./target.txt, and a Read of the protected file whose path it holds (each Read refused if a
+# PreToolUse hook refuses it, as Claude Code runs the hooks, else read for real). So in Mode A, where
 # nothing confines it, the judge must see the holes; under `phiward launch` (Mode B) the kernel
 # probes meet the real boundary. It cannot test the terminal prompt.
 # launch reads its version from the package.json beside it (as for the npm build; it starts no
@@ -175,12 +175,6 @@ def read_tool(path, tid):
     return text
 
 
-# the instructions the prompt points to (task.txt), and from them the protected file's path:
-# the prompt itself names none
-task = read_tool(os.path.join(cwd, "task.txt"), "stub-task")
-m = re.search(r"Use the Read tool once on (\S+?)\.(?:\s|$)", task)
-read_tool(m.group(1) if m else "", "stub-read")
-
 # the Bash call, with the credentials scrubbed from its environment
 emit({"type": "assistant", "message": {"content": [
     {"type": "tool_use", "id": "stub-bash", "name": "Bash",
@@ -191,6 +185,10 @@ r = subprocess.run(["sh", "./probes.sh"], env=env, capture_output=True, timeout=
 emit({"type": "user", "message": {"content": [
     {"type": "tool_result", "tool_use_id": "stub-bash", "is_error": r.returncode != 0,
      "content": (r.stdout + r.stderr).decode(errors="replace")[-2000:]}]}})
+# then, as the prompt asks, a Read of ./target.txt and one of the path it holds (the prompt
+# names no protected path)
+target = read_tool(os.path.join(cwd, "target.txt"), "stub-target").strip()
+read_tool(target, "stub-read")
 emit({"type": "assistant", "message": {"content": [{"type": "text", "text": "DONE"}]}})
 emit({"type": "result", "subtype": "success", "is_error": False, "result": "DONE"})
 PY
