@@ -1985,7 +1985,7 @@ Guide: <a href="../setup/#7-check-with-doctor">Check with doctor</a>.</p>
 </tr>
 <tr>
 <td><code>--show-paths</code></td>
-<td>Also print the protected paths (by default only their counts).</td>
+<td>Also print the protected paths (by default only their counts), and the project files the project scan found (masked, with line numbers).</td>
 </tr>
 <tr>
 <td><code>--headless</code></td>
@@ -2002,6 +2002,13 @@ WARNING for each value of <code>[sanitize] examples</code> that is not fully mas
 made-up path came out unmasked, and a NOTE for each of your rules that no example tests
 (<a href="../configuration/#sanitize">configuration.md</a>). It names index numbers only. A failure does
 not change the exit status; <code>--headless</code> lists it as a reason.</p>
+<p>Then doctor prints the project scan (<a href="../launch/#the-project-scan">launch.md</a>), with no time
+limit: <code>project scan: ok (N files)</code>, or <code>WARNING: project scan: found &lt;SUBJECT&gt; in 3 files,
+&lt;SAMPLEID&gt; in 1 file name; ...</code>. With <code>--show-paths</code>, it lists each file as
+<code>data/&lt;SUBJECT&gt;.csv: line 2: &lt;SUBJECT&gt;</code> (the path masked, at most 50 files). A NOTE counts
+what it did not read. In <code>/</code>, the home folder or above it, it says <code>project scan: skipped (not
+a project folder)</code>; with no rule for subject IDs, <code>project scan: off</code>. A finding does not
+change the exit status; <code>--headless</code> lists it as a reason (it scans for 2 s at most).</p>
 <h3 id="phiward-mcp-list-wrap-and-unwrap">phiward mcp list, wrap and unwrap<a class="headerlink" href="#phiward-mcp-list-wrap-and-unwrap" title="Permanent link">&para;</a></h3>
 <p>Show your MCP servers, and run each one in phiward's kernel profile (wrap) or as it was (unwrap).
 Guide: <a href="../modes/#wrap-an-mcp-server-mode-a">Wrap an MCP server</a>.</p>
@@ -2152,6 +2159,15 @@ Guide: <a href="../launch/">Mode B: phiward launch</a>.</p>
 </tr>
 </tbody>
 </table>
+<p>Before the tool starts, launch runs the project scan for 2 s at most
+(<a href="../launch/#the-project-scan">launch.md</a>). On a finding it refuses: <code>phiward launch: the
+project scan found &lt;SUBJECT&gt; in 3 files: move the data under a protected root, pseudonymize it
+(phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward doctor --show-paths
+lists them; nothing runs</code>. When it stops at its limit, the tool starts after one line: <code>phiward
+launch: NOTE: the project scan stopped at its 2 s limit after N files; run phiward doctor for
+the full scan</code>. When it finished but left part unread: <code>phiward launch: NOTE: the project scan
+did not read all of the project (3 files read only to their head); phiward doctor gives the
+counts</code>.</p>
 <h3 id="phiward-check">phiward check<a class="headerlink" href="#phiward-check" title="Permanent link">&para;</a></h3>
 <p>Show what the guard decides for a shell command, and why. Nothing runs.
 Guide: <a href="../daily-use/#check-a-command-phiward-check">Check a command</a>.</p>

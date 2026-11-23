@@ -1611,7 +1611,7 @@
 <tr>
 <td>A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, <code>phiward mcp</code>), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under <code>phiward launch</code> (<a href="#known-leak-test">what it does not cover</a>)</td>
 <td>macOS, Linux (launch: Linux)</td>
-<td>under the root: refused or masked (only placeholders left; <code>--table</code> keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent. A pack file weakened, a pattern edited or a root removed in the config is found</td>
+<td>under the root: refused or masked (only placeholders left; <code>--table</code> keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent in Mode A (the session note warns), refused at the start under <code>phiward launch</code> (the project scan). A pack file weakened, a pattern edited or a root removed in the config is found</td>
 </tr>
 <tr>
 <td>The full test suite (over 1,000 tests)</td>
@@ -2119,19 +2119,43 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   entry points let through. What it does not cover:</p>
 </li>
 <li><code>CLAUDE.md</code> and other instruction files: Claude Code sends them at the start, and no hook
-    sees them;</li>
-<li>the git status and the file names in the system prompt;</li>
+    sees them (the <a href="#known-project-scan">project scan</a> reads them);</li>
+<li>the git status and the file names in the system prompt (the project scan reads the file
+    names);</li>
 <li>your own <code>!</code> commands: their output is sent, and no PreToolUse hook runs;</li>
 <li>MCP servers that are not wrapped in <code>phiward launch --</code> (doctor warns);</li>
 <li>compaction and summaries, which rephrase only what was already sent;</li>
 <li>Claude Code's own sandbox in Mode A: the replay cannot run it (the launch leg and the
     sandbox check cover the kernel);</li>
-<li>identifiers in project files outside the roots (a <code>notes.md</code> with a study ID): the hook
-    decides by path, so a Read, a Grep or a shell command in the project sends them. Keep such files under a
-    protected root, or pseudonymize them;</li>
+<li>identifiers in project files outside the roots (a <code>notes.md</code> with a study ID) in Mode A: the
+    hook decides by path, so a Read, a Grep or a shell command in the project sends them; the
+    session note and doctor warn. Under <code>phiward launch</code> the project scan refuses the start (the
+    test's launch step checks it). Keep such files under a protected root, or pseudonymize them;</li>
 <li>
 <p>Claude Code's own Read, Grep and Glob: the replay uses models of them. A hook's ask is
     played as a yes, so the test sees what a yes would send.</p>
+</li>
+<li>
+<p><a id="known-project-scan"></a><strong>The project scan reads the project as it is at the start.</strong>
+  <code>phiward launch</code> refuses a project whose files or file names hold a subject or sample ID
+  outside the roots; in Mode A the SessionStart note and <code>phiward doctor</code> warn, and nothing
+  refuses (<a href="../launch/#the-project-scan">launch.md</a>). What it does not see:</p>
+</li>
+<li>git history and commit messages: reading them needs git, which runs programs the project's
+    <code>.git/config</code> names. The pre-commit hook (<code>phiward init</code>) refuses a new commit that adds an
+    ID;</li>
+<li>binary formats (xlsx, parquet, BAM, pickles: a NUL byte in the first 8 KiB), anything past a
+    file's first 64 KiB at launch and in the note (1 MiB in doctor; after gzip), lines over
+    64 KiB, and more than 10000 entries of one folder;</li>
+<li>IDs known only as entry names under the roots, with no rule for their form, and positions,
+    numbers, dates, file and read names (the rules are subject IDs only);</li>
+<li>the targets of links, files outside the project that Claude Code also sends at the start
+    (<code>~/.claude/CLAUDE.md</code>, the memory folder), and files that arrive during a session;</li>
+<li>the folders of installed code and caches it skips by name, and the <code>[sanitize] scan_allow</code>
+    paths (an allowed file that later gets a real ID is not seen);</li>
+<li>
+<p>under <code>launch</code>, a project larger than its 2 s budget is read only in part, and starts with a
+    NOTE; in Mode A an ID is found only within the note's 2 s, or when someone runs doctor.</p>
 </li>
 <li>
 <p><a id="known-leftover-processes"></a><strong>A gateway command's leftover processes (macOS).</strong> A request ends when its command ends, and the

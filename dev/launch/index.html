@@ -598,6 +598,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1213,6 +1224,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1352,6 +1374,8 @@ team.</p>
   made-up path below a root came out unmasked
   (<a href="../configuration/#sanitize">configuration.md</a>). Fix the rule, the example or the root, then
   start again. A wrapped MCP server (<code>launch --server</code>) is not checked.</li>
+<li><code>launch</code> refuses to start when the project scan finds a subject or sample ID in a project
+  file or a file name (<a href="#the-project-scan">The project scan</a>).</li>
 <li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
   threat model).</li>
 <li>On macOS the tool starts as <code>/usr/bin/sandbox-exec -f FILE TOOL ARGS...</code>, with nothing in
@@ -1371,6 +1395,50 @@ team.</p>
   <code>package.json</code> of the script's npm package (<code>@anthropic-ai/claude-code</code>). A tool that gives
   no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
   start Claude Code's own program directly, or use <code>--tool generic</code> for another tool.</li>
+</ul>
+<h2 id="the-project-scan">The project scan<a class="headerlink" href="#the-project-scan" title="Permanent link">&para;</a></h2>
+<p>A file in the project is outside the protected roots, so the agent reads it with no gateway.
+Claude Code also sends <code>CLAUDE.md</code> and the list of file names at the start, with no tool call.
+So, before the tool starts, <code>launch</code> reads the project for subject and sample IDs.</p>
+<ul>
+<li><strong>The rules:</strong> the subject rules only: your <code>[sanitize] patterns</code>, your pack files, and the
+  built-in packs in force (a repo's <code>.phiward.toml</code> may add one, such as <code>msk</code>). Not file
+  names, read names, positions, numbers, dates, protected paths or the entry names under the
+  roots: a project holds those everywhere. With no subject rule, there is no scan.</li>
+<li><strong>What it reads:</strong> one walk of the project folder, git-ignored files too: first the
+  instruction files Claude Code sends at the start (<code>CLAUDE.md</code>, <code>CLAUDE.local.md</code>,
+  <code>AGENTS.md</code>, <code>.claude/</code>), names and content; then every other name, breadth first; then the
+  other files' content, the smallest first. Of each
+  regular file it reads the first 64 KiB (<code>phiward doctor</code>: 1 MiB): of its decompressed form
+  for gzip and BGZF (<code>.csv.gz</code>, <code>.vcf.gz</code>), and as UTF-16 with a BOM (Excel's "Unicode text").
+  A folder named after an ID is one finding, not one for each file below it.</li>
+<li><strong>What it does not read:</strong> binary files (a NUL byte in the first 8 KiB: xlsx, parquet, BAM),
+  lines over 64 KiB, anything past the first 64 KiB (doctor: 1 MiB), the targets of links, files it cannot open,
+  more than 10000 entries of one folder, the protected and hidden paths, the folders of
+  installed code and caches (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>,
+  <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>, <code>.pytest_cache</code>, <code>.ruff_cache</code>,
+  <code>.claude/worktrees</code>), and the paths in <code>[sanitize] scan_allow</code>. It runs no git command:
+  git would run programs that the project's <code>.git/config</code> names.</li>
+<li><strong>On a finding:</strong> <code>launch</code> refuses, and says the kinds and counts only:
+  <code>the project scan found &lt;SUBJECT&gt; in 3 files: move the data under a protected root,
+  pseudonymize it (phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward
+  doctor --show-paths lists them</code>. Run <code>phiward doctor --show-paths</code> in your own terminal to see
+  the files (masked paths and line numbers). Then move the data under a protected root, make a
+  pseudonymized copy (<code>phiward pseudonymize</code>), or, for made-up IDs only, add the files to
+  <code>[sanitize] scan_allow</code> in your user config
+  (<a href="../configuration/#sanitize">configuration.md</a>).</li>
+<li><strong>The budget:</strong> 2 s. On a made-up project of 5,012 files (5,000 source files of 4 KB and ten
+  2 MiB tables), the scan read all of them in 1.6 s on the maintainer's Mac. A larger project starts
+  anyway, after one line: <code>phiward launch: NOTE: the project scan stopped at its 2 s limit
+  after N files; run phiward doctor for the full scan</code>. An ID found before the limit still
+  refuses. <code>phiward doctor</code> scans with no limit. A scan that finished but left part of the
+  project unread (files past their head, long lines, folders over the entry cap, files it
+  cannot open) starts with one NOTE of those counts.</li>
+<li><strong>A scan that cannot run</strong> refuses: <code>the project scan could not run; run phiward doctor</code>.</li>
+<li>A wrapped MCP server (<code>--entry</code>) is not scanned: its folder is not the agent's project.</li>
+<li><strong>Mode A</strong> has no launch: the SessionStart note runs the same scan within 2 s and, on a
+  finding, tells the session the kinds and counts (it never stops the session), and
+  <code>phiward doctor</code> warns. Under <code>launch</code> the note does not scan again. <code>phiward doctor --headless</code> lists a finding as a reason.</li>
 </ul>
 <h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
 <table>
