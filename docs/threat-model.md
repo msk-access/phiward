@@ -827,16 +827,19 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   Claude Code's Bash and Monitor: a shell that only the sandbox openers leave unconfined gets
   the text check, with its limits ([gaps of the hook alone](#gaps-of-the-hook-alone)), not the
   refusal. It is your record that the folder holds no PHI; phiward cannot prove it.
-  - Only the openers are relaxed (configuration.md, `[no_phi]`), never `filesystem.disabled`.
-    Any other cause (a root or hidden path missing from `denyRead`, an `allowRead` that
+  - Only the openers are relaxed (configuration.md, `[no_phi]`), never `filesystem.disabled`,
+    and never a unix socket or Mach service (`allowUnixSockets`, `allowAllUnixSockets`,
+    `allowMachLookup`): the service behind it, such as Docker's daemon, runs outside the sandbox
+    and could read a root for a command. Docker goes through `excludedCommands` instead (its
+    text check, above). Any other cause (a root or hidden path missing from `denyRead`, an `allowRead` that
     re-opens one, a startup folder the sandbox may write, a settings file that does not parse,
     patterns) keeps the blanket refusal, so `denyRead` holds for every root in a relaxed
     folder. Other tools that run commands are not relaxed.
   - Protected roots and the hidden list stay denied (`denyRead`, the text check and
     `permissions.deny`), and the prompt scan, the asks for files that run later and the guard
     files stay. But an opener you turned on there (`allowLocalBinding` on macOS: every local
-    service; a unix socket such as Docker's) is open to every command, and a command can reach
-    a root through what its text does not show (a local service, a program's own config).
+    service) is open to every command, and a command can reach a root through what its text
+    does not show (a local service, a program's own config).
   - The project scan at the start of a session is the check that "no PHI" still holds. It
     warns and does not stop: an agent in another session, or a copy you make, can put data in a
     listed folder, and the folder stays relaxed until you take it off the list.

@@ -488,9 +488,12 @@ written.
 
 - **Only the sandbox openers.** The folder is relaxed only when the openers alone keep the
   shell from counting as confined: `enableWeakerNestedSandbox`, `allowAppleEvents`,
-  `allowNestedUserNamespaces`, `network.allowLocalBinding` (macOS), `network.allowAllUnixSockets`,
-  `network.allowUnixSockets` and `network.allowMachLookup`. Not `filesystem.disabled`: with it
-  nothing denies a read, so the refusal stays. Any other cause keeps the refusal too: a root or
+  `allowNestedUserNamespaces` and `network.allowLocalBinding` (macOS). Not `filesystem.disabled`:
+  with it nothing denies a read. Not the socket and service openers
+  (`network.allowUnixSockets`, `network.allowAllUnixSockets`, `network.allowMachLookup`): what
+  answers there, such as Docker's daemon, runs outside the sandbox and can read a root. For
+  Docker, use a `sandbox.excludedCommands` entry (`docker *`) instead: the hook then checks the
+  text of every command, in every folder. Any other cause keeps the refusal too: a root or
   hidden path missing from `denyRead` (run install again), an `allowRead` that re-opens one, a
   startup folder the sandbox may write, a settings file that does not parse, or protected
   patterns. So `denyRead` always holds in a relaxed folder.

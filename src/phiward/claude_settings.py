@@ -564,16 +564,17 @@ def _opened(lv, excluded_opens: bool = True,
     """Why these settings let a sandboxed command reach past the sandbox: (the reason, the keys
     under `sandbox`, whether it is a list), or None. `excluded_opens`: whether a non-empty
     `excludedCommands` counts (`shell_reason` leaves it to the hook's text check).
-    `openers_open`: whether the openers count (`no_phi_reason`); `filesystem.disabled` always
-    counts, since with it nothing denies a read."""
+    `openers_open`: whether the OPENERS and `allowLocalBinding` count (`no_phi_reason`);
+    `filesystem.disabled` always counts, since with it nothing denies a read, and so do the
+    unix socket and Mach service openers."""
     for keys in OPENERS + ((LOCAL_BINDING,) if sys.platform == "darwin" else ()):
         if (openers_open or keys == ("filesystem", "disabled")) and \
                 _first(lv, "sandbox", *keys) is True:
             return f"sandbox.{'.'.join(keys)} is true (it opens the sandbox)", tuple(keys), False
     if excluded_opens and _merged_list(lv, "sandbox", "excludedCommands"):
         return "sandbox.excludedCommands is not empty", ("excludedCommands",), True
-    if not openers_open:
-        return None
+    # the socket and service openers count always: what answers there (Docker's daemon) runs
+    # outside the sandbox and can read a root
     if _first(lv, "sandbox", "network", "allowAllUnixSockets") is True:
         return ("sandbox.network.allowAllUnixSockets is true",
                 ("network", "allowAllUnixSockets"), False)
@@ -850,10 +851,12 @@ def no_phi_reason(project: Optional[str], home: str, roots: Sequence[str],
                   patterns: Sequence[str], guard: Sequence[str] = (),
                   env: Optional[Mapping[str, str]] = None,
                   hidden: Sequence[str] = ()) -> Optional[Reason]:
-    """For the hook in a no-PHI folder: `shell_reason` without the sandbox openers (but
-    `filesystem.disabled`). None: only openers leave the shell unconfined, so the folder is
-    relaxed; any other cause (a root missing from denyRead, a startup folder the sandbox may
-    write, a file that does not parse, patterns) keeps the blanket refusal."""
+    """For the hook in a no-PHI folder: `shell_reason` without the sandbox openers
+    (`enableWeakerNestedSandbox`, `allowAppleEvents`, `allowNestedUserNamespaces`, macOS
+    `allowLocalBinding`). None: only those leave the shell unconfined, so the folder is
+    relaxed; any other cause (`filesystem.disabled`, a unix socket or Mach service, a root
+    missing from denyRead, a startup folder the sandbox may write, a file that does not parse,
+    patterns) keeps the blanket refusal."""
     return confinement_reason(project, home, roots, patterns, guard, env, hidden,
                               excluded_opens=False, openers_open=False)
 
