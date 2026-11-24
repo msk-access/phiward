@@ -55,6 +55,26 @@ def test_a_file_that_says_more_or_other_is_refused(tree, capsys, how):
         wholetool._without_launch_settings(["claude", "--settings", path])
 
 
+OLDER = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                     "allowUnsandboxedCommands": False}}  # what v0.2.0b1's install wrote
+
+
+def test_the_file_an_older_install_wrote_is_accepted(tree):
+    # launch passes its own, stricter settings: dropping the older file loosens nothing
+    f = tree / "home" / "claude-settings.json"
+    f.write_text(json.dumps(OLDER, indent=2) + "\n")
+    assert wholetool._without_launch_settings(["claude", "--settings", str(f)]) == ["claude"]
+
+
+def test_a_near_miss_of_the_older_file_is_refused_with_the_rerun_step(tree):
+    data = copy.deepcopy(OLDER)
+    data["sandbox"]["failIfUnavailable"] = False
+    f = tree / "home" / "claude-settings.json"
+    f.write_text(json.dumps(data))
+    with pytest.raises(wholetool.LaunchError, match="rerun `phiward install"):
+        wholetool._without_launch_settings(["claude", "--settings", str(f)])
+
+
 @pytest.mark.parametrize("text", ["", "{", "not json", "[]"])
 def test_a_file_that_does_not_parse_is_refused(tree, text):
     f = tree / "home" / "settings.json"
