@@ -153,6 +153,13 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux, below 7.1: `phiward launch --tool claude` refused the file `install` writes for
+  `claude --settings` (a common shell alias adds it): since `@` mentions were turned off there,
+  it no longer said just what launch passes. launch now passes that file's content, mentions
+  off included, and drops the operator's `--settings` only when its content is the same, or
+  is the file v0.2.0b1's `install` wrote (launch's own is stricter). One that says more or
+  other (another key or value, an allow, a hook) or does not parse still stops the start,
+  and the refusal says to rerun `phiward install claude --user --write`.
 - `launch` refuses an empty `PATH` entry (a leading or trailing `:`, or `::`), `.` and any
   other relative entry. It names the folder the shell is in: the project, where the tool runs,
   or a folder of it after the session. The check skipped such entries, so a program the session

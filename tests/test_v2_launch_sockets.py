@@ -303,8 +303,10 @@ def test_claude_does_not_start_when_settings_open_its_sandbox(tree, sandbox):
     assert code == 126 and "RAN" not in out, out
 
 
+# what launch passes: the file `install` writes for `claude --settings`
 INNER = {"sandbox": {"enabled": True, "failIfUnavailable": True,
-                     "allowUnsandboxedCommands": False}}
+                     "allowUnsandboxedCommands": False},
+         "env": {"CLAUDE_CODE_DISABLE_FILE_MENTIONS": "1"}}
 
 
 def argv_of(out):
@@ -449,6 +451,21 @@ def test_settings_that_say_what_launch_passes_are_passed_once(tree, form):
     code, out = launch(tree, "", "claude", program=["--", str(claude), "-p", "x", *given])
     argv = argv_of(out)
     assert argv[:2] == ["-p", "x"] and argv.count("--settings") == 1, argv
+    assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
+
+
+@below9
+def test_the_file_install_writes_is_passed_once(tree):
+    # the shell alias `claude --settings ~/.config/phiward/claude-settings.json`
+    import json
+    from phiward import install
+    claude = native(tree)
+    f = tree / "home" / ".config" / "phiward" / "claude-settings.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(install.LAUNCH_SETTINGS, indent=2) + "\n")
+    code, out = launch(tree, "", "claude", program=["--", str(claude), "--settings", str(f)])
+    argv = argv_of(out)
+    assert argv.count("--settings") == 1, argv
     assert argv[-2] == "--settings" and json.loads(argv[-1]) == INNER, argv
 
 
