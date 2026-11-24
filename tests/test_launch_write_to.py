@@ -584,6 +584,21 @@ def test_instruction_files_not_read_in_time_stop_the_start(tree, monkeypatch):
 
 
 @needs_confine
+def test_the_projects_own_instruction_files_over_the_budget_keep_the_note(tree, monkeypatch,
+                                                                          capsys):
+    # with no listed folder the project keeps its old rule: a NOTE, and the tool starts
+    scan_cfg()
+    repo = tree / "repo"
+    for i in range(300):
+        (repo / ".claude" / "skills" / f"s{i}").mkdir(parents=True)
+        (repo / ".claude" / "skills" / f"s{i}" / "SKILL.md").write_text("made-up\n")
+    monkeypatch.setattr(projectscan, "time", _Clock())
+    monkeypatch.setattr(projectscan, "BUDGET", 0.05)
+    close(build(tree))
+    assert "the project scan stopped at its" in capsys.readouterr().err
+
+
+@needs_confine
 def test_the_bulk_not_read_in_time_gives_the_note_and_starts(tree, monkeypatch, capsys):
     scan_cfg()
     _bulk(tree / "repo")
@@ -630,6 +645,16 @@ def test_the_end_report_names_the_folder_in_its_header(tree):
     assert f"in {s}" in lines[0] and "in the project" not in lines[0], lines
     assert carryover.project_report(changes)[0].startswith(
         "phiward launch: the session changed 1 file(s) in the project;")
+
+
+def test_the_truncation_warning_of_a_listed_folder_names_the_folder(tree):
+    s = str(folder(tree))
+    changes = carryover.Changes({0: [], 1: [], 2: [], 3: []}, True)
+    warning = [ln for ln in carryover.project_report(changes, where=s) if "WARNING" in ln]
+    assert warning and f"Read {s} before" in warning[0], warning
+    assert "the project" not in warning[0], warning
+    own = [ln for ln in carryover.project_report(changes) if "WARNING" in ln]
+    assert "Read the project before you run anything outside launch." in own[0], own
 
 
 @needs_confine
@@ -683,30 +708,36 @@ def test_headless_lists_a_launch_refusal(tree):
 # --- 8a. an abnormal end --------------------------------------------------------------------------
 
 LAUNCHER = r"""
-import json, os, sys
+import json, os, signal, sys
 from phiward import carryover, wholetool
-project, sib, report, pidfile, home = sys.argv[1:6]
+project, sib, report, pidfile, home, base, ignore = sys.argv[1:8]
+if ignore:  # as under nohup: the launcher inherits SIGHUP ignored
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
 child = ("import os, time\nopen(%r, 'w').write('{}')\n"
          "open(%r, 'w').write(str(os.getpid()))\ntime.sleep(60)\n" % (
              os.path.join(sib, '.mcp.json'), pidfile))
 run = wholetool._Run()
 run.write_to = [sib]
+run.record = (base, os.path.join(base, "runs", "20260101-000000-0000cccc"))
 store = carryover.Store("generic", home)
 code = wholetool._run_tool([sys.executable, "-c", child], dict(os.environ), [], project,
                            lambda: None, store, os.path.join(home, "toolfolder"), run,
                            listed=[sib])
-wholetool._write_report(report, run.data(code))
-sys.exit(code)
+sys.exit(wholetool._end(report, run, code))
 """
 
 
-@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGHUP])
-def test_sigterm_and_sighup_still_give_the_exit_report(tree, sig):
+def _signalled(tree, sig, ignore=False, then_kill_tool=False):
+    """The stand-in launcher, its tool started, sent `sig`: (its exit, stderr, the record)."""
     s = folder(tree)
+    base, runs = _runs(tree)
+    rec = runs / "20260101-000000-0000cccc.write_to"
+    rec.write_text(f"{s}\n")
     report = tree / "out.json"
     pidfile = tree / "child.pid"
     p = subprocess.Popen([PY, "-c", LAUNCHER, str(tree / "repo"), str(s), str(report),
-                          str(pidfile), str(tree / "home")], env=dict(os.environ, PYTHONPATH=SRC),
+                          str(pidfile), str(tree / "home"), str(base), "1" if ignore else ""],
+                         env=dict(os.environ, PYTHONPATH=SRC),
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                          stdin=subprocess.DEVNULL)
     child = 0
@@ -719,6 +750,11 @@ def test_sigterm_and_sighup_still_give_the_exit_report(tree, sig):
         assert child, "the stand-in tool did not start"
         time.sleep(0.2)
         p.send_signal(sig)
+        if then_kill_tool:
+            time.sleep(1)
+            assert p.poll() is None, "the launcher ended on an ignored signal"
+            os.kill(child, signal.SIGKILL)
+            child = 0
         _out, err = p.communicate(timeout=60)
     finally:
         if p.poll() is None:
@@ -728,11 +764,37 @@ def test_sigterm_and_sighup_still_give_the_exit_report(tree, sig):
                 os.kill(child, signal.SIGKILL)
             except OSError:
                 pass
-    assert p.returncode == 128 + sig, (p.returncode, err)
+    return p.returncode, err, rec
+
+
+@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGHUP])
+def test_sigterm_and_sighup_still_give_the_exit_report(tree, sig):
+    code, err, rec = _signalled(tree, sig)
+    s = tree / "sib"
+    assert code == 128 + sig, (code, err)
     assert f"in {s}" in err and ".mcp.json" in err.split(f"in {s}", 1)[1], err
-    data = json.loads(report.read_text())
+    data = json.loads((tree / "out.json").read_text())
     assert data["exit"] == 128 + sig
     assert any(".mcp.json" in n for n in data["notes"]), data
+    # on macOS the tool may outlive the launcher: the next start names the folders
+    assert rec.exists(), "the record went with a signal end"
+
+
+def test_an_inherited_ignored_sighup_stays_ignored(tree):
+    code, err, rec = _signalled(tree, signal.SIGHUP, ignore=True, then_kill_tool=True)
+    assert code == -signal.SIGKILL, (code, err)  # the tool's own end, not the signal's
+    assert not rec.exists(), "a normal end keeps the record"
+
+
+def test_an_orphaned_record_gives_the_note(tree):
+    # its run folder already went to the trash (the launcher died during the end walks)
+    base, runs = _runs(tree)
+    rec = runs / "20260101-000000-0000dddd.write_to"
+    rec.write_text(f"{tree / 'sib'}\n")
+    msgs = carryover._clean_runs(str(base), str(runs / "now"), lambda n: [])
+    text = "\n".join(msgs)
+    assert "an earlier session (20260101-000000-0000dddd) did not finish" in text, text
+    assert str(tree / "sib") in text and not os.path.lexists(rec), text
 
 
 def _run_name(store):
@@ -938,6 +1000,7 @@ def test_a_dash_dash_with_a_listed_folder_refuses(tree):
     with pytest.raises(wholetool.LaunchError) as exc:
         build(tree, argv=[tool_py(tree), "--", "hi"], adapter="claude")
     assert str(exc.value) == wholetool.DASH_DASH
+    assert "--add-dir" in wholetool.DASH_DASH, wholetool.DASH_DASH
 
 
 @needs_confine
