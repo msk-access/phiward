@@ -206,7 +206,9 @@ Every pull sends everything named (no resume); files that exist in the protected
 kept, never replaced. What the remote sends lands inside the protected
 folder: plain files and folders only; links and special files are skipped. A file or folder
 that cannot be made or written in full there (no permission, no space) fails the pull. A
-partly written file is removed, and the rest is still written.
+partly written file is removed, and the rest is still written. A stream that ends early (a
+dropped connection, a killed remote tar) stops the pull and fails it: the file being written
+is removed, and the files that arrived whole before it stay.
 
 A remote path may hold only letters, digits and `. _ + - /`, so it is one plain word for the
 remote shell. An argument with a `:` before its first `/` is remote, as rsync reads it: write a

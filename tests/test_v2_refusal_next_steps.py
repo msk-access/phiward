@@ -327,10 +327,11 @@ def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeyp
     assert "project scan" not in session_note.note(cfg, str(tree / "repo"))
 
 
-def _extract(dest, members, max_file=None):
+def _extract(dest, members, max_file=None, cut=None):
     """Run the pull's extractor on a made-up tar stream of `members` (name, bytes). `max_file`:
     a file-size limit for the extractor (RLIMIT_FSIZE, SIGXFSZ ignored), so a write past it
-    fails as a full disk would."""
+    fails as a full disk would. `cut`: the stream ends after that many bytes, as when the
+    connection drops or the remote tar is killed."""
     import io
     import subprocess
     import sys
@@ -349,7 +350,7 @@ def _extract(dest, members, max_file=None):
         signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
         resource.setrlimit(resource.RLIMIT_FSIZE, (max_file, max_file))
     return subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
-                          input=buf.getvalue(), capture_output=True,
+                          input=buf.getvalue()[:cut], capture_output=True,
                           preexec_fn=limit if max_file else None)
 
 
@@ -389,3 +390,21 @@ def test_the_extractor_removes_a_file_whose_write_failed(tree):
     assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
     again = _extract(dest, [("big.bin", b"x" * 1024)])
     assert again.returncode == 0 and b"kept 0 existing" in again.stdout, again
+
+
+def test_a_stream_cut_partway_removes_the_partial_file_and_fails(tree):
+    dest = tree / "phi" / "pulled"
+    dest.mkdir()
+    data = os.urandom(3 * 1024 * 1024)
+    members = [("a.txt", b"a\n"), ("FAKE-PT-0001.bin", data)]
+    r = _extract(dest, members, cut=2 * 1024 * 1024)
+    assert r.returncode == 1, r
+    assert b"Traceback" not in r.stderr, r.stderr
+    err = r.stderr.decode()
+    assert len(err.strip().splitlines()) == 1 and "failed 1" in err, err
+    # no truncated file that the next pull would count as kept
+    assert not (dest / "FAKE-PT-0001.bin").exists()
+    assert (dest / "a.txt").read_text() == "a\n"  # what came whole before the cut stays
+    again = _extract(dest, members)
+    assert again.returncode == 0 and b"kept 1 existing" in again.stdout, again
+    assert (dest / "FAKE-PT-0001.bin").stat().st_size == len(data)
