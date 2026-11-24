@@ -33,6 +33,11 @@ def test_the_page_quotes_each_message():
     assert not missing, missing
 
 
+def test_the_path_entry_names_each_way_off_path():
+    page = PAGE.read_text(encoding="utf-8")
+    assert "deactivate" in page and "off PATH" in page and "direnv deny" in page
+
+
 def test_the_page_is_linked_from_setup_and_the_site():
     assert "refusals.md" in (PAGE.parent / "setup.md").read_text(encoding="utf-8")
     assert "refusals.md" in (PAGE.parents[1] / "mkdocs.yml").read_text(encoding="utf-8")

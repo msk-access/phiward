@@ -32,8 +32,8 @@ def test_a_wrapper_gives_one_step_with_the_version_it_needs(tree):
     shim.write_text("#!/bin/sh\nexec /nonexistent/claude \"$@\"\n")
     shim.chmod(0o755)
     msg = wholetool.claude_version_problem(str(shim), [str(tree / "repo")])
-    assert "`claude --version`" in msg and "2.1.295" in msg, msg
-    assert "\n" not in msg and "wrapper" in msg, msg
+    assert "native binary" in msg and "cli.js" in msg and "must print" not in msg, msg
+    assert "\n" not in msg and "wrapper" in msg and "--tool generic" in msg, msg
 
 
 def test_a_dash_dash_refusal_says_drop_it():
@@ -56,15 +56,32 @@ def test_a_copy_out_of_a_root_names_phiward_run(tree):
 
 # --- c1: doctor's launch section ----------------------------------------------------------------
 
-def _launch(tree, project=None, platform="darwin", **env):
+def _launch(tree, project=None, platform="darwin", version=(2, 1, 300), installed=True,
+            show=False, cfg=None, **env):
     base = {k: v for k, v in os.environ.items()
             if k not in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN",
                          "ANTHROPIC_BASE_URL", "VIRTUAL_ENV")}
     base["PATH"] = "/usr/bin:/bin"
     base.update(env)
     project = str(project or tree / "repo")
-    return doctor.launch_report(project, str(tree / "home"), config.load(project), env=base,
-                                platform=platform)
+    return doctor.launch_report(project, str(tree / "home"), cfg or config.load(project),
+                                env=base, platform=platform, version=version,
+                                installed=installed, show=show)
+
+
+@pytest.fixture()
+def native(tree, monkeypatch):
+    """A made-up native `claude` (no `#!` line) on a PATH folder of its own; starting it fails
+    the test: doctor never starts it."""
+    folder = tree / "native"
+    folder.mkdir()
+    (folder / "claude").write_bytes(b"\xcf\xfa\xed\xfe fake native build\n")
+    (folder / "claude").chmod(0o755)
+
+    def never(real, env):
+        raise AssertionError(f"doctor started {real}")
+    monkeypatch.setattr(wholetool, "_native_version", never)
+    return f"{folder}:/usr/bin:/bin"
 
 
 def _text(lines):
@@ -82,6 +99,46 @@ def test_doctor_warns_about_a_path_entry_inside_the_project(tree):
     (venv / "bin").mkdir(parents=True)
     out = _text(_launch(tree, PATH=f"{venv}/bin:/usr/bin:/bin", VIRTUAL_ENV=str(venv)))
     assert "WARNING" in out and ".venv/bin" in out and "deactivate" in out, out
+    assert str(tree) not in out, out  # the entry relative to the project
+    shown = _text(_launch(tree, show=True, PATH=f"{venv}/bin:/usr/bin:/bin",
+                          VIRTUAL_ENV=str(venv)))
+    assert f"{venv}/bin" in shown, shown
+
+
+def test_doctor_warns_that_launch_needs_protected_paths(tree):
+    empty = tree / "home" / "empty.toml"
+    empty.write_text("[shell]\nbest_effort = true\n")
+    cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(empty)))
+    out = _text(_launch(tree, cfg=cfg))
+    assert "WARNING" in out and wholetool.NO_PATHS in out, out
+
+
+def test_doctor_judges_a_native_binary_by_the_version_it_read(tree, native):
+    assert "WARNING" not in _text(_launch(tree, PATH=native))
+    old = _text(_launch(tree, PATH=native, version=(2, 1, 1)))
+    assert "WARNING" in old and "older than 2.1.295" in old, old
+
+
+def test_doctor_notes_an_unknown_version_and_starts_nothing(tree, native):
+    out = _text(_launch(tree, PATH=native, version=None))
+    assert "NOTE" in out and "only launch can tell" in out and "WARNING" not in out, out
+
+
+def test_the_launch_section_reuses_the_version_doctor_read(tree, native, monkeypatch, capsys):
+    from phiward import claude_settings
+    monkeypatch.setattr(claude_settings, "claude_version", lambda: (2, 1, 300))
+    got = {}
+    real = doctor.launch_report
+    monkeypatch.setattr(doctor, "launch_report",
+                        lambda *a, **k: got.update(k) or real(*a, **k))
+    monkeypatch.chdir(tree / "repo")
+    doctor.main([])
+    assert got.get("version") == (2, 1, 300) and "installed" in got, got
+
+    def again():
+        raise AssertionError("launch_report read the version itself")
+    monkeypatch.setattr(claude_settings, "claude_version", again)
+    _launch(tree, PATH=native, version=None)
 
 
 def test_doctor_warns_about_a_linked_settings_folder(tree):
@@ -98,7 +155,7 @@ def test_doctor_warns_about_a_wrapper_named_claude(tree):
     (shim / "claude").chmod(0o755)
     out = _text(_launch(tree, PATH=f"{shim}:/usr/bin:/bin"))
     assert "WARNING" in out and "gives no Claude Code version" in out, out
-    assert "`claude --version`" in out, out
+    assert "native binary" in out, out
 
 
 def test_doctor_warns_about_a_base_url_the_proxy_refuses(tree):
@@ -119,10 +176,14 @@ def test_doctor_notes_the_read_only_files_of_a_launch_session(tree):
 
 def test_doctor_notes_a_source_checkout(tree, monkeypatch):
     from phiward import selfcheck
-    monkeypatch.setattr(selfcheck, "check_isolated", lambda timeout=60: (False, []))
-    out = _text(_launch(tree, PHIWARD_DEV="0"))
+
+    def again(*a, **k):
+        raise AssertionError("a second self-check")
+    monkeypatch.setattr(selfcheck, "check_isolated", again)
+    out = _text(_launch(tree, installed=False, PHIWARD_DEV="0"))
     assert "PHIWARD_DEV=1" in out, out
-    assert "PHIWARD_DEV=1" not in _text(_launch(tree, PHIWARD_DEV="1"))
+    assert "PHIWARD_DEV=1" not in _text(_launch(tree, installed=False, PHIWARD_DEV="1"))
+    assert "PHIWARD_DEV=1" not in _text(_launch(tree, installed=True, PHIWARD_DEV="0"))
 
 
 def test_doctor_names_linuxs_inner_mode_and_its_refusals(tree, monkeypatch):
