@@ -62,7 +62,9 @@ class Result(NamedTuple):
     complete: bool  # False when the deadline came first
     error: str  # non-empty: the scan could not run (fail closed)
     off: bool = False  # no subject rule: nothing to look for
-    listed: int = 0  # regular files the walk found (all of them, when it finished)
+    # regular files the walk found (all of them, when it finished). No src code reads it; it stays
+    # for the timing report in tests/test_projectscan.py, which prints it beside `files`.
+    listed: int = 0
 
 
 def deadline() -> float:

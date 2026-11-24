@@ -43,13 +43,6 @@ def user_cfg(t, extra):
     p.write_text(p.read_text() + extra)
 
 
-def set_patterns(t, pats):
-    p = Path(os.environ["PHIWARD_CONFIG"])
-    s = p.read_text()
-    old = s.split("patterns = ", 1)[1].split("\n", 1)[0]
-    p.write_text(s.replace(old, json.dumps(pats)))
-
-
 # --- K5: one matcher --------------------------------------------------------------------------
 
 def test_k5_the_matcher_handles_dot_names(tree):

@@ -859,11 +859,12 @@ def test_a_preset_and_a_scripts_folder_in_the_program_list(tree, monkeypatch):
     user = Path(os.environ["PHIWARD_CONFIG"])
     user.write_text(user.read_text() + f'\n[broker]\ncommands = ["@counts", "{scripts}/"]\n')
     cfg = config.load(str(tree / "repo"))
-    assert run.program_listed("wc", "/usr/bin/wc", cfg)
-    assert not run.program_listed("python3", "/usr/bin/python3", cfg)
-    assert run.program_listed(str(mine), os.path.realpath(mine), cfg)
+    cwd, path = os.getcwd(), os.environ.get("PATH", os.defpath)
+    assert run.listed_run_path("wc", "/usr/bin/wc", cfg, cwd, path)
+    assert not run.listed_run_path("python3", "/usr/bin/python3", cfg, cwd, path)
+    assert run.listed_run_path(str(mine), os.path.realpath(mine), cfg, cwd, path)
     other = _tool(tree / "repo", "evil.sh")
-    assert not run.program_listed(str(other), os.path.realpath(other), cfg)
+    assert not run.listed_run_path(str(other), os.path.realpath(other), cfg, cwd, path)
 
 
 def test_listed_scripts_are_protected_from_agent_writes(tree):
@@ -1220,10 +1221,11 @@ def test_a_program_listed_by_name_is_called_by_its_name(tree, monkeypatch):
     user = Path(os.environ["PHIWARD_CONFIG"])
     user.write_text(user.read_text() + '\n[broker]\ncommands = ["mytool"]\n')
     cfg = config.load(str(tree / "repo"))
-    assert run.program_listed("mytool", os.path.realpath(tool), cfg)
-    assert not run.program_listed(str(tool), os.path.realpath(tool), cfg)
+    cwd, path = os.getcwd(), os.environ.get("PATH", os.defpath)
+    assert run.listed_run_path("mytool", os.path.realpath(tool), cfg, cwd, path)
+    assert not run.listed_run_path(str(tool), os.path.realpath(tool), cfg, cwd, path)
     other = _tool(tree / "elsewhere", "mytool")
-    assert not run.program_listed(str(other), os.path.realpath(other), cfg)
+    assert not run.listed_run_path(str(other), os.path.realpath(other), cfg, cwd, path)
 
 
 @pytest.mark.skipif(__import__("sys").platform != "darwin", reason="the macOS admin group")

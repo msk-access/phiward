@@ -62,7 +62,8 @@ def test_a_relative_word_is_never_the_listed_name(tree, monkeypatch):
     (proj / "opbin" / "wc").chmod(0o755)
     word, cwd = "../opbin/wc", str(proj / "sub")
     program = run.resolve_program(word, cwd, dict(os.environ))
-    assert run.program_listed(word, program, config.load(cwd)) is False
+    assert run.listed_run_path(word, program, config.load(cwd), os.getcwd(),
+                               os.environ.get("PATH", os.defpath)) == ""
     seen = []
     monkeypatch.setattr(run, "run_confined", _fake_confined(seen))
     out = io.StringIO()

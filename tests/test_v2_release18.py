@@ -974,8 +974,8 @@ def test_a_listed_name_is_known_by_its_folder_not_its_text(tree, monkeypatch):
         f'[protected_paths]\nroots = ["{tree}/phi"]\n[broker]\ncommands = ["wc"]\n')
     cfg = config.load(str(proj))
     word = str(d / "tools" / ".." / "wc")
-    assert run.program_listed(word, run.resolve_program(word, str(proj), dict(os.environ)),
-                              cfg) is False
+    assert run.listed_run_path(word, run.resolve_program(word, str(proj), dict(os.environ)),
+                               cfg, os.getcwd(), os.environ.get("PATH", os.defpath)) == ""
     # a path never stands for a bare listed name (round 18d), in any spelling: give the name
     (tree / "usrbin").mkdir()
     (tree / "usrbin" / "wc").write_text("#!/bin/sh\necho real\n")
@@ -983,7 +983,9 @@ def test_a_listed_name_is_known_by_its_folder_not_its_text(tree, monkeypatch):
     os.symlink(str(tree / "usrbin"), str(tree / "bin"))
     monkeypatch.setenv("PATH", f"{tree / 'usrbin'}:{os.environ['PATH']}")
     w2 = str(tree / "bin" / "wc")
-    assert run.program_listed(w2, run.resolve_program(w2, str(proj), dict(os.environ)),
-                              config.load(str(proj))) is False
-    assert run.program_listed("wc", run.resolve_program("wc", str(proj), dict(os.environ)),
-                              config.load(str(proj))) is True
+    assert run.listed_run_path(w2, run.resolve_program(w2, str(proj), dict(os.environ)),
+                               config.load(str(proj)), os.getcwd(),
+                               os.environ.get("PATH", os.defpath)) == ""
+    assert run.listed_run_path("wc", run.resolve_program("wc", str(proj), dict(os.environ)),
+                               config.load(str(proj)), os.getcwd(),
+                               os.environ.get("PATH", os.defpath)) != ""
