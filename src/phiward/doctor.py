@@ -337,9 +337,10 @@ def bare_split(project: str, home: str) -> Tuple[List[str], List[Tuple[str, str]
     return sorted(can), sorted(cannot)
 
 
-def install_lines() -> List[str]:
+def install_lines(state: Optional[List[bool]] = None) -> List[str]:
     """doctor's lines for how phiward itself is installed: a shared environment, and the
-    self-check. Setup does not change them, so they show before setup too."""
+    self-check (whether phiward is installed goes into `state`). Setup does not change them, so
+    they show before setup too."""
     out = []
     if os.path.isdir(os.path.join(sys.prefix, "conda-meta")) or \
             os.path.basename(sys.prefix).lower() in ("anaconda3", "miniconda3", "mambaforge",
@@ -350,10 +351,10 @@ def install_lines() -> List[str]:
                    f"{os.path.basename(sys.prefix)}); its folder is protected from the agent, so "
                    "the agent cannot install packages there. Install phiward with `uv tool "
                    "install` or `pipx` instead (see docs/setup.md).")
-    return out + selfcheck_lines()
+    return out + selfcheck_lines(state)
 
 
-def selfcheck_lines() -> List[str]:
+def selfcheck_lines(state: Optional[List[bool]] = None) -> List[str]:
     """doctor's lines for phiward's self-check and its full check of phiward's own Python: one
     WARNING for the package (what `launch` and every wrapped MCP server check before they start,
     and refuse), one for the rest of its Python (which another account could change), each with
@@ -363,6 +364,8 @@ def selfcheck_lines() -> List[str]:
         installed, package, python = selfcheck.check_full_isolated()
     except Exception as exc:  # noqa: BLE001 - doctor reports; it does not stop
         return [f"WARNING: phiward's self-check could not run ({type(exc).__name__})"]
+    if state is not None:
+        state.append(bool(installed))
     if not installed:
         return []
     out = []
@@ -971,8 +974,10 @@ def main(argv: List[str]) -> int:
               "do not trust, leave write_to and remotes empty and net false.")
     # the operator runs doctor in the project folder; a hook gets $CLAUDE_PROJECT_DIR
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
-    for line in install_lines():
+    installed: List[bool] = []  # from the self-check: the launch section asks no second time
+    for line in install_lines(installed):
         print(line)
+    version = claude_settings.claude_version()  # read once, for mentions and launch
     print("Claude Code:")
     # before Claude Code is wired, each part's fix is the same command: one next step (each
     # part is behind --verbose)
@@ -1009,7 +1014,7 @@ def main(argv: List[str]) -> int:
         say(line)
     for line in launch_settings_report():
         say(line)
-    for line in mentions_report(project, home):
+    for line in mentions_report(project, home, version):
         say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
@@ -1079,7 +1084,8 @@ def main(argv: List[str]) -> int:
     for line in network_report(project, home, cfg):
         say(line)
     print("launch (Mode B), for a session started with `phiward launch` here:")
-    for line in launch_report(cwd, home, cfg):
+    for line in launch_report(cwd, home, cfg, version=version,
+                              installed=installed[0] if installed else None, show=show):
         print(line)
     return 0
 
@@ -1133,13 +1139,16 @@ RUNS_LATER_NOTE = (
 
 
 def launch_report(project: str, home: str, cfg: config.Config,
-                  env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> List[str]:
+                  env: Optional[Dict[str, str]] = None, platform: str = sys.platform,
+                  version: Optional[Tuple[int, int, int]] = None,
+                  installed: Optional[bool] = None, show: bool = False) -> List[str]:
     """`phiward launch` started in `project`: what its start would refuse, from the checks launch
-    itself runs (wholetool), and what a session there cannot do. It starts nothing: Claude Code's
-    build is judged from its files, and a native binary's version is the one doctor reads above
-    (`claude --version`); when that is unknown, only launch can tell."""
+    itself runs (wholetool), and what a session there cannot do. It starts nothing and asks
+    nothing again: Claude Code's build is judged from its files, a native binary's version is
+    `version` (what doctor read; when None, a NOTE says only launch can tell), and whether
+    phiward is installed is `installed` (doctor's self-check; None: not known, no line). A PATH
+    entry is named relative to the project unless `show`."""
     import shutil
-    from phiward import selfcheck
     from phiward import wholetool as wt
     env = dict(os.environ) if env is None else env
     real = os.path.realpath(project)
@@ -1148,22 +1157,31 @@ def launch_report(project: str, home: str, cfg: config.Config,
     def refused(why: str) -> None:
         out.append(f"  WARNING: launch would refuse to start here: {why}.")
 
+    if not cfg.has_protected_paths:
+        refused(wt.NO_PATHS)
     why = wt._project_problem(real, env)
     if why:
         refused(wt.PROJECT_STEP.format(why))
     entry = wt._path_entry_inside(real, env)
     if entry:
-        refused(wt._path_step(entry, env))
+        shown = entry if show else os.path.relpath(os.path.realpath(entry), real)
+        refused(wt._path_step(entry, env, shown))
     for rel in wt.LINK_REFUSED:
         if os.path.islink(os.path.join(real, rel)):
             refused(wt.LINK_STEP.format(rel))
     tool = shutil.which("claude", path=env.get("PATH") or os.defpath)
     if tool:
-        known = claude_settings.claude_version() or claude_settings.VERSION_HOOK_ARGS
-        why = wt.claude_version_problem(tool, wt.write_places(real, env), env,
-                                        ask=lambda _real, _env: known)
+        asked: List[str] = []
+
+        def known(real_tool: str, _env: Any) -> Optional[Tuple[int, int, int]]:
+            asked.append(real_tool)  # a native binary: its version is the one doctor read
+            return version or claude_settings.VERSION_HOOK_ARGS
+        why = wt.claude_version_problem(tool, wt.write_places(real, env), env, ask=known)
         if why:
             refused(f"--tool claude: {why}")
+        elif asked and version is None:
+            out.append("  NOTE: launch --tool claude: the version of Claude Code is unknown "
+                       "here: only launch can tell (it asks the native binary at the start).")
     if env.get("ANTHROPIC_BASE_URL"):
         why = wt.base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
         if why:
@@ -1187,11 +1205,7 @@ def launch_report(project: str, home: str, cfg: config.Config,
                                     "ANTHROPIC_AUTH_TOKEN")):
         out.append(f"  NOTE: {wt.LOGIN_NOTE}.")
     out.append("  " + RUNS_LATER_NOTE)
-    try:
-        installed = selfcheck.check_isolated()[0]
-    except Exception:  # noqa: BLE001 - doctor reports; it does not stop
-        installed = True  # selfcheck_lines says why it could not run
-    if not installed and env.get("PHIWARD_DEV") != "1":
+    if installed is False and env.get("PHIWARD_DEV") != "1":
         out.append("  NOTE: this phiward is a source checkout or an editable install, which "
                    "launch refuses: install it with uv tool or pipx, or set PHIWARD_DEV=1 to "
                    "start from a checkout.")
@@ -1470,11 +1484,15 @@ MENTIONS_MIN_VERSION = (2, 1, 299)
 MENTIONS_PROBLEM_BELOW = (2, 1, 295)
 
 
-def mentions_report(project: Optional[str], home: str) -> List[str]:
+_UNREAD = object()
+
+
+def mentions_report(project: Optional[str], home: str, version: Any = _UNREAD) -> List[str]:
     """`@path` mentions: with them on, a mention puts a file's text into the prompt without a
     tool call phiward's hook sees. The user (or managed) settings turn them off with
     `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` (Claude Code v2.1.299+, and ignored in a project's
-    settings, so a project's value is not read)."""
+    settings, so a project's value is not read). `version` is Claude Code's, when the caller has
+    read it already."""
     trusted = [lv for lv in claude_settings.levels(project, home) if lv[0] in ("managed", "user")]
     value = claude_settings._first(trusted, "env", install.MENTIONS_OFF)
     out: List[str] = []
@@ -1482,7 +1500,8 @@ def mentions_report(project: Optional[str], home: str) -> List[str]:
         out.append(f"  WARNING: env.{install.MENTIONS_OFF} is not \"1\" in your user settings: an "
                    "@-mention puts a file's text into the prompt without a tool call the hook "
                    "sees. Run `(cd ~ && phiward install claude --user --write)`.")
-    version = claude_settings.claude_version()
+    if version is _UNREAD:
+        version = claude_settings.claude_version()
     if version is not None and version < MENTIONS_MIN_VERSION:
         word = "PROBLEM" if version < MENTIONS_PROBLEM_BELOW else "WARNING"
         out.append(f"  {word}: Claude Code {claude_settings.version_text(version)} does not know "

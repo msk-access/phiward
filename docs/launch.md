@@ -94,7 +94,7 @@ phiward launch --tool claude
   interpreter, or a shim's config, could be the session's. It reads the version from the
   `package.json` of the script's npm package (`@anthropic-ai/claude-code`). A tool that gives
   no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
-  run Claude Code's own program (`claude --version` must print 2.1.295 (Claude Code) or newer),
+  run Claude Code's own program directly (the native binary, or the npm package's `cli.js`),
   or use `--tool generic` for another tool. `phiward doctor` warns about a wrapper before the
   start ([refusals.md](refusals.md)).
 

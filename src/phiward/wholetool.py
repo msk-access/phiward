@@ -282,9 +282,8 @@ PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a proj
 LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
 DASH_DASH = ("launch passes --settings to Claude Code as the last arguments, so `--` cannot be "
              "among them: drop the `--` and put the prompt last")
-CLAUDE_STEP = ("run Claude Code's own program directly, not a wrapper or a shim (`claude --version` must "
-               "print " + claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
-               + " (Claude Code) or newer), or use --tool generic for another tool")
+CLAUDE_STEP = ("run Claude Code's own program directly (the native binary, or the npm package's "
+               "cli.js), not a wrapper or a shim, or use --tool generic for another tool")
 LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
               "every time; to log in once, run `claude setup-token` and set "
               "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
@@ -355,15 +354,17 @@ def _path_entry_inside(project: str, env: Dict[str, str]) -> str:
     return ""
 
 
-def _path_step(entry: str, env: Dict[str, str]) -> str:
-    """The refusal for a PATH entry inside the project, with the way out."""
-    why = (f"PATH holds {entry}, inside the project; programs there run in your terminal after "
+def _path_step(entry: str, env: Dict[str, str], shown: str = "") -> str:
+    """The refusal for a PATH entry inside the project, with the way out; `shown` is how the
+    entry is named (doctor names it relative to the project)."""
+    name = shown or entry
+    why = (f"PATH holds {name}, inside the project; programs there run in your terminal after "
            "the session. ")
     venv = env.get("VIRTUAL_ENV") or ""
     if venv and os.path.realpath(venv) == os.path.dirname(os.path.realpath(entry)):
-        return why + (f"Run `deactivate` (or take {entry} off PATH), then start again; in the "
+        return why + (f"Run `deactivate` (or take {name} off PATH), then start again; in the "
                       "session, use .venv/bin/python or uv run")
-    return why + f"Take {entry} off PATH (direnv: `direnv deny`), then start again"
+    return why + f"Take {name} off PATH (direnv: `direnv deny`), then start again"
 
 
 def _fixed_folders(folder: str) -> None:

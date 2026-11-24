@@ -29,8 +29,10 @@ message ends: ); start the tool in a project folder
 
 **A folder on PATH inside the project** (an activated `.venv`, direnv, `node_modules/.bin`). Your
 own shell runs what is there after the session, and the session could write there. The message
-names the entry and the step: run `deactivate` (or take the entry off PATH), then start again;
-in the session, use `.venv/bin/python` or `uv run`.
+names the entry and the step. For an activated `.venv`: run `deactivate` (or take the entry
+off PATH), then start again; in the session, use `.venv/bin/python` or `uv run`. For any other
+entry: take it off PATH (for direnv, `direnv deny`), then start again. Doctor names the entry
+relative to the project (`--show-paths` names it in full).
 
 **A settings file or folder that is a link** (`.claude` or `.vscode` linked to a dotfiles
 repository). A session's writes would reach a file a later plain run reads. The message ends:
@@ -39,7 +41,11 @@ in the project is a link; replace it with a real file or folder
 **A wrapper, a shim or an old Claude Code** (`module load` scripts, asdf, mise, volta, a site
 `claude` script). Launch needs Claude Code's own program, at the version whose hooks it writes,
 and never starts a script to ask. The step:
-run Claude Code's own program directly, not a wrapper or a shim (`claude --version` must print 2.1.295 (Claude Code) or newer), or use --tool generic for another tool
+run Claude Code's own program directly (the native binary, or the npm package's cli.js), not a wrapper or a shim, or use --tool generic for another tool
+
+Launch needs Claude Code 2.1.295 or newer. Doctor judges the build from its files and starts
+nothing; for a native binary it uses the version it read, and when that is unknown it says only
+launch can tell.
 
 On Linux, the JavaScript (npm) build is refused too: it does not carry Claude Code's seccomp
 filter. Update to the native build: `claude install`.
