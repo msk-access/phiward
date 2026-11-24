@@ -19,9 +19,9 @@ broker treats everything in it as untrusted data:
   `BASH_ENV`, `RSYNC_RSH` or `LD_PRELOAD` cannot change what an approved command runs.
 
 The broker also writes a status file, `~/.phiward/broker.json` (outside the spool; the
-agent may not write it): the user config, cache folder, roots and patterns that it uses. It
-writes it again when they change, and removes it when it stops. `doctor` reports a difference
-from the agent's own view (the spool too). A reader uses it only while the heartbeat is fresh.
+agent may not write it): its phiward version, and the user config, cache folder, roots and
+patterns that it uses. It writes it again when they change, and removes it when it stops.
+`doctor` reports a difference from the agent's own view (the spool and the version too). A reader uses it only while the heartbeat is fresh.
 
 Files: the client writes `req-<id>.json` (through a temporary name and a rename); the broker
 claims it by renaming it to `job-<id>.json`, writes the sanitized output to `out-<id>.log`, then
@@ -689,8 +689,9 @@ def _status() -> Dict[str, Any]:
     cfg = config.load("/")
     import socket as _socket
     from phiward import procinfo
+    from phiward import __version__
     me = procinfo.info(os.getpid())
-    return {"v": 1, "pid": os.getpid(), "start": me[1] if me else None,
+    return {"v": 1, "version": __version__, "pid": os.getpid(), "start": me[1] if me else None,
             "host": _socket.gethostname(), "config": config.user_config_path(), "cache": config.cache_dir(),
             "spool": config.spool_dir(),
             "roots": cfg.user_roots, "patterns": cfg.user_patterns,
@@ -746,6 +747,18 @@ def read_status(spool: Optional[str] = None) -> Dict[str, Any]:
     return _read_status_file()
 
 
+def version_problem(status: Dict[str, Any]) -> str:
+    """For doctor and `--headless`: why the running broker (its status, `read_status`) may run
+    older code than this phiward, or "". A broker before 0.2.0b2 writes no version."""
+    from phiward import __version__
+    if not status or status.get("version") == __version__:
+        return ""
+    theirs = status.get("version") or "not given (older than 0.2.0b2)"
+    return (f"the running broker's phiward version is {theirs}, this one's is {__version__}: "
+            "after an upgrade the broker runs the old code until it restarts. Restart it: "
+            "`(cd ~ && phiward broker --service --write)`, or stop and start `phiward broker`")
+
+
 def other_spool(spool: str) -> Optional[str]:
     """The spool of a broker that runs with another spool than `spool`, or None. Only to say
     where the broker is (`doctor`, a refused request): nothing else is taken from the file."""
@@ -785,7 +798,7 @@ def _read_status_file() -> Dict[str, Any]:
         v = data.get(key)
         out[key] = [x for x in v if isinstance(x, str) and os.path.isabs(x)] if isinstance(v, list) else []
     if private:  # who wrote it (`running`): only from the broker's own private file
-        for key, kind in (("pid", int), ("start", int), ("host", str)):
+        for key, kind in (("pid", int), ("start", int), ("host", str), ("version", str)):
             v = data.get(key)
             if isinstance(v, kind) and not isinstance(v, bool):
                 out[key] = v
