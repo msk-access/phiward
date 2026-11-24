@@ -127,6 +127,8 @@ def test_doctor_notes_an_unknown_version_and_starts_nothing(tree, native):
 def test_the_launch_section_reuses_the_version_doctor_read(tree, native, monkeypatch, capsys):
     from phiward import claude_settings
     monkeypatch.setattr(claude_settings, "claude_version", lambda: (2, 1, 300))
+    # as on Linux, or with no protected patterns: doctor's other reading gives None
+    monkeypatch.setattr(doctor, "_pattern_version", lambda cfg: None)
     got = {}
     real = doctor.launch_report
     monkeypatch.setattr(doctor, "launch_report",
@@ -134,6 +136,7 @@ def test_the_launch_section_reuses_the_version_doctor_read(tree, native, monkeyp
     monkeypatch.chdir(tree / "repo")
     doctor.main([])
     assert got.get("version") == (2, 1, 300) and "installed" in got, got
+    assert got.get("show") is False, got  # paths in full only with --show-paths
 
     def again():
         raise AssertionError("launch_report read the version itself")
