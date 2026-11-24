@@ -303,8 +303,10 @@ def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeyp
     assert "project scan" not in session_note.note(cfg, str(tree / "repo"))
 
 
-def _extract(dest, members):
-    """Run the pull's extractor on a made-up tar stream of `members` (name, bytes)."""
+def _extract(dest, members, max_file=None):
+    """Run the pull's extractor on a made-up tar stream of `members` (name, bytes). `max_file`:
+    a file-size limit for the extractor (RLIMIT_FSIZE, SIGXFSZ ignored), so a write past it
+    fails as a full disk would."""
     import io
     import subprocess
     import sys
@@ -316,8 +318,15 @@ def _extract(dest, members):
             info = tarfile.TarInfo(name)
             info.size = len(data)
             t.addfile(info, io.BytesIO(data))
+
+    def limit():
+        import resource
+        import signal
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (max_file, max_file))
     return subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
-                          input=buf.getvalue(), capture_output=True)
+                          input=buf.getvalue(), capture_output=True,
+                          preexec_fn=limit if max_file else None)
 
 
 def test_the_extractor_counts_an_existing_file_as_kept(tree):
@@ -342,3 +351,17 @@ def test_the_extractor_fails_on_a_file_it_cannot_write(tree):
     assert r.returncode != 0, r
     assert b"kept 0 existing" in r.stdout and b"failed 1" in r.stdout, r.stdout
     assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
+
+
+def test_the_extractor_removes_a_file_whose_write_failed(tree):
+    dest = tree / "phi" / "pulled"
+    dest.mkdir()
+    r = _extract(dest, [("big.bin", b"x" * (256 * 1024)), ("b.txt", b"b\n")],
+                 max_file=64 * 1024)
+    assert r.returncode == 1, r
+    assert b"failed 1" in r.stdout, r
+    # no truncated file that the next pull would count as kept
+    assert not (dest / "big.bin").exists()
+    assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
+    again = _extract(dest, [("big.bin", b"x" * 1024)])
+    assert again.returncode == 0 and b"kept 0 existing" in again.stdout, again
