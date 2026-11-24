@@ -53,12 +53,11 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
             if r is not None and cfg.no_phi_folders:
                 # a no-PHI folder (the session's project is a listed folder that passes its
                 # check): the hook acts as with `[shell] best_effort`, but only when the
-                # sandbox openers alone leave the shell unconfined (`no_phi_reason`)
-                entry, why = config.no_phi_match(cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""))
-                cfg.no_phi_here = bool(entry) and not why and all(
-                    claude_settings.no_phi_reason(p, home, cfg.all_roots, cfg.patterns,
-                                                  config.guard_files(), hidden=secret) is None
-                    for p in folders)
+                # sandbox openers alone leave the shell unconfined (`no_phi_relaxed`, the test
+                # the session note and doctor show)
+                entry, why = claude_settings.no_phi_relaxed(
+                    cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""), home, folders)
+                cfg.no_phi_here = bool(entry) and why is None
             listed = [p for p in folders if r is None and claude_settings.excluded_entries(p, home)]
             if listed:
                 where, step = claude_settings.excluded_step(listed[0], home)

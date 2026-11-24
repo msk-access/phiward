@@ -76,9 +76,11 @@ NO_PHI_FOUND = ("phiward: WARNING: this folder is listed as holding no PHI, but 
                 "folders.")
 
 
-def no_phi_refused(why: str) -> str:
-    """Why a listed folder is not relaxed, for the person (the note and doctor)."""
-    return f"phiward: [no_phi] folders lists this folder, but {why}: not relaxed."
+def no_phi_refused(why: str, step: str = "") -> str:
+    """Why a listed folder is not relaxed, with the step that relaxes it when there is one, for
+    the person (the note and doctor; `claude_settings.no_phi_relaxed`)."""
+    return (f"phiward: [no_phi] folders lists this folder, but {why}: not relaxed"
+            + (f"; to relax it, {step}." if step else "."))
 
 
 LIMITS_GIT = ("git push, pull and fetch that need the operator's SSH key or keychain run in the "
@@ -157,15 +159,19 @@ def main(argv: List[str]) -> int:
         if cfg.problem or not cfg.has_protected_paths:
             return 0
         found = _scan_found(cfg, project)
-        # the same test as the hook's (adapters.decide): the named project is a listed folder
-        from phiward import claude_settings
-        entry, why = config.no_phi_match(cfg, os.environ.get("CLAUDE_PROJECT_DIR", "")) \
-            if claude_settings.named_project_holds(project) else ("", "")
+        # the hook's own test (adapters.decide): the named project is a listed folder
+        from phiward import claude_settings, pathid
+        home = pathid.home()
+        entry, why = claude_settings.no_phi_relaxed(
+            cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""), home,
+            claude_settings.confining_folders(project, home)) \
+            if claude_settings.named_project_holds(project) else ("", None)
         out: dict = {"hookSpecificOutput": {"hookEventName": "SessionStart",
                                             "additionalContext": note(
-                                                cfg, project, bool(entry) and not why, found)}}
+                                                cfg, project, bool(entry) and why is None,
+                                                found)}}
         if entry:
-            out["systemMessage"] = (no_phi_refused(why) if why else
+            out["systemMessage"] = (no_phi_refused(why.text, why.step) if why else
                                     NO_PHI_FOUND.format(found=found) if found else NO_PHI_RELAXED)
         sys.stdout.write(json.dumps(out))
     except Exception:  # noqa: BLE001 - a note must never stop a session

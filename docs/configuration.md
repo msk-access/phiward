@@ -523,8 +523,9 @@ written.
   relaxed when there is a link on its path, when it is a place `phiward launch` refuses as a
   project (`/`, the home folder or above it, a dot-folder in it, `~/Library`, a folder that
   holds phiward's own files), or when it is inside or above a protected path. The session's
-  start message says why. An entry that does not exist relaxes nothing; `phiward doctor` notes
-  it.
+  start message and `phiward doctor` use the hook's own test: when a listed folder is not
+  relaxed, for these reasons or for the settings above, they say why, and give the step when
+  there is one. An entry that does not exist relaxes nothing; `phiward doctor` notes it.
 - **What stays on:** protected roots and the hidden list (the text check, `permissions.deny`
   and `denyRead`), the prompt scan, the project scan at the start of a session, the asks for
   files that run later and for writes outside the project, and the guard files. When the

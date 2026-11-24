@@ -34,7 +34,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   nothing. The session's start message says whether it is relaxed (and warns when the project
   scan finds identifiers there); `phiward doctor` lists the folders. `phiward launch` runs as
   usual in a listed folder, with a NOTE. The `allowLocalBinding` refusal names `[no_phi]
-  folders` as a way out.
+  folders` as a way out. The start message and doctor use the hook's own test, so where the
+  hook keeps the refusal (a unix socket, a root missing from `denyRead`) they say "not
+  relaxed", with the reason and its step.
 - The masking check, and `[sanitize] examples` (user config only): made-up values in the form
   of your own rules (`FAKE-PT-0001` for `FAKE-PT-\d{4} => <SUBJECT>`), never real ones.
   `phiward doctor`, `phiward launch` and the broker at its start check that each value is fully
