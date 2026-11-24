@@ -288,6 +288,9 @@ WRITE_TO_STEP = "[launch] write_to {}: {}; fix or remove it in [launch] write_to
 WRITE_TO_MISSING = "[launch] write_to {} does not exist, so the session does not write there"
 WRITE_TO_BROKER = ("it is, holds or is inside a [broker] write_to folder: the gateway writes "
                    "unmasked output there; keep the two apart")
+# the variables that give Claude Code a login without asking (launch and doctor say LOGIN_NOTE when
+# none is set)
+LOGIN_TOKEN_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
               "every time; to log in once, run `claude setup-token` and set "
               "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
@@ -2313,8 +2316,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         with carryover._runs_lock(folder) as rfd:
             _write_at(rfd, os.path.basename(run) + carryover.RECORD,
                       "".join(p + "\n" for p in listed))
-    if adapter.name == "claude" and not any(env.get(k) for k in (
-            "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
+    if adapter.name == "claude" and not any(env.get(k) for k in LOGIN_TOKEN_VARS):
         sys.stderr.write(f"phiward launch: {LOGIN_NOTE}\n")
     if claude and not cfg.launch_keep_transcripts and _asks_resume(argv[1:]):
         sys.stderr.write("phiward launch: NOTE: keep_transcripts is off, so this session starts "
