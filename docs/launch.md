@@ -470,8 +470,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
     write the program's real file or a folder above it, on a machine other than x86_64 or
     aarch64, or when settings
     open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
-    `enableWeakerNestedSandbox`). A read-only wrapper of your own, inside the project, that
-    runs a native binary the session can write is not caught: only the wrapper is checked.
+    `enableWeakerNestedSandbox`). With a wrapper of your own, the check is of the wrapper
+    itself. Keep the programs the session runs, and what a wrapper runs, outside the project
+    and the folders the session writes.
   - **What is not covered.** The tests use a made-up native build. Only the sandbox check
     shows that the real binary's filter works inside launch's bubblewrap, and whether sessions
     that Claude Code starts in the background (`--bg`, its background service) get the same
