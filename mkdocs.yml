@@ -50,6 +50,7 @@ extra:
 nav:
   - Home: index.md
   - Status: status.md
+  - Roadmap: roadmap.md
   - Use phiward:
       - Quick start: quickstart.md
       - Daily use: daily-use.md
@@ -71,6 +72,7 @@ nav:
       - For contributors: developer.md
       - Releasing: releasing.md
   - Release notes:
+      - v0.2.0b2: release-notes/v0.2.0b2.md
       - v0.2.0b1: release-notes/v0.2.0b1.md
 
 markdown_extensions:

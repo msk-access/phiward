@@ -7,8 +7,9 @@ tested yet. It lists only results that passed. Each line names its source; the t
 
 ## Read this first
 
-- **No run of the real Claude Code on a Linux machine has passed yet.** On Linux, only the test
-  suite and a wrapped MCP server have run ([threat model](threat-model.md#for-reviewers-the-summary)).
+- **On Linux, the real Claude Code has passed only in Docker.** The maintainer's sandbox check
+  has passed in Docker since 2026-11-22. No run on a real Linux machine has passed yet
+  ([threat model](threat-model.md#for-reviewers-the-summary)).
 - **On RHEL 8 (kernel 4.18) the gateway cannot run.** That kernel has no Landlock, and
   `phiward run` refuses to run without it. The hook and Claude Code's sandbox are meant to work
   there, but no run on RHEL 8 has passed yet ([hpc.md](hpc.md)).
@@ -18,7 +19,7 @@ tested yet. It lists only results that passed. Each line names its source; the t
 | Platform | What passed |
 |---|---|
 | macOS | Mode A: the real Claude Code desktop app, wired by `install claude`: reads of protected data and credentials refused, `ssh` to HPC failed, normal work unaffected. Mode A with the plugin only, in the desktop app: reads refused by the hook (no sandbox or permission rules without `install`). Mode B: the real Claude Code under `phiward launch`. A small stdio MCP server wrapped in `phiward launch`. HPC through the shared SSH connection, against a real cluster. The full test suite. |
-| Linux | The full test suite, with bubblewrap. The published `@modelcontextprotocol/server-filesystem` 2.3.0, wrapped in `phiward launch`: it read ordinary files and could neither read nor list a protected folder. |
+| Linux | The maintainer's sandbox check with the real Claude Code, in Docker (since 2026-11-22). The full test suite, with bubblewrap. The published `@modelcontextprotocol/server-filesystem` 2.3.0, wrapped in `phiward launch`: it read ordinary files and could neither read nor list a protected folder. |
 
 Source: the threat model, "What was tested".
 
@@ -26,7 +27,7 @@ Source: the threat model, "What was tested".
 
 From the threat model, "Not tested":
 
-- the real Claude Code on Linux (only the test suite);
+- the real Claude Code on a real Linux machine (it has passed only in Docker);
 - `phiward launch` driven from the app with Remote Control;
 - a published MCP server under `launch` on macOS (on Linux it was);
 - a protected folder on a mounted HPC volume;

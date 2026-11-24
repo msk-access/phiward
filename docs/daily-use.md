@@ -147,15 +147,18 @@ delete it yourself first.
 phiward copy ~/data/patients/run1 ~/data/patients/run1-copy
 ```
 
-`copy SRC... DST` copies without printing names. The destination must be inside a protected path
-of the user config, or under a `[copy] remotes` entry. Each local path is made absolute
-once, and every check and the copy itself use that path. One with a `..` part, or one that
-starts with `~` (quoted, so the shell left it), is refused: give the full path. A local copy first makes the destination folder with the system
-`mkdir -p`, then copies with the system `rsync -a` (or `cp -R`): two steps in the same profile,
-and the copy runs only when the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
-([hpc.md](hpc.md#phiward-copy)). The copy runs in the gateway profile and cannot read
-credentials. Its output is sanitized. The only option is `--dry-run`, as the first word: it
-counts what a push would send, and for a local copy it shows what rsync would copy.
+`copy SRC... DST` copies without printing names. The destination must be inside a protected path of
+the user config, or under a `[copy] remotes` entry. Each local path is made absolute once, and every
+check and the copy itself use that path. One with a `..` part, or one that starts with `~` (quoted,
+so the shell left it), is refused: give the full path. A local copy first makes the destination
+folder with the system `mkdir -p`, then copies with the system `rsync` (files that exist are kept,
+never replaced; a `.claude/` folder is skipped; times are kept, modes and links are not), or without
+rsync with `cp -R -n`, single files only: two steps in the same profile, and the copy runs only when
+the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
+([hpc.md](hpc.md#phiward-copy)). The copy runs in the gateway profile and cannot read credentials.
+Its output is sanitized. The only option is `--dry-run`, as the first word: it counts what a push
+would send, and for a local copy with rsync it shows what rsync would copy (without rsync it shows
+nothing).
 
 ## Give the agent pseudonymized data: `phiward pseudonymize`
 
@@ -384,7 +387,7 @@ flowchart TD
 The hook refuses a tool call that names a protected path, and ends its reason with the rule:
 no tool may read, list, search or print a protected path; use `phiward run -- CMD` as the
 whole command, or `phiward copy`. Once a config exists, it also refuses `phiward setup`,
-`broker`, `pin` and `carryover`: those are for the operator only.
+`broker`, `pin`, `carryover` and `pseudonymize`: those are for the operator only.
 
 ### A prompt that was not sent
 
@@ -401,9 +404,9 @@ What the check does not see: [threat-model.md](threat-model.md#known-prompt-scan
 ### Messages from `run` and `copy`
 
 Messages start with `run` or `copy` (the table shows `run`; `copy` says the same), and the real
-text goes on with more detail. Four come from the broker itself and start with `refused:`
-(busy; cannot use this request; the config changed; programs not approved); all four exit with
-3. An exit of 3 with no output at all means the broker refused the request before it could write
+text goes on with more detail. Five come from the broker itself and start with `refused:`
+(busy; cannot use this request; the config changed; programs not approved; the masking check
+failed); all five exit with 3. An exit of 3 with no output at all means the broker refused the request before it could write
 anything: the broker's log has the reason.
 
 | Message | Meaning | What to do |

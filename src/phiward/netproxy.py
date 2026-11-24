@@ -170,7 +170,7 @@ def private_network_problem(text: str) -> str:
     try:
         n = ipaddress.ip_network(text, strict=True)
     except ValueError:
-        return "is not a network with its prefix length (for example 10.20.0.0/16)"
+        return "is not a network (for example 10.20.0.0/16) or one address (10.20.0.5)"
     if not any(n.version == p.version and n.subnet_of(p) for p in PRIVATE):  # type: ignore[arg-type]
         return ("is not inside a private range (" + ", ".join(str(p) for p in PRIVATE) +
                 "); this machine, its link and public addresses cannot be listed")

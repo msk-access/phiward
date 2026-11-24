@@ -60,10 +60,11 @@ the machine ([threat model](threat-model.md#for-reviewers-the-summary)).
 - It reuses the operating system's sandboxes (Seatbelt on macOS; bubblewrap, seccomp and
   Landlock on Linux), Claude Code's own sandbox and permission rules, and the system `ssh`,
   `tar` and `rsync`.
-- It filters the network only where Claude Code's own sandbox can: with `[network] limit`, the
-  shell commands of a Mode A session reach only the hosts you list. The WebFetch tool, MCP
-  servers and Mode B stay open: an agent can still send what it can read there. A network proxy
-  such as the one in `sandbox-runtime` could add that later.
+- It filters the network in two places. With `[network] limit`, the shell commands of a Mode A
+  session reach only the hosts you list; the WebFetch tool and MCP servers stay open. In Mode B,
+  `phiward launch` sends the tool's network through a loopback proxy of its own, which refuses
+  this machine and private addresses. Public hosts stay open in both: an agent can still send
+  what it can read there.
 - Masking hides names and identifiers, not other content in a record. Gateway commands should
   print counts and summaries.
 

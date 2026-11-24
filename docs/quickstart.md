@@ -1,7 +1,8 @@
 # Quick start
 
 - **For:** anyone who sets phiward up for the first time.
-- **Before:** macOS or Linux, and Claude Code 2.1.295 or newer.
+- **Before:** macOS or Linux, and Claude Code 2.1.295 or newer; 2.1.299 or newer for
+  `@` mentions off (`phiward doctor` warns below it).
 - **You will have:** phiward installed, your protected folders set, Claude Code wired, and a test
   that shows it works.
 
@@ -26,6 +27,11 @@ people. The stronger **Mode B**
 
 ## 1. Install phiward
 
+**On Linux, first** install bubblewrap and socat (phiward's kernel profile and Claude Code's
+sandbox need them), with your package manager, for example `sudo apt install bubblewrap socat`.
+Without admin rights, see [hpc.md](hpc.md#claude-code-on-the-login-node). On Ubuntu 24.04,
+AppArmor can block bubblewrap: see [setup.md](setup.md#1-requirements).
+
 In Terminal:
 
 ```bash
@@ -46,12 +52,8 @@ uv downloads once (not Xcode's, conda's or the system's, which another account o
 change). The last command puts `~/.local/bin`, where `phiward`
 now is, on your `PATH`.
 
-Then **open a new Terminal**, and **quit and reopen the Claude Code desktop app** (Cmd-Q), so
-that both find `phiward`. In the new Terminal, `phiward --version` prints the version.
-
-**On Linux**, install bubblewrap and socat first (phiward's kernel profile and Claude Code's
-sandbox need them), with your package manager, for example `sudo apt install bubblewrap socat`.
-Without admin rights, see [hpc.md](hpc.md#claude-code-on-the-login-node).
+Then **open a new Terminal**, and **quit and reopen the Claude Code desktop app** (Cmd-Q on
+macOS), so that both find `phiward`. In the new Terminal, `phiward --version` prints the version.
 
 Do not install phiward into conda or another shared Python environment: phiward protects its own
 folder from the agent. Setup also makes phiward's own Python writable by you alone (it says
@@ -218,7 +220,7 @@ request can read your key or Kerberos ticket. The one-time setup is in [hpc.md](
 
 | What you see | What to do |
 |---|---|
-| Every tool call is refused with "phiward is not installed or not on PATH" | The app does not find `phiward`. Quit the app (Cmd-Q) and open it again. If that does not help, check in Terminal that `command -v phiward` prints `~/.local/bin/phiward`, and run `uv tool update-shell` again. |
+| Every tool call is refused with "phiward is not installed or not on PATH" | The app does not find `phiward`. Quit the app (Cmd-Q on macOS) and open it again. If that does not help, check in Terminal that `command -v phiward` prints `~/.local/bin/phiward`, and run `uv tool update-shell` again. |
 | `phiward run` says no broker is running | Start it at every login: `(cd ~ && phiward broker --service --write)` in Terminal. Or run `phiward broker` in a Terminal and keep it open. |
 | A command the agent needs is refused | The refusal says what to run instead. See [daily-use.md](daily-use.md). |
 | `phiward doctor` shows a `PROBLEM` | Fix it before you use the agent; the line says how. |

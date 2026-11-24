@@ -227,7 +227,9 @@ nothing from quarantine without reading it (`phiward carryover show`).
 - **Prompt injection.** A page or file the agent reads can tell it what to do, and nobody sees it
   happen. phiward still keeps it from reading protected data, but what it can read it can send: the
   network is open by default. In Mode A, `[network] limit` keeps shell commands to the hosts you
-  list ([configuration.md](configuration.md)). The WebFetch tool, MCP servers and Mode B stay open.
+  list ([configuration.md](configuration.md)); the WebFetch tool and MCP servers stay open. In
+  Mode B, `phiward launch`'s proxy refuses this machine and private addresses; public hosts stay
+  open.
 - **Masked output is still content.** Gateway output hides names and identifiers, not other
   content. Write the gateway commands an agent may run so that they print counts and summaries,
   and limit them with `[broker] commands`.

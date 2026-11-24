@@ -46,8 +46,9 @@ simplicity, surgical changes, verifiable goals):
 
 ## Git and safety
 
-- Work on a branch and open a pull request to `main`. Never push, tag or publish without the
-  maintainer's yes, and never skip the git hooks (`--no-verify`).
+- Work on a branch and open a pull request to `develop` (`main` gets only releases). Never
+  push, tag or publish without the maintainer's yes, and never skip the git hooks
+  (`--no-verify`).
 - A change to this file, `CLAUDE.md`, `.agents/` or `.claude/` is an instruction to every
   agent that works here: read such a diff on GitHub before you open a session on that branch.
 - A vulnerability in phiward is reported privately ([SECURITY.md](SECURITY.md)), never in an

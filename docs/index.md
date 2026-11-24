@@ -6,7 +6,8 @@ output can hold file contents, sample identifiers or file names. With phiward, t
 protected data only through a **gateway** that masks names and identifiers.
 
 - **Status:** v0.2.0b1, a beta. See the [release notes](release-notes/v0.2.0b1.md).
-- **Needs:** macOS or Linux, and Claude Code 2.1.295 or newer.
+- **Needs:** macOS or Linux, and Claude Code 2.1.295 or newer; 2.1.299 or newer for `@`
+  mentions off.
 - **Install:** `uv tool install --python-preference only-managed phiward==0.2.0b1`, then the
   [quick start](quickstart.md).
 
