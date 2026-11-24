@@ -302,7 +302,7 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 - **`pass_env`** (list): environment variables passed to a launched tool besides the built-in
   allow-list. The agent can read whatever you pass. The proxy variables are always the session's
   own proxy ([launch.md](launch.md#the-network)).
-- **`private_networks`** (list of networks; default none): private ranges the session's network
+- **`private_networks`** (list of networks or addresses; default none): private ranges the session's network
   proxy may reach, for example `["10.20.0.0/16"]` for an internal Git server or an HPC web
   service. Each entry must be a network (`10.20.0.0/16`) or one address (`10.20.0.5`), inside
   `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`; anything else
@@ -342,9 +342,8 @@ The grants. Nothing asks the operator at run time: what is not written here is r
   - an entry that does not exist yet is skipped (`doctor` counts it);
   - an entry reached through a link is skipped (`doctor` counts it): whoever can change the link
     would choose the place. Name the real folder;
-  - an entry that holds a `.claude` folder is skipped (`doctor` counts it): anyone who can make
-    that folder could otherwise stop every guarded action. A `--write-to` to it is then refused
-    as a folder that is not granted;
+  - an entry that holds a `.claude` folder is skipped (`doctor` counts it); a `--write-to` to it
+    is refused as a folder that is not granted;
   - an entry that is `/`, the home folder or above it, in a dot-folder of the home folder, in
     `~/Library` or a `PATH` folder, above a protected root, in a derived protected folder or a
     pattern match, that holds a names or pack file of the config, or that holds or is inside a
