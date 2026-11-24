@@ -264,10 +264,10 @@ def test_no_confinement_backend_names_bubblewrap_and_setup(tree, monkeypatch):
     monkeypatch.setattr(confine, "backend", lambda: None)
     msg = _refusal(["/bin/echo", "x"], tree / "repo", dict(os.environ))
     assert "no confinement backend" in msg, msg
-    assert "install bubblewrap" in msg and "setup.md" in msg, msg
+    assert "install bubblewrap" in msg and "on the PATH" in msg and "setup.md" in msg, msg
     with pytest.raises(confine.ConfineError) as exc:
         confine.gateway_command(["/bin/echo", "x"], [str(tree / "phi")], [])
-    assert "install bubblewrap" in str(exc.value) and "setup.md" in str(exc.value), exc.value
+    assert str(exc.value) == msg, exc.value
 
 
 @pytest.mark.parametrize("value", ["https://proxy.example:3128", "socks5://proxy.example:1080"])
@@ -280,8 +280,10 @@ def test_an_upstream_proxy_that_is_not_http_names_the_way_out(value):
 
 def test_landlock_below_abi_2_names_the_kernel_it_needs():
     from phiward import confine
-    line = next(t for t in confine.LANDLOCK_HELPER.splitlines() if "Landlock ABI 2" in t)
-    assert "Linux 5.19 or newer" in line and "Landlock turned on" in line, line
+    msg = confine.LANDLOCK_TOO_OLD
+    assert "Landlock ABI 2" in msg and "Linux 5.19 or newer with Landlock turned on" in msg, msg
+    assert repr(msg) in confine.LANDLOCK_HELPER  # the helper raises this message
+    assert "Landlock ABI 2" not in confine.LANDLOCK_HELPER.replace(repr(msg), "")
 
 
 def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeypatch):
