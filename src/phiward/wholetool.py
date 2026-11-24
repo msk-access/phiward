@@ -4,10 +4,10 @@ The tool itself starts inside the profile, so everything it does (its file tools
 and hooks), and every child it starts, is decided by the kernel, not by a path check. The text
 users see is HELP below; this docstring is for developers.
 
-Writes are denied by default. They are allowed only in the project, this session's own run
-folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
-a link on its path, is not used. Inside the project, files that other tools run later stay
-read-only: git's control files and `.git` entries, and the one list
+Writes are denied by default. They are allowed only in the project, the `[launch] write_to`
+folders, this session's own run folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A
+write place that is a link, or has a link on its path, is not used. Inside the project, files
+that other tools run later stay read-only: git's control files and `.git` entries, and the one list
 (`claude_settings.RUNS_LATER_DIRS`, `RUNS_LATER_FILES`) as a whole, at any depth, with the targets
 of the links inside them. The tool and a wrapped MCP server differ only in the whole `.git`
 folder. On Linux, `.claude`, `.vscode` and `.idea` are made at start and `.mcp.json` as a
@@ -44,9 +44,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from phiward import (carryover, claude_settings, config, confine, install, netproxy, pathid,
                      pathmatch, safeio)
-from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
-                            KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
-                            _token_paths)
+from phiward.hidden import IPC_PATHS, KRB5_CACHE_NAMES, KRB5_CACHE_PATTERNS
 from phiward.hidden import credentials as _credentials  # noqa: E402
 
 USAGE = ("Run an agent tool, or one program, in phiward's kernel profile (Mode B), for example "
@@ -145,9 +143,6 @@ class Adapter:
     name: str
     program: str = ""  # the tool's command, found on the operator's PATH
     config_env: str = ""  # the variable that moves its config folder
-    # state folders under HOME the tool uses; not write places: the operator's plain tool
-    # reads them, so XDG_STATE_HOME and XDG_DATA_HOME point into the run folder instead
-    home_writes: List[str] = field(default_factory=list)
     extra_env: Dict[str, str] = field(default_factory=dict)
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
@@ -206,7 +201,6 @@ class Adapter:
 ADAPTERS: Dict[str, Adapter] = {
     "generic": Adapter("generic"),
     "claude": Adapter("claude", "claude", "CLAUDE_CONFIG_DIR",
-                      [".local/state/claude", "Library/Caches/claude-cli-nodejs"],
                       # no auto-update; no download of the official plugin catalog into each fresh
                       # folder (~14 MB and 830 files every session)
                       {"DISABLE_AUTOUPDATER": "1",
@@ -294,6 +288,9 @@ WRITE_TO_STEP = "[launch] write_to {}: {}; fix or remove it in [launch] write_to
 WRITE_TO_MISSING = "[launch] write_to {} does not exist, so the session does not write there"
 WRITE_TO_BROKER = ("it is, holds or is inside a [broker] write_to folder: the gateway writes "
                    "unmasked output there; keep the two apart")
+# the variables that give Claude Code a login without asking (launch and doctor say LOGIN_NOTE when
+# none is set)
+LOGIN_TOKEN_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
 LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
               "every time; to log in once, run `claude setup-token` and set "
               "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
@@ -2319,8 +2316,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         with carryover._runs_lock(folder) as rfd:
             _write_at(rfd, os.path.basename(run) + carryover.RECORD,
                       "".join(p + "\n" for p in listed))
-    if adapter.name == "claude" and not any(env.get(k) for k in (
-            "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
+    if adapter.name == "claude" and not any(env.get(k) for k in LOGIN_TOKEN_VARS):
         sys.stderr.write(f"phiward launch: {LOGIN_NOTE}\n")
     if claude and not cfg.launch_keep_transcripts and _asks_resume(argv[1:]):
         sys.stderr.write("phiward launch: NOTE: keep_transcripts is off, so this session starts "

@@ -93,9 +93,6 @@ def _word(node):
     return None
 
 
-_INLINE_FLAGS = ("c", "e", "p")
-
-
 def _flag_letter(w: str):
     """The inline-code letter a short option word ends in (`-c`, `-Ic`, `-Sc`), or None."""
     m = re.fullmatch(r"-([A-Za-z]*)([cep])", w)

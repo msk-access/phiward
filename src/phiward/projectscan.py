@@ -62,7 +62,9 @@ class Result(NamedTuple):
     complete: bool  # False when the deadline came first
     error: str  # non-empty: the scan could not run (fail closed)
     off: bool = False  # no subject rule: nothing to look for
-    listed: int = 0  # regular files the walk found (all of them, when it finished)
+    # regular files the walk found (all of them, when it finished). No src code reads it; it stays
+    # for the timing report in tests/test_projectscan.py, which prints it beside `files`.
+    listed: int = 0
 
 
 def deadline() -> float:
@@ -304,7 +306,7 @@ def scan(cfg: config.Config, project: str, until: Optional[float] = None,
         return Result([], {}, 0, False, "the project scan could not run")
 
 
-def _plural(n: int, word: str) -> str:
+def plural(n: int, word: str) -> str:
     return f"{n} {word}" + ("" if n == 1 else "s")
 
 
@@ -314,8 +316,8 @@ def found_text(r: Result) -> str:
     names: Counter = Counter()
     for _path, line, kinds in r.hits:
         (files if line else names).update(kinds)
-    return ", ".join([f"{k} in {_plural(n, 'file')}" for k, n in sorted(files.items())]
-                     + [f"{k} in {_plural(n, 'file name')}" for k, n in sorted(names.items())])
+    return ", ".join([f"{k} in {plural(n, 'file')}" for k, n in sorted(files.items())]
+                     + [f"{k} in {plural(n, 'file name')}" for k, n in sorted(names.items())])
 
 
 def skipped_text(r: Result, reasons: Optional[Tuple[str, ...]] = None) -> str:

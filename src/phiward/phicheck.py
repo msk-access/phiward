@@ -17,6 +17,7 @@ import re
 from typing import List, NamedTuple, Tuple
 
 from phiward import config, pathmatch, promptscan, sanitize
+from phiward.projectscan import plural
 
 CANARY = "FAKE-CANARY-0001.txt"
 WILD = "fakecanary"
@@ -62,10 +63,6 @@ def _user_rules(cfg: config.Config) -> List[Tuple[str, "re.Pattern[str]"]]:
         rules += [(f"pack file {j}, rule {k}", rx)
                   for k, (rx, _r) in enumerate(pack.paths + pack.identifiers, 1)]
     return rules
-
-
-def _plural(n: int, word: str) -> str:
-    return f"{n} {word}" + ("" if n == 1 else "s")
 
 
 def _check(cfg: config.Config, cwd: str) -> Result:
@@ -117,9 +114,9 @@ def _check(cfg: config.Config, cwd: str) -> Result:
                     if label.startswith("remote") and not folder.startswith("/") else "")
             failed.append(f"a made-up path below {label} came out unmasked{hint}")
     if failed:
-        return Result(failed, notes, f"masking check: {_plural(len(failed), 'problem')}")
-    what = ([_plural(len(cfg.sanitize_examples), "example")] if cfg.sanitize_examples else []) \
-        + [_plural(len(places), "root")]
+        return Result(failed, notes, f"masking check: {plural(len(failed), 'problem')}")
+    what = ([plural(len(cfg.sanitize_examples), "example")] if cfg.sanitize_examples else []) \
+        + [plural(len(places), "root")]
     mine = f"{tested} of {len(rules)} rules tested" if rules else "no rules of your own"
     return Result([], notes, f"masking check: ok ({', '.join(what)}; {mine})")
 

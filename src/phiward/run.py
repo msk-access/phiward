@@ -497,14 +497,6 @@ def listed_run_path(word: str, program: str, cfg: config.Config, cwd: str,
     return chosen or program
 
 
-def program_listed(word: str, program: str, cfg: config.Config, cwd: str = "",
-                   path_env: Optional[str] = None) -> bool:
-    """Whether the program may run under `[broker] commands` (`listed_run_path`)."""
-    return bool(listed_run_path(word, program, cfg, cwd or os.getcwd(),
-                                os.environ.get("PATH", os.defpath) if path_env is None
-                                else path_env))
-
-
 def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
             cancelled: Callable[[], bool] = _never) -> int:
     """Run a request (in the broker). `env` is the command's environment; the config in force

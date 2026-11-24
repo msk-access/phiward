@@ -561,7 +561,7 @@ def settings_script_lines(project: str, home: str) -> List[str]:
 
 def code_root_lines(project: str, home: str) -> List[str]:
     """doctor's lines for the code Claude Code runs that a session in `project` can write, its
-    shell too (`claude_settings.writable_code_roots`: a skill linked in from the project)."""
+    shell too (`claude_settings.code_root_report`: a skill linked in from the project)."""
     out = []
     roots, notes = claude_settings.code_root_report(project, home)
     if len(roots) > 3:
@@ -1217,8 +1217,7 @@ def launch_report(project: str, home: str, cfg: config.Config,
             why = wt.inner_sandbox_reason(real, env)
             if why:
                 refused(f"--tool claude: {why}")
-    if not any(env.get(k) for k in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
-                                    "ANTHROPIC_AUTH_TOKEN")):
+    if not any(env.get(k) for k in wt.LOGIN_TOKEN_VARS):
         out.append(f"  NOTE: {wt.LOGIN_NOTE}.")
     out.append("  " + RUNS_LATER_NOTE)
     if installed is False and env.get("PHIWARD_DEV") != "1":

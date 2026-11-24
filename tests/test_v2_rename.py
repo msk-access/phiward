@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from phiward import config, gateway, wholetool
+from phiward import config, gateway, hidden
 
 
 @pytest.mark.parametrize("cmd", [
@@ -39,7 +39,7 @@ def test_an_old_user_config_is_refused(tree, monkeypatch):
 
 
 def test_sessions_cannot_read_the_old_state_folder():
-    assert ".agent-guards" in wholetool.CREDENTIALS
+    assert ".agent-guards" in hidden.CREDENTIALS
 
 
 def test_the_alias_launcher_is_a_guard_file(tree):

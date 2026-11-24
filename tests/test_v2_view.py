@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from phiward import wholetool
+from phiward import hidden, wholetool
 from helpers import CONFINE_WHY
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
@@ -233,5 +233,5 @@ def test_a_protected_root_is_never_skipped(tree, monkeypatch):
 def test_a_token_at_the_home_folder_does_not_hide_the_home(tree):
     home = str(tree / "home")
     (tree / "home" / "hpc").write_text("k")
-    out = wholetool._token_paths(home + "/%h", home)
+    out = hidden._token_paths(home + "/%h", home)
     assert home not in out and home + "/hpc" in out
