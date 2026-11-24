@@ -284,23 +284,6 @@ def test_landlock_below_abi_2_names_the_kernel_it_needs():
     assert "Linux 5.19 or newer" in line and "Landlock turned on" in line, line
 
 
-def test_a_pull_without_system_mkdir_or_tar_names_the_step(tree, monkeypatch):
-    import io
-    (tree / "home" / "phiward.toml").write_text(
-        (tree / "home" / "phiward.toml").read_text()
-        + '[copy]\nremotes = ["hpc-test:/work/me"]\n'
-        + '[remote]\nhosts = ["hpc-test"]\ncommands = ["wc"]\n')
-    real = copying.system_program
-    monkeypatch.setattr(copying, "system_program",
-                        lambda n: None if n == "tar" else real(n))
-    out = io.StringIO()
-    code = copying.execute(["hpc-test:/work/me/x", str(tree / "phi") + "/"], str(tree / "repo"),
-                           dict(os.environ), out)
-    msg = out.getvalue()
-    assert code == 2 and "mkdir and tar" in msg, msg
-    assert "/usr/bin" in msg and "package manager" in msg, msg
-
-
 def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeypatch):
     from phiward import projectscan
     cfg = config.load(str(tree / "repo"))

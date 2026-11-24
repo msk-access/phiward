@@ -167,7 +167,4 @@ the destination is not inside a protected path of the user config; results leave
 runs nothing without it. It needs Linux 5.19 or newer with Landlock turned on
 ([setup.md](setup.md#1-requirements)).
 
-**A pull without `mkdir` or `tar`.** A copy from a remote needs both in a system folder
-(`/usr/bin`, `/bin`, `/usr/sbin` or `/sbin`). Install them with the system's package manager.
-
 More messages of `run` and `copy`: [daily-use.md](daily-use.md#when-a-command-is-refused).

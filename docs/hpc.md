@@ -206,8 +206,6 @@ Every pull sends everything named (no resume); files that exist in the protected
 kept, never replaced. What the remote sends lands inside the protected
 folder: plain files and folders only; links and special files are skipped. A file or folder
 that cannot be made there (no permission, no space) fails the pull; the rest is still written.
-A pull needs `mkdir` and `tar` in a system folder (`/usr/bin`, `/bin`, `/usr/sbin` or
-`/sbin`); without them it is refused: install them with the system's package manager.
 
 A remote path may hold only letters, digits and `. _ + - /`, so it is one plain word for the
 remote shell. An argument with a `:` before its first `/` is remote, as rsync reads it: write a
