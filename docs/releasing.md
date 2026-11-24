@@ -202,7 +202,10 @@ Then push `main`, `develop` and the tag.
    The first release was tagged by hand on `main` (`git tag -a v0.2.0b1 -m "phiward v0.2.0b1"`).
 
 5. The `release` workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
-   checks that the tag names the version everywhere, builds the wheel and the source archive,
+   checks that the tag is on `main`, that it names the version in the three version files, that
+   no install line (`phiward==`), `/blob/v.../` link or plugin tag (`#v`) in README.md,
+   CHANGELOG.md, `plugin/commands/setup.md` or `docs/*.md` names another version, and that the
+   newest CHANGELOG entry no longer says unreleased. It builds the wheel and the source archive,
    checks them (`twine check --strict`), installs the wheel and runs it. Only then does the
    publish job start; nothing waits for an approval, so push the tag only when the release is
    ready. Its actions are pinned by commit; update a pin by its release's commit, not a tag.
