@@ -366,6 +366,34 @@ def test_the_note_says_not_relaxed_with_the_hooks_reason(tree, monkeypatch, caps
     assert CONTEXT not in out["hookSpecificOutput"]["additionalContext"], out
 
 
+def test_no_folders_to_check_is_not_relaxed(opened):
+    # fails closed: with no folder whose settings were read, nothing says the shell is confined
+    from phiward import claude_settings
+    _list(opened / "repo")
+    cfg = config.load(str(opened / "repo"))
+    home = str(opened / "home")
+    assert claude_settings.no_phi_relaxed(cfg, str(opened / "repo"), home) == (
+        str(opened / "repo"), None)
+    entry, why = claude_settings.no_phi_relaxed(cfg, str(opened / "repo"), home, [])
+    assert entry == str(opened / "repo") and why is not None and why.text, why
+
+
+def test_doctor_in_a_subfolder_checks_the_folders_the_hook_checks(opened, monkeypatch):
+    # a nested folder with its own settings: the hook reads them for a call there
+    tree = opened
+    _list(tree / "repo")
+    nested = tree / "repo" / "src" / ".claude"
+    nested.mkdir(parents=True)
+    (nested / "settings.json").write_text(json.dumps(
+        {"sandbox": {"network": {"allowUnixSockets": ["/var/run/docker.sock"]}}}))
+    code, text = _hook(tree, monkeypatch, "ls", cwd=tree / "repo" / "src")
+    assert code == 2, text
+    out = _doctor(tree / "repo" / "src", project=tree / "repo")
+    assert "(this folder: relaxed)" not in out, out
+    assert ("WARNING: " + NOT_RELAXED.format(why="sandbox.network.allowUnixSockets is not "
+                                             "empty")) in out, out
+
+
 @pytest.mark.parametrize("setup", [_sockets, _root_missing])
 def test_doctor_says_not_relaxed_with_the_hooks_reason(tree, monkeypatch, setup):
     why = setup(tree)
