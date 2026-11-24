@@ -352,11 +352,28 @@ def _project_problem(project: str, env: Dict[str, str]) -> str:
 PATH_INSIDE = "it holds a folder on PATH (programs there run later, outside launch)"
 
 
+PATH_RELATIVE = ("PATH holds an empty or relative entry (it names the folder your shell is in, "
+                 "and programs there run later, outside launch); remove it from PATH")
+EMPTY_PATH_ENTRY = "an empty entry"
+
+
+def _path_reason(entry: str) -> str:
+    """The short reason for a PATH entry `_path_entry_inside` found (write_to, the scan)."""
+    return PATH_INSIDE if os.path.isabs(entry) else PATH_RELATIVE
+
+
 def _path_entry_inside(project: str, env: Dict[str, str]) -> str:
     """The first PATH entry, as written, that is the project or inside it, or "": the operator's
-    own shell runs what is there after the session (an activated `.venv/bin`)."""
-    for e in (env.get("PATH") or "").split(":"):
-        if e and os.path.isabs(e) and _inside(os.path.realpath(e), project):
+    own shell runs what is there after the session (an activated `.venv/bin`). An empty entry
+    (EMPTY_PATH_ENTRY) or a relative one counts, fail-closed: it is resolved against the folder
+    the shell stands in, the project or a folder of it, which cannot be known."""
+    path = env.get("PATH")
+    if path is None:
+        return ""
+    for e in path.split(":"):
+        if not os.path.isabs(e):
+            return e or EMPTY_PATH_ENTRY
+        if _inside(os.path.realpath(e), project):
             return e
     return ""
 
@@ -364,6 +381,12 @@ def _path_entry_inside(project: str, env: Dict[str, str]) -> str:
 def _path_step(entry: str, env: Dict[str, str], shown: str = "") -> str:
     """The refusal for a PATH entry inside the project, with the way out; `shown` is how the
     entry is named (doctor names it relative to the project)."""
+    if not os.path.isabs(entry):
+        name = entry if entry == EMPTY_PATH_ENTRY else f"the relative entry {entry}"
+        return (f"PATH holds {name}: it names a folder of the "
+                "project when your shell is in it, and programs there run in your terminal after "
+                "the session. Remove the empty or relative entry from PATH (a leading or "
+                "trailing `:`, `::`, `.`, a name without a leading `/`), then start again")
     name = shown or entry
     why = (f"PATH holds {name}, inside the project; programs there run in your terminal after "
            "the session. ")
@@ -413,7 +436,7 @@ def launch_write_problem(full: str, cfg: config.Config, env: Dict[str, str]) -> 
     kind, what = _folder_checks(full, cfg, env)
     if kind:
         return {"protected": "it is inside or above a protected path",
-                "path": PATH_INSIDE, "link": f"its {what} is a link"}.get(kind, what)
+                "path": _path_reason(what), "link": f"its {what} is a link"}.get(kind, what)
     why = config.grant_problem(full, cfg, env)
     if why:
         return why

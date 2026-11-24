@@ -32,7 +32,10 @@ own shell runs what is there after the session, and the session could write ther
 names the entry and the step. For an activated `.venv`: run `deactivate` (or take the entry
 off PATH), then start again; in the session, use `.venv/bin/python` or `uv run`. For any other
 entry: take it off PATH (for direnv, `direnv deny`), then start again. Doctor names the entry
-relative to the project (`--show-paths` names it in full).
+relative to the project (`--show-paths` names it in full). An empty entry (a leading or
+trailing `:`, or `::`), `.` or another relative entry is refused too: it names the folder your
+shell is in, the project or a folder of it. Remove the empty or relative entry from PATH, then
+start again.
 
 **A settings file or folder that is a link** (`.claude` or `.vscode` linked to a dotfiles
 repository). A session's writes would reach a file a later plain run reads. The message ends:
