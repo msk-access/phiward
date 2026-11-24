@@ -2289,6 +2289,12 @@ prints the commands that remove it. Its log is in <code>~/Library/Logs/phiward</
 <code>~/.local/state/phiward</code> (Linux), which no session can read; <code>phiward doctor</code> shows whether it
 is running. The gateway is then available whenever
 you are logged in; every request is still checked against your config.</p>
+<p><strong>After an upgrade, restart the broker.</strong> A broker that still runs keeps the old code. Its
+status file names its phiward version. <code>doctor</code> warns when that differs from its own, or is
+missing (a broker older than this change writes none, and a status it cannot read counts as
+missing), and <code>doctor --headless</code> gives it as a reason it
+is not ready. Run <code>(cd ~ &amp;&amp; phiward broker --service --write)</code> again, or stop <code>phiward broker</code>
+and start it again.</p>
 <h2 id="6-pin-the-derived-folders">6. Pin the derived folders<a class="headerlink" href="#6-pin-the-derived-folders" title="Permanent link">&para;</a></h2>
 <p><code>phiward setup</code> does this each time it writes the config. After the
 guided first run, or after you edit the config by hand, do it yourself (<code>phiward doctor</code> notes
