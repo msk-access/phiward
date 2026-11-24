@@ -431,11 +431,14 @@ when in doubt, reinstall: the step names the command for the tool that installed
     and the system's name-service sockets (sssd, nscd).
   - Before 7.1, with `--tool claude`: Claude Code's own sandbox blocks unix sockets for Bash
     (its seccomp filter, which the native build carries). `launch` turns that sandbox on with
-    `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`, and
-    `sandbox.allowUnsandboxedCommands` false), passed as the last arguments of whatever
+    `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`,
+    `sandbox.allowUnsandboxedCommands` false, and `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS`:
+    the file `install` writes for `claude --settings`), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
     stops the start (drop the `--` and put the prompt last). Claude Code keeps only one `--settings`, so your own stops the start too,
-    unless it says just the same (the file `install` writes for `claude --settings`).
+    unless its content is just the same (the file `install` writes, as a shell alias adds it;
+    launch reads the content, not the path). One more key, another value or a file that does
+    not parse stops the start.
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
     --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,

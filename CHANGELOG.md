@@ -153,6 +153,12 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Fixed
 
+- Linux, below 7.1: `phiward launch --tool claude` refused the file `install` writes for
+  `claude --settings` (a common shell alias adds it): since `@` mentions were turned off there,
+  it no longer said just what launch passes. launch now passes that file's content, mentions
+  off included, and drops the operator's `--settings` only when its content is the same. One
+  that says more or other (another key or value, an allow, a hook) or does not parse still
+  stops the start.
 - Linux: the broker makes its cache folder (`~/.cache/phiward`) when it starts. While a
   command runs, Claude Code's own sandbox puts an empty read-only file at each denied path
   that does not exist, and the cache folder is denied: a first `phiward run` from a session

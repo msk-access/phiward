@@ -42,7 +42,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from phiward import carryover, claude_settings, config, confine, netproxy, pathid, pathmatch, safeio
+from phiward import (carryover, claude_settings, config, confine, install, netproxy, pathid,
+                     pathmatch, safeio)
 from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
                             KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
                             _token_paths)
@@ -673,15 +674,16 @@ FINGERPRINT_ERRNO = 3917
 UNIX_ABI = 9
 # what launch gives Claude Code below ABI 9, by --settings (above the project's and the user's
 # files; with the unsandboxed retry off there, Claude Code ignores a repository's settings that
-# loosen its sandbox)
-INNER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
-                              "allowUnsandboxedCommands": False}}
+# loosen its sandbox): the file `install` writes for `claude --settings`, so launch drops that
+# file (a shell alias adds it) with nothing lost
+INNER_SETTINGS = install.LAUNCH_SETTINGS
 # Claude Code's sandbox has a seccomp filter for these only
 INNER_ARCH = ("x86_64", "aarch64")
 def _without_launch_settings(argv: List[str]) -> List[str]:
-    """argv less a --settings that says just what launch passes (INNER_SETTINGS, as in the file
-    `install` writes for `claude --settings`). Claude Code keeps one --settings, the last, so any
-    other would be dropped without a word: it stops the start."""
+    """argv less a --settings that says just what launch passes (INNER_SETTINGS, the file
+    `install` writes for `claude --settings`), decided from its content, never its path.
+    Claude Code keeps one --settings, the last, so any other (one more key, another value, a
+    file that does not parse) would be dropped without a word: it stops the start."""
     out, i = [argv[0]], 1
     while i < len(argv):
         a = argv[i]
