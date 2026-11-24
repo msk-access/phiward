@@ -353,6 +353,10 @@ def install_lines() -> List[str]:
     return out + selfcheck_lines()
 
 
+# what the last self-check found: {"installed": bool}, for the launch section (no second check)
+SELFCHECK: Dict[str, bool] = {}
+
+
 def selfcheck_lines() -> List[str]:
     """doctor's lines for phiward's self-check and its full check of phiward's own Python: one
     WARNING for the package (what `launch` and every wrapped MCP server check before they start,
@@ -363,6 +367,7 @@ def selfcheck_lines() -> List[str]:
         installed, package, python = selfcheck.check_full_isolated()
     except Exception as exc:  # noqa: BLE001 - doctor reports; it does not stop
         return [f"WARNING: phiward's self-check could not run ({type(exc).__name__})"]
+    SELFCHECK["installed"] = bool(installed)
     if not installed:
         return []
     out = []
@@ -703,7 +708,9 @@ Options:
 Show the config in force and whether it loads, and what may turn the guards off: the
 confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
 MCP servers. On Linux it also says when `phiward launch` cannot start because the session
-cannot have a network of its own (no network namespaces). It reads settings files and never writes them. Run it in the project folder.
+cannot have a network of its own (no network namespaces). Its section "launch (Mode B)" runs
+the start checks of `phiward launch` in this folder, without starting anything, and names the
+step for each (docs/refusals.md). It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
 
 The project scan reads the project's files and file names for subject and sample IDs outside
@@ -831,9 +838,7 @@ def main(argv: List[str]) -> int:
         from phiward import paths
         rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(cwd)
     if rel:
-        print(f"WARNING: this folder is {rel} a protected path: its commands are refused or "
-              "denied, except gateway calls (phiward run|copy). Run the agent in a project "
-              "folder.")
+        print(relation_line(rel))
     from phiward import broker
     spool = config.spool_dir()
     where = broker.running(spool)
@@ -869,6 +874,8 @@ def main(argv: List[str]) -> int:
     elif st and (st.get("cache") != cfg.cache_dir or set(st.get("roots", [])) != set(cfg.user_roots)):
         print("WARNING: the broker uses another cache folder or roots than this shell (check "
               "XDG_CACHE_HOME on both sides, and restart the broker after a config change)")
+    for line in broker_path_lines(cfg, st):
+        print(line)
     from phiward import fsinfo, pin
     if cfg.has_protected_paths:
         pinned = set(pin.read_pins())
@@ -969,8 +976,11 @@ def main(argv: List[str]) -> int:
               "do not trust, leave write_to and remotes empty and net false.")
     # the operator runs doctor in the project folder; a hook gets $CLAUDE_PROJECT_DIR
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
+    SELFCHECK.clear()  # filled by the self-check: the launch section asks no second time
     for line in install_lines():
         print(line)
+    claude_ver = claude_settings.claude_version()  # read once, for mentions and launch
+    show_paths = show  # `show` is a printer further down
     print("Claude Code:")
     # before Claude Code is wired, each part's fix is the same command: one next step (each
     # part is behind --verbose)
@@ -1007,7 +1017,7 @@ def main(argv: List[str]) -> int:
         say(line)
     for line in launch_settings_report():
         say(line)
-    for line in mentions_report(project, home):
+    for line in mentions_report(project, home, claude_ver):
         say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
@@ -1071,9 +1081,138 @@ def main(argv: List[str]) -> int:
                           for a in allow):
             say("  NOTE: sandbox.filesystem.allowWrite does not hold the spool folder; "
                   "gateway calls cannot reach the broker from the sandbox.")
+        if ok:
+            for line in package_cache_lines():
+                say(line)
     for line in network_report(project, home, cfg):
         say(line)
+    print("launch (Mode B), for a session started with `phiward launch` here:")
+    for line in launch_report(cwd, home, cfg, version=claude_ver,
+                              installed=SELFCHECK.get("installed"), show=show_paths):
+        print(line)
     return 0
+
+
+def relation_line(rel: str) -> str:
+    """The WARNING for a folder inside or above a protected path; above one, Grep and Glob from
+    it are refused too (they would list the root), so it names the way: a subfolder."""
+    from phiward import paths
+    return (f"WARNING: this folder is {rel} a protected path: its commands are refused or denied, "
+            "except gateway calls (phiward run|copy). Run the agent in a project folder." +
+            (" Grep and Glob from this folder are refused too: give them a subfolder that holds "
+             "no protected folder." if rel == paths.ABOVE else ""))
+
+
+def broker_path_lines(cfg: config.Config, status: Dict[str, Any]) -> List[str]:
+    """A WARNING for the bare names of `[broker] commands` that the running broker's PATH (its
+    status file) does not find: `phiward run` refuses them as "not on the broker's PATH"."""
+    if not status or not cfg.command_lists or not isinstance(status.get("path"), str):
+        return []
+    from phiward import broker
+    missing = sorted({p[len("missing:"):] for p in broker.listed_programs(cfg, status["path"])
+                      if p.startswith("missing:")})
+    if not missing:
+        return []
+    return [f"WARNING: {len(missing)} program(s) of [broker] commands are not on the broker's "
+            "PATH, so `phiward run` refuses them: " + ", ".join(f"`{n}`" for n in missing[:10])
+            + ". The operator starts the broker again from a terminal where they work (for "
+            "example after `conda activate`), or lists them by their full path."]
+
+
+CACHE_NOTE = (
+    "NOTE: Claude Code's sandbox keeps the package caches outside the project read-only (pip: "
+    "~/.cache/pip, or ~/Library/Caches/pip on macOS; uv: ~/.cache/uv; npm: ~/.npm), so an "
+    "install that writes its cache fails with 'Operation not permitted'. Use `pip install "
+    "--no-cache-dir`, or set PIP_CACHE_DIR, UV_CACHE_DIR and npm_config_cache to folders under "
+    "$TMPDIR. phiward adds no allowWrite for them: a cache a session writes is code a later run "
+    "executes.")
+
+
+def package_cache_lines() -> List[str]:
+    """Mode A: the package caches the sandbox keeps read-only, and the way around (docs only:
+    no allowWrite, decided)."""
+    return ["  " + CACHE_NOTE]
+
+
+RUNS_LATER_NOTE = (
+    "NOTE: in a launch session the files other tools run later are read-only, at any depth: "
+    ".claude, .vscode, .idea, .Rprofile, .Renviron, .mcp.json and the like (a write gets "
+    "'Operation not permitted'). Edit them in a plain terminal, or `phiward carryover add` for "
+    "Claude Code's own files; run renv::init() once outside launch.")
+
+
+def launch_report(project: str, home: str, cfg: config.Config,
+                  env: Optional[Dict[str, str]] = None, platform: str = sys.platform,
+                  version: Optional[Tuple[int, int, int]] = None,
+                  installed: Optional[bool] = None, show: bool = False) -> List[str]:
+    """`phiward launch` started in `project`: what its start would refuse, from the checks launch
+    itself runs (wholetool), and what a session there cannot do. It starts nothing and asks
+    nothing again: Claude Code's build is judged from its files, a native binary's version is
+    `version` (what doctor read; when None, a NOTE says only launch can tell), and whether
+    phiward is installed is `installed` (doctor's self-check; None: not known, no line). A PATH
+    entry is named relative to the project unless `show`."""
+    import shutil
+    from phiward import wholetool as wt
+    env = dict(os.environ) if env is None else env
+    real = os.path.realpath(project)
+    out: List[str] = []
+
+    def refused(why: str) -> None:
+        out.append(f"  WARNING: launch would refuse to start here: {why}.")
+
+    if not cfg.has_protected_paths:
+        refused(wt.NO_PATHS)
+    why = wt._project_problem(real, env)
+    if why:
+        refused(wt.PROJECT_STEP.format(why))
+    entry = wt._path_entry_inside(real, env)
+    if entry:
+        shown = entry if show else os.path.relpath(os.path.realpath(entry), real)
+        refused(wt._path_step(entry, env, shown))
+    for rel in wt.LINK_REFUSED:
+        if os.path.islink(os.path.join(real, rel)):
+            refused(wt.LINK_STEP.format(rel))
+    tool = shutil.which("claude", path=env.get("PATH") or os.defpath)
+    if tool:
+        asked: List[str] = []
+
+        def known(real_tool: str, _env: Any) -> Optional[Tuple[int, int, int]]:
+            asked.append(real_tool)  # a native binary: its version is the one doctor read
+            return version or claude_settings.VERSION_HOOK_ARGS
+        why = wt.claude_version_problem(tool, wt.write_places(real, env), env, ask=known)
+        if why:
+            refused(f"--tool claude: {why}")
+        elif asked and version is None:
+            out.append("  NOTE: launch --tool claude: the version of Claude Code is unknown "
+                       "here: only launch can tell (it asks the native binary at the start).")
+    if env.get("ANTHROPIC_BASE_URL"):
+        why = wt.base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
+        if why:
+            refused(why)
+    if platform.startswith("linux"):
+        abi = wt.landlock_abi()
+        if abi >= wt.UNIX_ABI:
+            out.append(f"  launch on Linux: Landlock ABI {abi}: a session reaches only the unix "
+                       "sockets it makes itself")
+        else:
+            out.append(f"  NOTE: launch on Linux (Landlock ABI {abi}, below {wt.UNIX_ABI}): "
+                       "--tool claude runs in the inner mode, where Claude Code's own sandbox "
+                       "blocks unix sockets. There launch refuses your own --settings (put them "
+                       "in managed settings or launch's trusted copy), a `--` among Claude Code's "
+                       "arguments (put the prompt last), and Claude Code commands such as `claude "
+                       "mcp` (run those outside launch).")
+            why = wt.inner_sandbox_reason(real, env)
+            if why:
+                refused(f"--tool claude: {why}")
+    if not any(env.get(k) for k in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
+                                    "ANTHROPIC_AUTH_TOKEN")):
+        out.append(f"  NOTE: {wt.LOGIN_NOTE}.")
+    out.append("  " + RUNS_LATER_NOTE)
+    if installed is False and env.get("PHIWARD_DEV") != "1":
+        out.append("  NOTE: this phiward is a source checkout or an editable install, which "
+                   "launch refuses: install it with uv tool or pipx, or set PHIWARD_DEV=1 to "
+                   "start from a checkout.")
+    return out
 
 
 def clean_start_problem() -> Optional[str]:
@@ -1348,11 +1487,15 @@ MENTIONS_MIN_VERSION = (2, 1, 299)
 MENTIONS_PROBLEM_BELOW = (2, 1, 295)
 
 
-def mentions_report(project: Optional[str], home: str) -> List[str]:
+_UNREAD = object()
+
+
+def mentions_report(project: Optional[str], home: str, version: Any = _UNREAD) -> List[str]:
     """`@path` mentions: with them on, a mention puts a file's text into the prompt without a
     tool call phiward's hook sees. The user (or managed) settings turn them off with
     `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` (Claude Code v2.1.299+, and ignored in a project's
-    settings, so a project's value is not read)."""
+    settings, so a project's value is not read). `version` is Claude Code's, when the caller has
+    read it already."""
     trusted = [lv for lv in claude_settings.levels(project, home) if lv[0] in ("managed", "user")]
     value = claude_settings._first(trusted, "env", install.MENTIONS_OFF)
     out: List[str] = []
@@ -1360,7 +1503,8 @@ def mentions_report(project: Optional[str], home: str) -> List[str]:
         out.append(f"  WARNING: env.{install.MENTIONS_OFF} is not \"1\" in your user settings: an "
                    "@-mention puts a file's text into the prompt without a tool call the hook "
                    "sees. Run `(cd ~ && phiward install claude --user --write)`.")
-    version = claude_settings.claude_version()
+    if version is _UNREAD:
+        version = claude_settings.claude_version()
     if version is not None and version < MENTIONS_MIN_VERSION:
         word = "PROBLEM" if version < MENTIONS_PROBLEM_BELOW else "WARNING"
         out.append(f"  {word}: Claude Code {claude_settings.version_text(version)} does not know "

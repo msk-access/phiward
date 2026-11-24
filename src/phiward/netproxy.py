@@ -122,6 +122,8 @@ def address_problem(text: str, own: Set[Address], allow: Sequence[Network] = ())
 
 PRIVATE_WHY = "a private address"  # the one refusal the operator can lift ([launch] private_networks)
 PRIVATE_STEP = "the operator lists its range in [launch] private_networks (user config)"
+ONLY_CONNECT = ("only CONNECT (HTTPS) goes through phiward's proxy; use an https:// URL for the "
+                "index or mirror")
 
 
 def base_url_problem(url: str, allow: Sequence[str] = ()) -> str:
@@ -598,7 +600,7 @@ class Proxy:
         if len(parts) != 3 or not parts[2].startswith("HTTP/1."):
             raise _Refuse(400, "a request phiward cannot read")
         if parts[0] != "CONNECT":
-            raise _Refuse(405, "only CONNECT (HTTPS) goes through phiward's proxy")
+            raise _Refuse(405, ONLY_CONNECT)
         try:
             host, port = target(parts[1])
         except ValueError:

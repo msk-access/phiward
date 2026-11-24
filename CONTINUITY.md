@@ -24,6 +24,13 @@ v0.2.0b2, the second beta (v0.2.0b1 is on PyPI since 2026-11-18).
    newer), and the RHEL 8 run on the HPC nodes.
 3. The 0.2.0b2 release, as [docs/releasing.md](docs/releasing.md) says.
 4. Then on GitHub: rulesets on `main`, `develop` and `v*` tags, private vulnerability reporting.
+5. Refusals left by the refusals PR (c), each a change in behaviour, not a message:
+   - T4: under launch, the fast hook answers a file-tool write to a file that runs later with
+     one line, before the kernel's bare EPERM;
+   - T6: in Linux's inner mode, merge a user's `--settings` whose `sandbox` keys only tighten,
+     instead of refusing it (a guard: review first);
+   - T19: doctor tells when the config changed since the broker started. The broker's status
+     file holds no config fingerprint yet, so the broker must record one first.
 
 ## Waiting on the maintainer
 
