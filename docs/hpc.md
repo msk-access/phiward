@@ -205,7 +205,8 @@ profile. It writes only inside protected roots, reads no credential and has no n
 Every pull sends everything named (no resume); files that exist in the protected folder are
 kept, never replaced. What the remote sends lands inside the protected
 folder: plain files and folders only; links and special files are skipped. A file or folder
-that cannot be made there (no permission, no space) fails the pull; the rest is still written.
+that cannot be made or written in full there (no permission, no space) fails the pull. A
+partly written file is removed, and the rest is still written.
 
 A remote path may hold only letters, digits and `. _ + - /`, so it is one plain word for the
 remote shell. An argument with a `:` before its first `/` is remote, as rsync reads it: write a

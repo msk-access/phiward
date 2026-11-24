@@ -3,8 +3,8 @@
 Run by path, in the gateway profile: `<python> -I <PKG>/phiward/tar_extract.py DEST` (`-I` keeps
 this file's folder off `sys.path`). It is not imported. Standard library only. What exists is
 kept; links, special files, `..` and `.claude` are skipped; nothing is followed through a link.
-A file or folder it cannot make (no permission, no space) fails the pull (exit 1); the rest is
-still written.
+A file or folder it cannot make or write in full (no permission, no space) fails the pull
+(exit 1): a partly written file is removed, and the rest is still written.
 """
 import os
 import stat
@@ -63,12 +63,21 @@ with tarfile.open(fileobj=sys.stdin.buffer, mode="r|") as t:
                 failed += 1
                 continue
             src = t.extractfile(m)
-            with os.fdopen(out, "wb") as fh:
-                while True:
-                    b = src.read(1 << 20)
-                    if not b:
-                        break
-                    fh.write(b)
+            try:
+                with os.fdopen(out, "wb") as fh:
+                    while True:
+                        b = src.read(1 << 20)
+                        if not b:
+                            break
+                        fh.write(b)
+            except OSError:
+                # no truncated file: a later pull would keep it as if it were whole
+                try:
+                    os.unlink(parts[-1], dir_fd=fd)
+                except OSError:
+                    pass
+                failed += 1
+                continue
         finally:
             os.close(fd)
 sys.stdout.write(f"kept {kept} existing, skipped {skipped}, failed {failed}\n")
