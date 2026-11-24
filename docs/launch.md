@@ -436,9 +436,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
     the file `install` writes for `claude --settings`), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
     stops the start (drop the `--` and put the prompt last). Claude Code keeps only one `--settings`, so your own stops the start too,
-    unless its content is just the same (the file `install` writes, as a shell alias adds it;
-    launch reads the content, not the path). One more key, another value or a file that does
-    not parse stops the start.
+    unless its content is just the same (the file `install` writes, as a shell alias adds it,
+    or the one v0.2.0b1's `install` wrote, with no `env`; launch reads the content, not the
+    path). One more key, another value or a file that does not parse stops the start; if it
+    is phiward's file, rerun `phiward install claude --user --write`.
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
     --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,

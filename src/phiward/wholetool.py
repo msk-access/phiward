@@ -677,11 +677,15 @@ UNIX_ABI = 9
 # loosen its sandbox): the file `install` writes for `claude --settings`, so launch drops that
 # file (a shell alias adds it) with nothing lost
 INNER_SETTINGS = install.LAUNCH_SETTINGS
+# the file v0.2.0b1's `install` wrote (no env): launch passes its own, stricter, in its place
+OLDER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                              "allowUnsandboxedCommands": False}}
 # Claude Code's sandbox has a seccomp filter for these only
 INNER_ARCH = ("x86_64", "aarch64")
 def _without_launch_settings(argv: List[str]) -> List[str]:
     """argv less a --settings that says just what launch passes (INNER_SETTINGS, the file
-    `install` writes for `claude --settings`), decided from its content, never its path.
+    `install` writes for `claude --settings`) or what an older install wrote (OLDER_SETTINGS),
+    decided from its content, never its path.
     Claude Code keeps one --settings, the last, so any other (one more key, another value, a
     file that does not parse) would be dropped without a word: it stops the start."""
     out, i = [argv[0]], 1
@@ -702,13 +706,14 @@ def _without_launch_settings(argv: List[str]) -> List[str]:
                         data = json.loads(fh.read(1 << 20))
             except (OSError, ValueError):
                 data = None
-            if data != INNER_SETTINGS:
+            if data != INNER_SETTINGS and data != OLDER_SETTINGS:
                 raise LaunchError(
                     "launch passes its own --settings to Claude Code, which keeps only one, so "
-                    f"these ({val}) would be dropped. Under launch Claude Code reads a config "
-                    "folder of its own, not ~/.claude: put them in managed settings, or in the "
-                    "settings.json of launch's trusted copy (`phiward carryover add FILE --as "
-                    "settings.json --tool claude`)")
+                    f"these ({val}) would be dropped. If this is phiward's file, rerun `phiward "
+                    "install claude --user --write`. Under launch Claude Code reads a config "
+                    "folder of its own, not ~/.claude: put other settings in managed settings, "
+                    "or in the settings.json of launch's trusted copy (`phiward carryover add "
+                    "FILE --as settings.json --tool claude`)")
             continue
         out.append(a)
         i += 1
