@@ -48,8 +48,9 @@ Then push `main`, `develop` and the tag.
      and docs/index.md), and the release notes link (docs/index.md) and nav entry (mkdocs.yml).
    - Then grep for the old version, and change each line that names it as the current release:
      `git grep -n -F OLD -- ':!CHANGELOG.md' ':!docs/release-notes' ':!tests'`. Lines about an
-     older release stay (for example launch.md's "the one v0.2.0b1's `install` wrote", and the
-     agent-guards rename in setup.md, config.py, names.py and pyproject.toml).
+     older release stay (for example launch.md's "the one v0.2.0b1's `install` wrote", the
+     first release's tag line in step 4 below, and the agent-guards rename in setup.md,
+     config.py, names.py and pyproject.toml).
 
    The workflow refuses a tag when an install line (`phiward==`), a `/blob/v.../` link, a
    plugin tag (`#v`), a GitHub install (`@v`), a marketplace `"ref"` or a status line in
