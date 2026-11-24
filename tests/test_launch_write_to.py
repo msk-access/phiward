@@ -717,6 +717,16 @@ def test_a_listed_tmp_is_refused_by_the_write_to_check(tree):
     assert "WARNING: launch would refuse to start here: [launch] write_to /tmp: " in text, text
 
 
+def test_a_write_to_folder_with_an_unknown_kind_and_no_detail_is_refused(tree, monkeypatch):
+    """A kind of `_folder_checks` that the write_to check has no reason for still refuses,
+    also with no detail (fail-closed)."""
+    s = folder(tree)
+    monkeypatch.setattr(wholetool, "_folder_checks", lambda full, cfg, env: ("new-kind", ""))
+    why = wholetool.launch_write_problem(str(s), config.load(str(tree / "repo")),
+                                         dict(os.environ))
+    assert why, "an unknown kind with no detail was allowed"
+
+
 def test_headless_lists_a_launch_refusal(tree):
     os.symlink(tree / "pub", tree / "lnk")
     listed(tree / "lnk")
