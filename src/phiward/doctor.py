@@ -979,7 +979,8 @@ def main(argv: List[str]) -> int:
     SELFCHECK.clear()  # filled by the self-check: the launch section asks no second time
     for line in install_lines():
         print(line)
-    version = claude_settings.claude_version()  # read once, for mentions and launch
+    claude_ver = claude_settings.claude_version()  # read once, for mentions and launch
+    show_paths = show  # `show` is a printer further down
     print("Claude Code:")
     # before Claude Code is wired, each part's fix is the same command: one next step (each
     # part is behind --verbose)
@@ -1016,7 +1017,7 @@ def main(argv: List[str]) -> int:
         say(line)
     for line in launch_settings_report():
         say(line)
-    for line in mentions_report(project, home, version):
+    for line in mentions_report(project, home, claude_ver):
         say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
@@ -1086,8 +1087,8 @@ def main(argv: List[str]) -> int:
     for line in network_report(project, home, cfg):
         say(line)
     print("launch (Mode B), for a session started with `phiward launch` here:")
-    for line in launch_report(cwd, home, cfg, version=version,
-                              installed=SELFCHECK.get("installed"), show=show):
+    for line in launch_report(cwd, home, cfg, version=claude_ver,
+                              installed=SELFCHECK.get("installed"), show=show_paths):
         print(line)
     return 0
 
