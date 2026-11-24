@@ -138,6 +138,8 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
   project unread (files past their head, long lines, folders over the entry cap, files it
   cannot open) starts with one NOTE of those counts.
 - **A scan that cannot run** refuses: `the project scan could not run; run phiward doctor`.
+- **`[launch] write_to` folders** are scanned too, in the same 2 s, the instruction files of
+  every folder first ([More folders to write](#more-folders-to-write)).
 - A wrapped MCP server (`--entry`) is not scanned: its folder is not the agent's project.
 - **Mode A** has no launch: the SessionStart note runs the same scan within 2 s and, on a
   finding, tells the session the kinds and counts (it never stops the session), and
@@ -147,11 +149,73 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
 
 | | Can | Cannot |
 |---|---|---|
-| Files | read and write the project; write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
-| Files that run later | | write, at any depth in the project, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
+| Files | read and write the project and the [`[launch] write_to`](#more-folders-to-write) folders (user config); write its own session folder and the spool | read protected roots, patterns or derived folders (`.git`, snapshots, and on Linux other mounts of the same data); read credentials (`~/.ssh`, `~/.aws`, `~/.claude`, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's `write_to` folders; write anywhere else |
+| Files that run later | | write, at any depth in the project and in each `[launch] write_to` folder, the `.claude`, `.vscode`, `.idea`, `.cursor`, `.gemini` and `.codex` folders (each as a whole), `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` or `.Renviron`, or what a link inside them leads to; or git control files (hooks, config). On Linux `launch` makes `.claude`, `.vscode` and `.idea` in the project if there are none and `.mcp.json` as a `{}` placeholder; the others, a git control file missing at the start (`commondir`), and one of these made in a subfolder during the session can be made there, and the report at the end names them. In a `[launch] write_to` folder launch makes nothing; one missing at the start can be made there, and the report at the end names it. A wrapped MCP server (`--entry`) has the same profile, and cannot write the project's `.git` folders at all (on macOS also a new `.git`) |
 | Processes | run any program in the profile | read other terminals, signal processes outside, inject keystrokes, open or script other apps; on macOS also mount file systems or create launchd jobs |
 | Network | tunnels (CONNECT) to public addresses, through phiward's proxy ([below](#the-network)) | reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox |
 | Protected data | `phiward run -- CMD` (masked output), `phiward copy` (no names printed) | anything else |
+
+## More folders to write
+
+A project may need to write a sibling repository, a shared output folder or a scratch area.
+List those folders in your user config (a repo's `.phiward.toml` cannot):
+
+```toml
+[launch]
+write_to = ["~/work/shared-results", "/data/me/scratch"]
+```
+
+- **The checks, at each start.** launch refuses to start, naming the entry and the step ("fix
+  or remove it in [launch] write_to of the user config"), for an entry that is:
+  - a file, a link, or reached through a link (whoever can change the link would choose the
+    place); name the real folder;
+  - inside or above a protected root, a derived folder or a pattern match;
+  - `/`, the home folder or above it, a dot-folder of the home folder (`~/.config`,
+    `~/.claude`, `~/.phiward`), in `~/Library`, or a folder that is, holds or is inside a
+    `PATH` folder (files there run later, outside launch);
+  - a folder that holds a phiward file (the config, its code) or is the spool;
+  - a `[broker] write_to` folder, or one that holds or is inside one, or a credential.
+
+  The hook does not check them, so a bad entry stops only launch. `phiward doctor` gives the
+  same refusals.
+- **A missing entry is skipped,** with one NOTE: `phiward launch: NOTE: [launch] write_to
+  <entry> does not exist, so the session does not write there`. An entry inside the project
+  is dropped (the project is written already); one inside another entry is dropped too.
+- **The folders are named at the start:** `phiward launch: the session also writes: <folder>,
+  ...`, and in the `--report` JSON (`write_to`). `phiward doctor` counts them (the paths with
+  `--show-paths`).
+- **The project's rules hold in each folder.** What runs later and git control files are
+  read-only there, as in the project (the table above). launch makes nothing in a listed
+  folder: on Linux, one of them missing at the start can be made, and the report at the end
+  names it. A repository made in a listed folder during the session has writable git control
+  files on both platforms, as in the project; the report at the end names its `.git/` paths.
+- **The project scan reads each folder** with the project's rules and within the same 2 s:
+  first the instruction files of the project and of every listed folder, then the rest of each
+  in turn. A finding in any folder refuses, naming the folder. A listed folder's instruction
+  files not read in 2 s refuse ("run phiward doctor, or make them smaller"); the project's own,
+  and the rest not read, give the NOTE, naming the folders not finished.
+- **`--tool claude` gets `--add-dir D`** for each folder, after your own arguments (so a `--`
+  among them is refused). From an `--add-dir` folder Claude Code loads its skills (live), its
+  commands and its subagents, `enabledPlugins` and `extraKnownMarketplaces` of its settings,
+  and with `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1` (passed on as you set it) its
+  `CLAUDE.md` and rules. All of them sit under `.claude`, which is read-only there and scanned
+  before the tool starts.
+- **The trust prompt.** Claude Code 2.1.326 and newer asks you to trust each `--add-dir`
+  folder. Under launch every session starts with a fresh config folder, so it asks again in
+  every session. That is expected: answer it, or remove the entry.
+- **The end report** names what the session changed in each folder, under the folder's name.
+  Each folder is walked at the start and at the end, up to 2 million entries: list a folder,
+  not a whole disk.
+- **An abnormal end.** SIGHUP (the terminal closes) and SIGTERM still give the end report (one
+  ignored when launch starts, as under `nohup`, stays ignored). After a signal, a SIGKILL or a
+  crash, the next launch names the folders of the session that did not finish (on macOS the
+  tool may outlive the launcher): read their files that run later and what it changed before
+  you run anything there.
+- **Not `[broker] write_to`.** That one is the gateway's grant to write inside protected roots,
+  which a session cannot read; this one is what the session itself writes. The two may never
+  overlap ([configuration.md](configuration.md#launch)).
+- The broker's `PATH` filter and `phiward pseudonymize` treat the listed folders as written by
+  the agent: a program there is not run by the broker, and a table there is not an input.
 
 ## The network
 
@@ -262,7 +326,8 @@ What this breaks:
   code under `.venv` or `node_modules` is in that count. In a very large project it says so, and
   past its limit checks only the first three kinds (dot folders such as `.claude` first); past
   2,000,000 entries it checks nothing more. **Treat everything in the project as written
-  by the agent**, and read it before you run anything outside `launch`.
+  by the agent**, and read it before you run anything outside `launch`. Each `[launch]
+  write_to` folder gets a report of its own, under its name.
 - **Anything under `~/.phiward` may be deleted at any time** (a disk quota, an HPC purge, or
   you). The next start rebuilds from what is left, and it never trusts a folder a session could
   write. `carryover status` says what each deletion costs.

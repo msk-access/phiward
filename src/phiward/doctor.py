@@ -1174,6 +1174,17 @@ def launch_report(project: str, home: str, cfg: config.Config,
     for rel in wt.LINK_REFUSED:
         if os.path.islink(os.path.join(real, rel)):
             refused(wt.LINK_STEP.format(rel))
+    # [launch] write_to: launch's own start check of each entry
+    listed, missing, _dropped, cannot = wt._sort_write_to(cfg, env, real)
+    for entry, why in cannot:
+        refused(wt.WRITE_TO_STEP.format(entry, why))
+    for m in missing:
+        out.append(f"  NOTE: {wt.WRITE_TO_MISSING.format(m)}.")
+    if cfg.launch_write_to:
+        out.append(f"  launch writes also: {len(listed)} folder(s) ([launch] write_to)"
+                   + (f" (skipped: {len(missing)} that do not exist)" if missing else ""))
+        if show:
+            out += [f"    {p}" for p in listed]
     tool = shutil.which("claude", path=env.get("PATH") or os.defpath)
     if tool:
         asked: List[str] = []
@@ -1181,7 +1192,8 @@ def launch_report(project: str, home: str, cfg: config.Config,
         def known(real_tool: str, _env: Any) -> Optional[Tuple[int, int, int]]:
             asked.append(real_tool)  # a native binary: its version is the one doctor read
             return version or claude_settings.VERSION_HOOK_ARGS
-        why = wt.claude_version_problem(tool, wt.write_places(real, env), env, ask=known)
+        why = wt.claude_version_problem(tool, wt.write_places(real, env, extra=listed), env,
+                                        ask=known)
         if why:
             refused(f"--tool claude: {why}")
         elif asked and version is None:
@@ -1301,6 +1313,11 @@ def headless_problems(project: str, home: str) -> List[str]:
     from phiward import phicheck
     out += [f"masking check: {f}" for f in phicheck.check(cfg, project).failed]
     out += project_scan_problems(cfg, project)
+    from phiward import wholetool
+    _listed, _missing, _dropped, cannot = wholetool._sort_write_to(
+        cfg, dict(os.environ), os.path.realpath(project))
+    out += [f"launch would refuse to start: {wholetool.WRITE_TO_STEP.format(e, why)}"
+            for e, why in cannot]
     return out
 
 

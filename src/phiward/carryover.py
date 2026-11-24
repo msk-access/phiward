@@ -1530,22 +1530,71 @@ class _runs_lock:
         os.close(self.fd)
 
 
+# `runs/<name>.write_to`: the `[launch] write_to` folders of the session in `runs/<name>`, one
+# per line, written by the launcher before the tool starts (no session writes `runs/` itself)
+# and removed after its report; one left by a session that did not finish is named at the next
+# start
+RECORD = ".write_to"
+RECORD_CAP = 64 * 1024
+
+
+def _record_note(rfd: int, name: str) -> List[str]:
+    """The NOTE for the record of the unfinished session `name`, or [] when it has none. Read
+    only as a regular file with no link, of at most RECORD_CAP bytes; anything else: its
+    folders are unknown."""
+    try:
+        os.lstat(name + RECORD, dir_fd=rfd)
+    except OSError:
+        return []
+    folders: Optional[List[str]] = None
+    try:
+        fd = os.open(name + RECORD, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=rfd)
+        try:
+            if stat.S_ISREG(os.fstat(fd).st_mode):
+                data = os.read(fd, RECORD_CAP + 1)
+                if len(data) <= RECORD_CAP:
+                    folders = [ln for ln in data.decode("utf-8", "replace").splitlines() if ln]
+        finally:
+            os.close(fd)
+    except OSError:
+        folders = None
+    could = (f"it could write {', '.join(_esc(f) for f in folders)}" if folders
+             else "its write folders are unknown")
+    return [f"phiward launch: NOTE: an earlier session ({_esc(name)}) did not finish; {could}; "
+            "read their files that run later (.claude, .vscode, .mcp.json, git hooks ...) and "
+            "the files it changed before you run anything there"]
+
+
+def drop_record(base: str, run: str) -> List[str]:
+    """At the end of a session: its record moved away (after its final report)."""
+    name = os.path.basename(run) + RECORD
+    if not run or not os.path.lexists(os.path.join(base, RUNS, name)):
+        return []
+    return _plain_finish(base, name)
+
+
 def _clean_runs(base: str, current: str, finish) -> List[str]:
     """Every run folder but the current one whose launcher no longer holds its lock is finished
     (`finish(name)`: read, then moved to trash and removed). A locked one is a live session and
-    is left alone (parallel sessions). Trash is emptied; what cannot be removed stays and is
-    reported."""
+    is left alone (parallel sessions). A session's record (RECORD) stays while its run folder
+    does; when the folder is finished, the record is named in a NOTE and moved away. Trash is
+    emptied; what cannot be removed stays and is reported."""
     msgs: List[str] = []
     runs = os.path.join(base, RUNS)
     with _runs_lock(base) as rfd:
         for n in sorted(os.listdir(rfd)):
             if os.path.join(runs, n) == current:
                 continue
+            if n.endswith(RECORD) and os.path.lexists(os.path.join(runs, n[:-len(RECORD)])):
+                continue  # its session's folder decides (finished below, or live)
             try:
                 st = os.lstat(n, dir_fd=rfd)
             except OSError:
                 continue
             if not stat.S_ISDIR(st.st_mode):  # a link or a file: nothing to read, only moved away
+                if n.endswith(RECORD):  # its run folder is gone: the launcher ended mid-report
+                    msgs += _record_note(rfd, n[:-len(RECORD)])
                 msgs += _plain_finish(base, n)
                 continue
             _movable(rfd, n)  # a session may have made its own folder unreadable
@@ -1559,7 +1608,10 @@ def _clean_runs(base: str, current: str, finish) -> List[str]:
                 os.close(fd)
                 continue  # a live session
             try:
+                msgs += _record_note(rfd, n)  # read before the move
                 msgs += finish(n)  # the lock is held through the move
+                if os.path.lexists(os.path.join(runs, n + RECORD)):
+                    msgs += _plain_finish(base, n + RECORD)
             finally:
                 os.close(fd)
     trash = os.path.join(base, TRASH)
@@ -1759,15 +1811,17 @@ def project_changes(before: Dict[str, tuple], after: Dict[str, tuple],
     return Changes(groups, truncated)
 
 
-def project_report(changes: Changes) -> List[str]:
+def project_report(changes: Changes, where: str = "") -> List[str]:
     """The lines `launch` prints about the project files a session changed
-    (`project_changes`)."""
+    (`project_changes`); `where`: a `[launch] write_to` folder, named in the header (the
+    paths are relative to it)."""
     groups, truncated = changes
     changed = [c for k in sorted(groups) for c in groups[k]]
     lines: List[str] = []
+    place = _esc(where) if where else "the project"
     if changed:
-        lines.append(f"phiward launch: the session changed {len(changed)} file(s) in the "
-                     "project; read them before you run anything outside launch:")
+        lines.append(f"phiward launch: the session changed {len(changed)} file(s) in "
+                     f"{place}; read them before you run anything outside launch:")
         # instructions for models in full (up to 500), so other files cannot push them out of
         # sight
         # instructions, files that run later and settings are never folded into a count
@@ -1785,9 +1839,9 @@ def project_report(changes: Changes) -> List[str]:
             else:
                 lines.append(f"  and {len(rest)} other file(s)")
     if truncated:
-        lines.append("phiward launch: WARNING: the project has more entries than the report "
+        lines.append(f"phiward launch: WARNING: {place} has more entries than the report "
                      "compares; past that point only instructions, files that run later and "
-                     "settings were checked, and other files are not listed. Read the project "
+                     f"settings were checked, and other files are not listed. Read {place} "
                      "before you run anything outside launch.")
     return lines
 

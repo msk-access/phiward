@@ -52,7 +52,8 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
     # `phiward launch`: more variables for the tool; private networks its proxy may reach;
     # whether this project's transcripts are kept for --resume (USER_ONLY)
-    "launch": {"pass_env": "list", "private_networks": "list", "keep_transcripts": "bool"},
+    "launch": {"pass_env": "list", "private_networks": "list", "keep_transcripts": "bool",
+               "write_to": "list"},
     # commands on HPC through the broker; every key is the operator's own (USER_ONLY)
     "remote": {"hosts": "list", "commands": "list", "roots": "list",
                "use_shared_connection": "bool"},
@@ -116,6 +117,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("sanitize", "examples"), ("sanitize", "scan_allow"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
              ("launch", "private_networks"), ("launch", "keep_transcripts"),
+             ("launch", "write_to"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
              ("shell", "commands"), ("no_phi", "folders")}
 # an allowed_domains entry: a host name, `*.` and a host name, an IPv4 or bracketed IPv6
@@ -174,6 +176,9 @@ class Config:
     launch_private_networks: List[str] = field(default_factory=list)
     # [launch] keep_transcripts (USER_ONLY): this project's transcripts kept for --resume and -c
     launch_keep_transcripts: bool = True
+    # [launch] write_to (USER_ONLY): folders a launch session writes besides the project, `~/`
+    # expanded; their form is checked here, everything else when launch starts
+    launch_write_to: List[str] = field(default_factory=list)
     max_output_lines: int = 2000  # gateway output lines shown; a repo file may only lower it
     # the programs gateway commands may run ([broker] commands): one list per config file that
     # sets one; a program must be in every list. Empty: no list, any program
@@ -662,6 +667,9 @@ def _check_paths(cfg: Config) -> str:
         why = netproxy.private_network_problem(n)
         if why:
             return f"[launch] private_networks entry '{n}' {why}"
+    for p in cfg.launch_write_to:
+        if not p.startswith("/") or ".." in p.split("/"):
+            return f"[launch] write_to entry '{p}' must be absolute (or start with ~/) and have no '..'"
     for p in cfg.sanitize_scan_allow:
         if not p.startswith("/"):
             return f"[sanitize] scan_allow entry '{p}' must be absolute (or start with ~/)"
@@ -806,6 +814,33 @@ def _resolve_write_to(cfg: "Config", env: Dict[str, str]) -> str:
     return ""
 
 
+def launch_write_to_entries(env: Optional[Dict[str, str]] = None) -> List[str]:
+    """The `[launch] write_to` folders of the user file alone (realpath'd, missing ones too),
+    for what treats them as agent-writable in every project (the broker's PATH filter,
+    `pseudonymize`). Read with `load`'s own reader and checks. A user file that cannot be read
+    or checked gives `["/"]`: every folder counts as agent-writable (fail closed)."""
+    env = os.environ if env is None else env
+    user = user_config_path(env)
+    if not os.path.lexists(user):
+        return []  # not written yet (setup names it first): it lists nothing
+    try:
+        raw, _ = _toml.load_file(user, follow=True)
+    except (OSError, UnicodeDecodeError, _toml.TomlError):
+        return ["/"]
+    data, why = _check(raw, user)
+    if why:
+        return ["/"]
+    out: List[str] = []
+    for v in data.get("launch", {}).get("write_to", []):
+        v = _expand_root(v, pathid.home(env))
+        if not v.startswith("/") or ".." in v.split("/"):
+            return ["/"]
+        real = os.path.realpath(v)
+        if real not in out:
+            out.append(real)
+    return out
+
+
 def stricter(a: str, b: str) -> str:
     return a if UNRESOLVED.index(a) >= UNRESOLVED.index(b) else b
 
@@ -905,6 +940,11 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
             cfg.launch_private_networks.append(v)
     if "keep_transcripts" in data.get("launch", {}):  # USER_ONLY
         cfg.launch_keep_transcripts = bool(data["launch"]["keep_transcripts"])
+    for v in data.get("launch", {}).get("write_to", []):  # USER_ONLY; form: _check_paths
+        v = _expand_root(v, home)
+        v = v if ".." in v.split("/") else os.path.normpath(v)  # `..` stays for the check
+        if v not in cfg.launch_write_to:
+            cfg.launch_write_to.append(v)
     if "best_effort" in data.get("shell", {}):  # USER_ONLY
         cfg.shell_best_effort = bool(data["shell"]["best_effort"])
     for v in data.get("no_phi", {}).get("folders", []):  # USER_ONLY; absolute (_check_paths)

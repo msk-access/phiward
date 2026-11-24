@@ -72,6 +72,7 @@ FIELD = {
     ("launch", "pass_env"): "launch_pass_env",
     ("launch", "private_networks"): "launch_private_networks",
     ("launch", "keep_transcripts"): "launch_keep_transcripts",
+    ("launch", "write_to"): "launch_write_to",
     ("broker", "write_to"): "write_to", ("broker", "net"): "net",
     ("broker", "commands"): "user_commands", ("broker", "max_output_lines"): "max_output_lines",
     ("network", "limit"): "network_limit", ("network", "allowed_domains"): "allowed_domains",

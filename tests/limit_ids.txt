@@ -75,4 +75,5 @@ open-unix-sockets
 open-hpc
 open-carry-over
 open-fresh-config
+open-launch-write-to
 open-transcripts

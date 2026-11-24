@@ -1264,7 +1264,8 @@ folders as a whole, `.mcp.json`, `.gitmodules`, `.ripgreprc`, `.Rprofile` and `.
 any depth (on Linux, those that exist at start; it makes `.claude`, `.vscode` and `.idea` if
 there are none), and what a link inside them leads to (it refuses to start where it cannot
 tell). So R's `renv::init()`, which writes `.Rprofile`, runs once outside `launch`. On Linux it
-also reports git control files a session changed. But the class cannot be closed by a list. **The rule:** treat everything in the project as written by the agent.
+also reports git control files a session changed. The same rules hold in each `[launch]
+write_to` folder ([below](#open-launch-write-to)). But the class cannot be closed by a list. **The rule:** treat everything in the project as written by the agent.
 Run project commands inside `launch` (`phiward launch -- git status`, `phiward launch -- make
 test`), or read the change before you run it outside.
 
@@ -1369,7 +1370,33 @@ test`), or read the change before you run it outside.
   ([launch.md](launch.md#when-a-session-ends));
 - <a id="open-fresh-config"></a>a fresh config folder for the tool: your normal Claude Code memory, skills, plugins and MCP
   servers are not there until you add them (`phiward carryover add`), and a login token is needed
-  ([launch.md](launch.md)).
+  ([launch.md](launch.md));
+- <a id="open-launch-write-to"></a>`[launch] write_to` (user config only): the session's write
+  set holds these folders besides the project ([launch.md](launch.md#more-folders-to-write)).
+  Each one gets the project's start checks (no protected path, derived folder, pattern match,
+  home or dot-folder, `PATH` folder, phiward file, spool, credential or `[broker] write_to`
+  folder in it or above it, no link), then the project's rules:
+  - files that run later and git control files are read-only in it, as found at the start. On
+    Linux one missing at the start can be made, at the folder's top too (launch makes no
+    placeholders there), and the report at the end names it. A listed folder with no `.claude`
+    at the start lets the session make `.claude/skills/x/SKILL.md` on Linux, which Claude Code
+    live-reloads through `--add-dir` into the same session. The session wrote it itself, so the
+    model gets no new data, but it persists for a later plain `claude --add-dir`; the report
+    names it. On macOS it cannot be made;
+  - a repository made in a listed folder during the session has writable git control files on
+    both platforms, as in the project; the report names its `.git/` paths;
+  - code there that is not in the runs-later list (a sibling repository's `Makefile`, its
+    scripts) can be changed by the session, as in the project ([L1](#l1)); the report names it;
+  - the project scan reads each folder within the project's 2 s budget, the instruction files
+    of every folder first; past the budget the rest of a folder is not read at the start
+    (`phiward doctor` reads it all). The end report's walk bounds apply to each folder;
+  - the broker's `PATH` filter and `pseudonymize` treat the folders as written by the agent
+    (and every folder, when the user config cannot be read);
+  - `MODULEPATH` and `PYTHONPATH` entries inside a listed folder (or the project) are not
+    checked the way `PATH` is: modules the session plants there are loaded later by your own
+    `module load` or `python`. Keep those variables out of the folders the session writes;
+  - an abnormal end: SIGHUP and SIGTERM still give the end report; after a signal, a SIGKILL or
+    a crash, the next launch names the folders of the session that did not finish.
 
 **Recorded limits (beta).** These stay open in the beta. Each one belongs to the class "files that
 run later" or to the macOS process model:

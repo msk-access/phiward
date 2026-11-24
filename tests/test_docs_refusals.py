@@ -19,6 +19,7 @@ MESSAGES = {
     "launch, `--` on Linux": wholetool.DASH_DASH,
     "launch, a project folder": wholetool.PROJECT_STEP.split("{}")[1],
     "launch, a link": wholetool.LINK_STEP.split("{}")[1],
+    "launch, a [launch] write_to folder": wholetool.WRITE_TO_STEP.split("{}")[2],
     "proxy, plain HTTP": netproxy.ONLY_CONNECT,
     "copy out of a root": copying.NOT_IN_ROOT,
     "doctor, read-only files under launch": doctor.RUNS_LATER_NOTE,

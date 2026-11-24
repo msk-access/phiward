@@ -59,6 +59,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[launch] pass_env`](#launch) | list | none | ignored | More environment variables for `phiward launch` (the agent can read them). |
 | [`[launch] private_networks`](#launch) | list | none | ignored | Private ranges that `phiward launch`'s network proxy may reach. |
 | [`[launch] keep_transcripts`](#launch) | true or false | true | ignored | Keep this project's Claude Code transcripts between `launch` sessions, for `--resume` and `-c`. |
+| [`[launch] write_to`](#launch) | list of folders | none | ignored | More folders a `phiward launch` session may write besides the project (not `[broker] write_to`). |
 | [`[broker] write_to`](#broker) | list of folders | none | ignored | The folders where gateway commands may write. |
 | [`[broker] net`](#broker) | true or false | false | ignored | Whether `phiward run --net` gets the network. |
 | [`[broker] commands`](#broker) | list | not set: any program may run | narrows: a program must be in every list that is set | The programs gateway commands may run. **Set it for real patient data.** |
@@ -308,6 +309,20 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
   its history ([the limit](threat-model.md#open-transcripts)). With `false`, each session starts
   with no history, and a resume flag gets a NOTE. Where they are and how to delete them:
   [launch.md](launch.md#when-a-session-ends).
+- **`write_to`** (list of folders; default none): folders a `phiward launch` session may write
+  besides the project, for example a sibling repository or a shared output folder. Each entry
+  is absolute (or starts with `~/`) and has no `..`; only the user config sets it. The hook does
+  not check the entries: launch checks them when it starts, so a bad entry stops only launch.
+  - An entry that does not exist is skipped, with a NOTE.
+  - An entry inside the project is dropped (the project is written already).
+  - launch refuses to start, naming the entry, for one that is a file or a link, has a link on
+    its path, is inside or above a protected path, a derived folder or a pattern match, is `/`,
+    the home folder or above it, a dot-folder of the home folder, in `~/Library`, holds or is a
+    `PATH` folder, holds a phiward file (the config, the spool), or overlaps a `[broker]
+    write_to` folder or a credential.
+  - Not `[broker] write_to`: that one is the gateway's grant to write *inside* roots, hidden
+    from a session; this one is what the session itself writes, and may never overlap a root or
+    a `[broker] write_to` folder. What a session may do there: [launch.md](launch.md#more-folders-to-write).
 
 ### `[broker]`
 
@@ -330,6 +345,7 @@ The grants. Nothing asks the operator at run time: what is not written here is r
     protected.
   - on Linux, a request whose write place is at or below a path the gateway hides (credentials,
     traces) stops before its command runs.
+  - not the folders a `phiward launch` session writes: those are [`[launch] write_to`](#launch).
 - **`net`** (`true` or `false`; default `false`). With `true`, `phiward run --net` gets the
   network. On macOS it may also look up DNS; local unix sockets stay blocked (an SSH agent's or
   a shared connection's socket would log in to HPC as you). On Linux it gets the host network

@@ -279,6 +279,9 @@ the full scan`. When it finished but left part unread: `phiward launch: NOTE: th
 did not read all of the project (3 files read only to their head); phiward doctor gives the
 counts`.
 
+The session writes the project and the `[launch] write_to` folders of your user config
+([launch.md](launch.md#more-folders-to-write)), which launch checks and names at the start.
+
 ### phiward check
 
 Show what the guard decides for a shell command, and why. Nothing runs.
