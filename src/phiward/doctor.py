@@ -874,7 +874,7 @@ def main(argv: List[str]) -> int:
     elif st and (st.get("cache") != cfg.cache_dir or set(st.get("roots", [])) != set(cfg.user_roots)):
         print("WARNING: the broker uses another cache folder or roots than this shell (check "
               "XDG_CACHE_HOME on both sides, and restart the broker after a config change)")
-    old = broker.version_problem(st)
+    old = broker.version_problem(st) if where else ""
     if old:
         print(f"WARNING: {old}")
     for line in broker_path_lines(cfg, st):

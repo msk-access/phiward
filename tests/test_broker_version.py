@@ -1,6 +1,6 @@
 """The broker's version in its status file (pre-release P7): after an upgrade, a broker that
 still runs keeps the old code. Doctor and `doctor --headless` say so when the running broker's
-version differs from doctor's own, or is missing (a 0.2.0b1 broker writes none). This process
+version differs from doctor's own, or is missing (an older broker writes none). This process
 stands in for the running broker: it writes the status file and the spool's heartbeat."""
 
 import json

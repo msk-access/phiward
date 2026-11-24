@@ -570,7 +570,8 @@ you are logged in; every request is still checked against your config.
 
 **After an upgrade, restart the broker.** A broker that still runs keeps the old code. Its
 status file names its phiward version. `doctor` warns when that differs from its own, or is
-missing (a broker before 0.2.0b2 writes none), and `doctor --headless` gives it as a reason it
+missing (a broker older than this change writes none, and a status it cannot read counts as
+missing), and `doctor --headless` gives it as a reason it
 is not ready. Run `(cd ~ && phiward broker --service --write)` again, or stop `phiward broker`
 and start it again.
 

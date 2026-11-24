@@ -155,7 +155,8 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 - After an upgrade, `doctor` said "broker: running" for a broker that still ran the old code.
   The broker now writes its phiward version into its status file. `doctor` warns when it
-  differs from its own or is missing (as a 0.2.0b1 broker's is), with the restart step, and
+  differs from its own or is missing (an older broker writes none; a status that cannot be
+  read counts as missing), with the restart step, and
   `doctor --headless` gives it as a reason it is not ready. The request protocol is unchanged.
 - Linux, below 7.1: `phiward launch --tool claude` refused the file `install` writes for
   `claude --settings` (a common shell alias adds it): since `@` mentions were turned off there,

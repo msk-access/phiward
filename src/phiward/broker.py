@@ -21,7 +21,8 @@ broker treats everything in it as untrusted data:
 The broker also writes a status file, `~/.phiward/broker.json` (outside the spool; the
 agent may not write it): its phiward version, and the user config, cache folder, roots and
 patterns that it uses. It writes it again when they change, and removes it when it stops.
-`doctor` reports a difference from the agent's own view (the spool and the version too). A reader uses it only while the heartbeat is fresh.
+`doctor` reports a difference from the agent's own view (the spool and the version too). A
+reader uses it only while the heartbeat is fresh.
 
 Files: the client writes `req-<id>.json` (through a temporary name and a rename); the broker
 claims it by renaming it to `job-<id>.json`, writes the sanitized output to `out-<id>.log`, then
@@ -748,12 +749,13 @@ def read_status(spool: Optional[str] = None) -> Dict[str, Any]:
 
 
 def version_problem(status: Dict[str, Any]) -> str:
-    """For doctor and `--headless`: why the running broker (its status, `read_status`) may run
-    older code than this phiward, or "". A broker before 0.2.0b2 writes no version."""
+    """For doctor and `--headless`, only while a broker runs (`running`): why it may run older
+    code than this phiward, or "". A broker older than this change writes no version; a status
+    that cannot be read (`{}`) counts as one with no version."""
     from phiward import __version__
-    if not status or status.get("version") == __version__:
+    if status.get("version") == __version__:
         return ""
-    theirs = status.get("version") or "not given (older than 0.2.0b2)"
+    theirs = status.get("version") or "not given (an older broker, or its status cannot be read)"
     return (f"the running broker's phiward version is {theirs}, this one's is {__version__}: "
             "after an upgrade the broker runs the old code until it restarts. Restart it: "
             "`(cd ~ && phiward broker --service --write)`, or stop and start `phiward broker`")
