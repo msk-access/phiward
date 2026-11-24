@@ -28,6 +28,7 @@ l9
 l10
 known-leftover-processes
 known-pseudonymized-tables
+known-no-phi-folders
 known-file-mentions
 known-prompt-scan
 known-masking-check
