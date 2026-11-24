@@ -243,6 +243,16 @@ def test_r10_garbled_records_stop_the_start(records):
     assert "RAN" not in out and code == 126 and REFUSAL in err, (code, out, err)
 
 
+@pytest.mark.parametrize("chk", ["-1", "99"])
+def test_r10_no_records_file_stops_the_start(chk):
+    # the check has no off switch: a negative descriptor, or one that is not open, refuses
+    r = subprocess.run([sys.executable, "-I", "-S", "-c", wholetool.HELPER, chk, "none", "0",
+                        sys.executable, "-c", "print('RAN')"], capture_output=True, text=True,
+                       timeout=60, stdin=subprocess.DEVNULL)
+    assert "RAN" not in r.stdout and r.returncode == 126 and REFUSAL in r.stderr, \
+        (r.returncode, r.stdout, r.stderr)
+
+
 def test_r11_an_error_while_comparing_stops_the_start(tree):
     # a seam for an lstat that cannot encode a name (a launcher in UTF-8, a helper in Latin-1)
     name = os.fsencode(str(tree))

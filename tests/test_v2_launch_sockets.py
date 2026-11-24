@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from helpers import CONFINE_WHY, fake_native_claude, landlock_abi, ready_line, tool_py
+from helpers import CONFINE_WHY, fake_native_claude, landlock_abi, ready_line, records_fd, \
+    tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -228,9 +229,13 @@ def test_a_name_service_socket_stays_reachable(tree):
 
 def helper(mode, text=None):
     from phiward import wholetool
-    return subprocess.run([PY, "-I", "-S", "-c", text or wholetool.HELPER, "-1", mode, "0",
-                           PY, "-c", "print('RAN')"], capture_output=True, text=True, timeout=60,
-                          stdin=subprocess.DEVNULL)
+    fd = records_fd()  # a records file that matches: the stop below is the unix sockets' own
+    try:
+        return subprocess.run([PY, "-I", "-S", "-c", text or wholetool.HELPER, str(fd), mode, "0",
+                               PY, "-c", "print('RAN')"], pass_fds=[fd], capture_output=True,
+                              text=True, timeout=60, stdin=subprocess.DEVNULL)
+    finally:
+        os.close(fd)
 
 
 @below9
