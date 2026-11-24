@@ -151,6 +151,28 @@ def test_doctor_warns_about_a_linked_settings_folder(tree):
     assert "WARNING" in out and ".vscode in the project is a link" in out, out
 
 
+def test_doctor_warns_when_the_folder_is_inside_a_protected_path(tree):
+    out = _text(_launch(tree, project=tree / "phi" / "sub"))
+    assert "WARNING: launch would refuse to start here: this folder is inside or above a " \
+           "protected path; start the tool in a project folder" in out, out
+
+
+def test_doctor_decides_the_folder_with_launchs_own_checks(tree, monkeypatch):
+    """doctor calls launch's `_folder_checks`, not a copy of it: a kind it finds reaches doctor
+    with launch's own step."""
+    seen = []
+    rel = wholetool.LINK_REFUSED[0]
+
+    def checks(full, cfg, env):
+        seen.append(full)
+        return "link", rel
+    monkeypatch.setattr(wholetool, "_folder_checks", checks)
+    out = _text(_launch(tree))
+    assert seen == [str(tree / "repo")], seen
+    assert f"WARNING: launch would refuse to start here: {wholetool.LINK_STEP.format(rel)}." \
+        in out, out
+
+
 def test_doctor_warns_about_a_wrapper_named_claude(tree):
     shim = tree / "shim"
     shim.mkdir()
