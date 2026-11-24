@@ -178,7 +178,8 @@ write_to = ["~/work/shared-results", "/data/me/scratch"]
     `~/.claude`, `~/.phiward`), in `~/Library`, or a folder that is, holds or is inside a
     `PATH` folder (files there run later, outside launch);
   - a folder that holds a phiward file (the config, its code) or is the spool;
-  - a `[broker] write_to` folder, or one that holds or is inside one, or a credential.
+  - a `[broker] write_to` folder, or one that holds or is inside one, or a credential;
+  - `/tmp` (Linux): it holds the default Kerberos ticket cache, a credential.
 
   The hook does not check them, so a bad entry stops only launch. `phiward doctor` gives the
   same refusals.

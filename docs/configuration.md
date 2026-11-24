@@ -319,7 +319,8 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
     its path, is inside or above a protected path, a derived folder or a pattern match, is `/`,
     the home folder or above it, a dot-folder of the home folder, in `~/Library`, holds or is a
     `PATH` folder, holds a phiward file (the config, the spool), or overlaps a `[broker]
-    write_to` folder or a credential.
+    write_to` folder or a credential. On Linux that refuses `/tmp`: it holds the default
+    Kerberos ticket cache.
   - Not `[broker] write_to`: that one is the gateway's grant to write *inside* roots, hidden
     from a session; this one is what the session itself writes, and may never overlap a root or
     a `[broker] write_to` folder. What a session may do there: [launch.md](launch.md#more-folders-to-write).
