@@ -10,10 +10,10 @@ import os
 
 import pytest
 
-from phiward import config, doctor, wholetool
+from phiward import config, doctor, projectscan, wholetool
 
 RELATIVE = [":/usr/bin", "/usr/bin:", "/usr/bin::/bin", ".:/usr/bin", "bin:/usr/bin",
-            "../elsewhere/bin:/usr/bin", ""]
+            "../elsewhere/bin:/usr/bin", "~/bin:/usr/bin", ""]
 
 
 def _env(path):
@@ -50,12 +50,23 @@ def test_doctor_warns_about_an_empty_entry(tree):
     assert "WARNING" in out and "empty or relative" in out, out
 
 
-def test_a_write_to_folder_refuses_an_empty_entry(tree):
+def test_a_write_to_folder_refuses_an_empty_entry_and_names_it(tree):
     other = tree / "other"
     other.mkdir()
     cfg = config.load(str(tree / "repo"))
-    assert wholetool.launch_write_problem(str(other), cfg, _env("/usr/bin:")) == \
-        wholetool.PATH_INSIDE
+    why = wholetool.launch_write_problem(str(other), cfg, _env("/usr/bin:"))
+    assert why == wholetool.PATH_RELATIVE and "empty or relative" in why, why
+
+
+def test_the_project_scan_names_an_empty_entry(tree, monkeypatch):
+    monkeypatch.setenv("PATH", "/usr/bin::/bin")
+    cfg = config.load(str(tree / "repo"))
+    assert projectscan.place_problem(cfg, str(tree / "repo")) == wholetool.PATH_RELATIVE
+
+
+def test_the_step_names_the_entry_once():
+    msg = wholetool._path_step(wholetool.EMPTY_PATH_ENTRY, {})
+    assert msg.count("an empty") == 1, msg
 
 
 def test_an_absolute_entry_outside_the_project_is_not_refused(tree):
