@@ -60,8 +60,8 @@ phiward launch --tool claude
   changes go to quarantine like any other instruction.
 - `launch` refuses to start in `/`, your home, a folder above or inside protected data, a dot
   folder, `~/Library` (macOS), a folder on your `PATH`, or a phiward folder. On Linux it also
-  refuses `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared one.
-  A folder below `/tmp` works.
+  refuses `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared
+  one. A folder below `/tmp` works.
 - **Python environments:** an activated `.venv` puts a folder of the project on your `PATH`, so
   `launch` refuses: your own shell would run what the session wrote there. The refusal names the
   entry: `PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
@@ -411,11 +411,11 @@ when in doubt, reinstall: the step names the command for the tool that installed
   project, to one that does not exist (Linux), or when one of these folders has more entries than
   it walks for links (50,000 in one tree; it names the folder). Trees of installed code
   (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`,
-  `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`; `SKIP_TREES` in
-  `wholetool.py`) are not walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
-  the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
-  `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work inside it (they write
-  `renv/library`, which stays writable).
+  `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`; `SKIP_TREES` in `wholetool.py`) are
+  not walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
+  the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run
+  `renv::init()` (it writes `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work
+  inside it (they write `renv/library`, which stays writable).
 - **A `git pull`, `checkout` or `switch` that changes a tracked file in a `.claude`, `.vscode` or
   `.idea` folder** (at any depth) fails partway inside `launch`, since those folders are
   read-only. Run them in your own terminal.
@@ -442,10 +442,11 @@ when in doubt, reinstall: the step names the command for the tool that installed
     the file `install` writes for `claude --settings`), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
     stops the start (drop the `--` and put the prompt last). Claude Code keeps only one
-    `--settings`, so your own stops the start too, unless its content is just the same (the
-    file `install` writes, as a shell alias adds it, or the one v0.2.0b1's `install` wrote,
-    with no `env`; launch reads the content, not the path). One more key, another value or a file that does not parse stops the start; if it
-    is phiward's file, rerun `phiward install claude --user --write`.
+    `--settings`, so your own stops the start too, unless its content is just the same (the file
+    `install` writes, as a shell alias adds it, or the one v0.2.0b1's `install` wrote, with no
+    `env`; launch reads the content, not the path). One more key, another value or a file that does
+    not parse stops the start; if it is phiward's file, rerun `phiward install claude --user
+    --write`.
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
     --as settings.json --tool claude`.
@@ -473,13 +474,13 @@ when in doubt, reinstall: the step names the command for the tool that installed
     `enableWeakerNestedSandbox`). With a wrapper of your own, the check is of the wrapper
     itself. Keep the programs the session runs, and what a wrapper runs, outside the project
     and the folders the session writes.
-  - **What is not covered.** The tests use a made-up native build. Only the sandbox check
-    shows that the real binary's filter works inside launch's bubblewrap, and whether sessions
-    that Claude Code starts in the background (`--bg`, its background service) get the same
-    sandbox settings. Claude Code also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
-    Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
-    itself run outside that sandbox: they can reach sockets outside. You configure them; the
-    session cannot, because the project's `.claude` is read-only.
+  - **What is not covered.** The tests use a made-up native build. Only the sandbox check shows that
+    the real binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
+    starts in the background (`--bg`, its background service) get the same sandbox settings. Claude
+    Code also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
+    Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code itself run
+    outside that sandbox: they can reach sockets outside. You configure them; the session cannot,
+    because the project's `.claude` is read-only.
   - Before 7.1, with any other tool (`--tool generic`, a wrapped MCP server): the tool cannot
     make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its

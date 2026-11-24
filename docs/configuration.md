@@ -302,13 +302,12 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
 - **`pass_env`** (list): environment variables passed to a launched tool besides the built-in
   allow-list. The agent can read whatever you pass. The proxy variables are always the session's
   own proxy ([launch.md](launch.md#the-network)).
-- **`private_networks`** (list of networks or addresses; default none): private ranges the session's network
-  proxy may reach, for example `["10.20.0.0/16"]` for an internal Git server or an HPC web
+- **`private_networks`** (list of networks or addresses; default none): private ranges the session's
+  network proxy may reach, for example `["10.20.0.0/16"]` for an internal Git server or an HPC web
   service. Each entry must be a network (`10.20.0.0/16`) or one address (`10.20.0.5`), inside
-  `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`; anything else
-  is a problem.
-  This machine's own addresses, loopback and the local link stay refused. Every service in a
-  listed range is reachable from the session.
+  `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`; anything else is a
+  problem. This machine's own addresses, loopback and the local link stay refused. Every service in
+  a listed range is reachable from the session.
 - **`keep_transcripts`** (`true` or `false`; default `true`): keep this project's Claude Code
   transcripts between `launch --tool claude` sessions, so `--resume` and `-c` find earlier
   sessions. phiward never reads them. A resumed session reads what an earlier session wrote, as
