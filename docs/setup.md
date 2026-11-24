@@ -37,7 +37,8 @@ Later: [change the setup](#change-the-setup),
     (`kernel.apparmor_restrict_unprivileged_userns`). Then bubblewrap cannot start. Change the
     setting, or add an AppArmor profile for `bwrap`. `doctor` says when this is the cause.
 - Native Windows has no confinement. Use WSL 2, which is Linux.
-- For Claude Code: version 2.1.295 or newer (it needs `onFailure` on hooks). On Linux, Claude
+- For Claude Code: version 2.1.295 or newer (it needs `onFailure` on hooks); 2.1.299 or newer
+  for `@` mentions off (`doctor` warns below it). On Linux, Claude
   Code's own sandbox (Mode A) also needs bubblewrap and `socat`; `install` sets
   `failIfUnavailable`, so without them Claude Code stops at start instead of running commands
   unsandboxed. `doctor` checks both.

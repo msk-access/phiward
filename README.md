@@ -19,13 +19,13 @@ then in Claude Code, `/plugin marketplace add msk-access/phiward#v0.2.0b1`,
 `/plugin install phiward@phiward` and `/phiward:setup`.
 
 > **Status: v0.2.0b1, a beta.** Tested with the real Claude Code on macOS, in the desktop app
-> and in the terminal, and against a real HPC cluster. On Linux, only the test suite has run
-> (no real Claude Code session yet). Read
+> and in the terminal, and against a real HPC cluster. On Linux, the maintainer's sandbox check
+> with the real Claude Code has passed in Docker since 2026-11-22. Read
 > [docs/threat-model.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/docs/threat-model.md) before you rely on it for real data.
 
 It is a Python package with no dependencies. It makes no network connection of its own and
-has no telemetry. It needs Python 3.9 or
-newer, macOS or Linux, and Claude Code 2.1.295 or newer.
+has no telemetry. It needs Python 3.9 or newer, macOS or Linux, and Claude Code 2.1.295 or
+newer; 2.1.299 or newer for `@` mentions off (`phiward doctor` warns below it).
 
 ## How it works
 
@@ -79,7 +79,9 @@ newer, macOS or Linux, and Claude Code 2.1.295 or newer.
   Keychain, some Kerberos caches, tokens in your environment) are not hidden by a file list.
 - The network is open by default: an agent can send what it can read. In Mode A, `[network] limit`
   (suggested by `phiward setup`) limits shell commands to listed hosts, so `git push` and `pip
-  install` fail until you list their hosts; WebFetch, MCP servers and Mode B stay open.
+  install` fail until you list their hosts; WebFetch and MCP servers stay open. In Mode B,
+  `phiward launch` sends the tool's network through a loopback proxy that refuses this machine
+  and private addresses; public hosts stay open.
 - Protection follows the path: protected data moved out of a protected folder is not protected.
   `phiward copy` writes only inside a protected root of your user config, or under a remote root
   you listed; data you move another way (your own `cp`, a download) is not protected there.

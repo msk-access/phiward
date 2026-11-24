@@ -70,7 +70,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[shell] best_effort`](#shell) | true or false | false | ignored | The hook's text check, in place of a refusal, for a shell that no kernel confines. |
 | [`[shell] strict`](#shell) | true or false | not set | loads, does nothing | Removed before release. Remove it. |
 | [`[shell] commands`](#shell) | list | not set | ignored; does nothing | Removed before release. Remove it. |
-| [`[no_phi] folders`](#no_phi) | list of absolute folders | none | ignored | Exact folders you are sure hold no PHI: there the hook gives a shell that a sandbox setting opens the text check, not the refusal (Mode A). |
+| [`[no_phi] folders`](#no_phi) | list of absolute folders | none | ignored | Exact folders you are sure hold no PHI: there a shell that only a sandbox opener leaves unconfined gets the text check, not the refusal (Mode A). |
 
 A repo config that sets an ignored key is not an error. `phiward doctor` lists the ignored
 keys. A key that is not in this table is a bad config ([Fail closed](#fail-closed)).
@@ -151,10 +151,15 @@ is first masked on the whole line as in table mode (protected paths, entry names
 rules, names). Then a cell under an identifier header (the built-in list or `id_columns`, below)
 shows `<IDCOL>`, whatever its shape. A cell of another column keeps a plain number (`7654321`,
 `12.5`, `1e-05`, `1,234,567`); any other text in it gets the position rules (`chr1:1234567` is
-`<LOCUS>`). Then names and rule matches in other spellings (another dash, other digits, other separators) are masked inside each cell on its own: never in an ID cell, and never across a delimiter. The first line that is not such a row ends column mode: it and every later line are
+`<LOCUS>`). Then names and rule matches in other spellings are masked inside each cell on
+its own. Other spellings are another dash, other digits or other separators. This pass skips
+ID cells and never crosses a delimiter. The first line that is not such a row ends column
+mode: it and every later line are
 masked as text. Such a line is an empty line, a row with another field count, a quote, a
 backslash or a `%XX` escape, a row with no plain-number cell (another header, as from `cat
-a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. A row that fails the second pass only because of the masks in other spellings is withheld, and column mode goes on. Output
+a.csv b.csv`, or a row of words such as `TP53,BRCA1`), and a line too long to read. A row
+that fails the second pass only because of the masks in other spellings is withheld; column
+mode goes on. Output
 without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under `chrom` and `pos`, `chr1` and `1234567` are both
@@ -337,11 +342,14 @@ The grants. Nothing asks the operator at run time: what is not written here is r
   - an entry that does not exist yet is skipped (`doctor` counts it);
   - an entry reached through a link is skipped (`doctor` counts it): whoever can change the link
     would choose the place. Name the real folder;
+  - an entry that holds a `.claude` folder is skipped (`doctor` counts it): anyone who can make
+    that folder could otherwise stop every guarded action. A `--write-to` to it is then refused
+    as a folder that is not granted;
   - an entry that is `/`, the home folder or above it, in a dot-folder of the home folder, in
     `~/Library` or a `PATH` folder, above a protected root, in a derived protected folder or a
-    pattern match, that holds a names or pack file of the config, that holds a `.claude`
-    folder, or that holds or is inside a phiward file or folder (the config, the code, the
-    spool, the status file, the interpreter folder) is a problem: the config is bad.
+    pattern match, that holds a names or pack file of the config, or that holds or is inside a
+    phiward file or folder (the config, the code, the spool, the status file, the interpreter
+    folder) is a problem: the config is bad.
   - an entry **inside** a protected root is fine: gateway commands write only in `write_to`
     folders (protected roots are read only for them), and what they write there stays
     protected.

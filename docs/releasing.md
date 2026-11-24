@@ -38,13 +38,24 @@ The repository uses git-flow (`gitflow.prefix.versiontag` is `v`): start with
 `git flow release finish 0.2.0b2` merges it into `main` and `develop` and makes the tag `v0.2.0b2`.
 Then push `main`, `develop` and the tag.
 
-1. Set the version: `__version__` in `src/phiward/__init__.py` (the package and
-   `phiward --version` take it from there), and the same in `plugin/.claude-plugin/plugin.json`
-   and `.claude-plugin/marketplace.json`. A test fails when they disagree, and the workflow
-   refuses a tag that names another version. PyPI's form has no `v`: `0.2.0b1`; the tag has
-   it: `v0.2.0b1`. Change the install lines in the docs (`phiward==0.2.0b1`) too.
+1. Set the version. PyPI's form has no `v` (`0.2.0b2`); the tag has it (`v0.2.0b2`).
+   - `__version__` in `src/phiward/__init__.py` (the package and `phiward --version` take it
+     from there), `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`. A
+     test fails when they disagree.
+   - In README.md, docs/, `plugin/commands/setup.md` and mkdocs.yml: the install lines
+     (`phiward==`), the plugin tags (`#v`), the `/blob/v.../` links, the GitHub install
+     (`phiward@v` in setup.md), the marketplace `"ref"` (plugins.md), the status lines (README
+     and docs/index.md), and the release notes link (docs/index.md) and nav entry (mkdocs.yml).
+   - Then grep for the old version, and change each line that names it as the current release:
+     `git grep -n -F OLD -- ':!CHANGELOG.md' ':!docs/release-notes' ':!tests'`. Lines about an
+     older release stay (for example launch.md's "the one v0.2.0b1's `install` wrote", and the
+     agent-guards rename in setup.md, config.py, names.py and pyproject.toml).
+
+   The workflow refuses a tag when an install line (`phiward==`), a `/blob/v.../` link or a
+   plugin tag (`#v`) in README.md, CHANGELOG.md, `plugin/commands/setup.md` or `docs/*.md`
+   names another version. The other places in this list it does not check: grep for them.
 2. In `CHANGELOG.md`, replace "unreleased" with the date (UTC), and write the release notes in
-   `docs/release-notes/`.
+   `docs/release-notes/`, linked from the CHANGELOG entry.
 3. Run the full test suite on macOS ([tests/README.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md) says how) and on
    Linux (`sh scripts/linux-check/check.sh`, needs Docker: Python 3.12 and 3.9, two layouts,
    on a `git archive` of HEAD), and the quickstart in clean Linux containers
@@ -181,16 +192,14 @@ Then push `main`, `develop` and the tag.
    (`claude_settings.LOCAL_BINDING`); and it gives every shell call the text check while
    `excludedCommands` is not empty, because the page says Claude Code matches its entries by
    the call's text.
-4. Commit and tag: `git flow release finish` does both; the first release is tagged by hand on
-   `main`. Then push the tag:
+4. Commit and tag: `git flow release finish` does both. Then push `main`, `develop` and the tag
+   in one push (the workflow refuses a tag that is not on `main`):
 
    ```bash
-   git tag -a v0.2.0b1 -m "phiward v0.2.0b1"
+   git push origin main develop v0.2.0b2
    ```
 
-   ```bash
-   git push origin v0.2.0b1
-   ```
+   The first release was tagged by hand on `main` (`git tag -a v0.2.0b1 -m "phiward v0.2.0b1"`).
 
 5. The `release` workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
    checks that the tag names the version everywhere, builds the wheel and the source archive,

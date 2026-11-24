@@ -59,8 +59,8 @@ phiward launch --tool claude
 - `--memory`: turn Claude Code's auto memory on. It then lives in the session's folder, and its
   changes go to quarantine like any other instruction.
 - `launch` refuses to start in `/`, your home, a folder above or inside protected data, a dot
-  folder, `~/Library`, a folder on your `PATH`, or a phiward folder. On Linux it also refuses
-  `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared one.
+  folder, `~/Library` (macOS), a folder on your `PATH`, or a phiward folder. On Linux it also
+  refuses `/tmp` itself (as the project or the spool): the session's own `/tmp` would be the shared one.
   A folder below `/tmp` works.
 - **Python environments:** an activated `.venv` puts a folder of the project on your `PATH`, so
   `launch` refuses: your own shell would run what the session wrote there. The refusal names the
@@ -76,7 +76,7 @@ phiward launch --tool claude
   phiward doctor`. A value of `[sanitize] examples` is not fully masked by your own rules, or a
   made-up path below a root came out unmasked
   ([configuration.md](configuration.md#sanitize)). Fix the rule, the example or the root, then
-  start again. A wrapped MCP server (`launch --server`) is not checked.
+  start again. A wrapped MCP server (`--entry`) is not checked.
 - `launch` refuses to start when the project scan finds a subject or sample ID in a project
   file or a file name ([The project scan](#the-project-scan)).
 - Several `launch` sessions may run side by side, also in one project (see limit L8 of the
@@ -294,7 +294,7 @@ What this breaks:
   - Only plain files and real folders are kept. Links are dropped with a NOTE. `memory/` (auto
     memory, an instruction) and `mcp-tasks/` are never kept, in any letter case.
   - Sessions that end one after the other are merged; a file is replaced only by a newer one.
-  - At most 500 MB and 20,000 entries for each project; past that, the oldest sessions go first.
+  - At most 500 MiB and 20,000 entries for each project; past that, the oldest sessions go first.
     A session larger than that on its own is not kept, and its end says so with a NOTE.
   - A resumed session restores what Claude Code restores (the conversation, the model, the
     agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
@@ -410,8 +410,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
   is read-only too; `launch` refuses to start when such a link leads to a folder that holds the
   project, to one that does not exist (Linux), or when one of these folders has more entries than
   it walks for links (50,000 in one tree; it names the folder). Trees of installed code
-  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`, `__pycache__`, `.mypy_cache`; `SKIP_TREES` in `wholetool.py`) are not
-  walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
+  (`node_modules`, `.venv`, `venv`, `site-packages`, `renv/library`, `.tox`, `target`, `.git`,
+  `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`; `SKIP_TREES` in
+  `wholetool.py`) are not walked, and a `.vscode` or `.idea` inside them stays writable, so `npm install` works; nor are
   the links in `.claude/worktrees` followed. R: `.Rprofile` and `.Renviron` are read-only, so run `renv::init()` (it writes
   `.Rprofile`) once outside `launch`; `renv::restore()` and plain R work inside it (they write
   `renv/library`, which stays writable).
@@ -440,15 +441,16 @@ when in doubt, reinstall: the step names the command for the tool that installed
     `sandbox.allowUnsandboxedCommands` false, and `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS`:
     the file `install` writes for `claude --settings`), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
-    stops the start (drop the `--` and put the prompt last). Claude Code keeps only one `--settings`, so your own stops the start too,
-    unless its content is just the same (the file `install` writes, as a shell alias adds it,
-    or the one v0.2.0b1's `install` wrote, with no `env`; launch reads the content, not the
-    path). One more key, another value or a file that does not parse stops the start; if it
+    stops the start (drop the `--` and put the prompt last). Claude Code keeps only one
+    `--settings`, so your own stops the start too, unless its content is just the same (the
+    file `install` writes, as a shell alias adds it, or the one v0.2.0b1's `install` wrote,
+    with no `env`; launch reads the content, not the path). One more key, another value or a file that does not parse stops the start; if it
     is phiward's file, rerun `phiward install claude --user --write`.
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE
-    --as settings.json --tool claude`. A Claude Code command (`claude mcp`, `doctor`, `logs`,
-    ...), also after options (`claude --debug mcp list`), is not a session: some ignore
+    --as settings.json --tool claude`.
+  - **What launch checks before the start.** A Claude Code command (`claude mcp`, `doctor`,
+    `logs`, ...), also after options (`claude --debug mcp list`), is not a session: some ignore
     `--settings` and run, and some are hidden from the help. `launch` refuses it: run it outside
     `launch`. To tell a command from a prompt, `launch` asks the program that runs, inside
     the session: `claude WORD --help` for the first word that is not an option (which options
@@ -457,9 +459,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
     Some options run something other than a session (`--chrome-native-host`, `--preload`,
     `--eval-mock-server`, `--daemon-worker`). `launch` does not refuse them; they run inside
     the session's confinement, so the guards still hold. Cost: one help run
-    at each start, and one more when there is such a word. Only Claude Code's native build is accepted (npm
-    and the installer give it from 2.1.250; for an older JavaScript build, run `claude
-    install`). Before the tool starts, `launch` runs the filter of the program that will run
+    at each start, and one more when there is such a word. Only Claude Code's native build is
+    accepted (npm and the installer give it from 2.1.250; for an older JavaScript build, run
+    `claude install`). Before the tool starts, `launch` runs the filter of the program that will run
     (found on the session's `PATH`, then run by its real path) as Claude Code does (the native
     binary with `ARGV0=apply-seccomp`) and requires `socket(AF_UNIX)` to fail. So run the
     Claude Code binary itself: `env`, `npx`, `node`, a JavaScript program or a wrapper that
@@ -470,11 +472,10 @@ when in doubt, reinstall: the step names the command for the tool that installed
     open the sandbox (`excludedCommands`, `allowAllUnixSockets`, `allowUnixSockets`,
     `enableWeakerNestedSandbox`). A read-only wrapper of your own, inside the project, that
     runs a native binary the session can write is not caught: only the wrapper is checked.
-    The tests use a made-up native build. Only the sandbox check shows that the real
-    binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
-    starts in the background (`--bg`, its background service) get the same sandbox
-    settings. Claude Code
-    also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
+  - **What is not covered.** The tests use a made-up native build. Only the sandbox check
+    shows that the real binary's filter works inside launch's bubblewrap, and whether sessions
+    that Claude Code starts in the background (`--bg`, its background service) get the same
+    sandbox settings. Claude Code also needs `socat` and bubblewrap. Bash then cannot use any unix socket, so `tmux` and
     Python's `forkserver` fail there. Hooks, MCP servers, the status line and Claude Code
     itself run outside that sandbox: they can reach sockets outside. You configure them; the
     session cannot, because the project's `.claude` is read-only.
@@ -482,13 +483,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
     make unix sockets at all, also its own (socketpairs and pipes work).
 - **A launch inside a session** (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
-  keeps more of the project read-only), and not another project's `.phiward.toml`. On macOS it decides from the session's own folder, found
-  from your account's home folder (not `HOME`): a file there that only that profile denies, and
-  a new file that only the session can make in its own run folder (`PHIWARD_RUN`, which `launch`
-  sets);
-  on Linux the session's seccomp filter answers one unused system call with an error number
-  nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
-  profile; where `~/.phiward` cannot be written, that launch refuses and nothing runs.
+  keeps more of the project read-only), and not another project's `.phiward.toml`. Any other
+  launch builds the full profile; where `~/.phiward` cannot be written, that launch refuses and
+  nothing runs.
 
 Read [threat-model.md](threat-model.md) (Mode B, [limits L1–L10](threat-model.md#l1)). In short:
 - **The network goes only to public addresses, through phiward's proxy** ([above](#the-network)).

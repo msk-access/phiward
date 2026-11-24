@@ -111,8 +111,10 @@ editable install has no install record: install with `uv tool` or `pipx`, or set
 ## Mode A: Claude Code with the hook and its sandbox
 
 **A sandbox opener stops the whole shell.** One of `network.allowLocalBinding` (macOS),
-`allowUnixSockets`, `allowAllUnixSockets` or `allowMachLookup` in any settings level means the
-shell is not confined, and the hook refuses every command but a gateway call. Doctor's line
+`allowUnixSockets`, `allowAllUnixSockets`, `allowMachLookup`, `filesystem.disabled`,
+`enableWeakerNestedSandbox`, `allowAppleEvents` or `allowNestedUserNamespaces` in any settings
+level means the shell is not confined, and the hook refuses every command but a gateway call.
+Doctor's line
 "sandbox confines the shell" names the key and the file. Remove the key; run a dev server or
 docker in your own terminal. Or, for a folder you are sure holds no PHI, list it in `[no_phi]
 folders` of your user config: when `network.allowLocalBinding` (macOS),
