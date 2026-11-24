@@ -1503,13 +1503,13 @@ def _raise_fd_limit(need: int) -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (need, hard))
 
 
-# the helper the tool starts through: on Linux it first checks that each bind in the session's
-# view is what the launcher checked (_write_checks: bwrap mounts by name, and the host may change
-# a name in between), then it closes the launcher's descriptors, starts the relay to the proxy on
-# the session's own 127.0.0.1 (PHIWARD_PROXY_RELAY, `PORT:FD`: FD is its end of the proxy's socket
-# pair; it dies with the tool, PR_SET_PDEATHSIG, and starts before the limits below, which are
-# the tool's), limits
-# unix sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`; `none` on macOS), and execs the tool.
+# the helper the tool starts through, on Linux only (inside bubblewrap): it first checks that each
+# bind in the session's view is what the launcher checked (_write_checks: bwrap mounts by name,
+# and the host may change a name in between; with no records file, nothing runs), then it closes
+# the launcher's descriptors, starts the relay to the proxy on the session's own 127.0.0.1
+# (PHIWARD_PROXY_RELAY, `PORT:FD`: FD is its end of the proxy's socket pair; it dies with the
+# tool, PR_SET_PDEATHSIG, and starts before the limits below, which are the tool's), limits unix
+# sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`), and execs the tool.
 # argv: CHK UNIX N FD... CMD [ARG]...
 # - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
 #   session are refused, the session's own are not), the name-service folders allowed, REFER
@@ -1524,51 +1524,122 @@ HELPER = r"""
 import os, sys, ctypes, struct
 chk = int(sys.argv[1]); unix = sys.argv[2]
 n = int(sys.argv[3]); close = sys.argv[4:4 + n]; cmd = sys.argv[4 + n:]; run = cmd[0]
-if chk >= 0:
-    # each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The
-    # start goes on only when every record was read and compared; anything else stops it
-    import json
-    where, clean = "the list of checks", False
-    try:
-        os.lseek(chk, 0, 0)
-        with os.fdopen(chk, "rb") as fh:
-            recs = json.loads(fh.read().decode("ascii"))
-        if type(recs) is not list or not recs:
-            raise ValueError("no records")
-        for rec in recs:
-            if type(rec) is not list or len(rec) != 4:
-                raise ValueError("a malformed record")
-            name, dev, ino, may_go = rec
-            if type(name) is not str or type(dev) is not int or type(ino) is not int or \
-                    type(may_go) is not bool:
-                raise ValueError("a malformed record")
-            path = bytes.fromhex(name)
-            where = path.decode("utf-8", "backslashreplace")
-            if not path.startswith(b"/") or b"\0" in path:
-                raise ValueError("a malformed path")
-            try:
-                st = os.lstat(path)
-            except (FileNotFoundError, NotADirectoryError):
-                if may_go:  # an entry of the view, left out by --ro-bind-try
-                    continue
-                raise
-            if (st.st_dev, st.st_ino) != (dev, ino):
-                raise ValueError("changed")
-        clean = True
-    except BaseException:
-        clean = False
-    if not clean:
-        sys.stderr.write("phiward launch: the session's view is not what was checked before the "
-                         "start (%s changed while the session started); nothing runs, start "
-                         "again\n" % where)
-        sys.stderr.flush()
-        os._exit(126)
+# each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The start
+# goes on only when every record was read and compared; anything else (no records file) stops it
+import json
+where, clean = "the list of checks", False
+try:
+    os.lseek(chk, 0, 0)
+    with os.fdopen(chk, "rb") as fh:
+        recs = json.loads(fh.read().decode("ascii"))
+    if type(recs) is not list or not recs:
+        raise ValueError("no records")
+    for rec in recs:
+        if type(rec) is not list or len(rec) != 4:
+            raise ValueError("a malformed record")
+        name, dev, ino, may_go = rec
+        if type(name) is not str or type(dev) is not int or type(ino) is not int or \
+                type(may_go) is not bool:
+            raise ValueError("a malformed record")
+        path = bytes.fromhex(name)
+        where = path.decode("utf-8", "backslashreplace")
+        if not path.startswith(b"/") or b"\0" in path:
+            raise ValueError("a malformed path")
+        try:
+            st = os.lstat(path)
+        except (FileNotFoundError, NotADirectoryError):
+            if may_go:  # an entry of the view, left out by --ro-bind-try
+                continue
+            raise
+        if (st.st_dev, st.st_ino) != (dev, ino):
+            raise ValueError("changed")
+    clean = True
+except BaseException:
+    clean = False
+if not clean:
+    sys.stderr.write("phiward launch: the session's view is not what was checked before the "
+                     "start (%s changed while the session started); nothing runs, start "
+                     "again\n" % where)
+    sys.stderr.flush()
+    os._exit(126)
 for c in close:
     try:
         os.close(int(c))
     except OSError:
         pass
-# RELAY (Linux: the relay to the proxy's socket, RELAY below)
+# the relay, where the session reaches the proxy through it (PHIWARD_PROXY_RELAY); macOS has no
+# helper: the profile lets the tool reach the proxy's one port directly
+relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
+if relay:
+    import socket, threading
+    rport, _, rfd = relay.partition(":")
+    try:
+        ctl = socket.socket(fileno=int(rfd))
+        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ls.bind(("127.0.0.1", int(rport)))
+        ls.listen(128)
+    except (OSError, ValueError) as e:
+        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
+        os._exit(126)
+    parent = os.getpid()
+    if os.fork() == 0:
+        try:
+            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
+            if os.getppid() != parent:
+                os._exit(0)
+            nul = os.open("/dev/null", os.O_RDWR)
+            os.dup2(nul, 0)
+            os.dup2(nul, 1)
+            keep = sorted((ls.fileno(), ctl.fileno()))
+            os.closerange(3, keep[0])
+            os.closerange(keep[0] + 1, keep[1])
+            os.closerange(keep[1] + 1, 65536)
+            asking = threading.Lock()
+
+            def pump(a, b):
+                try:
+                    while True:
+                        d = a.recv(65536)
+                        if not d:
+                            break
+                        b.sendall(d)
+                except OSError:
+                    pass
+                try:
+                    b.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+
+            def serve(c):
+                # one end of a new pair to the proxy, or the connection is closed: never a
+                # direct dial, and no socket with a path
+                try:
+                    with asking:
+                        ctl.sendall(b"c")
+                        msg, fds, _f, _a = socket.recv_fds(ctl, 1, 4)
+                except OSError:
+                    msg, fds = b"", []
+                for f in fds[1:]:
+                    os.close(f)
+                if msg != b"y" or not fds:
+                    if fds:
+                        os.close(fds[0])
+                    c.close()
+                    return
+                u = socket.socket(fileno=fds[0])
+                t = threading.Thread(target=pump, args=(u, c), daemon=True)
+                t.start()
+                pump(c, u)
+                t.join()
+                c.close()
+                u.close()
+            while True:
+                c, _ = ls.accept()
+                threading.Thread(target=serve, args=(c,), daemon=True).start()
+        finally:
+            os._exit(0)
+    ls.close()
+    ctl.close()
 def stop(why):
     sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
     sys.stderr.flush()
@@ -1729,83 +1800,6 @@ except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
 
-# the relay, in the Linux helper, where the session reaches the proxy through it. macOS has no
-# helper: the profile lets the tool reach the proxy's one port directly
-RELAY = r"""
-relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
-if relay:
-    import socket, threading
-    rport, _, rfd = relay.partition(":")
-    try:
-        ctl = socket.socket(fileno=int(rfd))
-        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        ls.bind(("127.0.0.1", int(rport)))
-        ls.listen(128)
-    except (OSError, ValueError) as e:
-        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
-        os._exit(126)
-    parent = os.getpid()
-    if os.fork() == 0:
-        try:
-            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
-            if os.getppid() != parent:
-                os._exit(0)
-            nul = os.open("/dev/null", os.O_RDWR)
-            os.dup2(nul, 0)
-            os.dup2(nul, 1)
-            keep = sorted((ls.fileno(), ctl.fileno()))
-            os.closerange(3, keep[0])
-            os.closerange(keep[0] + 1, keep[1])
-            os.closerange(keep[1] + 1, 65536)
-            asking = threading.Lock()
-
-            def pump(a, b):
-                try:
-                    while True:
-                        d = a.recv(65536)
-                        if not d:
-                            break
-                        b.sendall(d)
-                except OSError:
-                    pass
-                try:
-                    b.shutdown(socket.SHUT_WR)
-                except OSError:
-                    pass
-
-            def serve(c):
-                # one end of a new pair to the proxy, or the connection is closed: never a
-                # direct dial, and no socket with a path
-                try:
-                    with asking:
-                        ctl.sendall(b"c")
-                        msg, fds, _f, _a = socket.recv_fds(ctl, 1, 4)
-                except OSError:
-                    msg, fds = b"", []
-                for f in fds[1:]:
-                    os.close(f)
-                if msg != b"y" or not fds:
-                    if fds:
-                        os.close(fds[0])
-                    c.close()
-                    return
-                u = socket.socket(fileno=fds[0])
-                t = threading.Thread(target=pump, args=(u, c), daemon=True)
-                t.start()
-                pump(c, u)
-                t.join()
-                c.close()
-                u.close()
-            while True:
-                c, _ = ls.accept()
-                threading.Thread(target=serve, args=(c,), daemon=True).start()
-        finally:
-            os._exit(0)
-    ls.close()
-    ctl.close()
-"""
-HELPER_LINUX = HELPER.replace(
-    "# RELAY (Linux: the relay to the proxy's socket, RELAY below)\n", RELAY, 1)
 
 
 def _git_snapshot(project: str, limit: int = 20000) -> Dict[str, str]:
@@ -2373,7 +2367,6 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if why:
             raise LaunchError(why)
     backend = confine.backend()
-    helper = [sys.executable, "-I", "-S", "-c", HELPER_LINUX]  # bubblewrap only
     if backend == "seatbelt":
         # no helper: `sandbox-exec -f FILE TOOL ARGS...`, the tool by its full path, found on the
         # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
@@ -2397,6 +2390,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         return [confine.SANDBOX_EXEC, "-f", path, tool] + list(argv[1:]), child_env, \
             [], project, lambda: None, proxy
     if backend == "bwrap":
+        helper = [sys.executable, "-I", "-S", "-c", HELPER]
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
                               "run phiward setup first")

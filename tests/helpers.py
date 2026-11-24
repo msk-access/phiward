@@ -298,3 +298,14 @@ def tool_py(tree, tool="claude") -> str:
     itself."""
     import sys
     return str(Path(tree) / "claude-py" / "claude") if tool == "claude" else sys.executable
+
+
+def records_fd() -> int:
+    """A records file for launch's helper run on its own (outside bwrap): an unlinked file whose
+    one record, `/`, matches. The helper always checks its records; the caller closes the fd."""
+    import tempfile
+    st = os.lstat("/")
+    with tempfile.TemporaryFile() as fh:
+        fh.write(json.dumps([[b"/".hex(), st.st_dev, st.st_ino, False]]).encode("ascii"))
+        fh.flush()
+        return os.dup(fh.fileno())

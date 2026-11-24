@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import landlock_abi, needs_confine, tool_py
+from helpers import landlock_abi, needs_confine, records_fd, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -1403,11 +1403,13 @@ def test_17_a_failed_fd_pass_refuses_the_connection_and_dials_nothing(server):
     env = dict(os.environ, PHIWARD_PROXY_RELAY=f"{port}:{theirs.fileno()}",
                HTTPS_PROXY=f"http://phiward:{TOKEN}@127.0.0.1:{port}", DIRECT=str(server.port))
     code = f"import time; time.sleep(0.5)\n{RELAY_PROBE}"
+    chk = records_fd()  # a records file that matches, so the helper goes on to the relay
     try:
-        r = subprocess.run([PY, "-I", "-S", "-c", wholetool.HELPER_LINUX, "-1", "none", "0", PY,
-                            "-c", code], pass_fds=[theirs.fileno()], env=env,
+        r = subprocess.run([PY, "-I", "-S", "-c", wholetool.HELPER, str(chk), "none", "0", PY,
+                            "-c", code], pass_fds=[theirs.fileno(), chk], env=env,
                            capture_output=True, text=True, timeout=60)
     finally:
+        os.close(chk)
         theirs.close()
         mine.close()
     out = r.stdout + r.stderr
