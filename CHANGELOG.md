@@ -36,7 +36,9 @@ The release notes have the same steps as a checklist:
 5. **Plugin users:** add the marketplace again with this release's tag, as
    [docs/plugins.md](docs/plugins.md) says. The plugin stays at the tag you added, with that
    release's hooks.
-6. Run `phiward doctor` and fix each WARNING. Each one names its step.
+6. Run `phiward doctor` and fix each WARNING. Each one names its step. `doctor` does not
+   check the plugin's version: plugin users check step 5 by hand, in `/plugin` in Claude
+   Code. The plugin's version must match `phiward --version`.
 
 **Claude Code:** 2.1.295 or newer, as before. 2.1.299 or newer turns `@` mentions off;
 `doctor` warns below it.
