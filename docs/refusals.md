@@ -27,6 +27,10 @@ a dot folder in your home, `~/Library` on macOS, and a folder that holds a phiwa
 of them is writable as a whole in a session, and other programs run what is there later. The
 message ends: ); start the tool in a project folder
 
+Launch also refuses a folder inside or above a protected path, and doctor warns about it: the
+session would reach the protected data. The message is: this folder is inside or above a
+protected path; start the tool in a project folder
+
 **A folder on PATH inside the project** (an activated `.venv`, direnv, `node_modules/.bin`). Your
 own shell runs what is there after the session, and the session could write there. The message
 names the entry and the step. For an activated `.venv`: run `deactivate` (or take the entry
