@@ -869,13 +869,16 @@ def no_phi_relaxed(cfg: "config.Config", project: str, home: str,
     of the hook, the session note and doctor: the entry passes its own check
     (`config.no_phi_match`, whose reasons have no step) and the settings of every folder in
     `folders` (the hook's `confining_folders`; by default the project alone) pass
-    `no_phi_reason`."""
+    `no_phi_reason`. An empty `folders` is not relaxed: no settings were checked."""
     from phiward import hidden
     entry, why = config.no_phi_match(cfg, project)
     if not entry or why:
         return entry, Reason(why, "") if why else None
+    folders = [project] if folders is None else folders
+    if not folders:
+        return entry, Reason("no settings folder was checked for this call", NO_PROJECT_STEP)
     secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
-    for p in ([project] if folders is None else folders):
+    for p in folders:
         r = no_phi_reason(p, home, cfg.all_roots, cfg.patterns, config.guard_files(),
                           hidden=secret)
         if r is not None:
