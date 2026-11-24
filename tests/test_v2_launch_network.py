@@ -425,6 +425,15 @@ def test_d2_a_private_network_that_is_not_private_is_a_config_problem(tree, bad)
     assert config.load(str(tree / "repo")).problem, bad
 
 
+def test_d2_a_bad_private_network_entry_is_named_as_the_docs_name_it():
+    # configuration.md: "a network (`10.20.0.0/16`) or one address (`10.20.0.5`)"; a bare
+    # address is a /32, so the message may not ask for a prefix length
+    np = _np()
+    assert np.private_network_problem("10.20.0.5") == ""
+    why = np.private_network_problem("10.20.0.5/16")
+    assert "prefix length" not in why and "one address" in why, why
+
+
 def test_d2_the_user_config_sets_private_networks(tree):
     from phiward import config
     p = Path(os.environ["PHIWARD_CONFIG"])
