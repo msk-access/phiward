@@ -332,6 +332,49 @@ def test_doctor_warns_when_a_listed_folder_fails_its_check(above):
             "path: not relaxed.") in out, out
 
 
+# --- the note and doctor give the hook's answer (pre-release P3) --------------------------------
+
+def _sockets(tree):
+    """A listed folder whose user settings let a sandboxed command reach a unix socket."""
+    protect(tree, [], best_effort=False)
+    want = _wired(tree)
+    want["sandbox"].setdefault("network", {})["allowUnixSockets"] = ["/var/run/docker.sock"]
+    (tree / "home" / ".claude" / "settings.json").write_text(json.dumps(want))
+    _list(tree / "repo")
+    return "sandbox.network.allowUnixSockets is not empty"
+
+
+def _root_missing(tree):
+    """A listed folder, and a root added after install: denyRead does not cover it."""
+    protect(tree, [], best_effort=False)
+    _wired(tree, enableWeakerNestedSandbox=True)
+    protect(tree, [], root="pub", best_effort=False)
+    _list(tree / "repo")
+    return "sandbox.filesystem.denyRead does not cover 1 protected root(s)"
+
+
+NOT_RELAXED = "phiward: [no_phi] folders lists this folder, but {why}: not relaxed; to relax it, "
+
+
+@pytest.mark.parametrize("setup", [_sockets, _root_missing])
+def test_the_note_says_not_relaxed_with_the_hooks_reason(tree, monkeypatch, capsys, setup):
+    why = setup(tree)
+    _refused_blanket(tree, monkeypatch)  # the hook's decision: not relaxed
+    out = _note(tree, monkeypatch, capsys, tree / "repo")
+    assert out["systemMessage"].startswith(NOT_RELAXED.format(why=why)), out
+    assert out["systemMessage"].endswith("."), out
+    assert CONTEXT not in out["hookSpecificOutput"]["additionalContext"], out
+
+
+@pytest.mark.parametrize("setup", [_sockets, _root_missing])
+def test_doctor_says_not_relaxed_with_the_hooks_reason(tree, monkeypatch, setup):
+    why = setup(tree)
+    _refused_blanket(tree, monkeypatch)
+    out = _doctor(tree / "repo")
+    assert "(this folder: relaxed)" not in out, out
+    assert "WARNING: " + NOT_RELAXED.format(why=why) in out, out
+
+
 # --- launch -----------------------------------------------------------------------------------
 
 def _build(tree):
