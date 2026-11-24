@@ -208,8 +208,14 @@ def test_b8_the_heartbeat_continues_while_every_slot_is_busy(tree, broker):
         def started():
             out = [os.path.join(broker.spool, f"out-{r}.log") for r in rids]
             return [n for n in range(2) if os.path.exists(out[n]) and "STARTED" in open(out[n]).read()]
+
+        def claimed(n):
+            return os.path.exists(os.path.join(broker.spool, f"job-{rids[n]}.json"))
+        # the broker may list the spool between the two renames: then the first job can start
+        # before the next pass claims the second, so wait for both
         for _ in range(200):
-            if started():
+            s = started()
+            if len(s) == 1 and claimed(1 - s[0]):
                 break
             time.sleep(0.05)
         assert len(started()) == 1, started()
