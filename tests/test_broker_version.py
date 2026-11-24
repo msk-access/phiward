@@ -78,6 +78,26 @@ def test_headless_names_another_or_a_missing_version(tree, version):
     assert len(probs) == 1 and RESTART in probs[0], probs
 
 
+def test_a_status_that_cannot_be_read_while_the_broker_runs_counts_as_missing(
+        tree, monkeypatch, capsys):
+    # `running` says yes, the read just after it fails (the file replaced or gone between them)
+    _stand_in_broker(__version__)
+    monkeypatch.setattr(broker, "read_status", lambda spool=None: {})
+    probs = [p for p in doctor.headless_problems(str(tree / "repo"), str(tree / "home"))
+             if "version" in p]
+    assert len(probs) == 1 and RESTART in probs[0], probs
+    lines = _version_lines(_doctor(tree, monkeypatch, capsys))
+    assert len(lines) == 1 and lines[0].startswith("WARNING: "), lines
+
+
+def test_no_version_line_when_no_broker_runs(tree, monkeypatch, capsys):
+    assert not broker.running(config.spool_dir())
+    out = _doctor(tree, monkeypatch, capsys)
+    assert _version_lines(out) == [], out
+    probs = doctor.headless_problems(str(tree / "repo"), str(tree / "home"))
+    assert not [p for p in probs if "version" in p], probs
+
+
 def test_headless_is_silent_on_the_same_version(tree):
     _stand_in_broker(__version__)
     probs = doctor.headless_problems(str(tree / "repo"), str(tree / "home"))
