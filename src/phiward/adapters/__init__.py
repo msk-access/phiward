@@ -47,9 +47,6 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
                                                  config.guard_files(), hidden=secret)
                 if r is not None:
                     break
-            # Claude Code runs a call that matches an excludedCommands entry outside its
-            # sandbox, by its own matcher; phiward does not guess which calls match, so while
-            # any folder's list is non-empty every call gets the text check
             if r is not None and cfg.no_phi_folders:
                 # a no-PHI folder (the session's project is a listed folder that passes its
                 # check): the hook acts as with `[shell] best_effort`, but only when the
@@ -58,6 +55,9 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
                 entry, why = claude_settings.no_phi_relaxed(
                     cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""), home, folders)
                 cfg.no_phi_here = bool(entry) and why is None
+            # Claude Code runs a call that matches an excludedCommands entry outside its
+            # sandbox, by its own matcher; phiward does not guess which calls match, so while
+            # any folder's list is non-empty every call gets the text check
             listed = [p for p in folders if r is None and claude_settings.excluded_entries(p, home)]
             if listed:
                 where, step = claude_settings.excluded_step(listed[0], home)

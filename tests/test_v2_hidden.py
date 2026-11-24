@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from phiward import config, wholetool
+from phiward import config, hidden, wholetool
 from helpers import needs_confine
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
@@ -72,7 +72,7 @@ def test_keytabs_and_caches_from_krb5_conf_are_hidden(tree):
                     "  default_client_keytab_name = /etc/keytabs/%{uid}.keytab\n"
                     "  default_ccache_name = KEYRING:persistent:%{uid}\n")
     env = dict(os.environ, KRB5_CONFIG=str(conf), KRB5_CLIENT_KTNAME="FILE:/srv/kt/me.keytab")
-    found = wholetool._kerberos_caches(env)
+    found = hidden._kerberos_caches(env)
     uid = os.getuid()
     for p in (f"/var/krb/cc_{uid}", f"/etc/keytabs/{uid}.keytab", "/srv/kt/me.keytab"):
         assert p in found, (p, found)
@@ -104,5 +104,5 @@ def test_krb5_includedir_and_tokens(tree):
     (d / "ccache").write_text("[libdefaults]\n default_ccache_name = FILE:/srv/cc/%{username}/c\n"
                               " default_keytab_name = /srv/kt/%{weird}/k\n")
     env = dict(os.environ, KRB5_CONFIG=str(tree / "krb5.conf"), USER="fakeuser")
-    found = wholetool._kerberos_caches(env)
+    found = hidden._kerberos_caches(env)
     assert "/srv/cc/fakeuser/c" in found and "/srv/kt" in found, found

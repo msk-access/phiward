@@ -4,8 +4,8 @@ The tool itself starts inside the profile, so everything it does (its file tools
 and hooks), and every child it starts, is decided by the kernel, not by a path check. The text
 users see is HELP below; this docstring is for developers.
 
-Writes are denied by default. They are allowed only in the project, this session's own run
-folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
+Writes are denied by default. They are allowed only in the project, the `[launch] write_to`
+folders, this session's own run folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
 a link on its path, is not used. Inside the project, files that other tools run later stay
 read-only: git's control files and `.git` entries, and the one list
 (`claude_settings.RUNS_LATER_DIRS`, `RUNS_LATER_FILES`) as a whole, at any depth, with the targets
@@ -44,9 +44,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from phiward import (carryover, claude_settings, config, confine, install, netproxy, pathid,
                      pathmatch, safeio)
-from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
-                            KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
-                            _token_paths)
+from phiward.hidden import IPC_PATHS, KRB5_CACHE_NAMES, KRB5_CACHE_PATTERNS
 from phiward.hidden import credentials as _credentials  # noqa: E402
 
 USAGE = ("Run an agent tool, or one program, in phiward's kernel profile (Mode B), for example "
@@ -145,9 +143,6 @@ class Adapter:
     name: str
     program: str = ""  # the tool's command, found on the operator's PATH
     config_env: str = ""  # the variable that moves its config folder
-    # state folders under HOME the tool uses; not write places: the operator's plain tool
-    # reads them, so XDG_STATE_HOME and XDG_DATA_HOME point into the run folder instead
-    home_writes: List[str] = field(default_factory=list)
     extra_env: Dict[str, str] = field(default_factory=dict)
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
@@ -206,7 +201,6 @@ class Adapter:
 ADAPTERS: Dict[str, Adapter] = {
     "generic": Adapter("generic"),
     "claude": Adapter("claude", "claude", "CLAUDE_CONFIG_DIR",
-                      [".local/state/claude", "Library/Caches/claude-cli-nodejs"],
                       # no auto-update; no download of the official plugin catalog into each fresh
                       # folder (~14 MB and 830 files every session)
                       {"DISABLE_AUTOUPDATER": "1",

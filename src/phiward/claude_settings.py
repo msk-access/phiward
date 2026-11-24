@@ -1015,7 +1015,7 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
 # `worktrees`) and under the user config folder (CLAUDE_CONFIG_DIR may have another name). A skill
 # or subagent may hold hooks in its frontmatter, a skill or command `!` lines, a plugin hooks and
 # MCP servers; `launch.json` names what the app's preview starts. The one list: the hook asks
-# before a file tool writes one (`code_place`), and carryover quarantines them.
+# before a file tool writes one (`claude_place`), and carryover quarantines them.
 SETTINGS_NAMES = ("settings.json", "settings.local.json")
 CODE_DIRS = ("skills", "agents", "commands", "hooks", "workflows", "plugins", "routines")
 CODE_FILES = ("launch.json", "scheduled_tasks.json")
@@ -1291,12 +1291,6 @@ def code_root_report(project: str, home: str, env: Optional[Mapping[str, str]] =
     return out, notes
 
 
-def writable_code_roots(project: str, home: str,
-                        env: Optional[Mapping[str, str]] = None) -> List[Tuple[str, str]]:
-    """The code roots a session in `project` can write (`code_root_report`)."""
-    return code_root_report(project, home, env)[0]
-
-
 def claude_place(path: str, home: str, bases: Sequence[str] = (),
                  env: Optional[Mapping[str, str]] = None,
                  memo: Optional[Dict[Any, Any]] = None) -> str:
@@ -1350,11 +1344,6 @@ def _claude_place(path: str, home: str, bases: Sequence[str],
         if found == "settings":
             return found
     return found
-
-
-def code_place(path: str, home: str, env: Optional[Mapping[str, str]] = None) -> bool:
-    """Whether `path` (absolute) is one Claude Code runs as code (`claude_place`)."""
-    return claude_place(path, home, (), env) == "code"
 
 
 def memory_places(home: str, env: Optional[Mapping[str, str]] = None) -> List[str]:

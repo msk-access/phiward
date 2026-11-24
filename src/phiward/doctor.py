@@ -561,7 +561,7 @@ def settings_script_lines(project: str, home: str) -> List[str]:
 
 def code_root_lines(project: str, home: str) -> List[str]:
     """doctor's lines for the code Claude Code runs that a session in `project` can write, its
-    shell too (`claude_settings.writable_code_roots`: a skill linked in from the project)."""
+    shell too (`claude_settings.code_root_report`: a skill linked in from the project)."""
     out = []
     roots, notes = claude_settings.code_root_report(project, home)
     if len(roots) > 3:
