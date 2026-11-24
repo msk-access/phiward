@@ -44,6 +44,7 @@ says what it holds. By feature:
 | The hooks phiward writes, run from files in the package (the script, its variable list, `entry.py`, the plugin's copies, old entries replaced, doctor's notes, launch's Claude Code floor on macOS) | test_hooks_from_files |
 | Tools other than Bash (MCP tools, Copilot) | test_v2_tool_rule, test_v2_shell_names, test_v2_refusal_words, test_v2_mcp_source |
 | MCP: wrap, list, launch records, launcher | test_v2_mcp_wrap, test_v2_mcp_wrap_cmd, test_v2_wrap_shared, test_v2_backups, test_v2_entry_id, test_v2_one_answer, test_v2_one_wrapped, test_v2_twin_count, test_v2_launch_records, test_v2_launcher_identity, test_v2_launcher_owner, test_v2_launcher_path, test_v2_path_risk, test_v2_attacks, test_v2_review_round3, test_v2_review_round4 |
+| The broker's version in its status file, at doctor and `--headless` | test_broker_version |
 | The gateway and the broker | test_confinement, test_round2, test_round3, test_round4, test_round5, test_v2_broker_path_writable, test_v2_speed, test_v2_probe_bugs, test_v2_release_review, test_v2_placeholder_counts, test_v2_gateway_places, test_macos_gateway_profile_file, test_macos_inline_code |
 | HPC: remote runs and pushes; copy run from files | test_v2_remote, test_v2_push, test_macos_copy_from_files |
 | `phiward copy`: local paths resolved once | test_v2_copy_paths |
