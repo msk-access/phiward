@@ -318,8 +318,11 @@ def test_a_wrapped_server_gets_no_listed_folder(tree):
     s = folder(tree)
     listed(s)
     info = {}
-    text = session_text(build(tree, server=True, info=info))
-    assert str(s) not in text
+    cmd, text = close(build(tree, server=True, info=info))
+    if LINUX:  # the read-only view may name the folder; it is never bound writable
+        assert _at(cmd, "--bind", s) == -1, cmd
+    else:
+        assert str(s) not in text
     assert info.get("write_to", []) == []
 
 
