@@ -319,6 +319,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -337,10 +364,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -358,8 +385,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -795,10 +822,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -816,8 +843,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -966,10 +993,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -987,8 +1014,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1081,10 +1108,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1102,8 +1129,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1112,6 +1139,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1327,19 +1382,19 @@ editable install has no install record: install with <code>uv tool</code> or <co
 <code>PHIWARD_DEV=1</code> (developers only).</p>
 <h2 id="mode-a-claude-code-with-the-hook-and-its-sandbox">Mode A: Claude Code with the hook and its sandbox<a class="headerlink" href="#mode-a-claude-code-with-the-hook-and-its-sandbox" title="Permanent link">&para;</a></h2>
 <p><strong>A sandbox opener stops the whole shell.</strong> One of <code>network.allowLocalBinding</code> (macOS),
-<code>allowUnixSockets</code>, <code>allowAllUnixSockets</code> or <code>allowMachLookup</code> in any settings level means the
-shell is not confined, and the hook refuses every command but a gateway call. Doctor's line
-"sandbox confines the shell" names the key and the file. Remove the key; run a dev server or
+<code>allowUnixSockets</code>, <code>allowAllUnixSockets</code>, <code>allowMachLookup</code>, <code>filesystem.disabled</code>,
+<code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code> or <code>allowNestedUserNamespaces</code> in any settings level
+means the shell is not confined, and the hook refuses every command but a gateway call. Doctor's
+line "sandbox confines the shell" names the key and the file. Remove the key; run a dev server or
 docker in your own terminal. Or, for a folder you are sure holds no PHI, list it in <code>[no_phi]
-folders</code> of your user config: when <code>network.allowLocalBinding</code> (macOS),
-<code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code> or <code>allowNestedUserNamespaces</code> is the only
-cause, Bash and Monitor there get the text check in place of the refusal
-(<a href="../configuration/#no_phi">configuration.md</a>). The socket openers (<code>allowUnixSockets</code>,
-<code>allowAllUnixSockets</code>) and <code>allowMachLookup</code> are not relaxed, nor is <code>filesystem.disabled</code>: the
-service behind a socket (Docker's daemon) runs outside the sandbox. For Docker, use a
-<code>sandbox.excludedCommands</code> entry (<code>docker *</code>) instead of the socket. A non-empty <code>sandbox.excludedCommands</code> does not stop the shell:
-the hook checks the text of every command, and refuses a path it cannot see
-(<a href="../setup/">setup.md</a>).</p>
+folders</code> of your user config: when <code>network.allowLocalBinding</code> (macOS), <code>enableWeakerNestedSandbox</code>,
+<code>allowAppleEvents</code> or <code>allowNestedUserNamespaces</code> is the only cause, Bash and Monitor there get the
+text check in place of the refusal (<a href="../configuration/#no_phi">configuration.md</a>). The socket openers
+(<code>allowUnixSockets</code>, <code>allowAllUnixSockets</code>) and <code>allowMachLookup</code> are not relaxed, nor is
+<code>filesystem.disabled</code>: the service behind a socket (Docker's daemon) runs outside the sandbox. For
+Docker, use a <code>sandbox.excludedCommands</code> entry (<code>docker *</code>) instead of the socket. A non-empty
+<code>sandbox.excludedCommands</code> does not stop the shell: the hook checks the text of every command, and
+refuses a path it cannot see (<a href="../setup/">setup.md</a>).</p>
 <p><strong>Package caches are read-only.</strong> Claude Code's sandbox writes only the project and the temp
 folder. phiward adds no <code>allowWrite</code> for the caches, because a cache a session writes is code a
 later run executes. Doctor says:

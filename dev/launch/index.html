@@ -319,6 +319,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -337,10 +364,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -358,8 +385,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -872,10 +899,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -893,8 +920,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1043,10 +1070,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1064,8 +1091,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1158,10 +1185,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1179,8 +1206,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1189,6 +1216,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1440,9 +1495,9 @@ team.</p>
 <li><code>--memory</code>: turn Claude Code's auto memory on. It then lives in the session's folder, and its
   changes go to quarantine like any other instruction.</li>
 <li><code>launch</code> refuses to start in <code>/</code>, your home, a folder above or inside protected data, a dot
-  folder, <code>~/Library</code>, a folder on your <code>PATH</code>, or a phiward folder. On Linux it also refuses
-  <code>/tmp</code> itself (as the project or the spool): the session's own <code>/tmp</code> would be the shared one.
-  A folder below <code>/tmp</code> works.</li>
+  folder, <code>~/Library</code> (macOS), a folder on your <code>PATH</code>, or a phiward folder. On Linux it also
+  refuses <code>/tmp</code> itself (as the project or the spool): the session's own <code>/tmp</code> would be the shared
+  one. A folder below <code>/tmp</code> works.</li>
 <li><strong>Python environments:</strong> an activated <code>.venv</code> puts a folder of the project on your <code>PATH</code>, so
   <code>launch</code> refuses: your own shell would run what the session wrote there. The refusal names the
   entry: <code>PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
@@ -1457,7 +1512,7 @@ team.</p>
   phiward doctor</code>. A value of <code>[sanitize] examples</code> is not fully masked by your own rules, or a
   made-up path below a root came out unmasked
   (<a href="../configuration/#sanitize">configuration.md</a>). Fix the rule, the example or the root, then
-  start again. A wrapped MCP server (<code>launch --server</code>) is not checked.</li>
+  start again. A wrapped MCP server (<code>--entry</code>) is not checked.</li>
 <li><code>launch</code> refuses to start when the project scan finds a subject or sample ID in a project
   file or a file name (<a href="#the-project-scan">The project scan</a>).</li>
 <li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
@@ -1695,7 +1750,7 @@ this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm an
 <li>Only plain files and real folders are kept. Links are dropped with a NOTE. <code>memory/</code> (auto
     memory, an instruction) and <code>mcp-tasks/</code> are never kept, in any letter case.</li>
 <li>Sessions that end one after the other are merged; a file is replaced only by a newer one.</li>
-<li>At most 500 MB and 20,000 entries for each project; past that, the oldest sessions go first.
+<li>At most 500 MiB and 20,000 entries for each project; past that, the oldest sessions go first.
     A session larger than that on its own is not kept, and its end says so with a NOTE.</li>
 <li>A resumed session restores what Claude Code restores (the conversation, the model, the
     agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
@@ -1799,11 +1854,12 @@ when in doubt, reinstall: the step names the command for the tool that installed
   is read-only too; <code>launch</code> refuses to start when such a link leads to a folder that holds the
   project, to one that does not exist (Linux), or when one of these folders has more entries than
   it walks for links (50,000 in one tree; it names the folder). Trees of installed code
-  (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are not
-  walked, and a <code>.vscode</code> or <code>.idea</code> inside them stays writable, so <code>npm install</code> works; nor are
-  the links in <code>.claude/worktrees</code> followed. R: <code>.Rprofile</code> and <code>.Renviron</code> are read-only, so run <code>renv::init()</code> (it writes
-  <code>.Rprofile</code>) once outside <code>launch</code>; <code>renv::restore()</code> and plain R work inside it (they write
-  <code>renv/library</code>, which stays writable).</li>
+  (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>,
+  <code>__pycache__</code>, <code>.mypy_cache</code>, <code>.pytest_cache</code>, <code>.ruff_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are
+  not walked, and a <code>.vscode</code> or <code>.idea</code> inside them stays writable, so <code>npm install</code> works; nor are
+  the links in <code>.claude/worktrees</code> followed. R: <code>.Rprofile</code> and <code>.Renviron</code> are read-only, so run
+  <code>renv::init()</code> (it writes <code>.Rprofile</code>) once outside <code>launch</code>; <code>renv::restore()</code> and plain R work
+  inside it (they write <code>renv/library</code>, which stays writable).</li>
 <li><strong>A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or
   <code>.idea</code> folder</strong> (at any depth) fails partway inside <code>launch</code>, since those folders are
   read-only. Run them in your own terminal.</li>
@@ -1829,15 +1885,17 @@ when in doubt, reinstall: the step names the command for the tool that installed
     <code>sandbox.allowUnsandboxedCommands</code> false, and <code>env.CLAUDE_CODE_DISABLE_FILE_MENTIONS</code>:
     the file <code>install</code> writes for <code>claude --settings</code>), passed as the last arguments of whatever
     <code>--tool claude</code> runs (<code>claude</code>, a versioned binary, a wrapper); a <code>--</code> among the arguments
-    stops the start (drop the <code>--</code> and put the prompt last). Claude Code keeps only one <code>--settings</code>, so your own stops the start too,
-    unless its content is just the same (the file <code>install</code> writes, as a shell alias adds it,
-    or the one v0.2.0b1's <code>install</code> wrote, with no <code>env</code>; launch reads the content, not the
-    path). One more key, another value or a file that does not parse stops the start; if it
-    is phiward's file, rerun <code>phiward install claude --user --write</code>.
+    stops the start (drop the <code>--</code> and put the prompt last). Claude Code keeps only one
+    <code>--settings</code>, so your own stops the start too, unless its content is just the same (the file
+    <code>install</code> writes, as a shell alias adds it, or the one v0.2.0b1's <code>install</code> wrote, with no
+    <code>env</code>; launch reads the content, not the path). One more key, another value or a file that does
+    not parse stops the start; if it is phiward's file, rerun <code>phiward install claude --user
+    --write</code>.
     Under <code>launch</code>, Claude Code reads a config folder of its own, not <code>~/.claude</code>: put other
     settings in managed settings, or add a <code>settings.json</code> with <code>phiward carryover add FILE
-    --as settings.json --tool claude</code>. A Claude Code command (<code>claude mcp</code>, <code>doctor</code>, <code>logs</code>,
-    ...), also after options (<code>claude --debug mcp list</code>), is not a session: some ignore
+    --as settings.json --tool claude</code>.</li>
+<li><strong>What launch checks before the start.</strong> A Claude Code command (<code>claude mcp</code>, <code>doctor</code>,
+    <code>logs</code>, ...), also after options (<code>claude --debug mcp list</code>), is not a session: some ignore
     <code>--settings</code> and run, and some are hidden from the help. <code>launch</code> refuses it: run it outside
     <code>launch</code>. To tell a command from a prompt, <code>launch</code> asks the program that runs, inside
     the session: <code>claude WORD --help</code> for the first word that is not an option (which options
@@ -1846,9 +1904,9 @@ when in doubt, reinstall: the step names the command for the tool that installed
     Some options run something other than a session (<code>--chrome-native-host</code>, <code>--preload</code>,
     <code>--eval-mock-server</code>, <code>--daemon-worker</code>). <code>launch</code> does not refuse them; they run inside
     the session's confinement, so the guards still hold. Cost: one help run
-    at each start, and one more when there is such a word. Only Claude Code's native build is accepted (npm
-    and the installer give it from 2.1.250; for an older JavaScript build, run <code>claude
-    install</code>). Before the tool starts, <code>launch</code> runs the filter of the program that will run
+    at each start, and one more when there is such a word. Only Claude Code's native build is
+    accepted (npm and the installer give it from 2.1.250; for an older JavaScript build, run
+    <code>claude install</code>). Before the tool starts, <code>launch</code> runs the filter of the program that will run
     (found on the session's <code>PATH</code>, then run by its real path) as Claude Code does (the native
     binary with <code>ARGV0=apply-seccomp</code>) and requires <code>socket(AF_UNIX)</code> to fail. So run the
     Claude Code binary itself: <code>env</code>, <code>npx</code>, <code>node</code>, a JavaScript program or a wrapper that
@@ -1857,27 +1915,23 @@ when in doubt, reinstall: the step names the command for the tool that installed
     write the program's real file or a folder above it, on a machine other than x86_64 or
     aarch64, or when settings
     open the sandbox (<code>excludedCommands</code>, <code>allowAllUnixSockets</code>, <code>allowUnixSockets</code>,
-    <code>enableWeakerNestedSandbox</code>). A read-only wrapper of your own, inside the project, that
-    runs a native binary the session can write is not caught: only the wrapper is checked.
-    The tests use a made-up native build. Only the sandbox check shows that the real
-    binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
-    starts in the background (<code>--bg</code>, its background service) get the same sandbox
-    settings. Claude Code
-    also needs <code>socat</code> and bubblewrap. Bash then cannot use any unix socket, so <code>tmux</code> and
-    Python's <code>forkserver</code> fail there. Hooks, MCP servers, the status line and Claude Code
-    itself run outside that sandbox: they can reach sockets outside. You configure them; the
-    session cannot, because the project's <code>.claude</code> is read-only.</li>
+    <code>enableWeakerNestedSandbox</code>). With a wrapper of your own, the check is of the wrapper
+    itself. Keep the programs the session runs, and what a wrapper runs, outside the project
+    and the folders the session writes.</li>
+<li><strong>What is not covered.</strong> The tests use a made-up native build. Only the sandbox check shows that
+    the real binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
+    starts in the background (<code>--bg</code>, its background service) get the same sandbox settings. Claude
+    Code also needs <code>socat</code> and bubblewrap. Bash then cannot use any unix socket, so <code>tmux</code> and
+    Python's <code>forkserver</code> fail there. Hooks, MCP servers, the status line and Claude Code itself run
+    outside that sandbox: they can reach sockets outside. You configure them; the session cannot,
+    because the project's <code>.claude</code> is read-only.</li>
 <li>Before 7.1, with any other tool (<code>--tool generic</code>, a wrapped MCP server): the tool cannot
     make unix sockets at all, also its own (socketpairs and pipes work).</li>
 <li><strong>A launch inside a session</strong> (a wrapped MCP server, or a launch for another project) runs its
   command directly, under the session's own profile: not the narrower profile of a server (which
-  keeps more of the project read-only), and not another project's <code>.phiward.toml</code>. On macOS it decides from the session's own folder, found
-  from your account's home folder (not <code>HOME</code>): a file there that only that profile denies, and
-  a new file that only the session can make in its own run folder (<code>PHIWARD_RUN</code>, which <code>launch</code>
-  sets);
-  on Linux the session's seccomp filter answers one unused system call with an error number
-  nothing else gives. Anything else (no filter, another sandbox's filter) builds the full
-  profile; where <code>~/.phiward</code> cannot be written, that launch refuses and nothing runs.</li>
+  keeps more of the project read-only), and not another project's <code>.phiward.toml</code>. Any other
+  launch builds the full profile; where <code>~/.phiward</code> cannot be written, that launch refuses and
+  nothing runs.</li>
 </ul>
 <p>Read <a href="../threat-model/">threat-model.md</a> (Mode B, <a href="../threat-model/#l1">limits L1–L10</a>). In short:
 - <strong>The network goes only to public addresses, through phiward's proxy</strong> (<a href="#the-network">above</a>).

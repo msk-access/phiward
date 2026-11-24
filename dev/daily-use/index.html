@@ -319,6 +319,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -337,10 +364,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -358,8 +385,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -900,10 +927,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -921,8 +948,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1071,10 +1098,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1092,8 +1119,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1186,10 +1213,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1207,8 +1234,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1217,6 +1244,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1591,15 +1646,18 @@ in).</p>
 delete it yourself first.</p>
 <div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>copy<span class="w"> </span>~/data/patients/run1<span class="w"> </span>~/data/patients/run1-copy
 </code></pre></div>
-<p><code>copy SRC... DST</code> copies without printing names. The destination must be inside a protected path
-of the user config, or under a <code>[copy] remotes</code> entry. Each local path is made absolute
-once, and every check and the copy itself use that path. One with a <code>..</code> part, or one that
-starts with <code>~</code> (quoted, so the shell left it), is refused: give the full path. A local copy first makes the destination folder with the system
-<code>mkdir -p</code>, then copies with the system <code>rsync -a</code> (or <code>cp -R</code>): two steps in the same profile,
-and the copy runs only when the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
-(<a href="../hpc/#phiward-copy">hpc.md</a>). The copy runs in the gateway profile and cannot read
-credentials. Its output is sanitized. The only option is <code>--dry-run</code>, as the first word: it
-counts what a push would send, and for a local copy it shows what rsync would copy.</p>
+<p><code>copy SRC... DST</code> copies without printing names. The destination must be inside a protected path of
+the user config, or under a <code>[copy] remotes</code> entry. Each local path is made absolute once, and every
+check and the copy itself use that path. One with a <code>..</code> part, or one that starts with <code>~</code> (quoted,
+so the shell left it), is refused: give the full path. A local copy first makes the destination
+folder with the system <code>mkdir -p</code>, then copies with the system <code>rsync</code> (files that exist are kept,
+never replaced; a <code>.claude/</code> folder is skipped; times are kept, modes and links are not), or without
+rsync with <code>cp -R -n</code>, single files only: two steps in the same profile, and the copy runs only when
+the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
+(<a href="../hpc/#phiward-copy">hpc.md</a>). The copy runs in the gateway profile and cannot read credentials.
+Its output is sanitized. The only option is <code>--dry-run</code>, as the first word: it counts what a push
+would send, and for a local copy with rsync it shows what rsync would copy (without rsync it shows
+nothing).</p>
 <h2 id="give-the-agent-pseudonymized-data-phiward-pseudonymize">Give the agent pseudonymized data: <code>phiward pseudonymize</code><a class="headerlink" href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" title="Permanent link">&para;</a></h2>
 <p>When the agent needs a table but not its identifiers, make a copy in which the identifier
 columns hold codes. Type the command yourself, in your own terminal:</p>
@@ -1802,7 +1860,7 @@ credentials, a private mirror), with the way around each: <a href="../refusals/"
 <p>The hook refuses a tool call that names a protected path, and ends its reason with the rule:
 no tool may read, list, search or print a protected path; use <code>phiward run -- CMD</code> as the
 whole command, or <code>phiward copy</code>. Once a config exists, it also refuses <code>phiward setup</code>,
-<code>broker</code>, <code>pin</code> and <code>carryover</code>: those are for the operator only.</p>
+<code>broker</code>, <code>pin</code>, <code>carryover</code> and <code>pseudonymize</code>: those are for the operator only.</p>
 <h3 id="a-prompt-that-was-not-sent">A prompt that was not sent<a class="headerlink" href="#a-prompt-that-was-not-sent" title="Permanent link">&para;</a></h3>
 <p>Before Claude Code sends a prompt, phiward checks it. A prompt that holds an identifier of
 your packs or <code>[sanitize] patterns</code>, or a path below a protected root, is not sent:
@@ -1815,9 +1873,9 @@ could not run (a config or pack file it cannot use): every prompt is refused unt
 What the check does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
 <h3 id="messages-from-run-and-copy">Messages from <code>run</code> and <code>copy</code><a class="headerlink" href="#messages-from-run-and-copy" title="Permanent link">&para;</a></h3>
 <p>Messages start with <code>run</code> or <code>copy</code> (the table shows <code>run</code>; <code>copy</code> says the same), and the real
-text goes on with more detail. Four come from the broker itself and start with <code>refused:</code>
-(busy; cannot use this request; the config changed; programs not approved); all four exit with
-3. An exit of 3 with no output at all means the broker refused the request before it could write
+text goes on with more detail. Five come from the broker itself and start with <code>refused:</code>
+(busy; cannot use this request; the config changed; programs not approved; the masking check
+failed); all five exit with 3. An exit of 3 with no output at all means the broker refused the request before it could write
 anything: the broker's log has the reason.</p>
 <table>
 <thead>

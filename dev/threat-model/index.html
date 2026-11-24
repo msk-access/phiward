@@ -321,6 +321,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -335,10 +362,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -356,8 +383,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -704,10 +731,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -725,8 +752,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1110,10 +1137,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1131,8 +1158,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1225,10 +1252,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1246,8 +1273,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1256,6 +1283,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1645,6 +1700,11 @@
 <td>under the root: refused or masked (only placeholders left; <code>--table</code> keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent in Mode A (the session note warns), refused at the start under <code>phiward launch</code> (the project scan). A pack file weakened, a pattern edited or a root removed in the config is found</td>
 </tr>
 <tr>
+<td>The maintainer's sandbox check with the real Claude Code (<code>scripts/sandbox-check/linux.sh</code>)</td>
+<td>Linux, in Docker</td>
+<td>passed, since 2026-11-22</td>
+</tr>
+<tr>
 <td>The full test suite (over 1,000 tests)</td>
 <td>macOS; Linux (bubblewrap)</td>
 <td>passes</td>
@@ -1653,7 +1713,7 @@
 </table>
 <ul>
 <li><strong>Not tested:</strong></li>
-<li>the real Claude Code on Linux (only the test suite);</li>
+<li>the real Claude Code on a real Linux machine (it has passed only in Docker);</li>
 <li><code>phiward launch</code> driven from the app with Remote Control;</li>
 <li>a published MCP server under <code>launch</code> on macOS (on Linux it was);</li>
 <li>a protected folder on a mounted HPC volume;</li>
@@ -3010,7 +3070,7 @@ run later" or to the macOS process model:</p>
 </tr>
 <tr>
 <td><a id="l2"></a>L2</td>
-<td>Linux: a name of the list that is missing at the start can be made and written in the session: <code>.cursor</code>, <code>.gemini</code>, <code>.codex</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code> at the top, and any of them, <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are not walked, and the names of the list inside them stay writable; the links in <code>.claude/worktrees</code> are not followed. A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or <code>.idea</code> folder fails partway inside <code>launch</code>: run it in your own terminal.</td>
+<td>Linux: a name of the list that is missing at the start can be made and written in the session: <code>.cursor</code>, <code>.gemini</code>, <code>.codex</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code> at the top, and any of them, <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> too, in a subfolder; so can a nested one that is a link (where it leads is read-only, the link can be replaced) and one past the first 50,000 entries of the walk (launch says where it stopped, at the start and in the exit report). A bind needs a file that exists. The exit report lists them. On both systems, the trees of installed code (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>, <code>.pytest_cache</code>, <code>.ruff_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are not walked, and the names of the list inside them stay writable; the links in <code>.claude/worktrees</code> are not followed. A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or <code>.idea</code> folder fails partway inside <code>launch</code>: run it in your own terminal.</td>
 <td>The rule above.</td>
 </tr>
 <tr>

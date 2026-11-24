@@ -16,7 +16,7 @@
         <link rel="prev" href="../developer/">
       
       
-        <link rel="next" href="../release-notes/v0.2.0b1/">
+        <link rel="next" href="../release-notes/v0.2.0b2/">
       
       
         
@@ -321,6 +321,33 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
     
     
     
@@ -335,10 +362,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -356,8 +383,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -702,10 +729,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -723,8 +750,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -875,10 +902,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -896,8 +923,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1070,10 +1097,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1091,8 +1118,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1101,6 +1128,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1250,14 +1305,27 @@ works from a private repository.</p>
 <code>git flow release finish 0.2.0b2</code> merges it into <code>main</code> and <code>develop</code> and makes the tag <code>v0.2.0b2</code>.
 Then push <code>main</code>, <code>develop</code> and the tag.</p>
 <ol>
-<li>Set the version: <code>__version__</code> in <code>src/phiward/__init__.py</code> (the package and
-   <code>phiward --version</code> take it from there), and the same in <code>plugin/.claude-plugin/plugin.json</code>
-   and <code>.claude-plugin/marketplace.json</code>. A test fails when they disagree, and the workflow
-   refuses a tag that names another version. PyPI's form has no <code>v</code>: <code>0.2.0b1</code>; the tag has
-   it: <code>v0.2.0b1</code>. Change the install lines in the docs (<code>phiward==0.2.0b1</code>) too.</li>
-<li>In <code>CHANGELOG.md</code>, replace "unreleased" with the date (UTC), and write the release notes in
-   <code>docs/release-notes/</code>.</li>
-<li>Run the full test suite on macOS (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a> says how) and on
+<li>Set the version. PyPI's form has no <code>v</code> (<code>0.2.0b2</code>); the tag has it (<code>v0.2.0b2</code>).</li>
+<li><code>__version__</code> in <code>src/phiward/__init__.py</code> (the package and <code>phiward --version</code> take it
+     from there), <code>plugin/.claude-plugin/plugin.json</code> and <code>.claude-plugin/marketplace.json</code>. A
+     test fails when they disagree.</li>
+<li>In README.md, docs/, <code>plugin/commands/setup.md</code> and mkdocs.yml: the install lines
+     (<code>phiward==</code>), the plugin tags (<code>#v</code>), the <code>/blob/v.../</code> links, the GitHub install
+     (<code>phiward@v</code> in setup.md), the marketplace <code>"ref"</code> (plugins.md), the status lines (README
+     and docs/index.md), and the release notes link (docs/index.md) and nav entry (mkdocs.yml).</li>
+<li>Then grep for the old version, and change each line that names it as the current release:
+     <code>git grep -n -F OLD -- ':!CHANGELOG.md' ':!docs/release-notes' ':!tests'</code>. Lines about an
+     older release stay (for example launch.md's "the one v0.2.0b1's <code>install</code> wrote", the
+     first release's tag line in step 4 below, and the agent-guards rename in setup.md,
+     config.py, names.py and pyproject.toml).</li>
+</ol>
+<p>The workflow refuses a tag when an install line (<code>phiward==</code>), a <code>/blob/v.../</code> link, a
+   plugin tag (<code>#v</code>), a GitHub install (<code>@v</code>), a marketplace <code>"ref"</code> or a status line in
+   README.md, CHANGELOG.md, <code>plugin/commands/setup.md</code> or <code>docs/*.md</code> names another version.
+   It does not check the release notes link or the mkdocs.yml nav entry: grep for them.
+2. In <code>CHANGELOG.md</code>, replace "unreleased" with the date (UTC), and write the release notes in
+   <code>docs/release-notes/</code>, linked from the CHANGELOG entry.
+3. Run the full test suite on macOS (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a> says how) and on
    Linux (<code>sh scripts/linux-check/check.sh</code>, needs Docker: Python 3.12 and 3.9, two layouts,
    on a <code>git archive</code> of HEAD), and the quickstart in clean Linux containers
    (<code>sh scripts/quickstart-check/check.sh</code>, needs Docker; its image is built fresh, and
@@ -1281,8 +1349,8 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    before the token prompt. Its programs run with its own home as HOME, in its own folder.
    <code>SBX_WHEEL</code> with <code>SBX_WHEEL_SHA256</code> installs a wheel you built beforehand instead of a build
    (see docs/hpc.md). uv's Python is found in
-   <code>~/.local/share/uv/python</code>; give its path as an argument if yours is elsewhere.</li>
-<li><code>sh scripts/sandbox-check/check.sh</code> on macOS, and on a real Linux machine with
+   <code>~/.local/share/uv/python</code>; give its path as an argument if yours is elsewhere.
+   - <code>sh scripts/sandbox-check/check.sh</code> on macOS, and on a real Linux machine with
      <code>SBX_BASE</code> set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
      folders; it may not be under /tmp or the temp folder, nor your home folder itself, nor
      anywhere the settings phiward installs let the session write (the check refuses). A
@@ -1295,25 +1363,24 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
      token first (<code>claude setup-token</code> may make <code>~/.claude</code> again), then move them away while
      the check runs, or choose another folder. On macOS it is <code>/Users/Shared</code> by default;
      without that folder, set SBX_BASE to another folder outside those (for example one you
-     make for it on a second volume).</li>
-<li><code>SBX_TOOLS</code> names a folder for socat, when the system has none (a cluster). It may hold
+     make for it on a second volume).
+   - <code>SBX_TOOLS</code> names a folder for socat, when the system has none (a cluster). It may hold
      socat and nothing else, so it cannot stand in for <code>bwrap</code>, <code>git</code> or <code>sh</code>. The check puts
      it on the session's PATH after its own bin folders, before the system folders. It must be
      an absolute folder outside SBX_BASE and outside what the session may write, and pass
      phiward's own rule for a PATH folder: it, its socat (and what a link leads to) and every
      folder above them (up to your home folder, when they are inside it) are yours or root's,
-     and no group or other account can write them. Else the check refuses, before the build.</li>
-<li>On a cluster, the check's folders go below your home folder, the one place no other
+     and no group or other account can write them. Else the check refuses, before the build.
+   - On a cluster, the check's folders go below your home folder, the one place no other
      account can write a folder above it (scratch and group folders are writable by others, so
      phiward's self-check refuses phiward installed there). The steps are in
-     <a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>, at its end.</li>
-<li><code>sh scripts/sandbox-check/linux.sh</code> on a machine with Docker: the same check in a Linux
+     <a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>, at its end.
+   - <code>sh scripts/sandbox-check/linux.sh</code> on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that <code>scripts/sandbox-check/docker/package-lock.json</code>
-     pins (<code>CLAUDE_VERSION=2.1.295</code> builds the lowest version phiward supports instead, unlocked).</li>
-<li>Re-read "Permission mode on resume" in Claude Code's sessions docs. <code>launch</code> keeps
+     pins (<code>CLAUDE_VERSION=2.1.295</code> builds the lowest version phiward supports instead, unlocked).
+   - Re-read "Permission mode on resume" in Claude Code's sessions docs. <code>launch</code> keeps
      transcripts on its word that a resumed bypass session starts in the mode a new one starts
-     in. If a release restores bypass, <code>launch</code> must add <code>--permission-mode default</code> to a resume.</li>
-</ol>
+     in. If a release restores bypass, <code>launch</code> must add <code>--permission-mode default</code> to a resume.</p>
 <p>Each runs one <code>claude -p</code> session per mode (<code>MODES</code>, default <code>A B</code>; Mode B runs under
    <code>phiward launch</code>), and with Mode A one more short session, the bypass probe: started with
    <code>--permission-mode bypassPermissions</code>, it Reads the protected file, runs <code>cat</code> on it, then
@@ -1393,15 +1460,18 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    (<code>claude_settings.LOCAL_BINDING</code>); and it gives every shell call the text check while
    <code>excludedCommands</code> is not empty, because the page says Claude Code matches its entries by
    the call's text.
-4. Commit and tag: <code>git flow release finish</code> does both; the first release is tagged by hand on
-   <code>main</code>. Then push the tag:</p>
-<div class="highlight"><pre><span></span><code>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v0.2.0b1<span class="w"> </span>-m<span class="w"> </span><span class="s2">"phiward v0.2.0b1"</span>
+4. Commit and tag: <code>git flow release finish</code> does both. Then push <code>main</code>, <code>develop</code> and the tag
+   in one push (the workflow refuses a tag that is not on <code>main</code>):</p>
+<div class="highlight"><pre><span></span><code>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main<span class="w"> </span>develop<span class="w"> </span>v0.2.0b2
 </code></pre></div>
-<div class="highlight"><pre><span></span><code>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v0.2.0b1
-</code></pre></div>
+<p>The first release was tagged by hand on <code>main</code> (<code>git tag -a v0.2.0b1 -m "phiward v0.2.0b1"</code>).</p>
 <ol>
 <li>The <code>release</code> workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
-   checks that the tag names the version everywhere, builds the wheel and the source archive,
+   checks that the tag is on <code>main</code>, that it names the version in the three version files, that
+   no install line (<code>phiward==</code>), <code>/blob/v.../</code> link, plugin tag (<code>#v</code>), GitHub install (<code>@v</code>),
+   marketplace <code>"ref"</code> or status line in README.md, CHANGELOG.md, <code>plugin/commands/setup.md</code>
+   or <code>docs/*.md</code> names another version, and that the
+   newest CHANGELOG entry no longer says unreleased. It builds the wheel and the source archive,
    checks them (<code>twine check --strict</code>), installs the wheel and runs it. Only then does the
    publish job start; nothing waits for an approval, so push the tag only when the release is
    ready. Its actions are pinned by commit; update a pin by its release's commit, not a tag.</li>
@@ -1465,13 +1535,13 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
         
         
           
-          <a href="../release-notes/v0.2.0b1/" class="md-footer__link md-footer__link--next" aria-label="Next: v0.2.0b1">
+          <a href="../release-notes/v0.2.0b2/" class="md-footer__link md-footer__link--next" aria-label="Next: v0.2.0b2">
             <div class="md-footer__title">
               <span class="md-footer__direction">
                 Next
               </span>
               <div class="md-ellipsis">
-                v0.2.0b1
+                v0.2.0b2
               </div>
             </div>
             <div class="md-footer__button md-icon">

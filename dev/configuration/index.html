@@ -319,6 +319,33 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -337,10 +364,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -358,8 +385,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_3">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -983,10 +1010,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
             
   
   
@@ -1004,8 +1031,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1154,10 +1181,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
         
           
-          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
             
   
   
@@ -1175,8 +1202,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1269,10 +1296,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
         
           
-          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
             
   
   
@@ -1290,8 +1317,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_6">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1300,6 +1327,34 @@
 
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
             
               
                 
@@ -1942,7 +1997,7 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>list of absolute folders</td>
 <td>none</td>
 <td>ignored</td>
-<td>Exact folders you are sure hold no PHI: there the hook gives a shell that a sandbox setting opens the text check, not the refusal (Mode A).</td>
+<td>Exact folders you are sure hold no PHI: there a shell that only a sandbox opener leaves unconfined gets the text check, not the refusal (Mode A).</td>
 </tr>
 </tbody>
 </table>
@@ -2018,10 +2073,15 @@ is first masked on the whole line as in table mode (protected paths, entry names
 rules, names). Then a cell under an identifier header (the built-in list or <code>id_columns</code>, below)
 shows <code>&lt;IDCOL&gt;</code>, whatever its shape. A cell of another column keeps a plain number (<code>7654321</code>,
 <code>12.5</code>, <code>1e-05</code>, <code>1,234,567</code>); any other text in it gets the position rules (<code>chr1:1234567</code> is
-<code>&lt;LOCUS&gt;</code>). Then names and rule matches in other spellings (another dash, other digits, other separators) are masked inside each cell on its own: never in an ID cell, and never across a delimiter. The first line that is not such a row ends column mode: it and every later line are
+<code>&lt;LOCUS&gt;</code>). Then names and rule matches in other spellings are masked inside each cell on
+its own. Other spellings are another dash, other digits or other separators. This pass skips
+ID cells and never crosses a delimiter. The first line that is not such a row ends column
+mode: it and every later line are
 masked as text. Such a line is an empty line, a row with another field count, a quote, a
 backslash or a <code>%XX</code> escape, a row with no plain-number cell (another header, as from <code>cat
-a.csv b.csv</code>, or a row of words such as <code>TP53,BRCA1</code>), and a line too long to read. A row that fails the second pass only because of the masks in other spellings is withheld, and column mode goes on. Output
+a.csv b.csv</code>, or a row of words such as <code>TP53,BRCA1</code>), and a line too long to read. A row
+that fails the second pass only because of the masks in other spellings is withheld; column
+mode goes on. Output
 without a header line, or with a line before it (a warning on stderr too), is all text.
 When no header was found, the output ends with a note that says so. Rules that span cells in
 text mode do not match cell by cell: under <code>chrom</code> and <code>pos</code>, <code>chr1</code> and <code>1234567</code> are both
@@ -2158,12 +2218,12 @@ and the derived protected folders. Details and limits:
 <li><strong><code>pass_env</code></strong> (list): environment variables passed to a launched tool besides the built-in
   allow-list. The agent can read whatever you pass. The proxy variables are always the session's
   own proxy (<a href="../launch/#the-network">launch.md</a>).</li>
-<li><strong><code>private_networks</code></strong> (list of networks; default none): private ranges the session's network
-  proxy may reach, for example <code>["10.20.0.0/16"]</code> for an internal Git server or an HPC web
-  service. Each entry must be a network with its prefix length inside <code>10.0.0.0/8</code>,
-  <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>100.64.0.0/10</code> or <code>fc00::/7</code>; anything else is a problem.
-  This machine's own addresses, loopback and the local link stay refused. Every service in a
-  listed range is reachable from the session.</li>
+<li><strong><code>private_networks</code></strong> (list of networks or addresses; default none): private ranges the session's
+  network proxy may reach, for example <code>["10.20.0.0/16"]</code> for an internal Git server or an HPC web
+  service. Each entry must be a network (<code>10.20.0.0/16</code>) or one address (<code>10.20.0.5</code>), inside
+  <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>100.64.0.0/10</code> or <code>fc00::/7</code>; anything else is a
+  problem. This machine's own addresses, loopback and the local link stay refused. Every service in
+  a listed range is reachable from the session.</li>
 <li><strong><code>keep_transcripts</code></strong> (<code>true</code> or <code>false</code>; default <code>true</code>): keep this project's Claude Code
   transcripts between <code>launch --tool claude</code> sessions, so <code>--resume</code> and <code>-c</code> find earlier
   sessions. phiward never reads them. A resumed session reads what an earlier session wrote, as
@@ -2196,11 +2256,13 @@ and the derived protected folders. Details and limits:
 <li>an entry that does not exist yet is skipped (<code>doctor</code> counts it);</li>
 <li>an entry reached through a link is skipped (<code>doctor</code> counts it): whoever can change the link
     would choose the place. Name the real folder;</li>
+<li>an entry that holds a <code>.claude</code> folder is skipped (<code>doctor</code> counts it); a <code>--write-to</code> to it
+    is refused as a folder that is not granted;</li>
 <li>an entry that is <code>/</code>, the home folder or above it, in a dot-folder of the home folder, in
     <code>~/Library</code> or a <code>PATH</code> folder, above a protected root, in a derived protected folder or a
-    pattern match, that holds a names or pack file of the config, that holds a <code>.claude</code>
-    folder, or that holds or is inside a phiward file or folder (the config, the code, the
-    spool, the status file, the interpreter folder) is a problem: the config is bad.</li>
+    pattern match, that holds a names or pack file of the config, or that holds or is inside a
+    phiward file or folder (the config, the code, the spool, the status file, the interpreter
+    folder) is a problem: the config is bad.</li>
 <li>an entry <strong>inside</strong> a protected root is fine: gateway commands write only in <code>write_to</code>
     folders (protected roots are read only for them), and what they write there stays
     protected.</li>
