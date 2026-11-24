@@ -15,7 +15,8 @@ read-only `{}` placeholder; nested ones are bound when they exist at start. The 
 are compared after the session.
 
 Carry-over (see carryover): each session runs in its own config folder, built from a trusted
-copy and thrown away at exit. Reads of protected data and credentials are denied, and credential
+copy and thrown away at exit; only this project's transcripts are kept, by a folder name launch
+sets (`CLAUDE_CODE_PROJECT_DIR_NAME`). Reads of protected data and credentials are denied, and credential
 variables are removed. On Linux the launcher runs the tool through a helper inside bubblewrap
 that checks the session's view and closes every descriptor it holds; on macOS it runs
 `sandbox-exec -f FILE TOOL` with nothing in between (the profile is a file, as the gateway's).
@@ -78,7 +79,9 @@ read protected data. It works with protected data only through the gateway (`phi
 Start it from the project folder, in your own terminal. It refuses to start in /, in your
 home or a folder above it, in a dot folder of your home, in a folder that holds a phiward
 folder, or in a folder inside or above protected data. It also refuses when the config has a
-problem or when no protected paths are configured.
+problem or when no protected paths are configured. An activated .venv puts a project folder on
+PATH, which launch refuses: run `deactivate` first, and in the session use .venv/bin/python or
+uv run.
 
 What the session can do:
 - Write: only the project, its own session folder (in ~/.phiward/tools/<tool>/runs/) and the
@@ -100,7 +103,10 @@ What the session can do:
   the HTTPS_PROXY of your own environment by checked address. Tools that ignore the proxy
   variables, and UDP, have no network. On Linux the session has a network of its own (launch
   refuses where network namespaces are not available); on macOS it cannot reach servers on
-  this machine, its own too (use unix sockets or IPC transports).
+  this machine, its own too (use unix sockets or IPC transports). A refusal says why in its
+  403 status line, and the refused hosts are listed at exit. With --tool claude, an
+  ANTHROPIC_BASE_URL the proxy would refuse (not https://, this machine, a private range not
+  listed) stops the start.
 - Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
   (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
   --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
@@ -118,7 +124,8 @@ What the session can do:
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
-  can read or write.
+  can read or write. With --tool claude, this project's transcripts are kept for --resume and
+  -c, never read by phiward ([launch] keep_transcripts in the user config turns it off).
 - Changes to the tool's instructions and settings go to quarantine. Read and keep them with
   `phiward carryover show` and `phiward carryover accept ID`.
 - Every file the session changed in the project is reported.
@@ -268,6 +275,20 @@ class LaunchError(Exception):
     pass
 
 
+# refusals and notes that `phiward doctor` gives too (doctor.launch_report), each with its step
+NO_PATHS = ("no protected paths are configured: there is nothing to confine; run "
+            "`(cd ~ && phiward setup)` first")
+PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a project folder"
+LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
+DASH_DASH = ("launch passes --settings to Claude Code as the last arguments, so `--` cannot be "
+             "among them: drop the `--` and put the prompt last")
+CLAUDE_STEP = ("run Claude Code's own program directly (the native binary, or the npm package's "
+               "cli.js), not a wrapper or a shim, or use --tool generic for another tool")
+LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
+              "every time; to log in once, run `claude setup-token` and set "
+              "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
+
+
 # -- safe file work in agent-writable folders -----------------------------------
 
 
@@ -318,10 +339,32 @@ def _project_problem(project: str, env: Dict[str, str]) -> str:
             return "it holds a phiward file or folder"
     if sys.platform == "darwin" and _inside(project, os.path.join(home, "Library")):
         return "it is in ~/Library (LaunchAgents and preferences run later)"
+    return ""
+
+
+PATH_INSIDE = "it holds a folder on PATH (programs there run later, outside launch)"
+
+
+def _path_entry_inside(project: str, env: Dict[str, str]) -> str:
+    """The first PATH entry, as written, that is the project or inside it, or "": the operator's
+    own shell runs what is there after the session (an activated `.venv/bin`)."""
     for e in (env.get("PATH") or "").split(":"):
         if e and os.path.isabs(e) and _inside(os.path.realpath(e), project):
-            return "it holds a folder on PATH (programs there run later, outside launch)"
+            return e
     return ""
+
+
+def _path_step(entry: str, env: Dict[str, str], shown: str = "") -> str:
+    """The refusal for a PATH entry inside the project, with the way out; `shown` is how the
+    entry is named (doctor names it relative to the project)."""
+    name = shown or entry
+    why = (f"PATH holds {name}, inside the project; programs there run in your terminal after "
+           "the session. ")
+    venv = env.get("VIRTUAL_ENV") or ""
+    if venv and os.path.realpath(venv) == os.path.dirname(os.path.realpath(entry)):
+        return why + (f"Run `deactivate` (or take {name} off PATH), then start again; in the "
+                      "session, use .venv/bin/python or uv run")
+    return why + f"Take {name} off PATH (direnv: `direnv deny`), then start again"
 
 
 def _fixed_folders(folder: str) -> None:
@@ -1850,8 +1893,22 @@ def _npm_version(script: str, places: Sequence[str]) -> Optional[Tuple[int, int,
     return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
+def _native_version(real: str, env: Optional[Dict[str, str]]) -> Optional[Tuple[int, int, int]]:
+    """What the native binary `real` says it is (`--version`, from /), or None."""
+    try:
+        out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=20, env=env,
+                             cwd="/").stdout
+    except (OSError, subprocess.SubprocessError, ValueError):
+        out = ""
+    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
 def claude_version_problem(tool: str, places: Sequence[str],
-                           env: Optional[Dict[str, str]] = None) -> str:
+                           env: Optional[Dict[str, str]] = None,
+                           ask: Optional[Callable[[str, Optional[Dict[str, str]]],
+                                                  Optional[Tuple[int, int, int]]]] = None) -> str:
     """Why `tool` cannot run under `--tool claude`, or "": it is not a Claude Code of
     VERSION_HOOK_ARGS or newer. The launched hooks are in exec form (`args`) with `onFailure`,
     and an older one would run their Python alone. Only a native binary outside the session's
@@ -1859,12 +1916,10 @@ def claude_version_problem(tool: str, places: Sequence[str],
     A script (an npm build) is never started: its interpreter is found on PATH, and a shim
     reads the project's config, so either could be the session's. Its version is read from
     its npm package's package.json. No Claude Code version (another program, a wrapper, a
-    shim) is a refusal too."""
+    shim) is a refusal too. `ask` gives a native binary's version in place of starting it
+    (doctor, which starts nothing here)."""
     need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
-    unknown = (f"`{tool}` gives no Claude Code version, and --tool claude needs Claude Code "
-               f"{need} or newer: start Claude Code's own program directly (the native binary, "
-               "or the npm package's cli.js; not a wrapper or a shim), or use --tool generic "
-               "for another tool")
+    unknown = f"`{tool}` gives no Claude Code version: {CLAUDE_STEP}"
     real = os.path.realpath(tool)
     for p in places:
         if pathid.inside(real, os.path.realpath(p)):
@@ -1886,16 +1941,9 @@ def claude_version_problem(tool: str, places: Sequence[str],
         if version is None:
             return unknown
     else:
-        try:
-            out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
-                                 capture_output=True, text=True, timeout=20, env=env,
-                                 cwd="/").stdout
-        except (OSError, subprocess.SubprocessError, ValueError):
-            out = ""
-        m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
-        if not m:
+        version = (ask or _native_version)(real, env)
+        if version is None:
             return unknown
-        version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
     if version < claude_settings.VERSION_HOOK_ARGS:
         return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
                 "which launch needs (an older one would not run phiward's hooks); update "
@@ -1927,6 +1975,42 @@ def _proxy_env(url: str) -> Dict[str, str]:
     return out
 
 
+RESUME_FLAGS = ("--resume", "-r", "--continue", "-c")
+
+
+def _asks_resume(args: Sequence[str]) -> bool:
+    """Whether Claude Code's arguments, before any `--`, ask for an earlier session."""
+    for a in args:
+        if a == "--":
+            return False
+        if a in RESUME_FLAGS or a.startswith(("--resume=", "--continue=")):
+            return True
+    return False
+
+
+def _shown_url(url: str) -> str:
+    """`scheme://host[:port]` of a URL, without a login or a path: for a message."""
+    from urllib.parse import urlsplit  # parsing only
+    try:
+        u = urlsplit(url.strip())
+    except ValueError:
+        return "not a URL"
+    host = u.netloc.rpartition("@")[2]
+    return netproxy._one_line(f"{u.scheme}://{host}" if u.scheme else host or u.path)
+
+
+def base_url_refusal(url: str, allow: Sequence[str]) -> str:
+    """Why a session could not reach the model at ANTHROPIC_BASE_URL `url` (the proxy's own
+    rules), with the step, or ""."""
+    why = netproxy.base_url_problem(url, allow)
+    if not why:
+        return ""
+    step = ("list its range in [launch] private_networks (user config), or run Claude Code in "
+            "Mode A") if why.endswith(netproxy.PRIVATE_WHY) else "run Claude Code in Mode A"
+    return (f"ANTHROPIC_BASE_URL ({_shown_url(url)}) {why}; a launch session reaches only HTTPS "
+            f"on public addresses and listed private ranges: {step}")
+
+
 def _start_proxy(cfg: config.Config, env: Dict[str, str], pair: bool = False) -> "netproxy.Proxy":
     try:
         return netproxy.start(env, cfg.launch_private_networks, pair)
@@ -1945,7 +2029,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     if cfg.problem:
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
     if not cfg.has_protected_paths:
-        raise LaunchError("no protected paths are configured: there is nothing to confine")
+        raise LaunchError(NO_PATHS)
     from phiward import phicheck
     masking = None if server else phicheck.check(cfg, cwd)
     if masking and masking.failed:
@@ -1960,14 +2044,15 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                           "project folder")
     why = _project_problem(project, env)
     if why:
-        raise LaunchError(f"this folder cannot be the project ({why}); start the tool in a "
-                          "project folder")
+        raise LaunchError(PROJECT_STEP.format(why))
+    entry = _path_entry_inside(project, env)
+    if entry:  # this is the project folder: the step is to take the entry off PATH
+        raise LaunchError(_path_step(entry, env))
     # a settings path that is already a link would carry the session's writes to a file a later
     # plain run reads: refused
     for rel in LINK_REFUSED:
         if os.path.islink(os.path.join(project, rel)):
-            raise LaunchError(f"{rel} in the project is a link; replace it with a real file or "
-                              "folder")
+            raise LaunchError(LINK_STEP.format(rel))
     if not server:  # a wrapped MCP server's folder is not the agent's project
         from phiward import projectscan
         scanned = projectscan.scan(cfg, project, projectscan.deadline())
@@ -1990,6 +2075,14 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         sys.stderr.write("phiward launch: NOTE: the operator lists this folder in [no_phi] "
                          "folders; launch confines it all the same (plain claude here is "
                          "relaxed).\n")
+    claude = adapter.name == "claude" and not server
+    if claude and env.get("ANTHROPIC_BASE_URL"):
+        # the proxy's own rules, once: a model the session cannot reach is said at the start
+        why = base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
+        if why:
+            raise LaunchError(why)
+    # this project's transcripts, for --resume and -c: one folder, by a name of its own
+    transcripts = hashlib.sha256(os.fsencode(project)).hexdigest()[:16] if claude else ""
     folder = tool_folder(adapter, env)
     _fixed_folders(folder)
     # this session's own folder: its config folder, built from the trusted copy, and its
@@ -1997,15 +2090,18 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     run = os.path.join(folder, carryover.RUNS, time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(4))
     store = store if store is not None else carryover.Store(adapter.name, _real_home(env))
     try:
-        for line in store.start(folder, run, memory, adapter.turn_own_sandbox_off):
+        for line in store.start(folder, run, memory, adapter.turn_own_sandbox_off,
+                                transcripts if cfg.launch_keep_transcripts else ""):
             sys.stderr.write(line + "\n")
     except (carryover.CarryoverError, OSError, RecursionError) as exc:
         raise LaunchError(f"carry-over: {exc}")
     if adapter.name == "claude" and not any(env.get(k) for k in (
             "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
-        sys.stderr.write("phiward launch: each session starts with a fresh config folder, so "
-                         "Claude Code asks you to log in every time; to log in once, run `claude "
-                         "setup-token` and set CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)\n")
+        sys.stderr.write(f"phiward launch: {LOGIN_NOTE}\n")
+    if claude and not cfg.launch_keep_transcripts and _asks_resume(argv[1:]):
+        sys.stderr.write("phiward launch: NOTE: keep_transcripts is off, so this session starts "
+                         "with no history and --resume and --continue find nothing from earlier "
+                         "sessions ([launch] keep_transcripts, user config)\n")
     tmp = os.path.join(run, "tmp")
     os.makedirs(tmp, mode=0o700, exist_ok=True)
     canary = _canary_path(env)
@@ -2034,6 +2130,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             child_env["CLAUDE_CODE_TMPDIR"] = tmp
     child_env["PHIWARD_HOOK_ROOTS"] = json.dumps(sorted(set(cfg.all_roots)))
     child_env["PHIWARD_LAUNCH_DEPTH"] = str(int(env.get("PHIWARD_LAUNCH_DEPTH", "0") or 0) + 1)
+    if transcripts:  # set last: an operator's own value (it passes CLAUDE_) never wins
+        child_env["CLAUDE_CODE_PROJECT_DIR_NAME"] = transcripts
     os.makedirs(config.spool_dir(env), mode=0o700, exist_ok=True)
     places = write_places(project, env, run)
     # phiward's own files as installed, unchanged, owned by the operator or root
@@ -2118,8 +2216,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             # whatever runs (claude, a versioned binary, a wrapper), the flag goes last; after a
             # `--` it would be read as an argument, so the start is refused
             if "--" in argv[1:]:
-                raise LaunchError("launch passes --settings to Claude Code as the last "
-                                  "arguments, so `--` cannot be among them")
+                raise LaunchError(DASH_DASH)
             argv = _without_launch_settings(argv)
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:
@@ -2281,6 +2378,9 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
         _raise_open_files()
         return _run_tool(cmd, child_env, fds, project, ready, store, folder, run)
     finally:
+        refused = proxy.refusal_line()  # the operator's own terminal, at exit (and the report)
+        if refused:
+            run.say(refused)
         confine.release_profile(cmd)  # macOS: the profile's file, once the tool has ended
         proxy.close()  # after the tool, the carry-over and the report
 

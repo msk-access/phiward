@@ -58,6 +58,7 @@ what a repo config may do with it. Each key links to its section below.
 | [`[remote] use_shared_connection`](#remote) | true or false | true | ignored | Join your shared SSH connection, so no request reads a key or ticket. |
 | [`[launch] pass_env`](#launch) | list | none | ignored | More environment variables for `phiward launch` (the agent can read them). |
 | [`[launch] private_networks`](#launch) | list | none | ignored | Private ranges that `phiward launch`'s network proxy may reach. |
+| [`[launch] keep_transcripts`](#launch) | true or false | true | ignored | Keep this project's Claude Code transcripts between `launch` sessions, for `--resume` and `-c`. |
 | [`[broker] write_to`](#broker) | list of folders | none | ignored | The folders where gateway commands may write. |
 | [`[broker] net`](#broker) | true or false | false | ignored | Whether `phiward run --net` gets the network. |
 | [`[broker] commands`](#broker) | list | not set: any program may run | narrows: a program must be in every list that is set | The programs gateway commands may run. **Set it for real patient data.** |
@@ -301,6 +302,12 @@ For `phiward run --remote HOST -- CMD` ([hpc.md](hpc.md)). User config only.
   `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`; anything else is a problem.
   This machine's own addresses, loopback and the local link stay refused. Every service in a
   listed range is reachable from the session.
+- **`keep_transcripts`** (`true` or `false`; default `true`): keep this project's Claude Code
+  transcripts between `launch --tool claude` sessions, so `--resume` and `-c` find earlier
+  sessions. phiward never reads them. A resumed session reads what an earlier session wrote, as
+  its history ([the limit](threat-model.md#open-transcripts)). With `false`, each session starts
+  with no history, and a resume flag gets a NOTE. Where they are and how to delete them:
+  [launch.md](launch.md#when-a-session-ends).
 
 ### `[broker]`
 

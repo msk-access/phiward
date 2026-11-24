@@ -54,7 +54,10 @@ says what it holds. By feature:
 | The project scan (subject rules only, the walk without git, what is read and skipped, `[sanitize] scan_allow`, launch, doctor and `--headless`, the SessionStart note, never the matched text, speed on a large made-up project) | test_projectscan |
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta, test_macos_profile_mount_jobs, test_macos_launch_no_helper |
-| `launch`'s network: the proxy (token, the address check, an upstream proxy, limits), the macOS profile's one port, Linux's network namespace and relay | test_v2_launch_network |
+| `launch`'s network: the proxy (token, the address check, an upstream proxy, limits, refusals that name `[launch] private_networks` and the list at exit), the macOS profile's one port, Linux's network namespace and relay, the `ANTHROPIC_BASE_URL` check at start | test_v2_launch_network |
+| `launch`'s start step for a project folder on `PATH` (an activated `.venv`) | test_v2_launch_path_step |
+| The one-line step of each typical refusal, doctor's launch section, the session note's limits, doctor's Mode A notes (package caches, Grep above a root, programs not on the broker's PATH) | test_v2_refusal_next_steps |
+| Kept transcripts under `launch` (`--resume`, `-c`, `[launch] keep_transcripts`: the folder name, out at the end and in at the start, the merge, the cap, links and left-out names) | test_v2_launch_resume |
 | Unix sockets under `launch` on Linux (Landlock ABI 9; below it Claude Code's seccomp filter for `--tool claude`, and no unix sockets for other tools). `conftest.py` plants a made-up native Claude Code that runs as Python (`helpers.tool_py`) | test_v2_launch_sockets, test_v2_nested_launch |
 | Files that other tools run later (read-only under `launch` for the tool and a wrapped server, at any depth, with link targets; Mode A's nested `.vscode` and `.idea` on macOS; the network limit's exact host list; renv under `launch`, Linux with R) | test_v2_runs_later |
 | A launch inside a session (a wrapped MCP server in Mode B; the Linux seccomp fingerprint) | test_v2_nested_launch, test_v2_w1 |
@@ -65,6 +68,7 @@ says what it holds. By feature:
 | Git hooks | test_githooks |
 | The docs' links and anchors, and the docs the code names | test_docs_links |
 | The command reference (docs/cli.md) against each command's help | test_docs_cli |
+| The refusals page (docs/refusals.md) against the messages it quotes | test_docs_refusals |
 | The configuration table (docs/configuration.md) against the loader's keys | test_docs_config |
 | The threat model's limit anchors against tests/limit_ids.txt | test_docs_limits |
 | The page for security teams (docs/endpoint-security.md): its command lines and regexes, and on macOS every process phiward starts, recorded and checked against the rule and the page | test_docs_endpoint_security, test_macos_processes |

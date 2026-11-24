@@ -28,6 +28,8 @@ How one CONNECT is decided:
 Raw sockets only: never urllib's or http.client's network code (they read the proxy variables
 and follow `file://`). Limits: MAX_CONNECTIONS at once (one more is refused, not queued), and
 timeouts on the header, the connection and idle tunnels. When a check cannot decide, it refuses.
+A refusal gives its reason in the status line (`403 phiward: <why>`) and the body; the launcher
+prints the first MAX_REFUSALS refused targets at exit.
 """
 
 import base64
@@ -110,10 +112,57 @@ def address_problem(text: str, own: Set[Address], allow: Sequence[Network] = ())
             return "this machine or its local link"
         if f.is_global:
             continue
-        if _within(f, PRIVATE) and _within(f, allow):
-            continue
+        if _within(f, PRIVATE):
+            if _within(f, allow):
+                continue
+            return PRIVATE_WHY
         return "not a public address"
     return ""
+
+
+PRIVATE_WHY = "a private address"  # the one refusal the operator can lift ([launch] private_networks)
+PRIVATE_STEP = "the operator lists its range in [launch] private_networks (user config)"
+ONLY_CONNECT = ("only CONNECT (HTTPS) goes through phiward's proxy; use an https:// URL for the "
+                "index or mirror")
+
+
+def base_url_problem(url: str, allow: Sequence[str] = ()) -> str:
+    """Why a session could not reach `url` (ANTHROPIC_BASE_URL) through its proxy, or "": the
+    proxy's own rules, judged once at the start. A name that does not resolve here is left to
+    the proxy (it looks it up again for each connection)."""
+    from urllib.parse import urlsplit  # parsing only: no network code
+    try:
+        u = urlsplit(url.strip())
+        host = (u.hostname or "").lower().rstrip(".")
+        u.port  # noqa: B018 - a port that is not a number raises here
+    except ValueError:
+        return "is not a URL"
+    if u.scheme.lower() != "https":
+        return "is not an https:// URL"
+    if not host:
+        return "names no host"
+    try:
+        addrs = [host] if _is_address(host) else list(dict.fromkeys(_resolve(host, 443)))
+    except (OSError, ValueError):
+        return ""
+    try:
+        own = _own_addresses()
+    except Exception:  # noqa: BLE001 - cannot tell: refuse, as the proxy does
+        return "cannot be checked (this machine's addresses cannot be read)"
+    nets = [ipaddress.ip_network(n) for n in allow]
+    for a in addrs:
+        why = address_problem(a, own, nets)
+        if why:
+            return "is " + why
+    return ""
+
+
+def _is_address(text: str) -> bool:
+    try:
+        ipaddress.ip_address(text.split("%", 1)[0])
+        return True
+    except ValueError:
+        return False
 
 
 def private_network_problem(text: str) -> str:
@@ -261,10 +310,12 @@ class _Refuse(Exception):
         self.code, self.why, self.extra = code, why, extra
 
 
-_REASONS = {400: "Bad Request", 403: "Forbidden", 405: "Method Not Allowed",
-            407: "Proxy Authentication Required", 408: "Request Timeout",
-            431: "Request Header Fields Too Large", 502: "Bad Gateway",
-            503: "Service Unavailable"}
+MAX_REFUSALS = 20  # distinct (host, why) refusals kept for the line at exit
+
+
+def _one_line(text: str) -> str:
+    """Printable ASCII only: a reason goes into the status line, which must stay one line."""
+    return "".join(ch for ch in text if " " <= ch <= "~")
 
 
 def _read_head(s: socket.socket, deadline: float) -> Tuple[bytes, bytes]:
@@ -314,6 +365,9 @@ class Proxy:
         self._slots = threading.BoundedSemaphore(limit)
         self._closed = threading.Event()
         self._want = f"{USER}:{token}".encode()
+        self._refused: List[Tuple[str, str]] = []  # the first MAX_REFUSALS distinct (host, why)
+        self._refused_count = 0
+        self._refused_lock = threading.Lock()
 
     # listening
 
@@ -383,6 +437,33 @@ class Proxy:
 
     def url(self, port: int = 0) -> str:
         return f"http://{USER}:{self.token}@127.0.0.1:{port or self.port}"
+
+    # the refused targets, for the operator at exit
+
+    def _note_refusal(self, host: str, why: str) -> None:
+        with self._refused_lock:
+            self._refused_count += 1
+            if len(self._refused) < MAX_REFUSALS and (host, why) not in self._refused:
+                self._refused.append((host, why))
+
+    def refusals(self) -> List[Tuple[str, str]]:
+        """The first MAX_REFUSALS distinct (host, why) of the targets this proxy refused."""
+        with self._refused_lock:
+            return list(self._refused)
+
+    def refusal_line(self) -> str:
+        """One line for the operator's terminal at exit, or "" when nothing was refused."""
+        with self._refused_lock:
+            got, n = list(self._refused), self._refused_count
+        if not got:
+            return ""
+        line = (f"phiward launch: the proxy refused {n} connection(s): "
+                + ", ".join(f"{h} ({w})" for h, w in got))
+        if len(got) >= MAX_REFUSALS:
+            line += ", ..."
+        if any(w == PRIVATE_WHY for _, w in got):
+            line += "; private ranges go in [launch] private_networks (user config)"
+        return line
 
     # serving
 
@@ -462,10 +543,13 @@ class Proxy:
 
     @staticmethod
     def _refuse(c: socket.socket, r: _Refuse) -> None:
-        body = f"phiward launch: {r.why}\n".encode()
+        # the reason in the status line too: most clients print only that line of a refused
+        # CONNECT (pip, through http.client)
+        why = _one_line(r.why)
+        body = f"phiward launch: {why}\n".encode()
         try:
             c.settimeout(2)
-            c.sendall(f"HTTP/1.1 {r.code} {_REASONS.get(r.code, 'Refused')}\r\n{r.extra}"
+            c.sendall(f"HTTP/1.1 {r.code} phiward: {why}\r\n{r.extra}"
                       f"Content-Type: text/plain\r\nContent-Length: {len(body)}\r\n"
                       "Connection: close\r\n\r\n".encode() + body)
         except OSError:
@@ -516,7 +600,7 @@ class Proxy:
         if len(parts) != 3 or not parts[2].startswith("HTTP/1."):
             raise _Refuse(400, "a request phiward cannot read")
         if parts[0] != "CONNECT":
-            raise _Refuse(405, "only CONNECT (HTTPS) goes through phiward's proxy")
+            raise _Refuse(405, ONLY_CONNECT)
         try:
             host, port = target(parts[1])
         except ValueError:
@@ -524,8 +608,9 @@ class Proxy:
         try:
             addrs = list(dict.fromkeys(self.resolver(host, port)))
         except Exception:  # noqa: BLE001 - any lookup failure refuses
-            raise _Refuse(403, f"{host} does not resolve here") from None
+            addrs = []
         if not addrs:
+            self._note_refusal(host, "does not resolve here")
             raise _Refuse(403, f"{host} does not resolve here")
         try:
             own = self.own_addresses()
@@ -534,7 +619,9 @@ class Proxy:
         for a in addrs:
             why = address_problem(a, own, self.allow)
             if why:
-                raise _Refuse(403, f"{host} is {why}")
+                self._note_refusal(host, why)
+                step = f"; {PRIVATE_STEP}" if why == PRIVATE_WHY else ""
+                raise _Refuse(403, f"{host} is {why}{step}")
         # every address was checked above; each is tried in turn, with a short timeout
         each = min(self.connect_timeout, PER_ADDRESS_TIMEOUT)
         for ip in addrs:

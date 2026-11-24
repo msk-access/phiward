@@ -50,6 +50,10 @@ ALLOWED = {
     # command line and no private interface; the proxy needs it to refuse this machine's addresses
     ("src/phiward/netproxy.py", "own_addresses", "ctypes"): KEPT_IFADDRS,
     ("src/phiward/guards/protected_paths.py", "_check_shell", "sh -c"): MESSAGE,
+    # Claude Code's own `-c` (--continue), looked for in the operator's arguments for a NOTE;
+    # nothing is started with it
+    ("src/phiward/wholetool.py", "RESUME_FLAGS", "flag, program unknown"):
+        "not a command line: Claude Code's -c (--continue), matched in its arguments",
 }
 
 # the inline-code flag of each kind of interpreter

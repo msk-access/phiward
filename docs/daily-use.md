@@ -366,6 +366,9 @@ try another spelling, a link, a nested shell, an encoded command or another tool
 same data. It also does not ask you to show it the data (`! cat`, a paste, a copy into the project)
 or to remove a guard. If it does, say no: that sends the data to the model provider.
 
+Refusals that typical work meets (a folder on PATH, a wrapper, the package caches, git with
+credentials, a private mirror), with the way around each: [refusals.md](refusals.md).
+
 Who acts on a refusal:
 
 ```mermaid

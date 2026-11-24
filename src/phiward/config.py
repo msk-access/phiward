@@ -50,9 +50,9 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
-    # `phiward launch`: more variables for the tool; private networks its proxy may reach
-    # (USER_ONLY)
-    "launch": {"pass_env": "list", "private_networks": "list"},
+    # `phiward launch`: more variables for the tool; private networks its proxy may reach;
+    # whether this project's transcripts are kept for --resume (USER_ONLY)
+    "launch": {"pass_env": "list", "private_networks": "list", "keep_transcripts": "bool"},
     # commands on HPC through the broker; every key is the operator's own (USER_ONLY)
     "remote": {"hosts": "list", "commands": "list", "roots": "list",
                "use_shared_connection": "bool"},
@@ -115,7 +115,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("sanitize", "id_columns"),
              ("sanitize", "examples"), ("sanitize", "scan_allow"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
-             ("launch", "private_networks"),
+             ("launch", "private_networks"), ("launch", "keep_transcripts"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
              ("shell", "commands"), ("no_phi", "folders")}
 # an allowed_domains entry: a host name, `*.` and a host name, an IPv4 or bracketed IPv6
@@ -172,6 +172,8 @@ class Config:
     launch_pass_env: List[str] = field(default_factory=list)  # more variables for `launch`
     # [launch] private_networks (USER_ONLY): private ranges launch's proxy may reach
     launch_private_networks: List[str] = field(default_factory=list)
+    # [launch] keep_transcripts (USER_ONLY): this project's transcripts kept for --resume and -c
+    launch_keep_transcripts: bool = True
     max_output_lines: int = 2000  # gateway output lines shown; a repo file may only lower it
     # the programs gateway commands may run ([broker] commands): one list per config file that
     # sets one; a program must be in every list. Empty: no list, any program
@@ -745,7 +747,7 @@ def no_phi_match(cfg: "Config", project: str,
     ""), or ("", "") when no entry is it. Entries are exact: a subfolder is no match. Only the
     matching entry is checked, so a missing or moved entry relaxes nothing and costs nothing.
     It fails closed: a link on the entry's path, a place `launch` would refuse as a project
-    (`wholetool._project_problem`, less its PATH test), or a folder inside or above a
+    (`wholetool._project_problem`, which has no PATH test), or a folder inside or above a
     protected path is not relaxed."""
     env = dict(os.environ if env is None else env)
     if not cfg.no_phi_folders or not project or not project.startswith("/"):
@@ -759,10 +761,7 @@ def no_phi_match(cfg: "Config", project: str,
     if not os.path.isdir(entry):
         return entry, "it is not a folder"
     from phiward import paths, wholetool
-    # PATH-free: a PATH folder inside the project concerns launch, not Mode A's shell
-    env["PATH"] = ":".join(e for e in (env.get("PATH") or "").split(":")
-                           if not (os.path.isabs(e) and inside(os.path.realpath(e), entry)))
-    why = wholetool._project_problem(entry, env)
+    why = wholetool._project_problem(entry, env)  # PATH-free: PATH concerns launch only
     if why:
         return entry, why
     rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(entry)
@@ -904,6 +903,8 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
     for v in data.get("launch", {}).get("private_networks", []):  # USER_ONLY
         if v not in cfg.launch_private_networks:
             cfg.launch_private_networks.append(v)
+    if "keep_transcripts" in data.get("launch", {}):  # USER_ONLY
+        cfg.launch_keep_transcripts = bool(data["launch"]["keep_transcripts"])
     if "best_effort" in data.get("shell", {}):  # USER_ONLY
         cfg.shell_best_effort = bool(data["shell"]["best_effort"])
     for v in data.get("no_phi", {}).get("folders", []):  # USER_ONLY; absolute (_check_paths)

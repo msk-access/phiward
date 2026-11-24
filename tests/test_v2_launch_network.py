@@ -485,6 +485,16 @@ def test_10_a_plain_request_is_refused(make_proxy):
     assert _status(line) == 405 and not dial.calls, line
 
 
+def test_10_a_plain_request_names_https_in_its_status_line(make_proxy):
+    dial = Dial()
+    p = make_proxy(dial=dial)
+    try:
+        line, _ = ask(p, "http://pub.example/", method="GET")
+    finally:
+        dial.close()
+    assert _status(line) == 405 and "https://" in line, line
+
+
 def test_10_bytes_after_a_connect_go_only_to_the_checked_host(make_proxy):
     dial, res = Dial(), Resolver({"pub.example": ["8.8.4.4"]})
     p = make_proxy(dial=dial, resolver=res)
@@ -1411,3 +1421,114 @@ def test_16_no_background_transfer_service_in_the_mach_allows():
     # only the user's trustd agent (kept: a stated limit)
     assert "com.apple.ocspd" not in wholetool.MACH_ALLOW
     assert "com.apple.trustd" not in wholetool.MACH_ALLOW
+
+
+# --- a3: a refusal names the key that would allow it ---------------------------------------------
+
+def test_a3_a_private_address_names_private_networks_in_the_status_line_and_the_body(make_proxy):
+    dial = Dial()
+    p = make_proxy(dial=dial, resolver=Resolver({"git.example.internal": ["10.9.8.7"]}))
+    try:
+        line, rest = ask(p, "git.example.internal:443")
+    finally:
+        dial.close()
+    assert _status(line) == 403 and not dial.calls, line
+    assert "private_networks" in line, line
+    assert b"private_networks" in rest, rest
+
+
+def test_a3_loopback_does_not_name_private_networks(make_proxy):
+    dial = Dial()
+    p = make_proxy(dial=dial, resolver=Resolver({"looks-public.example": ["127.0.0.1"]}))
+    try:
+        line, rest = ask(p, "looks-public.example:443")
+    finally:
+        dial.close()
+    assert _status(line) == 403 and "private_networks" not in line, line
+    assert b"private_networks" not in rest, rest
+
+
+def test_a3_the_proxy_lists_its_refusals_for_the_exit_line(make_proxy):
+    dial = Dial()
+    p = make_proxy(dial=dial, resolver=Resolver({"git.example.internal": ["10.9.8.7"],
+                                                 "looks-public.example": ["127.0.0.1"]}))
+    try:
+        for host in ("git.example.internal", "looks-public.example", "git.example.internal"):
+            ask(p, f"{host}:443")
+    finally:
+        dial.close()
+    got = p.refusals()
+    assert [h for h, _ in got] == ["git.example.internal", "looks-public.example"], got
+    line = p.refusal_line()
+    assert "git.example.internal (a private address)" in line, line
+    assert "looks-public.example" in line and "[launch] private_networks" in line, line
+
+
+def test_a3_no_refusal_no_exit_line(make_proxy):
+    assert make_proxy(dial=Dial()).refusal_line() == ""
+
+
+def test_a3_a_reason_with_cr_lf_stays_one_status_line():
+    np = _np()
+    a, b = socket.socketpair()
+    try:
+        np.Proxy._refuse(a, np._Refuse(403, "x.example\r\nInjected: 1\nmore"))
+        data = b"".join(iter(lambda: b.recv(4096), b""))
+    finally:
+        b.close()
+    first, _, head = data.partition(b"\r\n")
+    assert first.startswith(b"HTTP/1.1 403 phiward: x.example"), first
+    assert b"\r\nInjected" not in data and b"\nInjected" not in data, data
+
+
+@pytest.fixture
+def build_claude(tree, monkeypatch):
+    from phiward import carryover, confine, netproxy, wholetool
+    monkeypatch.setattr(wholetool, "_darwin_user_dir", lambda name: "")
+    monkeypatch.setattr(netproxy, "_resolve", Resolver({"api.example.com": ["8.8.4.4"]}))
+
+    def run(env):
+        store = carryover.Store("claude", str(tree / "home"))
+        try:
+            cmd, _env, fds, _p, _r, proxy = wholetool.build(
+                [tool_py(tree)], str(tree / "repo"), env, wholetool.ADAPTERS["claude"],
+                store=store)
+        finally:
+            if store.run:
+                store.end(str(tree / "home" / ".phiward" / "tools" / "claude"))
+        for fd in fds:
+            os.close(fd)
+        proxy.close()
+        confine.release_profile(cmd)
+    return run
+
+
+@needs_confine
+@pytest.mark.parametrize("url", ["http://127.0.0.1:4000", "https://127.0.0.1:4000",
+                                 "https://localhost:4000", "http://api.example.com",
+                                 "https://10.9.8.7"])
+def test_a3_a_base_url_the_session_cannot_reach_refuses_the_start(tree, build_claude, url):
+    from phiward import wholetool
+    with pytest.raises(wholetool.LaunchError) as exc:
+        build_claude(dict(os.environ, ANTHROPIC_BASE_URL=url))
+    assert "ANTHROPIC_BASE_URL" in str(exc.value), exc.value
+
+
+@needs_confine
+def test_a3_a_private_base_url_names_the_key(tree, build_claude):
+    from phiward import wholetool
+    with pytest.raises(wholetool.LaunchError) as exc:
+        build_claude(dict(os.environ, ANTHROPIC_BASE_URL="https://10.9.8.7"))
+    assert "[launch] private_networks" in str(exc.value), exc.value
+
+
+@needs_confine
+def test_a3_a_public_https_base_url_starts(tree, build_claude):
+    build_claude(dict(os.environ, ANTHROPIC_BASE_URL="https://api.example.com"))
+
+
+@needs_confine
+def test_a3_a_listed_private_base_url_starts(tree, build_claude):
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text() + '[launch]\nprivate_networks = ["10.9.0.0/16"]\n')
+    build_claude(dict(os.environ, ANTHROPIC_BASE_URL="https://10.9.8.7"))

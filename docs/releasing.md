@@ -98,9 +98,19 @@ Then push `main`, `develop` and the tag.
    - `sh scripts/sandbox-check/linux.sh` on a machine with Docker: the same check in a Linux
      container, with the Claude Code version that `scripts/sandbox-check/docker/package-lock.json`
      pins (`CLAUDE_VERSION=2.1.295` builds the lowest version phiward supports instead, unlocked).
+   - Re-read "Permission mode on resume" in Claude Code's sessions docs. `launch` keeps
+     transcripts on its word that a resumed bypass session starts in the mode a new one starts
+     in. If a release restores bypass, `launch` must add `--permission-mode default` to a resume.
 
    Each runs one `claude -p` session per mode (`MODES`, default `A B`; Mode B runs under
-   `phiward launch`), Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a
+   `phiward launch`), and with Mode A one more short session, the bypass probe: started with
+   `--permission-mode bypassPermissions`, it Reads the protected file, runs `cat` on it, then
+   `env > env.txt`. phiward must refuse the Read (also by the deny rules `install` writes) and
+   the `cat`. The token must be in neither the output nor the environment, the settings must
+   not change, and no name may change in the data folder. The judge says `ok`, or `BAD` with
+   one word (`leaked`, `token`, `settings`, `wrote`, `hook-skipped`: FAIL; `facts`,
+   `no-session`, `no-read`, `no-cat`: INCONCLUSIVE). If it fails, the threat model must say that bypass skips the hook.
+   Each session runs Haiku (or `SBX_MODEL=sonnet`, when Haiku declines the request) with a
    spending cap of $1 and a time limit. The session must be
    refused when it reads the protected file with the Read tool, and when a Bash command reads
    it, writes the data folder, `~/.phiward` or `~/.claude/settings.json`; `phiward run` from the

@@ -236,6 +236,10 @@ def _is_remote(arg: str) -> bool:
     return ":" in arg.split("/", 1)[0]
 
 
+NOT_IN_ROOT = ("the destination is not inside a protected path of the user config; results leave "
+               "a root only as `phiward run` output (counts and summaries)")
+
+
 def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
     """Why the copy is refused, or None when it may run."""
     if len(args) < 2:
@@ -249,7 +253,7 @@ def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
         if not _remote_ok(dst, cfg.remotes):
             return "the destination is not under a configured remote ([copy] remotes)"
     elif not _local_inside(dst, cwd, pset):
-        return "the destination is not inside a protected path of the user config"
+        return NOT_IN_ROOT
     from phiward import run
     hidden = paths.ProtectedSet(run.gateway_hidden(cfg), [])
     for src in args[:-1]:
