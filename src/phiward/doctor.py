@@ -337,10 +337,9 @@ def bare_split(project: str, home: str) -> Tuple[List[str], List[Tuple[str, str]
     return sorted(can), sorted(cannot)
 
 
-def install_lines(state: Optional[List[bool]] = None) -> List[str]:
+def install_lines() -> List[str]:
     """doctor's lines for how phiward itself is installed: a shared environment, and the
-    self-check (whether phiward is installed goes into `state`). Setup does not change them, so
-    they show before setup too."""
+    self-check. Setup does not change them, so they show before setup too."""
     out = []
     if os.path.isdir(os.path.join(sys.prefix, "conda-meta")) or \
             os.path.basename(sys.prefix).lower() in ("anaconda3", "miniconda3", "mambaforge",
@@ -351,10 +350,14 @@ def install_lines(state: Optional[List[bool]] = None) -> List[str]:
                    f"{os.path.basename(sys.prefix)}); its folder is protected from the agent, so "
                    "the agent cannot install packages there. Install phiward with `uv tool "
                    "install` or `pipx` instead (see docs/setup.md).")
-    return out + selfcheck_lines(state)
+    return out + selfcheck_lines()
 
 
-def selfcheck_lines(state: Optional[List[bool]] = None) -> List[str]:
+# what the last self-check found: {"installed": bool}, for the launch section (no second check)
+SELFCHECK: Dict[str, bool] = {}
+
+
+def selfcheck_lines() -> List[str]:
     """doctor's lines for phiward's self-check and its full check of phiward's own Python: one
     WARNING for the package (what `launch` and every wrapped MCP server check before they start,
     and refuse), one for the rest of its Python (which another account could change), each with
@@ -364,8 +367,7 @@ def selfcheck_lines(state: Optional[List[bool]] = None) -> List[str]:
         installed, package, python = selfcheck.check_full_isolated()
     except Exception as exc:  # noqa: BLE001 - doctor reports; it does not stop
         return [f"WARNING: phiward's self-check could not run ({type(exc).__name__})"]
-    if state is not None:
-        state.append(bool(installed))
+    SELFCHECK["installed"] = bool(installed)
     if not installed:
         return []
     out = []
@@ -974,8 +976,8 @@ def main(argv: List[str]) -> int:
               "do not trust, leave write_to and remotes empty and net false.")
     # the operator runs doctor in the project folder; a hook gets $CLAUDE_PROJECT_DIR
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
-    installed: List[bool] = []  # from the self-check: the launch section asks no second time
-    for line in install_lines(installed):
+    SELFCHECK.clear()  # filled by the self-check: the launch section asks no second time
+    for line in install_lines():
         print(line)
     version = claude_settings.claude_version()  # read once, for mentions and launch
     print("Claude Code:")
@@ -1085,7 +1087,7 @@ def main(argv: List[str]) -> int:
         say(line)
     print("launch (Mode B), for a session started with `phiward launch` here:")
     for line in launch_report(cwd, home, cfg, version=version,
-                              installed=installed[0] if installed else None, show=show):
+                              installed=SELFCHECK.get("installed"), show=show):
         print(line)
     return 0
 
