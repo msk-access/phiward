@@ -160,6 +160,11 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   is the file v0.2.0b1's `install` wrote (launch's own is stricter). One that says more or
   other (another key or value, an allow, a hook) or does not parse still stops the start,
   and the refusal says to rerun `phiward install claude --user --write`.
+- `launch` refuses an empty `PATH` entry (a leading or trailing `:`, or `::`), `.` and any
+  other relative entry. It names the folder the shell is in: the project, where the tool runs,
+  or a folder of it after the session. The check skipped such entries, so a program the session
+  wrote there could run later. The step says to remove the entry. `phiward doctor`, the session
+  note's scan and the `[launch] write_to` check give the same refusal.
 - Linux: the broker makes its cache folder (`~/.cache/phiward`) when it starts. While a
   command runs, Claude Code's own sandbox puts an empty read-only file at each denied path
   that does not exist, and the cache folder is denied: a first `phiward run` from a session

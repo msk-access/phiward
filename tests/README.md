@@ -58,6 +58,7 @@ says what it holds. By feature:
 | `launch --tool claude` and the operator's `--settings`: the file `install` writes is accepted by its content; one that says more or other, or does not parse, is refused | test_launch_install_settings |
 | `launch`'s network: the proxy (token, the address check, an upstream proxy, limits, refusals that name `[launch] private_networks` and the list at exit), the macOS profile's one port, Linux's network namespace and relay, the `ANTHROPIC_BASE_URL` check at start | test_v2_launch_network |
 | `launch`'s start step for a project folder on `PATH` (an activated `.venv`) | test_v2_launch_path_step |
+| `launch`'s refusal of an empty or relative `PATH` entry (`::`, a leading or trailing `:`, `.`, `bin`), in doctor and for `[launch] write_to` | test_launch_path_relative |
 | The one-line step of each typical refusal, doctor's launch section, the session note's limits, doctor's Mode A notes (package caches, Grep above a root, programs not on the broker's PATH) | test_v2_refusal_next_steps |
 | Kept transcripts under `launch` (`--resume`, `-c`, `[launch] keep_transcripts`: the folder name, out at the end and in at the start, the merge, the cap, links and left-out names) | test_v2_launch_resume |
 | Unix sockets under `launch` on Linux (Landlock ABI 9; below it Claude Code's seccomp filter for `--tool claude`, and no unix sockets for other tools). `conftest.py` plants a made-up native Claude Code that runs as Python (`helpers.tool_py`) | test_v2_launch_sockets, test_v2_nested_launch |

@@ -1169,7 +1169,8 @@ def launch_report(project: str, home: str, cfg: config.Config,
         refused(wt.PROJECT_STEP.format(why))
     entry = wt._path_entry_inside(real, env)
     if entry:
-        shown = entry if show else os.path.relpath(os.path.realpath(entry), real)
+        shown = entry if show or not os.path.isabs(entry) else \
+            os.path.relpath(os.path.realpath(entry), real)
         refused(wt._path_step(entry, env, shown))
     for rel in wt.LINK_REFUSED:
         if os.path.islink(os.path.join(real, rel)):

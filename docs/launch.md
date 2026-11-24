@@ -67,6 +67,9 @@ phiward launch --tool claude
   entry: `PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
   it off PATH), then start again`. Run `deactivate` before `launch`; inside the session, use
   `.venv/bin/python` or `uv run`. For another entry (direnv), take it off `PATH` (`direnv deny`).
+  An empty entry (a leading or trailing `:`, or `::`), `.` or another relative entry is refused
+  too: it names the folder your shell is in, the project or a folder of it. Remove it from
+  `PATH`, then start again.
 - `--resume` and `-c` find this project's earlier `launch` sessions
   ([When a session ends](#when-a-session-ends)).
 - `launch` refuses to start when the masking check fails: `the masking check failed: ...; run
