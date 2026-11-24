@@ -172,6 +172,35 @@ def test_a_disabled_file_system_sandbox_keeps_the_refusal(tree, monkeypatch):
     _refused_blanket(tree, monkeypatch)
 
 
+@pytest.mark.parametrize("network", [{"allowUnixSockets": ["/var/run/docker.sock"]},
+                                     {"allowAllUnixSockets": True},
+                                     {"allowMachLookup": ["com.example.fake"]}])
+def test_a_socket_opener_keeps_the_refusal(tree, monkeypatch, network):
+    # the service behind it (Docker's daemon) runs outside the sandbox and can read a root
+    protect(tree, [], best_effort=False)
+    want = _wired(tree)
+    want["sandbox"].setdefault("network", {}).update(network)
+    (tree / "home" / ".claude" / "settings.json").write_text(json.dumps(want))
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
+def test_an_allow_read_that_reopens_a_root_keeps_the_refusal(tree, monkeypatch):
+    protect(tree, [], best_effort=False)
+    want = _wired(tree, enableWeakerNestedSandbox=True)
+    want["sandbox"]["filesystem"].setdefault("allowRead", []).append(str(tree / "phi"))
+    (tree / "home" / ".claude" / "settings.json").write_text(json.dumps(want))
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
+def test_protected_patterns_keep_the_refusal(tree, monkeypatch):
+    protect(tree, [f"{tree}/runs/*/panel"], best_effort=False)
+    _wired(tree, enableWeakerNestedSandbox=True)
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
 def test_another_shell_tool_is_not_relaxed(opened, monkeypatch):
     tree = opened
     _list(tree / "repo")
