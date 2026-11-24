@@ -452,7 +452,7 @@ def launch_write_problem(full: str, cfg: config.Config, env: Dict[str, str]) -> 
     kind, what = _folder_checks(full, cfg, env)
     if kind:
         return {"protected": "it is inside or above a protected path",
-                "path": _path_reason(what), "link": f"its {what} is a link"}.get(kind, what)
+                "path": _path_reason(what), "link": f"its {what} is a link"}.get(kind, what or kind)
     why = config.grant_problem(full, cfg, env)
     if why:
         return why
