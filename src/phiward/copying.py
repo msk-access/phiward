@@ -495,7 +495,8 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
         return 0
     mkdir, tar = system_program("mkdir"), system_program("tar")
     if mkdir is None or tar is None:
-        out.write("copy refused: a pull needs mkdir and tar in a system folder\n")
+        out.write("copy refused: a pull needs mkdir and tar in a system folder (/usr/bin, /bin, "
+                  "/usr/sbin or /sbin); install them with the system's package manager\n")
         return 2
     rt, why = rmt.route(cfg, host)
     if rt is None:

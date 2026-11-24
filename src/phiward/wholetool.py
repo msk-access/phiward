@@ -2474,7 +2474,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             raise
         return cmd, child_env, fds + [r, chk, end], project, \
             lambda: _write_checks(chk, checks), proxy
-    raise LaunchError("no confinement backend on this system")
+    raise LaunchError(confine.NO_BACKEND)
 
 
 class _Run:

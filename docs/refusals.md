@@ -81,6 +81,14 @@ An `ANTHROPIC_BASE_URL` the proxy would refuse (`http://`, this machine, a priva
 listed) stops the start; doctor warns about it. Use Mode A for a model on this machine, or list
 the range. Details: [launch.md](launch.md).
 
+**A proxy of your own that is not `http://`.** When `HTTPS_PROXY` (or `ALL_PROXY`) in your
+terminal names an `https://` or `socks5://` proxy, launch cannot chain it and stops. Unset it
+for `launch`, or give an `http://` proxy.
+
+**No confinement backend.** Launch, `phiward run` and `phiward copy` need macOS
+`sandbox-exec` or Linux bubblewrap (`bwrap`). Without one they refuse. On Linux, install
+bubblewrap with the system's package manager ([setup.md](setup.md#1-requirements)).
+
 **Linux below Landlock ABI 9 (the inner mode).** There Claude Code's own sandbox blocks unix
 sockets, and launch passes its own `--settings`, last. So launch refuses your own `--settings`
 (put them in managed settings, or in launch's trusted copy with `phiward carryover add FILE --as
@@ -154,5 +162,12 @@ broker's yet.
 
 **A copy out of a root.** A copy may not take protected data out of the protected folders:
 the destination is not inside a protected path of the user config; results leave a root only as `phiward run` output (counts and summaries)
+
+**Linux below Landlock ABI 2.** The gateway uses Landlock as a second layer for its writes and
+runs nothing without it. It needs Linux 5.19 or newer with Landlock turned on
+([setup.md](setup.md#1-requirements)).
+
+**A pull without `mkdir` or `tar`.** A copy from a remote needs both in a system folder
+(`/usr/bin`, `/bin`, `/usr/sbin` or `/sbin`). Install them with the system's package manager.
 
 More messages of `run` and `copy`: [daily-use.md](daily-use.md#when-a-command-is-refused).
