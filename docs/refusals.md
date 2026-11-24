@@ -87,7 +87,8 @@ for `launch`, or give an `http://` proxy.
 
 **No confinement backend.** Launch, `phiward run` and `phiward copy` need macOS
 `sandbox-exec` or Linux bubblewrap (`bwrap`). Without one they refuse. On Linux, install
-bubblewrap with the system's package manager ([setup.md](setup.md#1-requirements)).
+bubblewrap with the system's package manager and have it on the PATH
+([setup.md](setup.md#1-requirements)).
 
 **Linux below Landlock ABI 9 (the inner mode).** There Claude Code's own sandbox blocks unix
 sockets, and launch passes its own `--settings`, last. So launch refuses your own `--settings`
