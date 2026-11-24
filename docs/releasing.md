@@ -51,9 +51,10 @@ Then push `main`, `develop` and the tag.
      older release stay (for example launch.md's "the one v0.2.0b1's `install` wrote", and the
      agent-guards rename in setup.md, config.py, names.py and pyproject.toml).
 
-   The workflow refuses a tag when an install line (`phiward==`), a `/blob/v.../` link or a
-   plugin tag (`#v`) in README.md, CHANGELOG.md, `plugin/commands/setup.md` or `docs/*.md`
-   names another version. The other places in this list it does not check: grep for them.
+   The workflow refuses a tag when an install line (`phiward==`), a `/blob/v.../` link, a
+   plugin tag (`#v`), a GitHub install (`@v`), a marketplace `"ref"` or a status line in
+   README.md, CHANGELOG.md, `plugin/commands/setup.md` or `docs/*.md` names another version.
+   It does not check the release notes link or the mkdocs.yml nav entry: grep for them.
 2. In `CHANGELOG.md`, replace "unreleased" with the date (UTC), and write the release notes in
    `docs/release-notes/`, linked from the CHANGELOG entry.
 3. Run the full test suite on macOS ([tests/README.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md) says how) and on
@@ -203,8 +204,9 @@ Then push `main`, `develop` and the tag.
 
 5. The `release` workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
    checks that the tag is on `main`, that it names the version in the three version files, that
-   no install line (`phiward==`), `/blob/v.../` link or plugin tag (`#v`) in README.md,
-   CHANGELOG.md, `plugin/commands/setup.md` or `docs/*.md` names another version, and that the
+   no install line (`phiward==`), `/blob/v.../` link, plugin tag (`#v`), GitHub install (`@v`),
+   marketplace `"ref"` or status line in README.md, CHANGELOG.md, `plugin/commands/setup.md`
+   or `docs/*.md` names another version, and that the
    newest CHANGELOG entry no longer says unreleased. It builds the wheel and the source archive,
    checks them (`twine check --strict`), installs the wheel and runs it. Only then does the
    publish job start; nothing waits for an approval, so push the tag only when the release is

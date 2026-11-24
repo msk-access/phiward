@@ -48,9 +48,13 @@ jobs:
           # the install lines and links the docs carry, and the changelog's date
           import glob
           ver = tag[1:]
+          # pins: phiward==X, /blob/vX/, #vX, @vX, "ref": "vX" and the "Status: vX" lines
+          pins = (r"phiward==([0-9][^\s`]*)|/blob/v([0-9][^/\s]*)/|#v([0-9][^\s\"`)]*)"
+                  r"|@v([0-9](?:[\w.+-]*\w)?)|\"ref\":\s*\"v([0-9][^\"]*)\""
+                  r"|Status:\**\s*v([0-9](?:[\w.+-]*\w)?)")
           for f in ["README.md", "CHANGELOG.md", "plugin/commands/setup.md"] + glob.glob("docs/*.md"):
               text = open(f).read()
-              for m in re.finditer(r"phiward==([0-9][^\s`]*)|/blob/v([0-9][^/\s]*)/|#v([0-9][^\s\"`)]*)", text):
+              for m in re.finditer(pins, text):
                   v = next(g for g in m.groups() if g)
                   if v != ver:
                       bad[f] = v
