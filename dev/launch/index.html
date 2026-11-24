@@ -1526,7 +1526,8 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
 <li>A wrapped MCP server (<code>--entry</code>) is not scanned: its folder is not the agent's project.</li>
 <li><strong>Mode A</strong> has no launch: the SessionStart note runs the same scan within 2 s and, on a
   finding, tells the session the kinds and counts (it never stops the session), and
-  <code>phiward doctor</code> warns. Under <code>launch</code> the note does not scan again. <code>phiward doctor --headless</code> lists a finding as a reason.</li>
+  <code>phiward doctor</code> warns. When the scan cannot run, the note says so and asks the agent to have
+  you run <code>phiward doctor</code>. Under <code>launch</code> the note does not scan again. <code>phiward doctor --headless</code> lists a finding as a reason.</li>
 </ul>
 <h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
 <table>
@@ -1643,7 +1644,7 @@ this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm an
   only (<code>CONNECT &lt;address&gt;:443</code>). A name that does not resolve on this machine is refused, not
   sent on. An address in your <code>[launch] private_networks</code> is connected to directly, not through
   that proxy (it does not reach your internal network). Any other kind of proxy there
-  (<code>https://</code>, <code>socks5://</code>) stops the start.</li>
+  (<code>https://</code>, <code>socks5://</code>) stops the start. Unset it for <code>launch</code>, or give an <code>http://</code> proxy.</li>
 <li><strong>At most 64 connections at once.</strong> One more is refused, not queued.</li>
 <li><strong>A refusal says why.</strong> The proxy answers <code>403 phiward: &lt;why&gt;</code> in the status line and the
   body; most tools print only the status line (<code>pip</code>: "Tunnel connection failed: 403 phiward:
