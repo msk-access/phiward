@@ -701,15 +701,17 @@ def test_doctor_lists_the_folders_with_show_paths(tree):
 def test_a_listed_tmp_is_refused_by_the_write_to_check(tree):
     """A listed /tmp is refused by the write_to check, naming the entry and the write_to step,
     not by the Linux write-place check ("start the tool in a folder below /tmp", the step for
-    the project): on Linux it holds the default Kerberos ticket cache, on macOS it is a link.
-    doctor says the same."""
+    the project). On macOS /tmp is a link. On Linux the reason is the default Kerberos ticket
+    cache (a place no session may read), pinned only when the made-up tree is not under /tmp:
+    there /tmp holds its protected root, and that reason comes first. doctor says the same."""
     listed("/tmp")
     with pytest.raises(wholetool.LaunchError) as exc:
         close(build(tree))
     msg = str(exc.value)
     assert msg.startswith("[launch] write_to /tmp: ") and STEP in msg, msg
     assert "below /tmp" not in msg, msg
-    if LINUX:
+    if LINUX and not str(tree).startswith("/tmp/"):
+        assert "place no session may read" in msg, msg
         assert f"/tmp/krb5cc_{os.getuid()}" in wholetool._credentials(dict(os.environ)), msg
     cfg = config.load(str(tree / "repo"))
     text = "\n".join(doctor.launch_report(str(tree / "repo"), str(tree / "home"), cfg,
