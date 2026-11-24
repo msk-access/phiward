@@ -151,7 +151,9 @@ phiward copy ~/data/patients/run1 ~/data/patients/run1-copy
 of the user config, or under a `[copy] remotes` entry. Each local path is made absolute
 once, and every check and the copy itself use that path. One with a `..` part, or one that
 starts with `~` (quoted, so the shell left it), is refused: give the full path. A local copy first makes the destination folder with the system
-`mkdir -p`, then copies with the system `rsync -a` (or `cp -R`): two steps in the same profile,
+`mkdir -p`, then copies with the system `rsync` (files that exist are kept, never replaced; a
+`.claude/` folder is skipped; times are kept, modes and links are not), or without rsync with
+`cp -R -n`, single files only: two steps in the same profile,
 and the copy runs only when the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
 ([hpc.md](hpc.md#phiward-copy)). The copy runs in the gateway profile and cannot read
 credentials. Its output is sanitized. The only option is `--dry-run`, as the first word: it
