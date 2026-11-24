@@ -698,6 +698,25 @@ def test_doctor_lists_the_folders_with_show_paths(tree):
     assert str(s) in shown and str(s) not in hidden, (shown, hidden)
 
 
+def test_a_listed_tmp_is_refused_by_the_write_to_check(tree):
+    """A listed /tmp is refused by the write_to check, naming the entry and the write_to step,
+    not by the Linux write-place check ("start the tool in a folder below /tmp", the step for
+    the project): on Linux it holds the default Kerberos ticket cache, on macOS it is a link.
+    doctor says the same."""
+    listed("/tmp")
+    with pytest.raises(wholetool.LaunchError) as exc:
+        close(build(tree))
+    msg = str(exc.value)
+    assert msg.startswith("[launch] write_to /tmp: ") and STEP in msg, msg
+    assert "below /tmp" not in msg, msg
+    if LINUX:
+        assert f"/tmp/krb5cc_{os.getuid()}" in wholetool._credentials(dict(os.environ)), msg
+    cfg = config.load(str(tree / "repo"))
+    text = "\n".join(doctor.launch_report(str(tree / "repo"), str(tree / "home"), cfg,
+                                          dict(os.environ)))
+    assert "WARNING: launch would refuse to start here: [launch] write_to /tmp: " in text, text
+
+
 def test_headless_lists_a_launch_refusal(tree):
     os.symlink(tree / "pub", tree / "lnk")
     listed(tree / "lnk")
