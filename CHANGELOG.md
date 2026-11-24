@@ -172,6 +172,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   truncated file that the next pull kept. Only a file that exists is kept now. A file or folder
   it cannot make or write in full (no permission, no space) fails the pull; a partly written
   file is removed.
+- `phiward doctor`'s launch section decides the project folder with launch's own checks, not a
+  copy of them. It now also warns when the folder is inside or above a protected path, and,
+  as launch does, names the first problem only.
 - Linux, below 7.1: `phiward launch --tool claude` refused the file `install` writes for
   `claude --settings` (a common shell alias adds it): since `@` mentions were turned off there,
   it no longer said just what launch passes. launch now passes that file's content, mentions

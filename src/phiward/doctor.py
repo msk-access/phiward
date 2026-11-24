@@ -1167,17 +1167,12 @@ def launch_report(project: str, home: str, cfg: config.Config,
 
     if not cfg.has_protected_paths:
         refused(wt.NO_PATHS)
-    why = wt._project_problem(real, env)
-    if why:
-        refused(wt.PROJECT_STEP.format(why))
-    entry = wt._path_entry_inside(real, env)
-    if entry:
-        shown = entry if show or not os.path.isabs(entry) else \
-            os.path.relpath(os.path.realpath(entry), real)
-        refused(wt._path_step(entry, env, shown))
-    for rel in wt.LINK_REFUSED:
-        if os.path.islink(os.path.join(real, rel)):
-            refused(wt.LINK_STEP.format(rel))
+    # the project folder: launch's own checks, and its step for each
+    kind, what = wt._folder_checks(real, cfg, env)
+    if kind:
+        shown = what if kind != "path" or show or not os.path.isabs(what) else \
+            os.path.relpath(os.path.realpath(what), real)
+        refused(wt.folder_step(kind, what, env, shown))
     # [launch] write_to: launch's own start check of each entry
     listed, missing, _dropped, cannot = wt._sort_write_to(cfg, env, real)
     for entry, why in cannot:

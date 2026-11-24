@@ -282,6 +282,8 @@ class LaunchError(Exception):
 NO_PATHS = ("no protected paths are configured: there is nothing to confine; run "
             "`(cd ~ && phiward setup)` first")
 PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a project folder"
+PROTECTED_STEP = ("this folder is inside or above a protected path; start the tool in a project "
+                  "folder")
 LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
 DASH_DASH = ("launch passes --add-dir (for [launch] write_to) or --settings to Claude Code as the "
              "last arguments, so `--` cannot be among them: drop the `--` and put the prompt last")
@@ -419,6 +421,19 @@ def _folder_checks(full: str, cfg: config.Config, env: Dict[str, str]) -> Tuple[
         if os.path.islink(os.path.join(full, rel)):
             return "link", rel
     return "", ""
+
+
+def folder_step(kind: str, what: str, env: Dict[str, str], shown: str = "") -> str:
+    """The refusal, with its step, for the project folder that failed `_folder_checks` with
+    (`kind`, `what`); launch and doctor both say it. `shown` names a PATH entry (doctor names it
+    relative to the project). A kind with no step of its own still refuses."""
+    if kind == "protected":
+        return PROTECTED_STEP
+    if kind == "path":  # this is the project folder: the step is to take the entry off PATH
+        return _path_step(what, env, shown)
+    if kind == "link":
+        return LINK_STEP.format(what)
+    return PROJECT_STEP.format(what or kind)
 
 
 def launch_write_problem(full: str, cfg: config.Config, env: Dict[str, str]) -> str:
@@ -2252,15 +2267,8 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         raise LaunchError(f"the masking check failed: {masking.failed[0]}; run phiward doctor")
     project = os.path.realpath(cwd)
     kind, what = _folder_checks(project, cfg, env)
-    if kind == "protected":
-        raise LaunchError("this folder is inside or above a protected path; start the tool in a "
-                          "project folder")
-    if kind == "place":
-        raise LaunchError(PROJECT_STEP.format(what))
-    if kind == "path":  # this is the project folder: the step is to take the entry off PATH
-        raise LaunchError(_path_step(what, env))
-    if kind == "link":
-        raise LaunchError(LINK_STEP.format(what))
+    if kind:
+        raise LaunchError(folder_step(kind, what, env))
     # the `[launch] write_to` folders, and the project scan of them all: not for a wrapped MCP
     # server, which writes only its own folder (not the agent's project)
     listed: List[str] = []
