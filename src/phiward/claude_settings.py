@@ -861,6 +861,28 @@ def no_phi_reason(project: Optional[str], home: str, roots: Sequence[str],
                               excluded_opens=False, openers_open=False)
 
 
+def no_phi_relaxed(cfg: "config.Config", project: str, home: str,
+                   folders: Optional[Sequence[Optional[str]]] = None
+                   ) -> Tuple[str, Optional[Reason]]:
+    """(the `[no_phi] folders` entry that is the session's project `project`, or "" when no
+    entry is; why that folder is not relaxed, with its step, or None when it is). The one test
+    of the hook, the session note and doctor: the entry passes its own check
+    (`config.no_phi_match`, whose reasons have no step) and the settings of every folder in
+    `folders` (the hook's `confining_folders`; by default the project alone) pass
+    `no_phi_reason`."""
+    from phiward import hidden
+    entry, why = config.no_phi_match(cfg, project)
+    if not entry or why:
+        return entry, Reason(why, "") if why else None
+    secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+    for p in ([project] if folders is None else folders):
+        r = no_phi_reason(p, home, cfg.all_roots, cfg.patterns, config.guard_files(),
+                          hidden=secret)
+        if r is not None:
+            return entry, r
+    return entry, None
+
+
 def excluded_entries(project: Optional[str], home: str,
                      env: Optional[Mapping[str, str]] = None) -> List[str]:
     """The merged `sandbox.excludedCommands` of every level phiward reads, with each

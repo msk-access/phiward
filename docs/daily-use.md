@@ -449,8 +449,9 @@ anything: the broker's log has the reason.
 - **A folder with no PHI needs a sandbox opener** (on macOS, `allowLocalBinding` for a dev
   server). The operator lists the exact folder in `[no_phi] folders` of the user config; there
   Bash gets the text check in place of the refusal, when the openers are the only cause
-  ([configuration.md](configuration.md#no_phi)). The session's start message says whether the
-  folder is relaxed, or why not; `phiward doctor` lists the folders.
+  ([configuration.md](configuration.md#no_phi)). The session's start message and `phiward
+  doctor` say whether the folder is relaxed, by the hook's own test; when it is not, they say
+  why (a unix socket, a root missing from `denyRead`) and the step when there is one.
 - **`doctor` says the broker uses another config.** The broker and the agent tool were started
   with a different `HOME`, `PHIWARD_CONFIG` or `XDG_*` variable. Start both from the same
   environment.
