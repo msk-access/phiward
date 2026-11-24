@@ -285,7 +285,8 @@ def upstream_from(env) -> Optional[Upstream]:
     except ValueError:
         raise ProxyError(why + "it is not a URL") from None
     if u.scheme.lower() != "http":
-        raise ProxyError(why + "only an http:// proxy can be")
+        raise ProxyError(why + "only an http:// proxy can be; unset it for launch, or give an "
+                         "http:// proxy")
     if not u.hostname or u.path not in ("", "/") or u.query or u.fragment:
         raise ProxyError(why + "give it as http://host:port")
     auth = ""

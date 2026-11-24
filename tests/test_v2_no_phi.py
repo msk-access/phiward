@@ -293,6 +293,20 @@ def test_the_session_note_warns_when_the_scan_finds_data_in_a_listed_folder(open
     assert _hook(tree, monkeypatch, "ls")[0] == 0
 
 
+def test_the_session_note_warns_when_the_scan_cannot_run_in_a_listed_folder(opened, monkeypatch,
+                                                                            capsys):
+    from phiward import projectscan
+    tree = opened
+    _list(tree / "repo")
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: projectscan.Result(
+        [], {}, 0, False, "the project scan could not run"))
+    out = _note(tree, monkeypatch, capsys, tree / "repo")
+    assert out["systemMessage"] == ("phiward: WARNING: this folder is listed as holding no PHI, "
+                                    "but the project scan could not run; run phiward doctor "
+                                    "in your own terminal."), out
+    assert "project scan could not run" in out["hookSpecificOutput"]["additionalContext"], out
+
+
 # --- doctor -----------------------------------------------------------------------------------
 
 def _doctor(cwd, project=None):

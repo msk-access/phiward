@@ -5,11 +5,12 @@ every session knows, before its first refusal, that protected data goes through 
 that the gateway is the intended route, not a way around the guards. It names no protected
 path: only the rules, and the HPC hosts and programs the operator listed. When the project scan
 (within its 2 s budget) finds subject IDs in the project's files, it says so by kind and count
-(not under `phiward launch`, which scanned the project before the session). It names the typical
+(not under `phiward launch`, which scanned the project before the session); when the scan could
+not run, it says that and names `phiward doctor`. It names the typical
 limits of a session (credentials for git, `@file` mentions, package caches) with the way around
 each, so the agent does not retry them. In a folder the operator lists in `[no_phi] folders`, a
 `systemMessage` tells the person whether it is relaxed, why not, or that the scan found data
-there. It never fails a session: on any error it prints nothing.
+there or could not run. It never fails a session: on any error it prints nothing.
 """
 # Without this note, a test session called `phiward run` "a way around the protection".
 
@@ -58,7 +59,11 @@ def note(cfg: config.Config, project: str = "", no_phi: bool = False,
     if broken:
         lines.append(f"{len(lines) - 1}. {broken}")
     found = _scan_found(cfg, project) if found is None else found
-    if found:
+    if found == SCAN_FAILED:
+        lines.append(f"{len(lines) - 1}. phiward's project scan could not run, so this note "
+                     "cannot say whether the project holds subject IDs outside the protected "
+                     "roots: ask the operator to run `phiward doctor` in their own terminal.")
+    elif found:
         lines.append(f"{len(lines) - 1}. phiward's project scan found {found} in this project, "
                      "outside the protected roots: do not read, quote or copy those files; tell "
                      "the operator to run `phiward doctor --show-paths` in their own terminal.")
@@ -74,6 +79,8 @@ NO_PHI_RELAXED = ("phiward: no-PHI folder (your user config): the shell's sandbo
 NO_PHI_FOUND = ("phiward: WARNING: this folder is listed as holding no PHI, but the project scan "
                 "found {found}; check it (phiward doctor --show-paths) or take it off [no_phi] "
                 "folders.")
+NO_PHI_UNSCANNED = ("phiward: WARNING: this folder is listed as holding no PHI, but the project "
+                    "scan could not run; run phiward doctor in your own terminal.")
 
 
 def no_phi_refused(why: str, step: str = "") -> str:
@@ -110,9 +117,12 @@ def _limits_line() -> str:
     return "Known limits of this session, each with its way around: " + "; ".join(parts) + "."
 
 
+SCAN_FAILED = "the project scan could not run"  # `_scan_found` then; never a `found_text`
+
+
 def _scan_found(cfg: config.Config, project: str) -> str:
     """The project scan (projectscan) within launch's time budget: kinds and counts of what it
-    found, or "". A warning only: it never stops a session."""
+    found, "", or SCAN_FAILED. A warning only: it never stops a session."""
     if not project:
         return ""
     from phiward import projectscan, wholetool
@@ -123,7 +133,9 @@ def _scan_found(cfg: config.Config, project: str) -> str:
             return ""
         r = projectscan.scan(cfg, project, projectscan.deadline())
     except Exception:  # noqa: BLE001 - a note must never stop a session
-        return ""
+        return SCAN_FAILED
+    if r.error:
+        return SCAN_FAILED
     return projectscan.found_text(r) if r.hits else ""
 
 
@@ -172,6 +184,7 @@ def main(argv: List[str]) -> int:
                                                 found)}}
         if entry:
             out["systemMessage"] = (no_phi_refused(why.text, why.step) if why else
+                                    NO_PHI_UNSCANNED if found == SCAN_FAILED else
                                     NO_PHI_FOUND.format(found=found) if found else NO_PHI_RELAXED)
         sys.stdout.write(json.dumps(out))
     except Exception:  # noqa: BLE001 - a note must never stop a session

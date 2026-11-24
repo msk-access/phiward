@@ -160,6 +160,18 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   differs from its own or is missing (an older broker writes none; a status that cannot be
   read counts as missing), with the restart step, and
   `doctor --headless` gives it as a reason it is not ready. The request protocol is unchanged.
+- Three refusals now name their next step: no confinement backend (install bubblewrap and have
+  it on the PATH, on Linux), an upstream `HTTPS_PROXY` that is not `http://` (unset it for
+  `launch`, or give an `http://` proxy), and Landlock ABI below 2 (Linux 5.19 or newer with
+  Landlock on).
+- A pull no longer needs `mkdir` and `tar` on this machine. phiward refused a pull without
+  them, but it never ran them: the remote runs `tar`, and phiward's own extractor unpacks.
+- The Mode A session note says when the project scan could not run, and names `phiward doctor`;
+  in a `[no_phi] folders` folder the person's message says so too. It said nothing before.
+- A pull counted any file it could not write as "kept", and a write that failed partway left a
+  truncated file that the next pull kept. Only a file that exists is kept now. A file or folder
+  it cannot make or write in full (no permission, no space) fails the pull; a partly written
+  file is removed.
 - Linux, below 7.1: `phiward launch --tool claude` refused the file `install` writes for
   `claude --settings` (a common shell alias adds it): since `@` mentions were turned off there,
   it no longer said just what launch passes. launch now passes that file's content, mentions

@@ -417,6 +417,10 @@ def seccomp_program(machine: Optional[str] = None, unix: bool = False) -> bytes:
     return b"".join(struct.pack("<HBBI", *ins) for ins in prog)
 
 
+# the helper's refusal below Landlock ABI 2 (%s: the kernel's ABI, or "none"), with its step
+LANDLOCK_TOO_OLD = ("Landlock ABI 2 or later is needed (the kernel has %s): it needs Linux 5.19 "
+                    "or newer with Landlock turned on")
+
 # Runs inside bubblewrap before the command. argv: N ENTRY... K FD... CMD [ARG]...
 # ENTRY is HEXPATH:DEV:INO:KIND: the path in the view as hex bytes; KIND `w` a place (checked,
 # and Landlock allows writes below it), `r` a read-only bind (checked only), `d` a device (DEV and
@@ -473,7 +477,7 @@ try:
     libc.syscall.restype = ctypes.c_long
     abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
     if abi < 2:
-        fail("Landlock ABI 2 or later is needed (the kernel has %s)" % ("none" if abi < 0 else abi))
+        fail(LANDLOCK_TOO_OLD % ("none" if abi < 0 else abi))
     fs = 0
     for bit in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):  # write, remove, make, refer
         fs |= 1 << bit
@@ -531,7 +535,7 @@ try:
     os.execvp(cmd[0], cmd)
 except OSError:
     sys.stderr.write("phiward gateway: the command could not start\n"); os._exit(127)
-"""
+""".replace("LANDLOCK_TOO_OLD", repr(LANDLOCK_TOO_OLD))
 
 _GATEWAY_DEVICES = ("/dev/null", "/dev/zero")  # no /dev/tty: the gateway has no terminal
 
@@ -728,8 +732,9 @@ def prune_profiles(max_age: int = PROFILE_MAX_AGE) -> int:
 
 # -- entry points -------------------------------------------------------------------------------
 
-_NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
-               "bubblewrap)")
+NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
+              "bubblewrap): on Linux, install bubblewrap (bwrap) with the system's package "
+              "manager and have it on the PATH; see Requirements in docs/setup.md")
 
 
 def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequence[str],
@@ -787,7 +792,7 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
             ["--"] + helper + \
             list(argv), \
             [r] + list(fds.values())
-    raise ConfineError(_NO_BACKEND)
+    raise ConfineError(NO_BACKEND)
 
 
 def _seatbelt_failure(code: int, why: List[str]) -> str:

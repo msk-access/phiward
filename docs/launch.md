@@ -146,7 +146,8 @@ So, before the tool starts, `launch` reads the project for subject and sample ID
 - A wrapped MCP server (`--entry`) is not scanned: its folder is not the agent's project.
 - **Mode A** has no launch: the SessionStart note runs the same scan within 2 s and, on a
   finding, tells the session the kinds and counts (it never stops the session), and
-  `phiward doctor` warns. Under `launch` the note does not scan again. `phiward doctor --headless` lists a finding as a reason.
+  `phiward doctor` warns. When the scan cannot run, the note says so and asks the agent to have
+  you run `phiward doctor`. Under `launch` the note does not scan again. `phiward doctor --headless` lists a finding as a reason.
 
 ## What a session can and cannot do
 
@@ -241,7 +242,7 @@ this session only; `NO_PROXY` is empty. Claude Code, git, pip, npm and curl use 
   only (`CONNECT <address>:443`). A name that does not resolve on this machine is refused, not
   sent on. An address in your `[launch] private_networks` is connected to directly, not through
   that proxy (it does not reach your internal network). Any other kind of proxy there
-  (`https://`, `socks5://`) stops the start.
+  (`https://`, `socks5://`) stops the start. Unset it for `launch`, or give an `http://` proxy.
 - **At most 64 connections at once.** One more is refused, not queued.
 - **A refusal says why.** The proxy answers `403 phiward: <why>` in the status line and the
   body; most tools print only the status line (`pip`: "Tunnel connection failed: 403 phiward:

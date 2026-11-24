@@ -493,10 +493,6 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
     if dry_run:
         out.write(f"copy (dry run): would pull {len(remote_srcs)} source(s) from the remote\n")
         return 0
-    mkdir, tar = system_program("mkdir"), system_program("tar")
-    if mkdir is None or tar is None:
-        out.write("copy refused: a pull needs mkdir and tar in a system folder\n")
-        return 2
     rt, why = rmt.route(cfg, host)
     if rt is None:
         out.write(f"copy refused: {why}\n")

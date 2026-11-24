@@ -255,3 +255,115 @@ def test_doctor_warns_about_a_listed_program_not_on_the_brokers_path(tree):
     assert "WARNING" in out and "fake-tool-not-here" in out and "conda activate" in out, out
     assert "`sh`" not in out, out
     assert doctor.broker_path_lines(cfg, {}) == []
+
+
+# --- P6: refusals that named no step, and quiet failures ----------------------------------------
+
+def test_no_confinement_backend_names_bubblewrap_and_setup(tree, monkeypatch):
+    from phiward import confine
+    monkeypatch.setattr(confine, "backend", lambda: None)
+    msg = _refusal(["/bin/echo", "x"], tree / "repo", dict(os.environ))
+    assert "no confinement backend" in msg, msg
+    assert "install bubblewrap" in msg and "on the PATH" in msg and "setup.md" in msg, msg
+    with pytest.raises(confine.ConfineError) as exc:
+        confine.gateway_command(["/bin/echo", "x"], [str(tree / "phi")], [])
+    assert str(exc.value) == msg, exc.value
+
+
+@pytest.mark.parametrize("value", ["https://proxy.example:3128", "socks5://proxy.example:1080"])
+def test_an_upstream_proxy_that_is_not_http_names_the_way_out(value):
+    with pytest.raises(netproxy.ProxyError) as exc:
+        netproxy.upstream_from({"HTTPS_PROXY": value})
+    msg = str(exc.value)
+    assert "unset it" in msg and "http:// proxy" in msg, msg
+
+
+def test_landlock_below_abi_2_names_the_kernel_it_needs():
+    from phiward import confine
+    msg = confine.LANDLOCK_TOO_OLD
+    assert "Landlock ABI 2" in msg and "Linux 5.19 or newer with Landlock turned on" in msg, msg
+    assert repr(msg) in confine.LANDLOCK_HELPER  # the helper raises this message
+    assert "Landlock ABI 2" not in confine.LANDLOCK_HELPER.replace(repr(msg), "")
+
+
+def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeypatch):
+    from phiward import projectscan
+    cfg = config.load(str(tree / "repo"))
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: projectscan.Result(
+        [], {}, 0, False, "the project scan could not run"))
+    text = session_note.note(cfg, str(tree / "repo"))
+    assert "project scan could not run" in text and "phiward doctor" in text, text
+
+    def boom(*a, **k):
+        raise OSError("fake")
+    monkeypatch.setattr(projectscan, "scan", boom)
+    text = session_note.note(cfg, str(tree / "repo"))
+    assert "project scan could not run" in text and "phiward doctor" in text, text
+    # a scan that ran and found nothing says nothing
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: projectscan.Result(
+        [], {}, 1, True, ""))
+    assert "project scan" not in session_note.note(cfg, str(tree / "repo"))
+
+
+def _extract(dest, members, max_file=None):
+    """Run the pull's extractor on a made-up tar stream of `members` (name, bytes). `max_file`:
+    a file-size limit for the extractor (RLIMIT_FSIZE, SIGXFSZ ignored), so a write past it
+    fails as a full disk would."""
+    import io
+    import subprocess
+    import sys
+    import tarfile
+    from phiward import remote
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as t:
+        for name, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+
+    def limit():
+        import resource
+        import signal
+        signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+        resource.setrlimit(resource.RLIMIT_FSIZE, (max_file, max_file))
+    return subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
+                          input=buf.getvalue(), capture_output=True,
+                          preexec_fn=limit if max_file else None)
+
+
+def test_the_extractor_counts_an_existing_file_as_kept(tree):
+    dest = tree / "phi" / "pulled"
+    dest.mkdir()
+    (dest / "a.txt").write_text("old\n")
+    r = _extract(dest, [("a.txt", b"new\n"), ("b.txt", b"b\n")])
+    assert r.returncode == 0, r
+    assert b"kept 1 existing" in r.stdout, r.stdout
+    assert (dest / "a.txt").read_text() == "old\n" and (dest / "b.txt").read_text() == "b\n"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes a read-only folder")
+def test_the_extractor_fails_on_a_file_it_cannot_write(tree):
+    dest = tree / "phi" / "pulled"
+    (dest / "ro").mkdir(parents=True)
+    (dest / "ro").chmod(0o555)
+    try:
+        r = _extract(dest, [("ro/a.txt", b"a\n"), ("b.txt", b"b\n")])
+    finally:
+        (dest / "ro").chmod(0o755)
+    assert r.returncode != 0, r
+    assert b"kept 0 existing" in r.stdout and b"failed 1" in r.stdout, r.stdout
+    assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
+
+
+def test_the_extractor_removes_a_file_whose_write_failed(tree):
+    dest = tree / "phi" / "pulled"
+    dest.mkdir()
+    r = _extract(dest, [("big.bin", b"x" * (256 * 1024)), ("b.txt", b"b\n")],
+                 max_file=64 * 1024)
+    assert r.returncode == 1, r
+    assert b"failed 1" in r.stdout, r
+    # no truncated file that the next pull would count as kept
+    assert not (dest / "big.bin").exists()
+    assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
+    again = _extract(dest, [("big.bin", b"x" * 1024)])
+    assert again.returncode == 0 and b"kept 0 existing" in again.stdout, again
