@@ -874,6 +874,9 @@ def main(argv: List[str]) -> int:
     elif st and (st.get("cache") != cfg.cache_dir or set(st.get("roots", [])) != set(cfg.user_roots)):
         print("WARNING: the broker uses another cache folder or roots than this shell (check "
               "XDG_CACHE_HOME on both sides, and restart the broker after a config change)")
+    old = broker.version_problem(st) if where else ""
+    if old:
+        print(f"WARNING: {old}")
     for line in broker_path_lines(cfg, st):
         print(line)
     from phiward import fsinfo, pin
@@ -1311,6 +1314,10 @@ def headless_problems(project: str, home: str) -> List[str]:
                    + " (their command tools may make only gateway calls)")
     if not broker.running(config.spool_dir()):
         out.append("the broker is not running (gateway calls would fail)")
+    else:
+        # a reason, not a note: its old code may lack this version's fixes to the masking
+        old = broker.version_problem(broker.read_status(config.spool_dir()))
+        out += [old] if old else []
     from phiward import phicheck
     out += [f"masking check: {f}" for f in phicheck.check(cfg, project).failed]
     out += project_scan_problems(cfg, project)

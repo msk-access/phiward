@@ -30,7 +30,7 @@ subject identifiers) does not change the exit status. It checks that:
   `allowManagedHooksOnly`) and the project's settings set no `env` that changes the hook;
 - the permission deny rules for protected and hidden paths are there;
 - Claude Code's sandbox confines the shell (on Linux, bubblewrap and socat are installed);
-- the broker is running.
+- the broker is running, with the same phiward version as `doctor` (restart it after an upgrade).
 
 With protected patterns, the shell counts as confined only on macOS (Claude Code 2.1.236 or
 newer, after `install claude --user --write`). Otherwise `--headless` reports it as not ready,
