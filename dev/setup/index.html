@@ -432,6 +432,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refusals and the way around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hpc/" class="md-nav__link">
         
   
@@ -2279,7 +2307,10 @@ pins; <code>pin</code> ends by printing the command: <code>(cd ~ &amp;&amp; phiw
 identifiers: add one with <code>phiward setup</code> (Question 8), or record <code>[sanitize] subjects = "none"</code>.
 A repo's <code>.phiward.toml</code> cannot clear it.</p>
 <p>Fix each line that starts with PROBLEM or WARNING (<code>doctor</code> exits with 0 even when there are
-WARNING lines). It also warns when the current folder is inside or above a protected path.</p>
+WARNING lines). It also warns when the current folder is inside or above a protected path.
+Its section "launch (Mode B)" runs the start checks of <code>phiward launch</code> here, without starting
+anything. What each typical refusal means, and the way around it:
+<a href="../refusals/">refusals.md</a>.</p>
 <p><code>doctor</code> shows the protected paths only as counts; add <code>--show-paths</code> to list them. It always
 names the files it reads, and a PROBLEM line can quote a path from the config. Run it in your
 own terminal when the paths are sensitive: when an agent runs it, the output reaches the model.</p>

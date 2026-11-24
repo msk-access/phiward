@@ -432,6 +432,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refusals and the way around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../hpc/" class="md-nav__link">
         
   
@@ -1425,7 +1453,9 @@ team.</p>
   interpreter, or a shim's config, could be the session's. It reads the version from the
   <code>package.json</code> of the script's npm package (<code>@anthropic-ai/claude-code</code>). A tool that gives
   no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
-  start Claude Code's own program directly, or use <code>--tool generic</code> for another tool.</li>
+  run Claude Code's own program directly (the native binary, or the npm package's <code>cli.js</code>),
+  or use <code>--tool generic</code> for another tool. <code>phiward doctor</code> warns about a wrapper before the
+  start (<a href="../refusals/">refusals.md</a>).</li>
 </ul>
 <h2 id="the-project-scan">The project scan<a class="headerlink" href="#the-project-scan" title="Permanent link">&para;</a></h2>
 <p>A file in the project is outside the protected roots, so the agent reads it with no gateway.
@@ -1710,7 +1740,7 @@ when in doubt, reinstall: the step names the command for the tool that installed
     <code>--settings</code> (<code>sandbox.enabled</code>, <code>sandbox.failIfUnavailable</code>, and
     <code>sandbox.allowUnsandboxedCommands</code> false), passed as the last arguments of whatever
     <code>--tool claude</code> runs (<code>claude</code>, a versioned binary, a wrapper); a <code>--</code> among the arguments
-    stops the start. Claude Code keeps only one <code>--settings</code>, so your own stops the start too,
+    stops the start (drop the <code>--</code> and put the prompt last). Claude Code keeps only one <code>--settings</code>, so your own stops the start too,
     unless it says just the same (the file <code>install</code> writes for <code>claude --settings</code>).
     Under <code>launch</code>, Claude Code reads a config folder of its own, not <code>~/.claude</code>: put other
     settings in managed settings, or add a <code>settings.json</code> with <code>phiward carryover add FILE
