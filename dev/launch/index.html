@@ -1447,7 +1447,10 @@ team.</p>
   <code>launch</code> refuses: your own shell would run what the session wrote there. The refusal names the
   entry: <code>PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
   it off PATH), then start again</code>. Run <code>deactivate</code> before <code>launch</code>; inside the session, use
-  <code>.venv/bin/python</code> or <code>uv run</code>. For another entry (direnv), take it off <code>PATH</code> (<code>direnv deny</code>).</li>
+  <code>.venv/bin/python</code> or <code>uv run</code>. For another entry (direnv), take it off <code>PATH</code> (<code>direnv deny</code>).
+  An empty entry (a leading or trailing <code>:</code>, or <code>::</code>), <code>.</code> or another relative entry is refused
+  too: it names the folder your shell is in, the project or a folder of it. Remove it from
+  <code>PATH</code>, then start again.</li>
 <li><code>--resume</code> and <code>-c</code> find this project's earlier <code>launch</code> sessions
   (<a href="#when-a-session-ends">When a session ends</a>).</li>
 <li><code>launch</code> refuses to start when the masking check fails: <code>the masking check failed: ...; run

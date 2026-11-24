@@ -1266,7 +1266,10 @@ own shell runs what is there after the session, and the session could write ther
 names the entry and the step. For an activated <code>.venv</code>: run <code>deactivate</code> (or take the entry
 off PATH), then start again; in the session, use <code>.venv/bin/python</code> or <code>uv run</code>. For any other
 entry: take it off PATH (for direnv, <code>direnv deny</code>), then start again. Doctor names the entry
-relative to the project (<code>--show-paths</code> names it in full).</p>
+relative to the project (<code>--show-paths</code> names it in full). An empty entry (a leading or
+trailing <code>:</code>, or <code>::</code>), <code>.</code> or another relative entry is refused too: it names the folder your
+shell is in, the project or a folder of it. Remove the empty or relative entry from PATH, then
+start again.</p>
 <p><strong>A settings file or folder that is a link</strong> (<code>.claude</code> or <code>.vscode</code> linked to a dotfiles
 repository). A session's writes would reach a file a later plain run reads. The message ends:
 in the project is a link; replace it with a real file or folder</p>
