@@ -881,6 +881,12 @@ def test_an_unreadable_user_config_makes_every_folder_agent_writable(tree):
     assert "/" in claude_settings.agent_writable_anywhere(str(tree / "home"))
 
 
+def test_a_user_config_not_written_yet_lists_no_folders(tree, tmp_path):
+    # setup names the file before it writes it: nothing is listed, nothing is refused
+    env = dict(os.environ, PHIWARD_CONFIG=str(tmp_path / "not-yet.toml"))
+    assert config.launch_write_to_entries(env) == []
+
+
 def test_listed_folders_are_agent_writable_anywhere(tree):
     s = folder(tree)
     listed(s, tree / "gone")

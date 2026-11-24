@@ -785,7 +785,7 @@ def launch_write_to_entries(env: Optional[Dict[str, str]] = None) -> List[str]:
     env = os.environ if env is None else env
     user = user_config_path(env)
     if not os.path.lexists(user):
-        return ["/"] if env.get("PHIWARD_CONFIG") else []
+        return []  # not written yet (setup names it first): it lists nothing
     try:
         raw, _ = _toml.load_file(user, follow=True)
     except (OSError, UnicodeDecodeError, _toml.TomlError):
