@@ -803,6 +803,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#no_phi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [no_phi]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1495,6 +1506,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#no_phi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        [no_phi]
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1908,6 +1930,13 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>ignored; does nothing</td>
 <td>Removed before release. Remove it.</td>
 </tr>
+<tr>
+<td><a href="#no_phi"><code>[no_phi] folders</code></a></td>
+<td>list of absolute folders</td>
+<td>none</td>
+<td>ignored</td>
+<td>Exact folders you are sure hold no PHI: there the hook gives a shell that a sandbox setting opens the text check, not the refusal (Mode A).</td>
+</tr>
 </tbody>
 </table>
 <p>A repo config that sets an ignored key is not an error. <code>phiward doctor</code> lists the ignored
@@ -2297,6 +2326,57 @@ the hook's text check instead of a refusal. That check cannot read shell text co
 bubblewrap). For real data there, prefer <code>phiward launch</code>. <code>doctor</code> warns while it is on. Only your user config can set it.</p>
 <p><code>[shell] strict</code> and <code>[shell] commands</code> (strict mode, removed before release) still load and
 do nothing: the default refusal replaces strict mode. Remove them when you next edit the file.</p>
+<h3 id="no_phi"><code>[no_phi]</code><a class="headerlink" href="#no_phi" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">[no_phi]</span>
+<span class="c1"># exact folders you are sure hold no PHI; not their subfolders. User config only</span>
+<span class="n">folders</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/Users/me/code/website"</span><span class="p">,</span><span class="w"> </span><span class="s2">"~/code/tool-x"</span><span class="p">]</span>
+</code></pre></div>
+<p>A way to work in a folder that holds no PHI when a sandbox setting you need there (on macOS,
+<code>network.allowLocalBinding</code> for a dev server) makes the shell count as not confined. In a
+listed folder, the hook acts as with <a href="#shell"><code>[shell] best_effort</code></a>, for sessions there only:
+a Bash or Monitor command gets the text check, not the refusal. No Claude Code setting is
+written.</p>
+<ul>
+<li><strong>Only the sandbox openers.</strong> The folder is relaxed only when the openers alone keep the
+  shell from counting as confined: <code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code>,
+  <code>allowNestedUserNamespaces</code> and <code>network.allowLocalBinding</code> (macOS). Not <code>filesystem.disabled</code>:
+  with it nothing denies a read. Not the socket and service openers
+  (<code>network.allowUnixSockets</code>, <code>network.allowAllUnixSockets</code>, <code>network.allowMachLookup</code>): what
+  answers there, such as Docker's daemon, runs outside the sandbox and can read a root. For
+  Docker, use a <code>sandbox.excludedCommands</code> entry (<code>docker *</code>) instead: the hook then checks the
+  text of every command, in every folder. Any other cause keeps the refusal too: a root or
+  hidden path missing from <code>denyRead</code> (run install again), an <code>allowRead</code> that re-opens one, a
+  startup folder the sandbox may write, a settings file that does not parse, or protected
+  patterns. So <code>denyRead</code> always holds in a relaxed folder.</li>
+<li>
+<p><strong>Claude Code's own shell only.</strong> Other tools that run commands (an MCP server's, for
+  example) run with no sandbox, and are refused as everywhere.</p>
+</li>
+<li>
+<p><strong>Exact folders.</strong> The session's project (<code>$CLAUDE_PROJECT_DIR</code>) must be the entry itself;
+  a subfolder is not relaxed. Each entry is an absolute path (or starts with <code>~/</code>); a relative
+  one is a bad config.</p>
+</li>
+<li><strong>Checked in the hook,</strong> only the entry that matches the session's project. It is not
+  relaxed when there is a link on its path, when it is a place <code>phiward launch</code> refuses as a
+  project (<code>/</code>, the home folder or above it, a dot-folder in it, <code>~/Library</code>, a folder that
+  holds phiward's own files), or when it is inside or above a protected path. The session's
+  start message says why. An entry that does not exist relaxes nothing; <code>phiward doctor</code> notes
+  it.</li>
+<li><strong>What stays on:</strong> protected roots and the hidden list (the text check, <code>permissions.deny</code>
+  and <code>denyRead</code>), the prompt scan, the project scan at the start of a session, the asks for
+  files that run later and for writes outside the project, and the guard files. When the
+  project scan finds identifiers in a listed folder, the start message warns; the folder stays
+  relaxed, so take it off the list.</li>
+<li><strong><code>phiward launch</code></strong> runs as usual in a listed folder, with a NOTE: it confines the whole
+  tool all the same.</li>
+<li><strong>Shown</strong> at the start of each session there (Claude Code's start message) and by <code>phiward
+  doctor</code>. Nothing is shown at the session's end: phiward has no step there in Mode A.</li>
+</ul>
+<p>No variable or flag of its own sets it. Which file is the user config is chosen as for every
+user-only key: <code>PHIWARD_CONFIG</code>, else <code>XDG_CONFIG_HOME</code>, else <code>~/.config/phiward/config.toml</code>
+(<a href="#where-the-files-are">Where the files are</a>). The limits are in the
+<a href="../threat-model/#known-no-phi-folders">threat model</a>.</p>
 <h2 id="mcp-servers">MCP servers<a class="headerlink" href="#mcp-servers" title="Permanent link">&para;</a></h2>
 <p>An MCP server is a program Claude Code starts, outside its sandbox, with your rights. phiward
 judges a server's tools by what confines them, not by guessing from their fields. <code>phiward mcp

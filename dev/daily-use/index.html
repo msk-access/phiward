@@ -1967,6 +1967,11 @@ anything: the broker's log has the reason.</p>
   (<a href="../configuration/#shell">configuration.md</a>). When <code>excludedCommands</code> is the only cause, the
   hook checks the text of every command in the same way, and refuses one that names protected
   data or a path it cannot see; the refusal names the file that holds the entry.</li>
+<li><strong>A folder with no PHI needs a sandbox opener</strong> (on macOS, <code>allowLocalBinding</code> for a dev
+  server). The operator lists the exact folder in <code>[no_phi] folders</code> of the user config; there
+  Bash gets the text check in place of the refusal, when the openers are the only cause
+  (<a href="../configuration/#no_phi">configuration.md</a>). The session's start message says whether the
+  folder is relaxed, or why not; <code>phiward doctor</code> lists the folders.</li>
 <li><strong><code>doctor</code> says the broker uses another config.</strong> The broker and the agent tool were started
   with a different <code>HOME</code>, <code>PHIWARD_CONFIG</code> or <code>XDG_*</code> variable. Start both from the same
   environment.</li>

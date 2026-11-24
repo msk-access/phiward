@@ -1313,7 +1313,14 @@ editable install has no install record: install with <code>uv tool</code> or <co
 <code>allowUnixSockets</code>, <code>allowAllUnixSockets</code> or <code>allowMachLookup</code> in any settings level means the
 shell is not confined, and the hook refuses every command but a gateway call. Doctor's line
 "sandbox confines the shell" names the key and the file. Remove the key; run a dev server or
-docker in your own terminal. A non-empty <code>sandbox.excludedCommands</code> does not stop the shell:
+docker in your own terminal. Or, for a folder you are sure holds no PHI, list it in <code>[no_phi]
+folders</code> of your user config: when <code>network.allowLocalBinding</code> (macOS),
+<code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code> or <code>allowNestedUserNamespaces</code> is the only
+cause, Bash and Monitor there get the text check in place of the refusal
+(<a href="../configuration/#no_phi">configuration.md</a>). The socket openers (<code>allowUnixSockets</code>,
+<code>allowAllUnixSockets</code>) and <code>allowMachLookup</code> are not relaxed, nor is <code>filesystem.disabled</code>: the
+service behind a socket (Docker's daemon) runs outside the sandbox. For Docker, use a
+<code>sandbox.excludedCommands</code> entry (<code>docker *</code>) instead of the socket. A non-empty <code>sandbox.excludedCommands</code> does not stop the shell:
 the hook checks the text of every command, and refuses a path it cannot see
 (<a href="../setup/">setup.md</a>).</p>
 <p><strong>Package caches are read-only.</strong> Claude Code's sandbox writes only the project and the temp

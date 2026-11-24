@@ -2214,10 +2214,23 @@ block of <code>~/.claude/settings.json</code>; phiward works the same either way
   <code>filesystem.disabled</code>, <code>enableWeakerNestedSandbox</code>, <code>allowAppleEvents</code>,
   <code>allowNestedUserNamespaces</code>, <code>network.allowMachLookup</code>, and on macOS only
   <code>network.allowLocalBinding</code> (there a sandboxed command can reach every service on localhost;
-  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal;</li>
+  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal,
+  or list its folder in <code>[no_phi] folders</code> (below);</li>
 <li>no <code>allowRead</code> entry re-opens a root;</li>
 <li>no protected patterns are configured.</li>
 </ul>
+<p><strong>No PHI here.</strong> For a folder you are sure holds no PHI (a website, a tool's code), list it in
+your user config:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[no_phi]</span>
+<span class="n">folders</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"/Users/me/code/website"</span><span class="p">]</span><span class="w">   </span><span class="c1"># exact folders; not their subfolders</span>
+</code></pre></div>
+<p>A session whose project is that folder then gets the text check of <code>[shell] best_effort</code> for
+Bash, in place of the refusal, when only sandbox openers leave the shell unconfined (not
+<code>filesystem.disabled</code>, and not a root missing from <code>denyRead</code>). Protected roots are still denied, and
+prompts, the project and files that run later are still checked. The session's start message
+says the folder is relaxed (or why not), and <code>phiward doctor</code> lists the folders.
+<a href="../configuration/#no_phi">Configuration</a> has the rules, and the
+<a href="../threat-model/#known-no-phi-folders">threat model</a> the limits.</p>
 <p>The hook reads the merged settings: managed settings and their <code>managed-settings.d</code> drop-ins,
 the project settings, and the user settings in <code>$CLAUDE_CONFIG_DIR</code> (or <code>~/.claude</code>). The
 project settings are <code>.claude/settings.json</code> in <code>$CLAUDE_PROJECT_DIR</code> and the

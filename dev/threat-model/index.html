@@ -2429,10 +2429,42 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
 <li><a id="known-local-binding"></a><strong><code>sandbox.network.allowLocalBinding</code> on macOS.</strong> There it
   lets a sandboxed command listen on ports and connect to any port on localhost, so a local
   service without authentication can act for it outside the sandbox. The shell does not count
-  as confined with it; run a dev server in your own terminal. On Linux a sandboxed command's
+  as confined with it; run a dev server in your own terminal, or in a folder with no PHI that
+  you list in <code>[no_phi] folders</code> (below). On Linux a sandboxed command's
   localhost is its own and the key has no effect (Claude Code's docs), so it is not counted. If
   a Linux Claude Code ever gives it an effect, this is wrong: the release check reads the docs
   again.</li>
+<li><a id="known-no-phi-folders"></a><strong>No-PHI folders (<code>[no_phi] folders</code>).</strong> In a folder you
+  list (user config only, exact folders), the hook acts as with <code>[shell] best_effort</code> for
+  Claude Code's Bash and Monitor: a shell that only the sandbox openers leave unconfined gets
+  the text check, with its limits (<a href="#gaps-of-the-hook-alone">gaps of the hook alone</a>), not the
+  refusal. It is your record that the folder holds no PHI; phiward cannot prove it.</li>
+<li>Only the openers are relaxed (configuration.md, <code>[no_phi]</code>), never <code>filesystem.disabled</code>,
+    and never a unix socket or Mach service (<code>allowUnixSockets</code>, <code>allowAllUnixSockets</code>,
+    <code>allowMachLookup</code>): the service behind it, such as Docker's daemon, runs outside the sandbox
+    and could read a root for a command. Docker goes through <code>excludedCommands</code> instead (its
+    text check, above). Any other cause (a root or hidden path missing from <code>denyRead</code>, an <code>allowRead</code> that
+    re-opens one, a startup folder the sandbox may write, a settings file that does not parse,
+    patterns) keeps the blanket refusal, so <code>denyRead</code> holds for every root in a relaxed
+    folder. Other tools that run commands are not relaxed.</li>
+<li>Protected roots and the hidden list stay denied (<code>denyRead</code>, the text check and
+    <code>permissions.deny</code>), and the prompt scan, the asks for files that run later and the guard
+    files stay. But an opener you turned on there (<code>allowLocalBinding</code> on macOS: every local
+    service) is open to every command, and a command can reach a root through what its text
+    does not show (a local service, a program's own config).</li>
+<li>The project scan at the start of a session is the check that "no PHI" still holds. It
+    warns and does not stop: an agent in another session, or a copy you make, can put data in a
+    listed folder, and the folder stays relaxed until you take it off the list.</li>
+<li>No environment variable or flag of its own sets it. <code>PHIWARD_CONFIG</code> and <code>XDG_CONFIG_HOME</code>
+    choose which file is the user config, as for every user-only key. In Mode A the agent
+    cannot write that file, and a project's settings that set a <code>PHIWARD_*</code> variable make the
+    hook refuse every call (above; Claude Code ignores <code>XDG_*</code> there). Under <code>launch</code>, the
+    session's own settings can set <code>PHIWARD_CONFIG</code> for its hooks (the prompt scan, above), so
+    a session there could name a config with its own list; that relaxes only the hook's text
+    check, and the kernel profile, which no hook changes, still confines the whole tool.</li>
+<li>A relaxed session is shown at its start (Claude Code's start message) and by <code>phiward
+    doctor</code>, not at its end: phiward has no step at the end of a session in Mode A.</li>
+<li><code>phiward launch</code> is not relaxed: it confines the whole tool in a listed folder too.</li>
 <li><a id="known-hooks-fail-open"></a><strong>Hooks fail open</strong> in most tools by default. Claude Code (<code>onFailure: "block"</code>) and Cursor
   (<code>failClosed</code>) have a switch. No tool documents whether a hook deny still applies in its bypass or
   auto-approve mode.</li>
