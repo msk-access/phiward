@@ -8,8 +8,10 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 - **`[no_phi] folders`: the operator's opt-out for folders with no PHI, Mode A only.** User
   config only, exact absolute folders (not their subfolders). Where the session's project is a
-  listed folder that passes its check, the hook acts as with `[shell] best_effort`; nothing
-  else changes (no Claude Code setting, the sandbox stays on). Load checks only the text (a
+  listed folder that passes its check, the hook acts as with `[shell] best_effort` for Bash
+  and Monitor, and only when the sandbox openers alone leave the shell unconfined
+  (`claude_settings.no_phi_reason`; `filesystem.disabled` is not one): every other cause keeps
+  the blanket refusal, so `denyRead` holds for every root. No Claude Code setting is written. Load checks only the text (a
   relative entry is a problem); the hook checks the one matching entry: no link on its path, a
   real folder, launch's project rule without PATH, not inside or above a protected path; a
   failing entry is not relaxed, and a missing one relaxes nothing. Kept on: protected roots,

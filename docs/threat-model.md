@@ -823,21 +823,30 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   a Linux Claude Code ever gives it an effect, this is wrong: the release check reads the docs
   again.
 - <a id="known-no-phi-folders"></a>**No-PHI folders (`[no_phi] folders`).** In a folder you
-  list (user config only, exact folders), the hook acts as with `[shell] best_effort`: a shell
-  that a sandbox setting opens gets the text check, with its limits
-  ([gaps of the hook alone](#gaps-of-the-hook-alone)), not the refusal. It is your record that
-  the folder holds no PHI; phiward cannot prove it.
-  - Protected roots and the hidden list stay denied (the text check, `permissions.deny`, and
-    `denyRead` while the sandbox is on), and the prompt scan, the asks for files that run later
-    and the guard files stay. But a sandbox setting you turned on there (`allowLocalBinding` on
-    macOS: every local service) is open to every command, and a command can reach a root
-    through a path its text does not show (a program's own config, a local service).
+  list (user config only, exact folders), the hook acts as with `[shell] best_effort` for
+  Claude Code's Bash and Monitor: a shell that only the sandbox openers leave unconfined gets
+  the text check, with its limits ([gaps of the hook alone](#gaps-of-the-hook-alone)), not the
+  refusal. It is your record that the folder holds no PHI; phiward cannot prove it.
+  - Only the openers are relaxed (configuration.md, `[no_phi]`), never `filesystem.disabled`.
+    Any other cause (a root or hidden path missing from `denyRead`, an `allowRead` that
+    re-opens one, a startup folder the sandbox may write, a settings file that does not parse,
+    patterns) keeps the blanket refusal, so `denyRead` holds for every root in a relaxed
+    folder. Other tools that run commands are not relaxed.
+  - Protected roots and the hidden list stay denied (`denyRead`, the text check and
+    `permissions.deny`), and the prompt scan, the asks for files that run later and the guard
+    files stay. But an opener you turned on there (`allowLocalBinding` on macOS: every local
+    service; a unix socket such as Docker's) is open to every command, and a command can reach
+    a root through what its text does not show (a local service, a program's own config).
   - The project scan at the start of a session is the check that "no PHI" still holds. It
     warns and does not stop: an agent in another session, or a copy you make, can put data in a
     listed folder, and the folder stays relaxed until you take it off the list.
   - No environment variable or flag of its own sets it. `PHIWARD_CONFIG` and `XDG_CONFIG_HOME`
-    choose which file is the user config, as for every user-only key; the agent cannot write
-    that file or set those variables for the hook (above).
+    choose which file is the user config, as for every user-only key. In Mode A the agent
+    cannot write that file, and a project's settings that set a `PHIWARD_*` variable make the
+    hook refuse every call (above; Claude Code ignores `XDG_*` there). Under `launch`, the
+    session's own settings can set `PHIWARD_CONFIG` for its hooks (the prompt scan, above), so
+    a session there could name a config with its own list; that relaxes only the hook's text
+    check, and the kernel profile, which no hook changes, still confines the whole tool.
   - A relaxed session is shown at its start (Claude Code's start message) and by `phiward
     doctor`, not at its end: phiward has no step at the end of a session in Mode A.
   - `phiward launch` is not relaxed: it confines the whole tool in a listed folder too.

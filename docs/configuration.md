@@ -476,8 +476,19 @@ folders = ["/Users/me/code/website", "~/code/tool-x"]
 A way to work in a folder that holds no PHI when a sandbox setting you need there (on macOS,
 `network.allowLocalBinding` for a dev server) makes the shell count as not confined. In a
 listed folder, the hook acts as with [`[shell] best_effort`](#shell), for sessions there only:
-a shell command gets the text check, not the refusal. Claude Code's sandbox stays on, and no
-Claude Code setting is written.
+a Bash or Monitor command gets the text check, not the refusal. No Claude Code setting is
+written.
+
+- **Only the sandbox openers.** The folder is relaxed only when the openers alone keep the
+  shell from counting as confined: `enableWeakerNestedSandbox`, `allowAppleEvents`,
+  `allowNestedUserNamespaces`, `network.allowLocalBinding` (macOS), `network.allowAllUnixSockets`,
+  `network.allowUnixSockets` and `network.allowMachLookup`. Not `filesystem.disabled`: with it
+  nothing denies a read, so the refusal stays. Any other cause keeps the refusal too: a root or
+  hidden path missing from `denyRead` (run install again), an `allowRead` that re-opens one, a
+  startup folder the sandbox may write, a settings file that does not parse, or protected
+  patterns. So `denyRead` always holds in a relaxed folder.
+- **Claude Code's own shell only.** Other tools that run commands (an MCP server's, for
+  example) run with no sandbox, and are refused as everywhere.
 
 - **Exact folders.** The session's project (`$CLAUDE_PROJECT_DIR`) must be the entry itself;
   a subfolder is not relaxed. Each entry is an absolute path (or starts with `~/`); a relative

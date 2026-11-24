@@ -8,9 +8,10 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 ### Added
 
 - `[no_phi] folders` (user config only): exact folders you are sure hold no PHI. In Mode A, a
-  session whose project is a listed folder gets the text check of `[shell] best_effort` for a
-  shell that a sandbox setting opens (on macOS, `allowLocalBinding` for a dev server), in place
-  of the refusal. Protected roots, the prompt scan, the project scan and the asks for files
+  session whose project is a listed folder gets the text check of `[shell] best_effort` for
+  Bash and Monitor, in place of the refusal, when only the sandbox openers (on macOS,
+  `allowLocalBinding` for a dev server; never `filesystem.disabled`) leave the shell
+  unconfined. Any other cause, such as a root missing from `denyRead`, keeps the refusal. Protected roots, the prompt scan, the project scan and the asks for files
   that run later stay on. The hook checks the one entry that matches the session's project: a
   link on its path, a place `launch` refuses as a project, or a folder inside or above a
   protected path is not relaxed. A relative entry is a bad config; a missing one relaxes

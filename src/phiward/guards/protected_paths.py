@@ -138,8 +138,9 @@ def check(action: Action, cfg: Config) -> Decision:
                                 ask=action.can_ask, tool=action.tool)
                 if d.verdict == DENY:
                     return d
-            # a no-PHI folder (`cfg.no_phi_here`, set by the hook) acts as best_effort
-            best_effort = cfg.shell_best_effort or cfg.no_phi_here
+            # a no-PHI folder (`cfg.no_phi_here`, set by the hook) acts as best_effort, for
+            # Claude Code's own Bash and Monitor only: other shell tools run with no sandbox
+            best_effort = cfg.shell_best_effort or (cfg.no_phi_here and not other)
             if other and action.shape and not best_effort:
                 return deny(UNSANDBOXED_TOOL.format(why=action.shape, advice=action.advice),
                             step="")

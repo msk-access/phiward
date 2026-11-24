@@ -488,7 +488,8 @@ folders = ["/Users/me/code/website"]   # exact folders; not their subfolders
 ```
 
 A session whose project is that folder then gets the text check of `[shell] best_effort` for
-a shell that is not confined, in place of the refusal. Protected roots are still denied, and
+Bash, in place of the refusal, when only sandbox openers leave the shell unconfined (not
+`filesystem.disabled`, and not a root missing from `denyRead`). Protected roots are still denied, and
 prompts, the project and files that run later are still checked. The session's start message
 says the folder is relaxed (or why not), and `phiward doctor` lists the folders.
 [Configuration](configuration.md#no_phi) has the rules, and the
