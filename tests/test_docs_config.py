@@ -79,6 +79,7 @@ FIELD = {
     ("git", "protected_branches"): "protected_branches",
     ("shell", "best_effort"): "shell_best_effort", ("shell", "strict"): None,
     ("shell", "commands"): None,
+    ("no_phi", "folders"): "no_phi_folders",
 }
 HOME = "/fake-home"
 # a user's list and a project's list, for the keys a project may add to

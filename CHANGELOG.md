@@ -21,6 +21,19 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   broker's `PATH` filter and `pseudonymize` treat them as agent-writable. SIGHUP and SIGTERM
   now end the wait, not the launcher, so the end report still comes (exit 128 + the signal);
   after a SIGKILL the next launch names the folders of the session that did not finish.
+- `[no_phi] folders` (user config only): exact folders you are sure hold no PHI. In Mode A, a
+  session whose project is a listed folder gets the text check of `[shell] best_effort` for
+  Bash and Monitor, in place of the refusal, when only the sandbox openers (on macOS,
+  `allowLocalBinding` for a dev server; never `filesystem.disabled`, a unix socket or
+  `allowMachLookup`) leave the shell
+  unconfined. Any other cause, such as a root missing from `denyRead`, keeps the refusal. Protected roots, the prompt scan, the project scan and the asks for files
+  that run later stay on. The hook checks the one entry that matches the session's project: a
+  link on its path, a place `launch` refuses as a project, or a folder inside or above a
+  protected path is not relaxed. A relative entry is a bad config; a missing one relaxes
+  nothing. The session's start message says whether it is relaxed (and warns when the project
+  scan finds identifiers there); `phiward doctor` lists the folders. `phiward launch` runs as
+  usual in a listed folder, with a NOTE. The `allowLocalBinding` refusal names `[no_phi]
+  folders` as a way out.
 - The masking check, and `[sanitize] examples` (user config only): made-up values in the form
   of your own rules (`FAKE-PT-0001` for `FAKE-PT-\d{4} => <SUBJECT>`), never real ones.
   `phiward doctor`, `phiward launch` and the broker at its start check that each value is fully

@@ -64,6 +64,9 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     # refusing every such call (USER_ONLY). `strict` and `commands` (strict mode, removed) still
     # load, and do nothing: unconfined calls are refused by default now
     "shell": {"best_effort": "bool", "strict": "bool", "commands": "list"},
+    # exact folders the operator is sure hold no PHI: in Mode A the hook acts there as with
+    # best_effort (USER_ONLY; checked in the hook, `no_phi_match`)
+    "no_phi": {"folders": "list"},
 }
 # built-in program lists for `[broker] commands` (`"@genomics"`): programs that read data and
 # print results, chosen so that none runs code it is given. Each still prints what it reads,
@@ -116,7 +119,7 @@ USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns
              ("launch", "private_networks"), ("launch", "keep_transcripts"),
              ("launch", "write_to"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
-             ("shell", "commands")}
+             ("shell", "commands"), ("no_phi", "folders")}
 # an allowed_domains entry: a host name, `*.` and a host name, an IPv4 or bracketed IPv6
 # address; an optional :port. Never `*` alone (that allows every host)
 _LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
@@ -218,6 +221,10 @@ class Config:
     # [shell] best_effort (USER_ONLY): a shell call that no kernel confines gets the text check
     # instead of a refusal
     shell_best_effort: bool = False
+    # [no_phi] folders (USER_ONLY): absolute, ~ expanded, normalized; nothing is read at load
+    no_phi_folders: List[str] = field(default_factory=list)
+    # set by the hook only: this session's project is a listed folder that passed its check
+    no_phi_here: bool = False
     allowed_domains: List[str] = field(default_factory=list)
     push_limit_gib: int = 5  # a larger push is the operator's to do
     protected_branches: List[str] = field(default_factory=list)
@@ -666,6 +673,9 @@ def _check_paths(cfg: Config) -> str:
     for p in cfg.sanitize_scan_allow:
         if not p.startswith("/"):
             return f"[sanitize] scan_allow entry '{p}' must be absolute (or start with ~/)"
+    for p in cfg.no_phi_folders:  # text only: the hook checks the one entry that matches
+        if not p.startswith("/"):
+            return f"[no_phi] folders entry '{p}' must be absolute (or start with ~/)"
     if cfg.ssh_config and not cfg.ssh_config.startswith("/"):
         return "[copy] ssh_config must be absolute (or start with ~/)"  # else the agent's folder
     from phiward import pathmatch
@@ -737,6 +747,33 @@ def runs_later_problem(full: str, env: Optional[Dict[str, str]] = None) -> str:
         if _deny_inside(full, entry) or _deny_inside(entry, full):
             return "it is a PATH folder, or holds or is inside one (programs you run live there)"
     return ""
+
+
+def no_phi_match(cfg: "Config", project: str,
+                 env: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+    """(the `[no_phi] folders` entry that is the folder `project`, why it is not relaxed or
+    ""), or ("", "") when no entry is it. Entries are exact: a subfolder is no match. Only the
+    matching entry is checked, so a missing or moved entry relaxes nothing and costs nothing.
+    It fails closed: a link on the entry's path, a place `launch` would refuse as a project
+    (`wholetool._project_problem`, which has no PATH test), or a folder inside or above a
+    protected path is not relaxed."""
+    env = dict(os.environ if env is None else env)
+    if not cfg.no_phi_folders or not project or not project.startswith("/"):
+        return "", ""
+    names = (os.path.normpath(project), os.path.realpath(project))
+    entry = next((e for e in cfg.no_phi_folders if e in names), "")
+    if not entry:
+        return "", ""
+    if os.path.realpath(entry) != entry:
+        return entry, "it has a link on its path"
+    if not os.path.isdir(entry):
+        return entry, "it is not a folder"
+    from phiward import paths, wholetool
+    why = wholetool._project_problem(entry, env)  # PATH-free: PATH concerns launch only
+    if why:
+        return entry, why
+    rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(entry)
+    return entry, f"it is {rel} a protected path" if rel else ""
 
 
 def _pattern_prefix(pattern: str) -> str:
@@ -910,6 +947,11 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
             cfg.launch_write_to.append(v)
     if "best_effort" in data.get("shell", {}):  # USER_ONLY
         cfg.shell_best_effort = bool(data["shell"]["best_effort"])
+    for v in data.get("no_phi", {}).get("folders", []):  # USER_ONLY; absolute (_check_paths)
+        v = _expand_root(v, home)
+        v = os.path.normpath(v) if v.startswith("/") else v
+        if v not in cfg.no_phi_folders:
+            cfg.no_phi_folders.append(v)
     nw = data.get("network", {})
     if "limit" in nw:  # USER_ONLY
         cfg.network_limit = bool(nw["limit"])

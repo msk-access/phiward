@@ -6,6 +6,23 @@ decision, newest at the top of its section. Public text: no names, hosts or path
 
 ## Decided
 
+- **`[no_phi] folders`: the operator's opt-out for folders with no PHI, Mode A only.** User
+  config only, exact absolute folders (not their subfolders). Where the session's project is a
+  listed folder that passes its check, the hook acts as with `[shell] best_effort` for Bash
+  and Monitor, and only when the sandbox openers alone leave the shell unconfined
+  (`claude_settings.no_phi_reason`; neither `filesystem.disabled` nor the unix socket and Mach
+  service openers are among them, by the operator's decision: Docker's daemon runs outside
+  the sandbox, so Docker goes through `excludedCommands`): every other cause keeps
+  the blanket refusal, so `denyRead` holds for every root. No Claude Code setting is written. Load checks only the text (a
+  relative entry is a problem); the hook checks the one matching entry: no link on its path, a
+  real folder, launch's project rule without PATH, not inside or above a protected path; a
+  failing entry is not relaxed, and a missing one relaxes nothing. Kept on: protected roots,
+  the prompt scan, the project scan (it warns and does not stop), the asks for files that run
+  later, the guard files. `launch` runs as usual there, with a NOTE (it stays all or nothing).
+  Shown at start and in doctor, not at the end (phiward has no step there in Mode A). (Why:
+  the operator asked for a way to work where there is no PHI, not a refusal of the tool. Turned
+  down with it: dropping the asks for files that run later there, and making launch refuse a
+  listed folder.)
 - **`launch` keeps this project's transcripts, by default.** `--resume` and `-c` are daily use.
   `[launch] keep_transcripts = false` (user config only) turns it off. phiward never parses a
   transcript (Claude Code's format is internal): launch names one folder

@@ -553,19 +553,28 @@ OPENERS = (("filesystem", "disabled"), ("enableWeakerNestedSandbox",), ("allowAp
 # on localhost; on Linux a sandboxed command's localhost is its own and the key has no effect
 # (Claude Code's docs, sandboxing)
 LOCAL_BINDING = ("network", "allowLocalBinding")
-LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, not in the session's shell (on "
-                      "macOS this key lets a sandboxed command reach every local service): ")
+LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, or in a folder with no PHI that "
+                      "the operator lists in [no_phi] folders (user config), not in the "
+                      "session's shell (on macOS this key lets a sandboxed command reach every "
+                      "local service): ")
 
 
-def _opened(lv, excluded_opens: bool = True) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
+def _opened(lv, excluded_opens: bool = True,
+            openers_open: bool = True) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
     """Why these settings let a sandboxed command reach past the sandbox: (the reason, the keys
     under `sandbox`, whether it is a list), or None. `excluded_opens`: whether a non-empty
-    `excludedCommands` counts (`shell_reason` leaves it to the hook's text check)."""
+    `excludedCommands` counts (`shell_reason` leaves it to the hook's text check).
+    `openers_open`: whether the OPENERS and `allowLocalBinding` count (`no_phi_reason`);
+    `filesystem.disabled` always counts, since with it nothing denies a read, and so do the
+    unix socket and Mach service openers."""
     for keys in OPENERS + ((LOCAL_BINDING,) if sys.platform == "darwin" else ()):
-        if _first(lv, "sandbox", *keys) is True:
+        if (openers_open or keys == ("filesystem", "disabled")) and \
+                _first(lv, "sandbox", *keys) is True:
             return f"sandbox.{'.'.join(keys)} is true (it opens the sandbox)", tuple(keys), False
     if excluded_opens and _merged_list(lv, "sandbox", "excludedCommands"):
         return "sandbox.excludedCommands is not empty", ("excludedCommands",), True
+    # the socket and service openers count always: what answers there (Docker's daemon) runs
+    # outside the sandbox and can read a root
     if _first(lv, "sandbox", "network", "allowAllUnixSockets") is True:
         return ("sandbox.network.allowAllUnixSockets is true",
                 ("network", "allowAllUnixSockets"), False)
@@ -781,9 +790,10 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
                 hidden: Sequence[str] = (),
                 user_data: Optional[Dict[str, Any]] = None,
                 version: Optional[Tuple[int, int, int]] = None,
-                excluded_opens: bool = True) -> Optional[Reason]:
+                excluded_opens: bool = True, openers_open: bool = True) -> Optional[Reason]:
     """Why the shell is not confined, with its step, or None. `excluded_opens`: whether a
-    non-empty `excludedCommands` counts (`shell_reason`). `user_data`: the user settings to take in place of the file (what
+    non-empty `excludedCommands` counts (`shell_reason`). `openers_open`: whether the sandbox
+    openers count (`no_phi_reason`). `user_data`: the user settings to take in place of the file (what
     `install claude --user --write` would write, for doctor), in every level whose file is the user
     file (a session started from the home folder reads it as its project file too). `version`:
     the Claude Code version when it is known (doctor; the hook cannot run `claude --version`),
@@ -816,7 +826,7 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
             mine = os.path.normpath(_user_file(home, env))  # install replaces the file there
             lv = [(lvl, f, user_data if os.path.normpath(f) == mine else d) for lvl, f, d in lv]
         r = _confined_with(lv, project, home, roots, patterns, guard, env, hidden, version,
-                           excluded_opens)
+                           excluded_opens, openers_open)
         if r is not None:
             if local != candidates[0]:  # not the file Claude Code is thought to read
                 r = Reason(f"{r.text}, with {local} as the settings.local.json Claude Code may "
@@ -835,6 +845,20 @@ def shell_reason(project: Optional[str], home: str, roots: Sequence[str],
     instead of refusing the whole shell. Every other cause still means not confined."""
     return confinement_reason(project, home, roots, patterns, guard, env, hidden,
                               excluded_opens=False)
+
+
+def no_phi_reason(project: Optional[str], home: str, roots: Sequence[str],
+                  patterns: Sequence[str], guard: Sequence[str] = (),
+                  env: Optional[Mapping[str, str]] = None,
+                  hidden: Sequence[str] = ()) -> Optional[Reason]:
+    """For the hook in a no-PHI folder: `shell_reason` without the sandbox openers
+    (`enableWeakerNestedSandbox`, `allowAppleEvents`, `allowNestedUserNamespaces`, macOS
+    `allowLocalBinding`). None: only those leave the shell unconfined, so the folder is
+    relaxed; any other cause (`filesystem.disabled`, a unix socket or Mach service, a root
+    missing from denyRead, a startup folder the sandbox may write, a file that does not parse,
+    patterns) keeps the blanket refusal."""
+    return confinement_reason(project, home, roots, patterns, guard, env, hidden,
+                              excluded_opens=False, openers_open=False)
 
 
 def excluded_entries(project: Optional[str], home: str,
@@ -896,7 +920,7 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
                    guard: Sequence[str], env: Optional[Mapping[str, str]],
                    hidden: Sequence[str],
                    version: Optional[Tuple[int, int, int]] = None,
-                   excluded_opens: bool = True) -> Optional[Reason]:
+                   excluded_opens: bool = True, openers_open: bool = True) -> Optional[Reason]:
     """`confinement_reason` for one set of settings files (`levels`)."""
     for _l, f, data in lv:
         if data is None and os.path.lexists(f):
@@ -911,7 +935,7 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
         if _first(lv, "sandbox", key) is not want:
             # install sets these three in the user file
             return Reason(text, _step_for(lv, project, home, env, ("sandbox", key), True))
-    opened = _opened(lv, excluded_opens)
+    opened = _opened(lv, excluded_opens, openers_open)
     if opened:
         text, keys, merged = opened
         fixes = _only_old_excludes if keys == ("excludedCommands",) else False

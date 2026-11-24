@@ -2245,6 +2245,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if info is not None:
             info["write_to"], info["notes"] = list(listed), notes
         _scan_tops(cfg, project, listed)
+    if project in cfg.no_phi_folders:  # Mode A's opt-out; launch stays all or nothing
+        sys.stderr.write("phiward launch: NOTE: the operator lists this folder in [no_phi] "
+                         "folders; launch confines it all the same (plain claude here is "
+                         "relaxed).\n")
     claude = adapter.name == "claude" and not server
     if claude and listed:
         # Claude Code's file tools write the listed folders through --add-dir; after a `--`
