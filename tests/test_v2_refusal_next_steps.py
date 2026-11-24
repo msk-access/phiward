@@ -255,3 +255,107 @@ def test_doctor_warns_about_a_listed_program_not_on_the_brokers_path(tree):
     assert "WARNING" in out and "fake-tool-not-here" in out and "conda activate" in out, out
     assert "`sh`" not in out, out
     assert doctor.broker_path_lines(cfg, {}) == []
+
+
+# --- P6: refusals that named no step, and quiet failures ----------------------------------------
+
+def test_no_confinement_backend_names_bubblewrap_and_setup(tree, monkeypatch):
+    from phiward import confine
+    monkeypatch.setattr(confine, "backend", lambda: None)
+    msg = _refusal(["/bin/echo", "x"], tree / "repo", dict(os.environ))
+    assert "no confinement backend" in msg, msg
+    assert "install bubblewrap" in msg and "setup.md" in msg, msg
+    with pytest.raises(confine.ConfineError) as exc:
+        confine.gateway_command(["/bin/echo", "x"], [str(tree / "phi")], [])
+    assert "install bubblewrap" in str(exc.value) and "setup.md" in str(exc.value), exc.value
+
+
+@pytest.mark.parametrize("value", ["https://proxy.example:3128", "socks5://proxy.example:1080"])
+def test_an_upstream_proxy_that_is_not_http_names_the_way_out(value):
+    with pytest.raises(netproxy.ProxyError) as exc:
+        netproxy.upstream_from({"HTTPS_PROXY": value})
+    msg = str(exc.value)
+    assert "unset it" in msg and "http:// proxy" in msg, msg
+
+
+def test_landlock_below_abi_2_names_the_kernel_it_needs():
+    from phiward import confine
+    line = next(t for t in confine.LANDLOCK_HELPER.splitlines() if "Landlock ABI 2" in t)
+    assert "Linux 5.19 or newer" in line and "Landlock turned on" in line, line
+
+
+def test_a_pull_without_system_mkdir_or_tar_names_the_step(tree, monkeypatch):
+    import io
+    (tree / "home" / "phiward.toml").write_text(
+        (tree / "home" / "phiward.toml").read_text()
+        + '[copy]\nremotes = ["hpc-test:/work/me"]\n'
+        + '[remote]\nhosts = ["hpc-test"]\ncommands = ["wc"]\n')
+    real = copying.system_program
+    monkeypatch.setattr(copying, "system_program",
+                        lambda n: None if n == "tar" else real(n))
+    out = io.StringIO()
+    code = copying.execute(["hpc-test:/work/me/x", str(tree / "phi") + "/"], str(tree / "repo"),
+                           dict(os.environ), out)
+    msg = out.getvalue()
+    assert code == 2 and "mkdir and tar" in msg, msg
+    assert "/usr/bin" in msg and "package manager" in msg, msg
+
+
+def test_the_session_note_says_when_the_project_scan_could_not_run(tree, monkeypatch):
+    from phiward import projectscan
+    cfg = config.load(str(tree / "repo"))
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: projectscan.Result(
+        [], {}, 0, False, "the project scan could not run"))
+    text = session_note.note(cfg, str(tree / "repo"))
+    assert "project scan could not run" in text and "phiward doctor" in text, text
+
+    def boom(*a, **k):
+        raise OSError("fake")
+    monkeypatch.setattr(projectscan, "scan", boom)
+    text = session_note.note(cfg, str(tree / "repo"))
+    assert "project scan could not run" in text and "phiward doctor" in text, text
+    # a scan that ran and found nothing says nothing
+    monkeypatch.setattr(projectscan, "scan", lambda *a, **k: projectscan.Result(
+        [], {}, 1, True, ""))
+    assert "project scan" not in session_note.note(cfg, str(tree / "repo"))
+
+
+def _extract(dest, members):
+    """Run the pull's extractor on a made-up tar stream of `members` (name, bytes)."""
+    import io
+    import subprocess
+    import sys
+    import tarfile
+    from phiward import remote
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as t:
+        for name, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+    return subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
+                          input=buf.getvalue(), capture_output=True)
+
+
+def test_the_extractor_counts_an_existing_file_as_kept(tree):
+    dest = tree / "phi" / "pulled"
+    dest.mkdir()
+    (dest / "a.txt").write_text("old\n")
+    r = _extract(dest, [("a.txt", b"new\n"), ("b.txt", b"b\n")])
+    assert r.returncode == 0, r
+    assert b"kept 1 existing" in r.stdout, r.stdout
+    assert (dest / "a.txt").read_text() == "old\n" and (dest / "b.txt").read_text() == "b\n"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes a read-only folder")
+def test_the_extractor_fails_on_a_file_it_cannot_write(tree):
+    dest = tree / "phi" / "pulled"
+    (dest / "ro").mkdir(parents=True)
+    (dest / "ro").chmod(0o555)
+    try:
+        r = _extract(dest, [("ro/a.txt", b"a\n"), ("b.txt", b"b\n")])
+    finally:
+        (dest / "ro").chmod(0o755)
+    assert r.returncode != 0, r
+    assert b"kept 0 existing" in r.stdout and b"failed 1" in r.stdout, r.stdout
+    assert (dest / "b.txt").read_text() == "b\n"  # the rest is still written
