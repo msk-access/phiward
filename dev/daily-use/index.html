@@ -1970,8 +1970,9 @@ anything: the broker's log has the reason.</p>
 <li><strong>A folder with no PHI needs a sandbox opener</strong> (on macOS, <code>allowLocalBinding</code> for a dev
   server). The operator lists the exact folder in <code>[no_phi] folders</code> of the user config; there
   Bash gets the text check in place of the refusal, when the openers are the only cause
-  (<a href="../configuration/#no_phi">configuration.md</a>). The session's start message says whether the
-  folder is relaxed, or why not; <code>phiward doctor</code> lists the folders.</li>
+  (<a href="../configuration/#no_phi">configuration.md</a>). The session's start message and <code>phiward
+  doctor</code> say whether the folder is relaxed, by the hook's own test; when it is not, they say
+  why (a unix socket, a root missing from <code>denyRead</code>) and the step when there is one.</li>
 <li><strong><code>doctor</code> says the broker uses another config.</strong> The broker and the agent tool were started
   with a different <code>HOME</code>, <code>PHIWARD_CONFIG</code> or <code>XDG_*</code> variable. Start both from the same
   environment.</li>
