@@ -453,8 +453,8 @@ The release notes have the same steps as a checklist:
 - `launch` refuses an empty `PATH` entry (a leading or trailing `:`, or `::`), `.` and any
   other relative entry. It names the folder the shell is in: the project, where the tool runs,
   or a folder of it after the session. The check skipped such entries, so a program the session
-  wrote there could run later. The step says to remove the entry. `phiward doctor`, the session
-  note's scan and the `[launch] write_to` check give the same refusal.
+  wrote there could run later. The step says to remove the entry. `phiward doctor` gives the
+  same refusal, and the `[launch] write_to` check refuses such an entry too.
 - Linux: the broker makes its cache folder (`~/.cache/phiward`) when it starts. While a
   command runs, Claude Code's own sandbox puts an empty read-only file at each denied path
   that does not exist, and the cache folder is denied: a first `phiward run` from a session
