@@ -648,6 +648,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#more-folders-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More folders to write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-network" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1285,6 +1296,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#more-folders-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More folders to write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-network" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1496,6 +1518,8 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
   project unread (files past their head, long lines, folders over the entry cap, files it
   cannot open) starts with one NOTE of those counts.</li>
 <li><strong>A scan that cannot run</strong> refuses: <code>the project scan could not run; run phiward doctor</code>.</li>
+<li><strong><code>[launch] write_to</code> folders</strong> are scanned too, in the same 2 s, the instruction files of
+  every folder first (<a href="#more-folders-to-write">More folders to write</a>).</li>
 <li>A wrapped MCP server (<code>--entry</code>) is not scanned: its folder is not the agent's project.</li>
 <li><strong>Mode A</strong> has no launch: the SessionStart note runs the same scan within 2 s and, on a
   finding, tells the session the kinds and counts (it never stops the session), and
@@ -1513,13 +1537,13 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
 <tbody>
 <tr>
 <td>Files</td>
-<td>read and write the project; write its own session folder and the spool</td>
+<td>read and write the project and the <a href="#more-folders-to-write"><code>[launch] write_to</code></a> folders (user config); write its own session folder and the spool</td>
 <td>read protected roots, patterns or derived folders (<code>.git</code>, snapshots, and on Linux other mounts of the same data); read credentials (<code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.claude</code>, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's <code>write_to</code> folders; write anywhere else</td>
 </tr>
 <tr>
 <td>Files that run later</td>
 <td></td>
-<td>write, at any depth in the project, the <code>.claude</code>, <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> and <code>.codex</code> folders (each as a whole), <code>.mcp.json</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code>, or what a link inside them leads to; or git control files (hooks, config). On Linux <code>launch</code> makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> if there are none and <code>.mcp.json</code> as a <code>{}</code> placeholder; the others, a git control file missing at the start (<code>commondir</code>), and one of these made in a subfolder during the session can be made there, and the report at the end names them. A wrapped MCP server (<code>--entry</code>) has the same profile, and cannot write the project's <code>.git</code> folders at all (on macOS also a new <code>.git</code>)</td>
+<td>write, at any depth in the project and in each <code>[launch] write_to</code> folder, the <code>.claude</code>, <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> and <code>.codex</code> folders (each as a whole), <code>.mcp.json</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code>, or what a link inside them leads to; or git control files (hooks, config). On Linux <code>launch</code> makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> in the project if there are none and <code>.mcp.json</code> as a <code>{}</code> placeholder; the others, a git control file missing at the start (<code>commondir</code>), and one of these made in a subfolder during the session can be made there, and the report at the end names them. In a <code>[launch] write_to</code> folder launch makes nothing; one missing at the start can be made there, and the report at the end names it. A wrapped MCP server (<code>--entry</code>) has the same profile, and cannot write the project's <code>.git</code> folders at all (on macOS also a new <code>.git</code>)</td>
 </tr>
 <tr>
 <td>Processes</td>
@@ -1538,6 +1562,64 @@ So, before the tool starts, <code>launch</code> reads the project for subject an
 </tr>
 </tbody>
 </table>
+<h2 id="more-folders-to-write">More folders to write<a class="headerlink" href="#more-folders-to-write" title="Permanent link">&para;</a></h2>
+<p>A project may need to write a sibling repository, a shared output folder or a scratch area.
+List those folders in your user config (a repo's <code>.phiward.toml</code> cannot):</p>
+<div class="highlight"><pre><span></span><code><span class="k">[launch]</span>
+<span class="n">write_to</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/work/shared-results"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/data/me/scratch"</span><span class="p">]</span>
+</code></pre></div>
+<ul>
+<li><strong>The checks, at each start.</strong> launch refuses to start, naming the entry and the step ("fix
+  or remove it in [launch] write_to of the user config"), for an entry that is:</li>
+<li>a file, a link, or reached through a link (whoever can change the link would choose the
+    place); name the real folder;</li>
+<li>inside or above a protected root, a derived folder or a pattern match;</li>
+<li><code>/</code>, the home folder or above it, a dot-folder of the home folder (<code>~/.config</code>,
+    <code>~/.claude</code>, <code>~/.phiward</code>), in <code>~/Library</code>, or a folder that is, holds or is inside a
+    <code>PATH</code> folder (files there run later, outside launch);</li>
+<li>a folder that holds a phiward file (the config, its code) or is the spool;</li>
+<li>a <code>[broker] write_to</code> folder, or one that holds or is inside one, or a credential.</li>
+</ul>
+<p>The hook does not check them, so a bad entry stops only launch. <code>phiward doctor</code> gives the
+  same refusals.
+- <strong>A missing entry is skipped,</strong> with one NOTE: <code>phiward launch: NOTE: [launch] write_to
+  &lt;entry&gt; does not exist, so the session does not write there</code>. An entry inside the project
+  is dropped (the project is written already); one inside another entry is dropped too.
+- <strong>The folders are named at the start:</strong> <code>phiward launch: the session also writes: &lt;folder&gt;,
+  ...</code>, and in the <code>--report</code> JSON (<code>write_to</code>). <code>phiward doctor</code> counts them (the paths with
+  <code>--show-paths</code>).
+- <strong>The project's rules hold in each folder.</strong> What runs later and git control files are
+  read-only there, as in the project (the table above). launch makes nothing in a listed
+  folder: on Linux, one of them missing at the start can be made, and the report at the end
+  names it. A repository made in a listed folder during the session has writable git control
+  files on both platforms, as in the project; the report at the end names its <code>.git/</code> paths.
+- <strong>The project scan reads each folder</strong> with the project's rules and within the same 2 s:
+  first the instruction files of the project and of every listed folder, then the rest of each
+  in turn. A finding in any folder refuses, naming the folder. A listed folder's instruction
+  files not read in 2 s refuse ("run phiward doctor, or make them smaller"); the project's own,
+  and the rest not read, give the NOTE, naming the folders not finished.
+- <strong><code>--tool claude</code> gets <code>--add-dir D</code></strong> for each folder, after your own arguments (so a <code>--</code>
+  among them is refused). From an <code>--add-dir</code> folder Claude Code loads its skills (live), its
+  commands and its subagents, <code>enabledPlugins</code> and <code>extraKnownMarketplaces</code> of its settings,
+  and with <code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> (passed on as you set it) its
+  <code>CLAUDE.md</code> and rules. All of them sit under <code>.claude</code>, which is read-only there and scanned
+  before the tool starts.
+- <strong>The trust prompt.</strong> Claude Code 2.1.326 and newer asks you to trust each <code>--add-dir</code>
+  folder. Under launch every session starts with a fresh config folder, so it asks again in
+  every session. That is expected: answer it, or remove the entry.
+- <strong>The end report</strong> names what the session changed in each folder, under the folder's name.
+  Each folder is walked at the start and at the end, up to 2 million entries: list a folder,
+  not a whole disk.
+- <strong>An abnormal end.</strong> SIGHUP (the terminal closes) and SIGTERM still give the end report (one
+  ignored when launch starts, as under <code>nohup</code>, stays ignored). After a signal, a SIGKILL or a
+  crash, the next launch names the folders of the session that did not finish (on macOS the
+  tool may outlive the launcher): read their files that run later and what it changed before
+  you run anything there.
+- <strong>Not <code>[broker] write_to</code>.</strong> That one is the gateway's grant to write inside protected roots,
+  which a session cannot read; this one is what the session itself writes. The two may never
+  overlap (<a href="../configuration/#launch">configuration.md</a>).
+- The broker's <code>PATH</code> filter and <code>phiward pseudonymize</code> treat the listed folders as written by
+  the agent: a program there is not run by the broker, and a table there is not an input.</p>
 <h2 id="the-network">The network<a class="headerlink" href="#the-network" title="Permanent link">&para;</a></h2>
 <p>The session has no direct outbound network. <code>launch</code> runs a proxy outside the profile, and the tool's
 <code>HTTPS_PROXY</code>, <code>HTTP_PROXY</code> and <code>ALL_PROXY</code> (and their lowercase forms) name it, with a token for
@@ -1643,7 +1725,8 @@ phiward<span class="w"> </span>carryover<span class="w"> </span>status<span clas
   code under <code>.venv</code> or <code>node_modules</code> is in that count. In a very large project it says so, and
   past its limit checks only the first three kinds (dot folders such as <code>.claude</code> first); past
   2,000,000 entries it checks nothing more. <strong>Treat everything in the project as written
-  by the agent</strong>, and read it before you run anything outside <code>launch</code>.
+  by the agent</strong>, and read it before you run anything outside <code>launch</code>. Each <code>[launch]
+  write_to</code> folder gets a report of its own, under its name.
 - <strong>Anything under <code>~/.phiward</code> may be deleted at any time</strong> (a disk quota, an HPC purge, or
   you). The next start rebuilds from what is left, and it never trusts a folder a session could
   write. <code>carryover status</code> says what each deletion costs.</p>

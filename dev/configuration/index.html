@@ -1861,6 +1861,13 @@ what a repo config may do with it. Each key links to its section below.</p>
 <td>Keep this project's Claude Code transcripts between <code>launch</code> sessions, for <code>--resume</code> and <code>-c</code>.</td>
 </tr>
 <tr>
+<td><a href="#launch"><code>[launch] write_to</code></a></td>
+<td>list of folders</td>
+<td>none</td>
+<td>ignored</td>
+<td>More folders a <code>phiward launch</code> session may write besides the project (not <code>[broker] write_to</code>).</td>
+</tr>
+<tr>
 <td><a href="#broker"><code>[broker] write_to</code></a></td>
 <td>list of folders</td>
 <td>none</td>
@@ -2163,6 +2170,20 @@ and the derived protected folders. Details and limits:
   its history (<a href="../threat-model/#open-transcripts">the limit</a>). With <code>false</code>, each session starts
   with no history, and a resume flag gets a NOTE. Where they are and how to delete them:
   <a href="../launch/#when-a-session-ends">launch.md</a>.</li>
+<li><strong><code>write_to</code></strong> (list of folders; default none): folders a <code>phiward launch</code> session may write
+  besides the project, for example a sibling repository or a shared output folder. Each entry
+  is absolute (or starts with <code>~/</code>) and has no <code>..</code>; only the user config sets it. The hook does
+  not check the entries: launch checks them when it starts, so a bad entry stops only launch.</li>
+<li>An entry that does not exist is skipped, with a NOTE.</li>
+<li>An entry inside the project is dropped (the project is written already).</li>
+<li>launch refuses to start, naming the entry, for one that is a file or a link, has a link on
+    its path, is inside or above a protected path, a derived folder or a pattern match, is <code>/</code>,
+    the home folder or above it, a dot-folder of the home folder, in <code>~/Library</code>, holds or is a
+    <code>PATH</code> folder, holds a phiward file (the config, the spool), or overlaps a <code>[broker]
+    write_to</code> folder or a credential.</li>
+<li>Not <code>[broker] write_to</code>: that one is the gateway's grant to write <em>inside</em> roots, hidden
+    from a session; this one is what the session itself writes, and may never overlap a root or
+    a <code>[broker] write_to</code> folder. What a session may do there: <a href="../launch/#more-folders-to-write">launch.md</a>.</li>
 </ul>
 <h3 id="broker"><code>[broker]</code><a class="headerlink" href="#broker" title="Permanent link">&para;</a></h3>
 <p>The grants. Nothing asks the operator at run time: what is not written here is refused.</p>
@@ -2184,6 +2205,7 @@ and the derived protected folders. Details and limits:
     protected.</li>
 <li>on Linux, a request whose write place is at or below a path the gateway hides (credentials,
     traces) stops before its command runs.</li>
+<li>not the folders a <code>phiward launch</code> session writes: those are <a href="#launch"><code>[launch] write_to</code></a>.</li>
 <li><strong><code>net</code></strong> (<code>true</code> or <code>false</code>; default <code>false</code>). With <code>true</code>, <code>phiward run --net</code> gets the
   network. On macOS it may also look up DNS; local unix sockets stay blocked (an SSH agent's or
   a shared connection's socket would log in to HPC as you). On Linux it gets the host network

@@ -1270,6 +1270,13 @@ relative to the project (<code>--show-paths</code> names it in full).</p>
 <p><strong>A settings file or folder that is a link</strong> (<code>.claude</code> or <code>.vscode</code> linked to a dotfiles
 repository). A session's writes would reach a file a later plain run reads. The message ends:
 in the project is a link; replace it with a real file or folder</p>
+<p><strong>A <code>[launch] write_to</code> folder the session may not write</strong> (a link, a file, a folder above or
+inside a protected path, your home or a dot-folder in it, a <code>PATH</code> folder, the spool, a
+<code>[broker] write_to</code> folder). The message names the entry and why, and ends:
+; fix or remove it in [launch] write_to of the user config</p>
+<p>An entry that does not exist is skipped with a NOTE. With a listed folder, <code>--tool claude</code> gets
+<code>--add-dir</code> after your arguments, so a <code>--</code> among them is refused with the message below, on
+every platform. Details: <a href="../launch/#more-folders-to-write">launch.md</a>.</p>
 <p><strong>A wrapper, a shim or an old Claude Code</strong> (<code>module load</code> scripts, asdf, mise, volta, a site
 <code>claude</code> script). Launch needs Claude Code's own program, at the version whose hooks it writes,
 and never starts a script to ask. The step:
@@ -1299,7 +1306,7 @@ sockets, and launch passes its own <code>--settings</code>, last. So launch refu
 (put them in managed settings, or in launch's trusted copy with <code>phiward carryover add FILE --as
 settings.json --tool claude</code>), Claude Code commands such as <code>claude mcp</code> and <code>claude doctor</code>
 (run them outside launch), and a <code>--</code> among Claude Code's arguments:
-launch passes --settings to Claude Code as the last arguments, so <code>--</code> cannot be among them: drop the <code>--</code> and put the prompt last</p>
+launch passes --add-dir (for [launch] write_to) or --settings to Claude Code as the last arguments, so <code>--</code> cannot be among them: drop the <code>--</code> and put the prompt last</p>
 <p>Doctor names the mode launch would use (Landlock or inner), and checks your settings for the
 inner mode.</p>
 <p><strong>The login.</strong> Each session starts with a fresh config folder, so Claude Code asks you to log in
