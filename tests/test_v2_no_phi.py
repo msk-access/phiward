@@ -135,6 +135,50 @@ def test_a_call_outside_the_listed_project_is_not_relaxed(opened, monkeypatch):
     assert code == 2, text
 
 
+def test_a_root_missing_from_deny_read_keeps_the_refusal(tree, monkeypatch):
+    # wired for T/phi, then T/pub becomes a root without install: denyRead lacks it
+    protect(tree, [], best_effort=False)
+    _wired(tree, enableWeakerNestedSandbox=True)
+    protect(tree, [], root="pub", best_effort=False)
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+    _refused_blanket(tree, monkeypatch, "python3 -c 'open(\"/fa\"+\"ke\")'")
+
+
+def test_a_startup_folder_in_allow_write_keeps_the_refusal(tree, monkeypatch):
+    protect(tree, [], best_effort=False)
+    want = _wired(tree)
+    want["sandbox"]["filesystem"].setdefault("allowWrite", []).append(
+        str(tree / "home" / "Library" / "LaunchAgents"))
+    (tree / "home" / ".claude" / "settings.json").write_text(json.dumps(want))
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
+def test_a_settings_file_that_does_not_parse_keeps_the_refusal(opened, monkeypatch):
+    # the user file (a project file that does not parse is refused earlier, as a redirect)
+    tree = opened
+    (tree / "home" / ".claude" / "settings.json").write_text("{")
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
+def test_a_disabled_file_system_sandbox_keeps_the_refusal(tree, monkeypatch):
+    protect(tree, [], best_effort=False)
+    want = _wired(tree)
+    want["sandbox"]["filesystem"]["disabled"] = True
+    (tree / "home" / ".claude" / "settings.json").write_text(json.dumps(want))
+    _list(tree / "repo")
+    _refused_blanket(tree, monkeypatch)
+
+
+def test_another_shell_tool_is_not_relaxed(opened, monkeypatch):
+    tree = opened
+    _list(tree / "repo")
+    code, text = _hook(tree, monkeypatch, "ls", tool="mcp__srv__run_command")
+    assert code == 2, text
+
+
 def _note(tree, monkeypatch, capsys, project):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"cwd": str(project)})))
