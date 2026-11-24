@@ -2180,7 +2180,8 @@ and the derived protected folders. Details and limits:
     its path, is inside or above a protected path, a derived folder or a pattern match, is <code>/</code>,
     the home folder or above it, a dot-folder of the home folder, in <code>~/Library</code>, holds or is a
     <code>PATH</code> folder, holds a phiward file (the config, the spool), or overlaps a <code>[broker]
-    write_to</code> folder or a credential.</li>
+    write_to</code> folder or a credential. On Linux that refuses <code>/tmp</code>: it holds the default
+    Kerberos ticket cache.</li>
 <li>Not <code>[broker] write_to</code>: that one is the gateway's grant to write <em>inside</em> roots, hidden
     from a session; this one is what the session itself writes, and may never overlap a root or
     a <code>[broker] write_to</code> folder. What a session may do there: <a href="../launch/#more-folders-to-write">launch.md</a>.</li>

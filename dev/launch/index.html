@@ -1582,7 +1582,8 @@ List those folders in your user config (a repo's <code>.phiward.toml</code> cann
     <code>~/.claude</code>, <code>~/.phiward</code>), in <code>~/Library</code>, or a folder that is, holds or is inside a
     <code>PATH</code> folder (files there run later, outside launch);</li>
 <li>a folder that holds a phiward file (the config, its code) or is the spool;</li>
-<li>a <code>[broker] write_to</code> folder, or one that holds or is inside one, or a credential.</li>
+<li>a <code>[broker] write_to</code> folder, or one that holds or is inside one, or a credential;</li>
+<li><code>/tmp</code> (Linux): it holds the default Kerberos ticket cache, a credential.</li>
 </ul>
 <p>The hook does not check them, so a bad entry stops only launch. <code>phiward doctor</code> gives the
   same refusals.
