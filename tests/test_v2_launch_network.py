@@ -1379,9 +1379,14 @@ except OSError as e:
 def test_17_a_failed_fd_pass_refuses_the_connection_and_dials_nothing(server):
     """The helper's relay on its own (outside bwrap): the launcher's end answers `n` without a
     descriptor; the tool's connection is closed unanswered and nothing is dialled directly."""
-    from phiward import netproxy, wholetool
+    from phiward import wholetool
     mine, theirs = socket.socketpair()
-    port = netproxy.random_port()
+    # outside bwrap the relay binds on the host's 127.0.0.1, not a namespace of its own: a
+    # random_port() there can be in use or in TIME_WAIT (EADDRINUSE on CI); the kernel's pick for
+    # port 0 is not
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
     answered = []
 
     def launcher():
