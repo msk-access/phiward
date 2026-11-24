@@ -5,9 +5,9 @@ and hooks), and every child it starts, is decided by the kernel, not by a path c
 users see is HELP below; this docstring is for developers.
 
 Writes are denied by default. They are allowed only in the project, the `[launch] write_to`
-folders, this session's own run folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
-a link on its path, is not used. Inside the project, files that other tools run later stay
-read-only: git's control files and `.git` entries, and the one list
+folders, this session's own run folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A
+write place that is a link, or has a link on its path, is not used. Inside the project, files
+that other tools run later stay read-only: git's control files and `.git` entries, and the one list
 (`claude_settings.RUNS_LATER_DIRS`, `RUNS_LATER_FILES`) as a whole, at any depth, with the targets
 of the links inside them. The tool and a wrapped MCP server differ only in the whole `.git`
 folder. On Linux, `.claude`, `.vscode` and `.idea` are made at start and `.mcp.json` as a
