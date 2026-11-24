@@ -39,7 +39,7 @@ in the project is a link; replace it with a real file or folder
 **A wrapper, a shim or an old Claude Code** (`module load` scripts, asdf, mise, volta, a site
 `claude` script). Launch needs Claude Code's own program, at the version whose hooks it writes,
 and never starts a script to ask. The step:
-run Claude Code's own program, not a wrapper or a shim (`claude --version` must print 2.1.295 (Claude Code) or newer), or use --tool generic for another tool
+run Claude Code's own program directly, not a wrapper or a shim (`claude --version` must print 2.1.295 (Claude Code) or newer), or use --tool generic for another tool
 
 On Linux, the JavaScript (npm) build is refused too: it does not carry Claude Code's seccomp
 filter. Update to the native build: `claude install`.

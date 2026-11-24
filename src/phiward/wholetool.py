@@ -282,7 +282,7 @@ PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a proj
 LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
 DASH_DASH = ("launch passes --settings to Claude Code as the last arguments, so `--` cannot be "
              "among them: drop the `--` and put the prompt last")
-CLAUDE_STEP = ("run Claude Code's own program, not a wrapper or a shim (`claude --version` must "
+CLAUDE_STEP = ("run Claude Code's own program directly, not a wrapper or a shim (`claude --version` must "
                "print " + claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
                + " (Claude Code) or newer), or use --tool generic for another tool")
 LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
