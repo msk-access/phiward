@@ -275,6 +275,21 @@ class LaunchError(Exception):
     pass
 
 
+# refusals and notes that `phiward doctor` gives too (doctor.launch_report), each with its step
+NO_PATHS = ("no protected paths are configured: there is nothing to confine; run "
+            "`(cd ~ && phiward setup)` first")
+PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a project folder"
+LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
+DASH_DASH = ("launch passes --settings to Claude Code as the last arguments, so `--` cannot be "
+             "among them: drop the `--` and put the prompt last")
+CLAUDE_STEP = ("run Claude Code's own program, not a wrapper or a shim (`claude --version` must "
+               "print " + claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
+               + " (Claude Code) or newer), or use --tool generic for another tool")
+LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
+              "every time; to log in once, run `claude setup-token` and set "
+              "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
+
+
 # -- safe file work in agent-writable folders -----------------------------------
 
 
@@ -1877,8 +1892,22 @@ def _npm_version(script: str, places: Sequence[str]) -> Optional[Tuple[int, int,
     return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
 
 
+def _native_version(real: str, env: Optional[Dict[str, str]]) -> Optional[Tuple[int, int, int]]:
+    """What the native binary `real` says it is (`--version`, from /), or None."""
+    try:
+        out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=20, env=env,
+                             cwd="/").stdout
+    except (OSError, subprocess.SubprocessError, ValueError):
+        out = ""
+    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
 def claude_version_problem(tool: str, places: Sequence[str],
-                           env: Optional[Dict[str, str]] = None) -> str:
+                           env: Optional[Dict[str, str]] = None,
+                           ask: Optional[Callable[[str, Optional[Dict[str, str]]],
+                                                  Optional[Tuple[int, int, int]]]] = None) -> str:
     """Why `tool` cannot run under `--tool claude`, or "": it is not a Claude Code of
     VERSION_HOOK_ARGS or newer. The launched hooks are in exec form (`args`) with `onFailure`,
     and an older one would run their Python alone. Only a native binary outside the session's
@@ -1886,12 +1915,10 @@ def claude_version_problem(tool: str, places: Sequence[str],
     A script (an npm build) is never started: its interpreter is found on PATH, and a shim
     reads the project's config, so either could be the session's. Its version is read from
     its npm package's package.json. No Claude Code version (another program, a wrapper, a
-    shim) is a refusal too."""
+    shim) is a refusal too. `ask` gives a native binary's version in place of starting it
+    (doctor, which starts nothing here)."""
     need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
-    unknown = (f"`{tool}` gives no Claude Code version, and --tool claude needs Claude Code "
-               f"{need} or newer: start Claude Code's own program directly (the native binary, "
-               "or the npm package's cli.js; not a wrapper or a shim), or use --tool generic "
-               "for another tool")
+    unknown = f"`{tool}` gives no Claude Code version: {CLAUDE_STEP}"
     real = os.path.realpath(tool)
     for p in places:
         if pathid.inside(real, os.path.realpath(p)):
@@ -1913,16 +1940,9 @@ def claude_version_problem(tool: str, places: Sequence[str],
         if version is None:
             return unknown
     else:
-        try:
-            out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
-                                 capture_output=True, text=True, timeout=20, env=env,
-                                 cwd="/").stdout
-        except (OSError, subprocess.SubprocessError, ValueError):
-            out = ""
-        m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
-        if not m:
+        version = (ask or _native_version)(real, env)
+        if version is None:
             return unknown
-        version = (int(m.group(1)), int(m.group(2)), int(m.group(3)))
     if version < claude_settings.VERSION_HOOK_ARGS:
         return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
                 "which launch needs (an older one would not run phiward's hooks); update "
@@ -1978,6 +1998,18 @@ def _shown_url(url: str) -> str:
     return netproxy._one_line(f"{u.scheme}://{host}" if u.scheme else host or u.path)
 
 
+def base_url_refusal(url: str, allow: Sequence[str]) -> str:
+    """Why a session could not reach the model at ANTHROPIC_BASE_URL `url` (the proxy's own
+    rules), with the step, or ""."""
+    why = netproxy.base_url_problem(url, allow)
+    if not why:
+        return ""
+    step = ("list its range in [launch] private_networks (user config), or run Claude Code in "
+            "Mode A") if why.endswith(netproxy.PRIVATE_WHY) else "run Claude Code in Mode A"
+    return (f"ANTHROPIC_BASE_URL ({_shown_url(url)}) {why}; a launch session reaches only HTTPS "
+            f"on public addresses and listed private ranges: {step}")
+
+
 def _start_proxy(cfg: config.Config, env: Dict[str, str], pair: bool = False) -> "netproxy.Proxy":
     try:
         return netproxy.start(env, cfg.launch_private_networks, pair)
@@ -1996,7 +2028,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     if cfg.problem:
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
     if not cfg.has_protected_paths:
-        raise LaunchError("no protected paths are configured: there is nothing to confine")
+        raise LaunchError(NO_PATHS)
     from phiward import phicheck
     masking = None if server else phicheck.check(cfg, cwd)
     if masking and masking.failed:
@@ -2011,8 +2043,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
                           "project folder")
     why = _project_problem(project, env)
     if why:
-        raise LaunchError(f"this folder cannot be the project ({why}); start the tool in a "
-                          "project folder")
+        raise LaunchError(PROJECT_STEP.format(why))
     entry = _path_entry_inside(project, env)
     if entry:  # this is the project folder: the step is to take the entry off PATH
         raise LaunchError(_path_step(entry, env))
@@ -2020,8 +2051,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     # plain run reads: refused
     for rel in LINK_REFUSED:
         if os.path.islink(os.path.join(project, rel)):
-            raise LaunchError(f"{rel} in the project is a link; replace it with a real file or "
-                              "folder")
+            raise LaunchError(LINK_STEP.format(rel))
     if not server:  # a wrapped MCP server's folder is not the agent's project
         from phiward import projectscan
         scanned = projectscan.scan(cfg, project, projectscan.deadline())
@@ -2043,15 +2073,9 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     claude = adapter.name == "claude" and not server
     if claude and env.get("ANTHROPIC_BASE_URL"):
         # the proxy's own rules, once: a model the session cannot reach is said at the start
-        url = env["ANTHROPIC_BASE_URL"]
-        why = netproxy.base_url_problem(url, cfg.launch_private_networks)
+        why = base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
         if why:
-            step = ("list its range in [launch] private_networks (user config), or run Claude "
-                    "Code in Mode A") if why.endswith(netproxy.PRIVATE_WHY) else \
-                "run Claude Code in Mode A"
-            raise LaunchError(f"ANTHROPIC_BASE_URL ({_shown_url(url)}) {why}; a launch session "
-                              "reaches only HTTPS on public addresses and listed private ranges: "
-                              f"{step}")
+            raise LaunchError(why)
     # this project's transcripts, for --resume and -c: one folder, by a name of its own
     transcripts = hashlib.sha256(os.fsencode(project)).hexdigest()[:16] if claude else ""
     folder = tool_folder(adapter, env)
@@ -2068,9 +2092,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         raise LaunchError(f"carry-over: {exc}")
     if adapter.name == "claude" and not any(env.get(k) for k in (
             "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
-        sys.stderr.write("phiward launch: each session starts with a fresh config folder, so "
-                         "Claude Code asks you to log in every time; to log in once, run `claude "
-                         "setup-token` and set CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)\n")
+        sys.stderr.write(f"phiward launch: {LOGIN_NOTE}\n")
     if claude and not cfg.launch_keep_transcripts and _asks_resume(argv[1:]):
         sys.stderr.write("phiward launch: NOTE: keep_transcripts is off, so this session starts "
                          "with no history and --resume and --continue find nothing from earlier "
@@ -2189,8 +2211,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             # whatever runs (claude, a versioned binary, a wrapper), the flag goes last; after a
             # `--` it would be read as an argument, so the start is refused
             if "--" in argv[1:]:
-                raise LaunchError("launch passes --settings to Claude Code as the last "
-                                  "arguments, so `--` cannot be among them")
+                raise LaunchError(DASH_DASH)
             argv = _without_launch_settings(argv)
             argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
         else:

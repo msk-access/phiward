@@ -5,8 +5,9 @@ every session knows, before its first refusal, that protected data goes through 
 that the gateway is the intended route, not a way around the guards. It names no protected
 path: only the rules, and the HPC hosts and programs the operator listed. When the project scan
 (within its 2 s budget) finds subject IDs in the project's files, it says so by kind and count
-(not under `phiward launch`, which scanned the project before the session).
-It never fails a session: on any error it prints nothing.
+(not under `phiward launch`, which scanned the project before the session). It names the typical
+limits of a session (credentials for git, `@file` mentions, package caches) with the way around
+each, so the agent does not retry them. It never fails a session: on any error it prints nothing.
 """
 # Without this note, a test session called `phiward run` "a way around the protection".
 
@@ -45,6 +46,7 @@ def note(cfg: config.Config, project: str = "") -> str:
             "copy` to or from the approved remotes. Job scripts must also write aggregates.")
     lines.append(f"{len(lines) - 1}. If `phiward run` says no broker is running, or a request is refused for a "
                  "reason only the operator can change, stop and ask the operator.")
+    lines.append(f"{len(lines) - 1}. {_limits_line()}")
     broken = _selfcheck_line()
     if broken:
         lines.append(f"{len(lines) - 1}. {broken}")
@@ -52,6 +54,33 @@ def note(cfg: config.Config, project: str = "") -> str:
     if found:
         lines.append(f"{len(lines) - 1}. {found}")
     return "\n".join(lines)
+
+
+LIMITS_GIT = ("git push, pull and fetch that need the operator's SSH key or keychain run in the "
+              "operator's own terminal")
+LIMITS_MENTIONS = "`@file` mentions attach nothing here: read the file with the Read tool"
+LIMITS_CACHES = ("the pip, uv and npm caches outside the project are read-only: use `pip install "
+                 "--no-cache-dir`, or set PIP_CACHE_DIR=$TMPDIR/pip, UV_CACHE_DIR=$TMPDIR/uv and "
+                 "npm_config_cache=$TMPDIR/npm")
+
+
+def _limits_line() -> str:
+    """What typical work meets in this session, each with its way around: credentials are not
+    reachable, `@file` mentions are off (when the settings turn them off), and package caches
+    are read-only in Claude Code's sandbox (not under `phiward launch`, which gives the session
+    caches of its own)."""
+    parts = [LIMITS_GIT]
+    from phiward import install
+    if os.environ.get(install.MENTIONS_OFF) == "1":
+        parts.append(LIMITS_MENTIONS)
+    try:
+        from phiward import wholetool
+        launched = wholetool.already_confined(dict(os.environ))
+    except Exception:  # noqa: BLE001 - a note must never stop a session
+        launched = False
+    if not launched:
+        parts.append(LIMITS_CACHES)
+    return "Known limits of this session, each with its way around: " + "; ".join(parts) + "."
 
 
 def _scan_line(cfg: config.Config, project: str) -> str:

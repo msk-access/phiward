@@ -53,6 +53,7 @@ nav:
   - Use phiward:
       - Quick start: quickstart.md
       - Daily use: daily-use.md
+      - "Refusals and the way around": refusals.md
       - HPC: hpc.md
       - Plugins: plugins.md
       - Agents with nobody watching: unattended.md

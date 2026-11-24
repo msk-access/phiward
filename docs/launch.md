@@ -94,7 +94,9 @@ phiward launch --tool claude
   interpreter, or a shim's config, could be the session's. It reads the version from the
   `package.json` of the script's npm package (`@anthropic-ai/claude-code`). A tool that gives
   no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
-  start Claude Code's own program directly, or use `--tool generic` for another tool.
+  run Claude Code's own program (`claude --version` must print 2.1.295 (Claude Code) or newer),
+  or use `--tool generic` for another tool. `phiward doctor` warns about a wrapper before the
+  start ([refusals.md](refusals.md)).
 
 ## The project scan
 
@@ -367,7 +369,7 @@ when in doubt, reinstall: the step names the command for the tool that installed
     `--settings` (`sandbox.enabled`, `sandbox.failIfUnavailable`, and
     `sandbox.allowUnsandboxedCommands` false), passed as the last arguments of whatever
     `--tool claude` runs (`claude`, a versioned binary, a wrapper); a `--` among the arguments
-    stops the start. Claude Code keeps only one `--settings`, so your own stops the start too,
+    stops the start (drop the `--` and put the prompt last). Claude Code keeps only one `--settings`, so your own stops the start too,
     unless it says just the same (the file `install` writes for `claude --settings`).
     Under `launch`, Claude Code reads a config folder of its own, not `~/.claude`: put other
     settings in managed settings, or add a `settings.json` with `phiward carryover add FILE

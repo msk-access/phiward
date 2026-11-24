@@ -593,6 +593,9 @@ A repo's `.phiward.toml` cannot clear it.
 
 Fix each line that starts with PROBLEM or WARNING (`doctor` exits with 0 even when there are
 WARNING lines). It also warns when the current folder is inside or above a protected path.
+Its section "launch (Mode B)" runs the start checks of `phiward launch` here, without starting
+anything. What each typical refusal means, and the way around it:
+[refusals.md](refusals.md).
 
 `doctor` shows the protected paths only as counts; add `--show-paths` to list them. It always
 names the files it reads, and a PROBLEM line can quote a path from the config. Run it in your

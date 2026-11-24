@@ -492,7 +492,7 @@ def test_10_a_plain_request_names_https_in_its_status_line(make_proxy):
         line, _ = ask(p, "http://pub.example/", method="GET")
     finally:
         dial.close()
-    assert _status(line) == 405 and b"https://" in line, line
+    assert _status(line) == 405 and "https://" in line, line
 
 
 def test_10_bytes_after_a_connect_go_only_to_the_checked_host(make_proxy):

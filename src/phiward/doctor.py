@@ -703,7 +703,9 @@ Options:
 Show the config in force and whether it loads, and what may turn the guards off: the
 confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
 MCP servers. On Linux it also says when `phiward launch` cannot start because the session
-cannot have a network of its own (no network namespaces). It reads settings files and never writes them. Run it in the project folder.
+cannot have a network of its own (no network namespaces). Its section "launch (Mode B)" runs
+the start checks of `phiward launch` in this folder, without starting anything, and names the
+step for each (docs/refusals.md). It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
 
 The project scan reads the project's files and file names for subject and sample IDs outside
@@ -831,9 +833,7 @@ def main(argv: List[str]) -> int:
         from phiward import paths
         rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(cwd)
     if rel:
-        print(f"WARNING: this folder is {rel} a protected path: its commands are refused or "
-              "denied, except gateway calls (phiward run|copy). Run the agent in a project "
-              "folder.")
+        print(relation_line(rel))
     from phiward import broker
     spool = config.spool_dir()
     where = broker.running(spool)
@@ -869,6 +869,8 @@ def main(argv: List[str]) -> int:
     elif st and (st.get("cache") != cfg.cache_dir or set(st.get("roots", [])) != set(cfg.user_roots)):
         print("WARNING: the broker uses another cache folder or roots than this shell (check "
               "XDG_CACHE_HOME on both sides, and restart the broker after a config change)")
+    for line in broker_path_lines(cfg, st):
+        print(line)
     from phiward import fsinfo, pin
     if cfg.has_protected_paths:
         pinned = set(pin.read_pins())
@@ -1071,9 +1073,129 @@ def main(argv: List[str]) -> int:
                           for a in allow):
             say("  NOTE: sandbox.filesystem.allowWrite does not hold the spool folder; "
                   "gateway calls cannot reach the broker from the sandbox.")
+        if ok:
+            for line in package_cache_lines():
+                say(line)
     for line in network_report(project, home, cfg):
         say(line)
+    print("launch (Mode B), for a session started with `phiward launch` here:")
+    for line in launch_report(cwd, home, cfg):
+        print(line)
     return 0
+
+
+def relation_line(rel: str) -> str:
+    """The WARNING for a folder inside or above a protected path; above one, Grep and Glob from
+    it are refused too (they would list the root), so it names the way: a subfolder."""
+    from phiward import paths
+    return (f"WARNING: this folder is {rel} a protected path: its commands are refused or denied, "
+            "except gateway calls (phiward run|copy). Run the agent in a project folder." +
+            (" Grep and Glob from this folder are refused too: give them a subfolder that holds "
+             "no protected folder." if rel == paths.ABOVE else ""))
+
+
+def broker_path_lines(cfg: config.Config, status: Dict[str, Any]) -> List[str]:
+    """A WARNING for the bare names of `[broker] commands` that the running broker's PATH (its
+    status file) does not find: `phiward run` refuses them as "not on the broker's PATH"."""
+    if not status or not cfg.command_lists or not isinstance(status.get("path"), str):
+        return []
+    from phiward import broker
+    missing = sorted({p[len("missing:"):] for p in broker.listed_programs(cfg, status["path"])
+                      if p.startswith("missing:")})
+    if not missing:
+        return []
+    return [f"WARNING: {len(missing)} program(s) of [broker] commands are not on the broker's "
+            "PATH, so `phiward run` refuses them: " + ", ".join(f"`{n}`" for n in missing[:10])
+            + ". The operator starts the broker again from a terminal where they work (for "
+            "example after `conda activate`), or lists them by their full path."]
+
+
+CACHE_NOTE = (
+    "NOTE: Claude Code's sandbox keeps the package caches outside the project read-only (pip: "
+    "~/.cache/pip, or ~/Library/Caches/pip on macOS; uv: ~/.cache/uv; npm: ~/.npm), so an "
+    "install that writes its cache fails with 'Operation not permitted'. Use `pip install "
+    "--no-cache-dir`, or set PIP_CACHE_DIR, UV_CACHE_DIR and npm_config_cache to folders under "
+    "$TMPDIR. phiward adds no allowWrite for them: a cache a session writes is code a later run "
+    "executes.")
+
+
+def package_cache_lines() -> List[str]:
+    """Mode A: the package caches the sandbox keeps read-only, and the way around (docs only:
+    no allowWrite, decided)."""
+    return ["  " + CACHE_NOTE]
+
+
+RUNS_LATER_NOTE = (
+    "NOTE: in a launch session the files other tools run later are read-only, at any depth: "
+    ".claude, .vscode, .idea, .Rprofile, .Renviron, .mcp.json and the like (a write gets "
+    "'Operation not permitted'). Edit them in a plain terminal, or `phiward carryover add` for "
+    "Claude Code's own files; run renv::init() once outside launch.")
+
+
+def launch_report(project: str, home: str, cfg: config.Config,
+                  env: Optional[Dict[str, str]] = None, platform: str = sys.platform) -> List[str]:
+    """`phiward launch` started in `project`: what its start would refuse, from the checks launch
+    itself runs (wholetool), and what a session there cannot do. It starts nothing: Claude Code's
+    build is judged from its files, and a native binary's version is the one doctor reads above
+    (`claude --version`); when that is unknown, only launch can tell."""
+    import shutil
+    from phiward import selfcheck
+    from phiward import wholetool as wt
+    env = dict(os.environ) if env is None else env
+    real = os.path.realpath(project)
+    out: List[str] = []
+
+    def refused(why: str) -> None:
+        out.append(f"  WARNING: launch would refuse to start here: {why}.")
+
+    why = wt._project_problem(real, env)
+    if why:
+        refused(wt.PROJECT_STEP.format(why))
+    entry = wt._path_entry_inside(real, env)
+    if entry:
+        refused(wt._path_step(entry, env))
+    for rel in wt.LINK_REFUSED:
+        if os.path.islink(os.path.join(real, rel)):
+            refused(wt.LINK_STEP.format(rel))
+    tool = shutil.which("claude", path=env.get("PATH") or os.defpath)
+    if tool:
+        known = claude_settings.claude_version() or claude_settings.VERSION_HOOK_ARGS
+        why = wt.claude_version_problem(tool, wt.write_places(real, env), env,
+                                        ask=lambda _real, _env: known)
+        if why:
+            refused(f"--tool claude: {why}")
+    if env.get("ANTHROPIC_BASE_URL"):
+        why = wt.base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
+        if why:
+            refused(why)
+    if platform.startswith("linux"):
+        abi = wt.landlock_abi()
+        if abi >= wt.UNIX_ABI:
+            out.append(f"  launch on Linux: Landlock ABI {abi}: a session reaches only the unix "
+                       "sockets it makes itself")
+        else:
+            out.append(f"  NOTE: launch on Linux (Landlock ABI {abi}, below {wt.UNIX_ABI}): "
+                       "--tool claude runs in the inner mode, where Claude Code's own sandbox "
+                       "blocks unix sockets. There launch refuses your own --settings (put them "
+                       "in managed settings or launch's trusted copy), a `--` among Claude Code's "
+                       "arguments (put the prompt last), and Claude Code commands such as `claude "
+                       "mcp` (run those outside launch).")
+            why = wt.inner_sandbox_reason(real, env)
+            if why:
+                refused(f"--tool claude: {why}")
+    if not any(env.get(k) for k in ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY",
+                                    "ANTHROPIC_AUTH_TOKEN")):
+        out.append(f"  NOTE: {wt.LOGIN_NOTE}.")
+    out.append("  " + RUNS_LATER_NOTE)
+    try:
+        installed = selfcheck.check_isolated()[0]
+    except Exception:  # noqa: BLE001 - doctor reports; it does not stop
+        installed = True  # selfcheck_lines says why it could not run
+    if not installed and env.get("PHIWARD_DEV") != "1":
+        out.append("  NOTE: this phiward is a source checkout or an editable install, which "
+                   "launch refuses: install it with uv tool or pipx, or set PHIWARD_DEV=1 to "
+                   "start from a checkout.")
+    return out
 
 
 def clean_start_problem() -> Optional[str]:
