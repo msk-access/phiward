@@ -55,6 +55,7 @@ says what it holds. By feature:
 | The sanitizer | test_sanitize, test_columns, test_v2_dates, test_v2_id_names, test_v2_subjects, test_entry_spellings |
 | `launch` (the whole tool in the kernel profile) | test_v2_w1, test_v2_w1b, test_v2_r1, test_v2_r1b, test_v2_view, test_v2_launch_races, test_v2_beta, test_macos_profile_mount_jobs, test_macos_launch_no_helper |
 | `launch`'s `[launch] write_to` folders (the key, the start checks and refusals, a missing entry, the read-only rules per folder on macOS and Linux, the shared scan budget, the start line, the end report, doctor, SIGHUP and SIGTERM, the record of an unfinished session, the broker's PATH filter and pseudonymize, `--add-dir`) | test_launch_write_to |
+| `launch --tool claude` and the operator's `--settings`: the file `install` writes is accepted by its content; one that says more or other, or does not parse, is refused | test_launch_install_settings |
 | `launch`'s network: the proxy (token, the address check, an upstream proxy, limits, refusals that name `[launch] private_networks` and the list at exit), the macOS profile's one port, Linux's network namespace and relay, the `ANTHROPIC_BASE_URL` check at start | test_v2_launch_network |
 | `launch`'s start step for a project folder on `PATH` (an activated `.venv`) | test_v2_launch_path_step |
 | The one-line step of each typical refusal, doctor's launch section, the session note's limits, doctor's Mode A notes (package caches, Grep above a root, programs not on the broker's PATH) | test_v2_refusal_next_steps |
