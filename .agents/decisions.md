@@ -191,6 +191,21 @@ decision, newest at the top of its section. Public text: no names, hosts or path
   counts, and the launch then runs its command directly, as on macOS. Any process may install such a filter on itself and its children, so the fingerprint is not a secret: forging it needs code running in the launcher or one of its ancestors, and such code could skip `launch` anyway.
   Any launch inside a session, also for another project, runs under the outer profile (that
   project's repo config is not applied), as on macOS.
+- **`[launch] write_to` folders are second projects for the kernel profile** (the operator,
+  2026-11-23). User config only; checked when launch starts, never by the hook (a missing
+  sibling disk must not stop the hook in every project). Each one gets the project's start
+  checks, the gateway's grant check, and no overlap with what a session may not read (a
+  `[broker] write_to` folder, credentials); then the project's read-only rules, scan and end
+  report. Decided with it:
+  - a listed folder inside the project is dropped (the project is written already); one inside
+    another listed folder is dropped, the outer kept;
+  - a missing entry is skipped with a NOTE and a doctor line; it adds no write place;
+  - no placeholders in a listed folder: what exists at the start is read-only; on Linux a
+    missing one can be made, and the end report names it ("It cannot be for every write
+    folder");
+  - launch adds `--add-dir D` for each folder to `--tool claude`;
+  - one shared 2 s scan budget for the project and every listed folder, the instruction files
+    of every folder first; those not read in time refuse.
 
 ## Turned down
 

@@ -7,6 +7,20 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
 
 ### Added
 
+- `[launch] write_to` (user config only): folders a `phiward launch` session may write besides
+  the project (a sibling repository, a shared output folder). launch checks each one when it
+  starts and refuses, naming the entry, for a file, a link, or a folder that overlaps a
+  protected path, a derived folder, a place where files run later (home, its dot-folders,
+  `~/Library`, `PATH`), a phiward file, the spool, a credential or a `[broker] write_to` folder.
+  A missing entry is skipped with a NOTE; one inside the project is dropped. Each folder gets
+  the project's rules: files that run later and git control files read-only (on Linux what
+  exists at the start; launch makes nothing there), the project scan in the same 2 s budget
+  (the instruction files of every folder first), and the end report under the folder's name.
+  launch names the folders at the start and in `--report` (`write_to`); `--tool claude` gets
+  `--add-dir D` for each; `phiward doctor` counts them and gives the same refusals. The
+  broker's `PATH` filter and `pseudonymize` treat them as agent-writable. SIGHUP and SIGTERM
+  now end the wait, not the launcher, so the end report still comes (exit 128 + the signal);
+  after a SIGKILL the next launch names the folders of the session that did not finish.
 - The masking check, and `[sanitize] examples` (user config only): made-up values in the form
   of your own rules (`FAKE-PT-0001` for `FAKE-PT-\d{4} => <SUBJECT>`), never real ones.
   `phiward doctor`, `phiward launch` and the broker at its start check that each value is fully

@@ -1395,10 +1395,11 @@ def agent_writable_anywhere(home: str) -> List[str]:
     """The folders the agent's sandbox may write in every project, as far as they are known
     without one (the broker's PATH): the spool, and the allowWrite and additionalDirectories
     entries of the managed and user settings that are absolute paths (a relative one would be
-    resolved against a project, which is not known here). Real paths. The temp folders are
+    resolved against a project, which is not known here), and the `[launch] write_to` folders of
+    the user config (`/` when that file cannot be read). Real paths. The temp folders are
     `_temp_roots`."""
     lv = levels(None, home)
-    roots = [config.spool_dir()]
+    roots = [config.spool_dir()] + config.launch_write_to_entries()
     for p in _paths(lv, "", home, None, "allowWrite", deny=False):
         cut = min([p.index(c) for c in "*?[" if c in p] or [len(p)])
         roots.append(p if cut == len(p) else os.path.dirname(p[:cut]))

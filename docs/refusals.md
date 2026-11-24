@@ -38,6 +38,15 @@ relative to the project (`--show-paths` names it in full).
 repository). A session's writes would reach a file a later plain run reads. The message ends:
 in the project is a link; replace it with a real file or folder
 
+**A `[launch] write_to` folder the session may not write** (a link, a file, a folder above or
+inside a protected path, your home or a dot-folder in it, a `PATH` folder, the spool, a
+`[broker] write_to` folder). The message names the entry and why, and ends:
+; fix or remove it in [launch] write_to of the user config
+
+An entry that does not exist is skipped with a NOTE. With a listed folder, `--tool claude` gets
+`--add-dir` after your arguments, so a `--` among them is refused with the message below, on
+every platform. Details: [launch.md](launch.md#more-folders-to-write).
+
 **A wrapper, a shim or an old Claude Code** (`module load` scripts, asdf, mise, volta, a site
 `claude` script). Launch needs Claude Code's own program, at the version whose hooks it writes,
 and never starts a script to ask. The step:

@@ -91,6 +91,7 @@ class _Scan:
         self.skipped: Counter = Counter()
         self.files = 0
         self.found: List[Tuple[int, int, str, str]] = []  # (rank, size, path, rel) of files
+        self._top: Optional[List[os.DirEntry]] = None
 
     def over(self) -> None:
         if self.until is not None and time.monotonic() > self.until:
@@ -133,10 +134,23 @@ class _Scan:
         before anything else; then every other name, breadth first; then the other files'
         content, the smallest first (a copied table is small or medium; a large head is
         slow)."""
-        top = self.listing(self.top)
-        for part in ([e for e in top if e.name in FIRST], [e for e in top if e.name not in FIRST]):
-            self.names(part)
-            self.contents()
+        self.walk_first()
+        self.walk_rest()
+
+    def top_entries(self) -> List[os.DirEntry]:
+        if self._top is None:
+            self._top = self.listing(self.top)
+        return self._top
+
+    def walk_first(self) -> None:
+        """The instruction files (FIRST), names and content."""
+        self.names([e for e in self.top_entries() if e.name in FIRST])
+        self.contents()
+
+    def walk_rest(self) -> None:
+        """Everything else, names first."""
+        self.names([e for e in self.top_entries() if e.name not in FIRST])
+        self.contents()
 
     def names(self, entries: List[os.DirEntry]) -> None:
         queue: collections.deque = collections.deque()
@@ -267,17 +281,21 @@ def _read(fd: int, n: int) -> bytes:
     return b"".join(parts)
 
 
-def scan(cfg: config.Config, project: str, until: Optional[float] = None) -> Result:
+def scan(cfg: config.Config, project: str, until: Optional[float] = None,
+         part: Optional[str] = None) -> Result:
     """The project scan of `project` under `cfg`, until the `time.monotonic()` value `until`
-    (None: no limit). Never raises: anything it cannot decide is an error."""
+    (None: no limit). `part`: "first" reads only the instruction files (FIRST), "rest" all the
+    others, None both (launch reads the first part of every folder before any rest, under one
+    budget). Never raises: anything it cannot decide is an error."""
     try:
         san = sanitize.subject_sanitizer(cfg)
         if not (san.path_rules or san.id_rules):
             return Result([], {}, 0, True, "", off=True)
         s = _Scan(san, os.path.realpath(project), cfg, until)
+        walk = {None: s.walk, "first": s.walk_first, "rest": s.walk_rest}[part]
         complete = True
         try:
-            s.walk()
+            walk()
         except _Stop:
             complete = False
         hits = [h[1:] for h in sorted(s.hits)]  # the instruction files first, then by path
