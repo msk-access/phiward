@@ -83,7 +83,7 @@ sockets, and launch passes its own `--settings`, last. So launch refuses your ow
 (put them in managed settings, or in launch's trusted copy with `phiward carryover add FILE --as
 settings.json --tool claude`), Claude Code commands such as `claude mcp` and `claude doctor`
 (run them outside launch), and a `--` among Claude Code's arguments:
-launch passes --settings to Claude Code as the last arguments, so `--` cannot be among them: drop the `--` and put the prompt last
+launch passes --add-dir (for [launch] write_to) or --settings to Claude Code as the last arguments, so `--` cannot be among them: drop the `--` and put the prompt last
 
 Doctor names the mode launch would use (Landlock or inner), and checks your settings for the
 inner mode.

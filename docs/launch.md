@@ -191,9 +191,9 @@ write_to = ["~/work/shared-results", "/data/me/scratch"]
   files on both platforms, as in the project; the report at the end names its `.git/` paths.
 - **The project scan reads each folder** with the project's rules and within the same 2 s:
   first the instruction files of the project and of every listed folder, then the rest of each
-  in turn. A finding in any folder refuses, naming the folder. Instruction files not read in
-  2 s refuse ("run phiward doctor, or make them smaller"); the rest not read gives the NOTE,
-  naming the folders not finished.
+  in turn. A finding in any folder refuses, naming the folder. A listed folder's instruction
+  files not read in 2 s refuse ("run phiward doctor, or make them smaller"); the project's own,
+  and the rest not read, give the NOTE, naming the folders not finished.
 - **`--tool claude` gets `--add-dir D`** for each folder, after your own arguments (so a `--`
   among them is refused). From an `--add-dir` folder Claude Code loads its skills (live), its
   commands and its subagents, `enabledPlugins` and `extraKnownMarketplaces` of its settings,
@@ -206,9 +206,11 @@ write_to = ["~/work/shared-results", "/data/me/scratch"]
 - **The end report** names what the session changed in each folder, under the folder's name.
   Each folder is walked at the start and at the end, up to 2 million entries: list a folder,
   not a whole disk.
-- **An abnormal end.** SIGHUP (the terminal closes) and SIGTERM still give the end report. After
-  a SIGKILL or a crash, the next launch names the folders of the session that did not finish:
-  read their files that run later and what it changed before you run anything there.
+- **An abnormal end.** SIGHUP (the terminal closes) and SIGTERM still give the end report (one
+  ignored when launch starts, as under `nohup`, stays ignored). After a signal, a SIGKILL or a
+  crash, the next launch names the folders of the session that did not finish (on macOS the
+  tool may outlive the launcher): read their files that run later and what it changed before
+  you run anything there.
 - **Not `[broker] write_to`.** That one is the gateway's grant to write inside protected roots,
   which a session cannot read; this one is what the session itself writes. The two may never
   overlap ([configuration.md](configuration.md#launch)).

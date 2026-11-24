@@ -19,8 +19,9 @@ All notable changes to phiward. Dates are UTC. Versions follow semantic versioni
   launch names the folders at the start and in `--report` (`write_to`); `--tool claude` gets
   `--add-dir D` for each; `phiward doctor` counts them and gives the same refusals. The
   broker's `PATH` filter and `pseudonymize` treat them as agent-writable. SIGHUP and SIGTERM
-  now end the wait, not the launcher, so the end report still comes (exit 128 + the signal);
-  after a SIGKILL the next launch names the folders of the session that did not finish.
+  now end the wait, not the launcher, so the end report still comes (exit 128 + the signal;
+  one ignored at the start, as under `nohup`, stays ignored); after such a signal, a SIGKILL
+  or a crash the next launch names the folders of the session that did not finish.
 - `[no_phi] folders` (user config only): exact folders you are sure hold no PHI. In Mode A, a
   session whose project is a listed folder gets the text check of `[shell] best_effort` for
   Bash and Monitor, in place of the refusal, when only the sandbox openers (on macOS,

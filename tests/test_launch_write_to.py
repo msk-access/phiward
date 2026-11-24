@@ -782,7 +782,8 @@ def test_sigterm_and_sighup_still_give_the_exit_report(tree, sig):
 
 def test_an_inherited_ignored_sighup_stays_ignored(tree):
     code, err, rec = _signalled(tree, signal.SIGHUP, ignore=True, then_kill_tool=True)
-    assert code == -signal.SIGKILL, (code, err)  # the tool's own end, not the signal's
+    # the tool's own end (sys.exit(-9) is status 247), not the signal's
+    assert code == -signal.SIGKILL & 0xFF, (code, err)
     assert not rec.exists(), "a normal end keeps the record"
 
 

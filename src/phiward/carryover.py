@@ -1567,7 +1567,7 @@ def _record_note(rfd: int, name: str) -> List[str]:
 
 
 def drop_record(base: str, run: str) -> List[str]:
-    """At the end of a session: its record moved away (after its report)."""
+    """At the end of a session: its record moved away (after its final report)."""
     name = os.path.basename(run) + RECORD
     if not run or not os.path.lexists(os.path.join(base, RUNS, name)):
         return []
@@ -1593,6 +1593,8 @@ def _clean_runs(base: str, current: str, finish) -> List[str]:
             except OSError:
                 continue
             if not stat.S_ISDIR(st.st_mode):  # a link or a file: nothing to read, only moved away
+                if n.endswith(RECORD):  # its run folder is gone: the launcher ended mid-report
+                    msgs += _record_note(rfd, n[:-len(RECORD)])
                 msgs += _plain_finish(base, n)
                 continue
             _movable(rfd, n)  # a session may have made its own folder unreadable
@@ -1839,7 +1841,7 @@ def project_report(changes: Changes, where: str = "") -> List[str]:
     if truncated:
         lines.append(f"phiward launch: WARNING: {place} has more entries than the report "
                      "compares; past that point only instructions, files that run later and "
-                     "settings were checked, and other files are not listed. Read the project "
+                     f"settings were checked, and other files are not listed. Read {place} "
                      "before you run anything outside launch.")
     return lines
 

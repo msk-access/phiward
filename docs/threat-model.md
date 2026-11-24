@@ -1395,8 +1395,8 @@ test`), or read the change before you run it outside.
   - `MODULEPATH` and `PYTHONPATH` entries inside a listed folder (or the project) are not
     checked the way `PATH` is: modules the session plants there are loaded later by your own
     `module load` or `python`. Keep those variables out of the folders the session writes;
-  - an abnormal end: SIGHUP and SIGTERM still give the end report; after a SIGKILL or a crash,
-    the next launch names the folders of the session that did not finish.
+  - an abnormal end: SIGHUP and SIGTERM still give the end report; after a signal, a SIGKILL or
+    a crash, the next launch names the folders of the session that did not finish.
 
 **Recorded limits (beta).** These stay open in the beta. Each one belongs to the class "files that
 run later" or to the macOS process model:

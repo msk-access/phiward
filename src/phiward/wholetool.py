@@ -282,8 +282,8 @@ NO_PATHS = ("no protected paths are configured: there is nothing to confine; run
             "`(cd ~ && phiward setup)` first")
 PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a project folder"
 LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
-DASH_DASH = ("launch passes --settings to Claude Code as the last arguments, so `--` cannot be "
-             "among them: drop the `--` and put the prompt last")
+DASH_DASH = ("launch passes --add-dir (for [launch] write_to) or --settings to Claude Code as the "
+             "last arguments, so `--` cannot be among them: drop the `--` and put the prompt last")
 CLAUDE_STEP = ("run Claude Code's own program directly (the native binary, or the npm package's "
                "cli.js), not a wrapper or a shim, or use --tool generic for another tool")
 # a `[launch] write_to` folder the session may not write, and one that does not exist
@@ -2157,7 +2157,7 @@ def _scan_tops(cfg: config.Config, project: str, listed: Sequence[str]) -> None:
     first the instruction files of every folder (Claude Code sends those at its start, from an
     --add-dir folder too), then the rest of each in turn. A finding or an error refuses, naming
     a listed folder; instruction files not read in time refuse; the rest not read in time is a
-    NOTE."""
+    NOTE, and so are the project's own instruction files (its rule before listed folders)."""
     from phiward import projectscan
     until = projectscan.deadline()
     tops = [project] + list(listed)
@@ -2172,13 +2172,19 @@ def _scan_tops(cfg: config.Config, project: str, listed: Sequence[str]) -> None:
                               + SCAN_FIX)
         done[top].append(r)
         return r
-    for top in tops:
-        if not judged(top, projectscan.scan(cfg, top, until, part="first")).complete:
-            raise LaunchError(f"the project scan could not read the instruction files of {top} "
-                              f"in {projectscan.BUDGET:g} s; run phiward doctor, or make them "
-                              "smaller")
     stopped: List[str] = []
     for top in tops:
+        if judged(top, projectscan.scan(cfg, top, until, part="first")).complete:
+            continue
+        if top == project:  # the project keeps its own rule: the NOTE below
+            stopped.append(top)
+            continue
+        raise LaunchError(f"the project scan could not read the instruction files of {top} "
+                          f"in {projectscan.BUDGET:g} s; run phiward doctor, or make them "
+                          "smaller")
+    for top in tops:
+        if top in stopped:
+            continue
         if stopped or not judged(top, projectscan.scan(cfg, top, until, part="rest")).complete:
             stopped.append(top)
     files = sum(r.files for rs in done.values() for r in rs)
@@ -2458,6 +2464,8 @@ class _Run:
         self.git: List[str] = []         # changed git control files (Linux)
         self.truncated = False           # the project scan was cut short
         self.write_to: List[str] = []    # the [launch] write_to folders the session wrote
+        self.record: Optional[Tuple[str, str]] = None  # (tool folder, run): its record's place
+        self.signalled = False           # SIGHUP or SIGTERM ended the wait
 
     def say(self, line: str) -> None:
         try:
@@ -2513,8 +2521,18 @@ def main(argv: List[str]) -> int:
         code = _launch(tool, memory, rest, env, run, report, server)
     finally:
         mcp_config.end_launch(record)
+    return _end(report, run, code)
+
+
+def _end(report: str, run: _Run, code: int) -> int:
+    """The final report, then the session's record moved away. The record stays after a signal
+    end (on macOS the tool may outlive the launcher) or when the report cannot be written: the
+    next start names its folders."""
     if report and not _write_report(report, run.data(code)):
         return code or 2
+    if run.record and not run.signalled:
+        for line in carryover.drop_record(*run.record):
+            run.say(line)
     return code
 
 
@@ -2571,6 +2589,8 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
         return 127 if isinstance(exc, ToolNotFound) else 126
     run.write_to = list(info.get("write_to", []))
     run.notes += info.get("notes", [])
+    if store.run:
+        run.record = (folder, store.run)  # moved away by `_end`, after the final report
     try:
         _raise_open_files()
         return _run_tool(cmd, child_env, fds, project, ready, store, folder, run, run.write_to)
@@ -2627,7 +2647,9 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
 
     def stop(signum: int, _frame: Any) -> None:
         raise SystemExit(128 + signum)
-    stops = {s: signal.signal(s, stop) for s in (signal.SIGHUP, signal.SIGTERM)}
+    # a signal the launcher inherited ignored (`nohup`) stays ignored
+    stops = {s: signal.signal(s, stop) for s in (signal.SIGHUP, signal.SIGTERM)
+             if signal.getsignal(s) != signal.SIG_IGN}
     try:
         quick = False
         try:
@@ -2644,6 +2666,7 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
                 signal.signal(signal.SIGINT, old)
         except SystemExit as exc:  # SIGHUP or SIGTERM: the tool is not signalled by phiward
             code = int(exc.code)  # type: ignore[arg-type]
+            run.signalled = True  # on macOS the tool may outlive this: the record stays
         finally:
             for s in stops:  # the report is not cut short by another one
                 signal.signal(s, signal.SIG_IGN)
@@ -2678,8 +2701,6 @@ def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project
         if code and quick and cmd[:2] == [confine.SANDBOX_EXEC, "-f"]:
             run.say(f"phiward launch: the tool exited with {code}; if sandbox-exec printed an "
                     "error above, run `phiward doctor`")
-        for line in carryover.drop_record(folder, store.run):  # after the report
-            run.say(line)
         return code
     finally:
         for s, h in stops.items():
