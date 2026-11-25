@@ -402,6 +402,11 @@ def main(fin: TextIO, fout: TextIO, ferr: TextIO) -> int:
         payload = json.load(fin)
         if not isinstance(payload, dict):
             raise ValueError("payload is not an object")
+        if payload.get("hook_event_name", "PreToolUse") != "PreToolUse":
+            # a tool hook wired to another event: refuse, never judge it as a tool call
+            ferr.write("phiward: `hook claude` is a PreToolUse hook; this event is refused. "
+                       "Run `phiward doctor`.\n")
+            return 2
         action, camel = to_action(payload)
         # Only Claude Code's own payload (it carries permission_mode) can be confined by Claude
         # Code's sandbox; Copilot runs the same hooks without it.

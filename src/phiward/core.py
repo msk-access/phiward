@@ -38,6 +38,10 @@ class Action:
     # why the shell is not confined, as the confinement check says it (the refusal names it)
     unconfined_why: str = ""
     unconfined_step: str = ""
+    # a shell call that is not confined only because `sandbox.excludedCommands` is not empty:
+    # it gets the text check of an unsandboxed call (as with `[shell] best_effort`), not the
+    # blanket refusal (unconfined_why and unconfined_step then name the entry's file and step)
+    text_checked: bool = False
     # For a shell tool other than Bash and Monitor: why its input is not the one exact form of
     # a command (adapters/claude.exact_command), or "" when it is
     shape: str = ""

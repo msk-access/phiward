@@ -11,7 +11,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from phiward import claude_settings, config, install, pathid
+from phiward import claude_settings, config, confine, install, pathid
 
 
 def _hook_words(h: Dict[str, Any]) -> List[str]:
@@ -27,20 +27,26 @@ _PYTHON_NAME = re.compile(r"python(?:3(?:\.\d+)?t?)?")
 
 def hook_form(h: Dict[str, Any]) -> str:
     """Which phiward hook an entry is, by its exact shape only: "isolated" (what
-    `install --user` writes: `install.isolated_command`), "launcher" (an older user form: an
-    absolute `.../phiward hook claude`, or a Python with `-I` and no clean-up of the loader
-    variables), "project" (`install --project` and the plugin: phiward by name), or "" (not
+    `install --user` writes: `install.hook_entry`, or the one `/bin/sh` line an earlier phiward
+    wrote, with this install's own Python), "launcher" (an older user form: an absolute
+    `.../phiward hook claude`, a Python with `-I` and no clean-up of the loader variables, or
+    another environment's Python), "project" (`install --project`: phiward by name), or "" (not
     phiward's guard, whatever it mentions; not a command hook; not run by sh)."""
     if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash"):
         return ""
+    py = install.hook_python(h)
+    if py:
+        if not _PYTHON_NAME.fullmatch(os.path.basename(py)):
+            return ""
+        return "isolated" if _same_folder(py, sys.executable) else "launcher"
     if h.get("args"):
         # the exec form an older phiward wrote with its shell prefix: the same isolated command
-        py = install.isolated_python(install._entry_text(h))
+        py = install.shell_form_python(install._entry_text(h))
         return "isolated" if py and _PYTHON_NAME.fullmatch(os.path.basename(py)) else ""
     command = str(h.get("command", ""))
     if command == install.PROJECT_HOOK or command in install.OLD_PROJECT_HOOKS:
         return "project"
-    py = install.isolated_python(command)
+    py = install.shell_form_python(command)
     if py:
         if not _PYTHON_NAME.fullmatch(os.path.basename(py)):
             return ""
@@ -69,12 +75,80 @@ def _same_folder(a: str, b: str) -> bool:
 
 def _program_there(h: Dict[str, Any]) -> bool:
     import shutil
-    first = install.isolated_python(str(h.get("command", ""))) or (_hook_words(h) or [""])[0]
+    py = install.hook_python(h)
+    if py:  # the script and the Python it runs
+        return all(os.path.isfile(p) and os.access(p, os.X_OK)
+                   for p in (str(h["command"]), py))
+    first = install.shell_form_python(str(h.get("command", ""))) or (_hook_words(h) or [""])[0]
     if h.get("command") in (install.PROJECT_HOOK, install.PROJECT_NOTE) + install.OLD_PROJECT_HOOKS:
         first = "phiward"  # the project hook: phiward by name
     if "/" in first:
         return os.path.isfile(first) and os.access(first, os.X_OK)
     return shutil.which(first) is not None
+
+
+PROMPT_EVENTS = ("UserPromptSubmit", "UserPromptExpansion")
+HOOK_TYPES = ("command", "prompt", "agent", "http", "mcp_tool")
+
+
+def is_prompt_scan(h: Dict[str, Any]) -> bool:
+    """Whether a hook entry is phiward's prompt check, by its exact shape: the user form
+    (`install.hook_entry`, or the `/bin/sh` line an earlier phiward wrote), or the project form
+    (PROJECT_PROMPT_HOOK). A program at any other path, whatever its name, is not."""
+    if h.get("type", "command") != "command" or h.get("shell") not in (None, "bash"):
+        return False
+    if install.hook_python(h, "prompt-scan"):
+        return True
+    if h.get("args"):
+        return False
+    command = str(h.get("command", ""))
+    return command == install.PROJECT_PROMPT_HOOK or \
+        bool(install.shell_form_python(command, "prompt-scan"))
+
+
+def prompt_hooks(data: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    """(event, entry) for each UserPromptSubmit and UserPromptExpansion hook in a settings
+    object or a plugin's hooks.json."""
+    hooks = data.get("hooks") if isinstance(data, dict) else None
+    if not isinstance(hooks, dict):
+        return []
+    return [(ev, h) for ev in PROMPT_EVENTS
+            for g in (hooks.get(ev) if isinstance(hooks.get(ev), list) else [])
+            if isinstance(g, dict) and isinstance(g.get("hooks"), list)
+            for h in g["hooks"] if isinstance(h, dict)]
+
+
+def _hook_type(h: Dict[str, Any]) -> str:
+    t = h.get("type", "command")
+    return t if t in HOOK_TYPES else "unknown"
+
+
+def _other_prompt_hook(where: str, ev: str, h: Dict[str, Any]) -> str:
+    return (f"  WARNING: {where} has a {ev} hook of type `{_hook_type(h)}`: it runs beside "
+            "phiward's prompt check, and may send the prompt on (the check is a tripwire, not a "
+            "boundary)")
+
+
+def plugin_prompt_lines(project: str, home: str) -> List[str]:
+    """The WARNINGs for the prompt hooks of each enabled plugin other than phiward's (its
+    hooks/hooks.json in each installed copy that applies here)."""
+    from phiward import claude_settings, mcp_config
+    enabled: Dict[str, bool] = {}
+    for _lvl, _p, data in claude_settings.levels(project, home):
+        plugins = data.get("enabledPlugins") if isinstance(data, dict) else None
+        if isinstance(plugins, dict):
+            for k, v in plugins.items():
+                if isinstance(k, str) and k not in enabled:
+                    enabled[k] = v is True  # the highest level that names it wins
+    out: List[str] = []
+    for key in sorted(k for k, on in enabled.items() if on and k != "phiward@phiward"):
+        roots = (mcp_config._plugin_roots(home, dict(os.environ), project,
+                                          key.split("@", 1)[0]) or {}).get(key, [])
+        for root in roots:
+            data, _err = claude_settings.read_settings(os.path.join(root, "hooks", "hooks.json"))
+            for ev, h in prompt_hooks(data):
+                out.append(_other_prompt_hook(f"the enabled plugin {key}", ev, h))
+    return out
 
 
 @dataclass
@@ -109,6 +183,20 @@ def wiring_state(project: str, home: str) -> Wiring:
         mine = [(g, h, form) for g in (data.get("hooks", {}) or {}).get("PreToolUse", []) or []
                 if isinstance(g, dict) for h in g.get("hooks", []) or [] if isinstance(h, dict)
                 for form in [hook_form(h)] if form]
+        prompts = prompt_hooks(data)
+        scans = [h for ev, h in prompts if ev == "UserPromptSubmit" and is_prompt_scan(h)]
+        w.lines += [_other_prompt_hook(f"the {level} settings", ev, h) for ev, h in prompts
+                    if not (ev == "UserPromptSubmit" and is_prompt_scan(h))]
+        if mine and not scans:
+            w.problems.append(f"the {level} settings run phiward's hook but not its prompt "
+                              "check (a UserPromptSubmit entry): run `(cd ~ && phiward install "
+                              "claude --user --write)`")
+        for h in scans:
+            if h.get("onFailure") != "block" or h.get("async") or h.get("asyncRewake") \
+                    or "if" in h:
+                w.problems.append(f"phiward's prompt check in the {level} settings has no "
+                                  "onFailure: block, or has `async` or `if`, so a prompt can be "
+                                  "sent unchecked")
         if mine:
             wired_levels.append(level)
             blocks = all(h.get("onFailure") == "block" for _g, h, _f in mine)
@@ -116,8 +204,19 @@ def wiring_state(project: str, home: str) -> Wiring:
             if not blocks:
                 w.problems.append(f"a phiward hook entry in the {level} settings has no "
                                   "onFailure: block (a hook that fails lets the tool run)")
+            if any(install.is_old_form(h) for _g, h, _f in mine) or \
+                    any(install.is_old_form(h) for h in scans):
+                w.lines.append(f"  WARNING: the {level} settings run phiward's hooks in the form "
+                               "an older phiward wrote (one inline shell line): run `(cd ~ && "
+                               "phiward install claude --user --write)` again; it replaces them "
+                               "with hooks that run from phiward's own files")
             for _g, h, form in mine:
-                if not _program_there(h):
+                if not _program_there(h) and install.hook_python(h):
+                    w.problems.append(f"the hook's file in the {level} settings is gone: "
+                                      "phiward's Python moved (an upgrade, or another Python "
+                                      "version); every tool call is refused until you run "
+                                      "`(cd ~ && phiward install claude --user --write)` again")
+                elif not _program_there(h):
                     w.problems.append(f"a phiward hook in the {level} settings names a program "
                                       "that is not there")
                 if h.get("async") or h.get("asyncRewake") or "if" in h:
@@ -151,6 +250,7 @@ def wiring_state(project: str, home: str) -> Wiring:
             w.problems.append(f"disableAllHooks is true at the {disable[0]} level")
     if managed_only and "managed" not in wired_levels:
         w.problems.append("managed settings allow only managed hooks, and they do not run phiward")
+    w.lines += plugin_prompt_lines(project, home)
     on, level, off, path = install.plugin_state(project, home)
     if on:
         w.lines.append(f"  the phiward plugin is enabled ({level} settings): it carries hooks")
@@ -184,6 +284,17 @@ def wiring_state(project: str, home: str) -> Wiring:
                            "folder (a parent folder, another checkout) has no protection. Wire "
                            "your user settings too: `(cd ~ && phiward install claude --user --write)`.")
     return w
+
+
+def pack_lines(cfg: config.Config) -> List[str]:
+    """A WARNING for each user pack file inside a protected path: under `phiward launch` the
+    prompt check cannot read it, so every prompt is refused."""
+    from phiward import paths
+    pset = paths.ProtectedSet(cfg.all_roots, cfg.patterns)
+    return [f"WARNING: a pack file of the user config ({p}) is inside a protected path: under "
+            "`phiward launch` the prompt check cannot read it, and refuses every prompt. Move it "
+            "out of the root." for p in cfg.user_packs
+            if "/" in p and pset.relation(os.path.expanduser(p)) == paths.INSIDE]
 
 
 def claude_report(project: str, home: str) -> List[str]:
@@ -242,6 +353,10 @@ def install_lines() -> List[str]:
     return out + selfcheck_lines()
 
 
+# what the last self-check found: {"installed": bool}, for the launch section (no second check)
+SELFCHECK: Dict[str, bool] = {}
+
+
 def selfcheck_lines() -> List[str]:
     """doctor's lines for phiward's self-check and its full check of phiward's own Python: one
     WARNING for the package (what `launch` and every wrapped MCP server check before they start,
@@ -252,6 +367,7 @@ def selfcheck_lines() -> List[str]:
         installed, package, python = selfcheck.check_full_isolated()
     except Exception as exc:  # noqa: BLE001 - doctor reports; it does not stop
         return [f"WARNING: phiward's self-check could not run ({type(exc).__name__})"]
+    SELFCHECK["installed"] = bool(installed)
     if not installed:
         return []
     out = []
@@ -306,22 +422,23 @@ def path_risks(project: str, home: str, path: str) -> List[Tuple[str, str, int]]
 _COMMAND_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper")
 
 
-def _settings_commands(data: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """(where, command) for each command a settings file makes Claude Code run."""
-    out: List[Tuple[str, str]] = []
+def _settings_commands(data: Dict[str, Any]) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """(where, command, entry) for each command a settings file makes Claude Code run; entry is
+    the whole hook entry (with its `args`), or {} for the keys that are not hooks."""
+    out: List[Tuple[str, str, Dict[str, Any]]] = []
     hooks = data.get("hooks") if isinstance(data.get("hooks"), dict) else {}
     for event, groups in hooks.items():
         for g in groups if isinstance(groups, list) else []:
             for h in (g.get("hooks") if isinstance(g, dict) else None) or []:
                 if isinstance(h, dict) and isinstance(h.get("command"), str):
-                    out.append((f"a {event} hook", h["command"]))
+                    out.append((f"a {event} hook", h["command"], h))
     for key in ("statusLine", "fileSuggestion"):
         v = data.get(key)
         if isinstance(v, dict) and isinstance(v.get("command"), str):
-            out.append((key, v["command"]))
+            out.append((key, v["command"], {}))
     for key in _COMMAND_KEYS:
         if isinstance(data.get(key), str):
-            out.append((key, data[key]))
+            out.append((key, data[key], {}))
     return out
 
 
@@ -426,9 +543,10 @@ def settings_script_lines(project: str, home: str) -> List[str]:
             out.append(f"  NOTE: the {level} settings ({path}) have a PermissionRequest hook: it "
                        "can answer the prompts phiward's hook asks (code files, writes outside "
                        "the sandbox's folders) without you; know what it allows")
-        for where, command in _settings_commands(data):
-            if hook_form({"type": "command", "command": command}):
-                continue  # phiward's own
+        for where, command, entry in _settings_commands(data):
+            if entry and (hook_form(entry) or
+                          any(install.hook_python(entry, w) for w in install.HOOK_WHATS)):
+                continue  # phiward's own (its guard, session note and prompt scan)
             for f in _script_files(command, project, home):
                 real = os.path.realpath(f)
                 key = pathid.fold(real)
@@ -445,7 +563,7 @@ def settings_script_lines(project: str, home: str) -> List[str]:
 
 def code_root_lines(project: str, home: str) -> List[str]:
     """doctor's lines for the code Claude Code runs that a session in `project` can write, its
-    shell too (`claude_settings.writable_code_roots`: a skill linked in from the project)."""
+    shell too (`claude_settings.code_root_report`: a skill linked in from the project)."""
     out = []
     roots, notes = claude_settings.code_root_report(project, home)
     if len(roots) > 3:
@@ -517,15 +635,24 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
                  "`(cd ~ && phiward install claude --user --write)`); the layers below are what it would "
                  "have"]
     secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+    # what the sandbox mounts over (the sockets left out where its seccomp filter refuses them)
+    sandboxed = hidden.for_sandbox(secret)
     # the same rule as the confinement check (`_covers`: both spellings, the path and where it
     # leads, as the sandbox resolves links: on macOS /tmp is /private/tmp)
     deny_read = claude_settings._paths(claude_settings.levels(project, home), project, home,
                                        None, "denyRead", deny=True)
-    miss = [h for h in secret if not claude_settings._covers(deny_read, h)]
-    lines.append(f"  hidden list in the sandbox: {len(secret) - len(miss)} of {len(secret)}"
+    miss = [h for h in sandboxed if not claude_settings._covers(deny_read, h)]
+    lines.append(f"  hidden list in the sandbox: {len(sandboxed) - len(miss)} of {len(sandboxed)}"
                  + ("" if not miss else " (WARNING: run `(cd ~ && phiward install claude --user --write)` again)"))
+    if hidden.sockets_left_out():
+        lines.append("  NOTE: bubblewrap here is older than 0.5, which cannot hide a socket by path: "
+                     "the Docker and Kerberos KCM sockets are not in the sandbox's lists, and only "
+                     "Claude Code's seccomp filter keeps a shell command from them. Check it once: "
+                     "ask the agent to run `python3 -c 'import socket; "
+                     "socket.socket(socket.AF_UNIX)'` in Bash; it must fail with \"Operation not "
+                     "permitted\". If it works, do not use Mode A on this node.")
     rules = set(_merged_rules(project, home))
-    want = install.permission_rules(secret, home)
+    want = install.permission_rules(sandboxed, home)
     have = sum(1 for r in want if r in rules)
     lines.append(f"  permission rules for the hidden list: {have} of {len(want)}"
                  + ("" if have == len(want) else " (WARNING: run `(cd ~ && phiward install claude --user --write)` again)"))
@@ -579,18 +706,27 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
 USAGE = "usage: phiward doctor [--verbose] [--show-paths | --headless]\n"
 HELP = USAGE + """
 Options:
-  --verbose      every check on its own line (by default, before Claude Code is wired, its
+  --verbose, -v  every check on its own line (by default, before Claude Code is wired, its
                  parts are one next step), and the detail counts
-  --show-paths   also print the protected paths (by default only their counts)
+  --show-paths   also print the protected paths (by default only their counts), and the
+                 project files the project scan found (masked, with line numbers)
   --headless     a short check before an unattended run (`claude -p`, an Agent SDK app, a
                  scheduled agent): exit 0 when the session would be guarded, 1 with the
-                 reasons when not (docs/unattended.md)
+                 reasons when not (docs/unattended.md); a NOTE (for example: no rule masks
+                 subject identifiers) does not change the exit status
   -h, --help     show this help
 
 Show the config in force and whether it loads, and what may turn the guards off: the
-confinement backend, the sanitizer, the broker, the pinned folders, Claude Code's settings and
-MCP servers. It reads settings files and never writes them. Run it in the project folder.
+confinement backend, the sanitizer (and whether it masks subject identifiers), the broker, the pinned folders, Claude Code's settings and
+MCP servers. On Linux it also says when `phiward launch` cannot start because the session
+cannot have a network of its own (no network namespaces). Its section "launch (Mode B)" runs
+the start checks of `phiward launch` in this folder, without starting anything, and names the
+step for each (docs/refusals.md). It reads settings files and never writes them. Run it in the project folder.
 The exit status is 1 when the config or the sanitizer cannot be used.
+
+The project scan reads the project's files and file names for subject and sample IDs outside
+the protected roots, with no time limit (`phiward launch` refuses such a project). It names
+only the kinds and counts.
 
 Its output may reach the model, so it shows paths only with --show-paths.
 """
@@ -631,7 +767,7 @@ def _after_install(project: str, home: str, cfg: config.Config,
 _FOLDED = ("  WARNING: no Claude Code settings file runs phiward", "  mode: none:",
            "  hidden list in the sandbox:", "  permission rules for the hidden list:",
            "  WARNING: sandbox confines the shell: NO", "  NOTE: Claude Code's shell is not pinned",
-           "  NOTE: no `--settings` file yet")
+           "  NOTE: no `--settings` file yet", "  WARNING: env.CLAUDE_CODE_DISABLE_FILE_MENTIONS is not")
 
 
 def main(argv: List[str]) -> int:
@@ -674,7 +810,7 @@ def main(argv: List[str]) -> int:
     if show:
         for p in cfg.roots + cfg.patterns + cfg.derived_roots:
             print(f"  {p}")
-    if any(r.endswith("/.git") or r.endswith(".git") for r in cfg.derived_roots):
+    if any(r.endswith(("/.git", ".git")) for r in cfg.derived_roots):
         print("NOTE: a protected root sits in a git work tree; its .git is protected too, so the "
               "agent cannot use git in that repository.")
     from phiward import confine
@@ -697,17 +833,23 @@ def main(argv: List[str]) -> int:
     try:
         Sanitizer.from_config(cfg)
         print(f"sanitizer: ok (packs: {', '.join(cfg.packs) or 'default'})")
+        for line in pack_lines(cfg):
+            print(line)
     except SanitizerError as exc:
         print(f"PROBLEM: the sanitizer cannot start: {exc}")
         return 1
+    if _subjects_unmasked(cfg):
+        print(SUBJECTS_WARNING)
+    for line in masking_lines(cfg, cwd):
+        print(line)
+    for line in project_scan_lines(cfg, cwd, show):
+        print(line)
     rel = None
     if cfg.has_protected_paths:
         from phiward import paths
         rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(cwd)
     if rel:
-        print(f"WARNING: this folder is {rel} a protected path: its commands are refused or "
-              "denied, except gateway calls (phiward run|copy). Run the agent in a project "
-              "folder.")
+        print(relation_line(rel))
     from phiward import broker
     spool = config.spool_dir()
     where = broker.running(spool)
@@ -743,6 +885,11 @@ def main(argv: List[str]) -> int:
     elif st and (st.get("cache") != cfg.cache_dir or set(st.get("roots", [])) != set(cfg.user_roots)):
         print("WARNING: the broker uses another cache folder or roots than this shell (check "
               "XDG_CACHE_HOME on both sides, and restart the broker after a config change)")
+    old = broker.version_problem(st) if where else ""
+    if old:
+        print(f"WARNING: {old}")
+    for line in broker_path_lines(cfg, st):
+        print(line)
     from phiward import fsinfo, pin
     if cfg.has_protected_paths:
         pinned = set(pin.read_pins())
@@ -790,6 +937,14 @@ def main(argv: List[str]) -> int:
           + (f" (skipped: {cfg.write_to_claude} that hold a .claude folder)"
              if cfg.write_to_claude else "")
           + f", network: {'yes' if cfg.net else 'no'}, copy remotes: {len(cfg.remotes)}")
+    folders = [os.path.normpath(r.split(":", 1)[-1]) for r in cfg.remotes]
+    bare = [f for f in folders if not any(
+        f == x or f.startswith(x.rstrip("/") + "/") for x in cfg.remote_roots)]
+    if bare:
+        print(f"WARNING: {len(bare)} copy remote(s) are not entirely under [remote] roots: a push "
+              "goes only under a remote root (what lands there is masked in remote output), so a "
+              "push to the rest of such a remote is refused. Add the folder to [remote] roots of "
+              "your user config (`(cd ~ && phiward setup)` does it for a new remote).")
     if show:
         for p in cfg.write_to:
             print(f"  write_to: {p}")
@@ -835,8 +990,13 @@ def main(argv: List[str]) -> int:
               "do not trust, leave write_to and remotes empty and net false.")
     # the operator runs doctor in the project folder; a hook gets $CLAUDE_PROJECT_DIR
     project = os.environ.get("CLAUDE_PROJECT_DIR") or cwd
+    for line in no_phi_lines(cfg, project, home, cwd):
+        print(line)
+    SELFCHECK.clear()  # filled by the self-check: the launch section asks no second time
     for line in install_lines():
         print(line)
+    claude_ver = claude_settings.claude_version()  # read once, for mentions and launch
+    show_paths = show  # `show` is a printer further down
     print("Claude Code:")
     # before Claude Code is wired, each part's fix is the same command: one next step (each
     # part is behind --verbose)
@@ -869,14 +1029,19 @@ def main(argv: List[str]) -> int:
         say(f"  WARNING: {clean}.")
     for line in sandbox_needs():
         say(line)
+    for line in launch_network_lines():
+        say(line)
     for line in launch_settings_report():
         say(line)
+    for line in mentions_report(project, home, claude_ver):
+        say(line)  # folded with the rest until Claude Code is wired: one next step
     if cfg.has_protected_paths and not cfg.problem:
         for line in mode_report(project, home, cfg):
             say(line)
     if cfg.has_protected_paths:
         from phiward import hidden as _hidden
-        hidden_now = [h for h in _hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+        hidden_now = [h for h in _hidden.for_sandbox(_hidden.paths(None, cfg, session=True))
+                      if os.path.lexists(h)]
         version = _pattern_version(cfg)
         reason = claude_settings.confinement_reason(
             project, home, cfg.all_roots, cfg.patterns, config.guard_files(), hidden=hidden_now,
@@ -893,9 +1058,17 @@ def main(argv: List[str]) -> int:
                f". To fix it: {still.step}" + ("" if still.text == why_not else
                                                  f" ({still.text})") + ".")
         show = say if ok or not fold or fixed else print
+        # not confined only by excludedCommands: the hook text-checks every call (b1), as its
+        # own reading (`shell_reason`) says
+        where = "" if ok or claude_settings.shell_reason(
+            project, home, cfg.all_roots, cfg.patterns, config.guard_files(),
+            hidden=hidden_now) is not None else claude_settings.excluded_step(project, home)[0]
         show("  sandbox confines the shell: yes" if ok else
              f"  WARNING: sandbox confines the shell: NO ({why_not})" +
-             ("; for shell commands only the hook's text check is left, which is best effort"
+             (f"; excludedCommands is not empty ({where}): the hook checks the text of every "
+              "command (as with [shell] best_effort), and refuses a path it cannot see"
+              if where else
+              "; for shell commands only the hook's text check is left, which is best effort"
               if cfg.shell_best_effort else
               "; so the hook refuses shell commands except gateway calls") + fix)
         if claude_settings._env_value(project, home, None, "CLAUDE_CODE_SHELL_PREFIX")[0] == \
@@ -925,22 +1098,159 @@ def main(argv: List[str]) -> int:
                           for a in allow):
             say("  NOTE: sandbox.filesystem.allowWrite does not hold the spool folder; "
                   "gateway calls cannot reach the broker from the sandbox.")
+        if ok:
+            for line in package_cache_lines():
+                say(line)
     for line in network_report(project, home, cfg):
         say(line)
+    print("launch (Mode B), for a session started with `phiward launch` here:")
+    for line in launch_report(cwd, home, cfg, version=claude_ver,
+                              installed=SELFCHECK.get("installed"), show=show_paths):
+        print(line)
     return 0
 
 
+def relation_line(rel: str) -> str:
+    """The WARNING for a folder inside or above a protected path; above one, Grep and Glob from
+    it are refused too (they would list the root), so it names the way: a subfolder."""
+    from phiward import paths
+    return (f"WARNING: this folder is {rel} a protected path: its commands are refused or denied, "
+            "except gateway calls (phiward run|copy). Run the agent in a project folder." +
+            (" Grep and Glob from this folder are refused too: give them a subfolder that holds "
+             "no protected folder." if rel == paths.ABOVE else ""))
+
+
+def broker_path_lines(cfg: config.Config, status: Dict[str, Any]) -> List[str]:
+    """A WARNING for the bare names of `[broker] commands` that the running broker's PATH (its
+    status file) does not find: `phiward run` refuses them as "not on the broker's PATH"."""
+    if not status or not cfg.command_lists or not isinstance(status.get("path"), str):
+        return []
+    from phiward import broker
+    missing = sorted({p[len("missing:"):] for p in broker.listed_programs(cfg, status["path"])
+                      if p.startswith("missing:")})
+    if not missing:
+        return []
+    return [f"WARNING: {len(missing)} program(s) of [broker] commands are not on the broker's "
+            "PATH, so `phiward run` refuses them: " + ", ".join(f"`{n}`" for n in missing[:10])
+            + ". The operator starts the broker again from a terminal where they work (for "
+            "example after `conda activate`), or lists them by their full path, or removes the "
+            "ones they do not use from [broker] commands."]
+
+
+CACHE_NOTE = (
+    "NOTE: Claude Code's sandbox keeps the package caches outside the project read-only (pip: "
+    "~/.cache/pip, or ~/Library/Caches/pip on macOS; uv: ~/.cache/uv; npm: ~/.npm), so an "
+    "install that writes its cache fails with 'Operation not permitted'. Use `pip install "
+    "--no-cache-dir`, or set PIP_CACHE_DIR, UV_CACHE_DIR and npm_config_cache to folders under "
+    "$TMPDIR. phiward adds no allowWrite for them: a cache a session writes is code a later run "
+    "executes.")
+
+
+def package_cache_lines() -> List[str]:
+    """Mode A: the package caches the sandbox keeps read-only, and the way around (docs only:
+    no allowWrite, decided)."""
+    return ["  " + CACHE_NOTE]
+
+
+RUNS_LATER_NOTE = (
+    "NOTE: in a launch session the files other tools run later are read-only, at any depth: "
+    ".claude, .vscode, .idea, .Rprofile, .Renviron, .mcp.json and the like (a write gets "
+    "'Operation not permitted'). Edit them in a plain terminal, or `phiward carryover add` for "
+    "Claude Code's own files; run renv::init() once outside launch.")
+
+
+def launch_report(project: str, home: str, cfg: config.Config,
+                  env: Optional[Dict[str, str]] = None, platform: str = sys.platform,
+                  version: Optional[Tuple[int, int, int]] = None,
+                  installed: Optional[bool] = None, show: bool = False) -> List[str]:
+    """`phiward launch` started in `project`: what its start would refuse, from the checks launch
+    itself runs (wholetool), and what a session there cannot do. It starts nothing and asks
+    nothing again: Claude Code's build is judged from its files, a native binary's version is
+    `version` (what doctor read; when None, a NOTE says only launch can tell), and whether
+    phiward is installed is `installed` (doctor's self-check; None: not known, no line). A PATH
+    entry is named relative to the project unless `show`."""
+    import shutil
+    from phiward import wholetool as wt
+    env = dict(os.environ) if env is None else env
+    real = os.path.realpath(project)
+    out: List[str] = []
+
+    def refused(why: str) -> None:
+        out.append(f"  WARNING: launch would refuse to start here: {why}.")
+
+    if not cfg.has_protected_paths:
+        refused(wt.NO_PATHS)
+    # the project folder: launch's own checks, and its step for each
+    kind, what = wt._folder_checks(real, cfg, env)
+    if kind:
+        shown = what if kind != "path" or show or not os.path.isabs(what) else \
+            os.path.relpath(os.path.realpath(what), real)
+        refused(wt.folder_step(kind, what, env, shown))
+    # [launch] write_to: launch's own start check of each entry
+    listed, missing, _dropped, cannot = wt._sort_write_to(cfg, env, real)
+    for entry, why in cannot:
+        refused(wt.WRITE_TO_STEP.format(entry, why))
+    for m in missing:
+        out.append(f"  NOTE: {wt.WRITE_TO_MISSING.format(m)}.")
+    if cfg.launch_write_to:
+        out.append(f"  launch writes also: {len(listed)} folder(s) ([launch] write_to)"
+                   + (f" (skipped: {len(missing)} that do not exist)" if missing else ""))
+        if show:
+            out += [f"    {p}" for p in listed]
+    tool = shutil.which("claude", path=env.get("PATH") or os.defpath)
+    if tool:
+        asked: List[str] = []
+
+        def known(real_tool: str, _env: Any) -> Optional[Tuple[int, int, int]]:
+            asked.append(real_tool)  # a native binary: its version is the one doctor read
+            return version or claude_settings.VERSION_HOOK_ARGS
+        why = wt.claude_version_problem(tool, wt.write_places(real, env, extra=listed), env,
+                                        ask=known)
+        if why:
+            refused(f"--tool claude: {why}")
+        elif asked and version is None:
+            out.append("  NOTE: launch --tool claude: the version of Claude Code is unknown "
+                       "here: only launch can tell (it asks the native binary at the start).")
+    if env.get("ANTHROPIC_BASE_URL"):
+        why = wt.base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
+        if why:
+            refused(why)
+    if platform.startswith("linux"):
+        abi = wt.landlock_abi()
+        if abi >= wt.UNIX_ABI:
+            out.append(f"  launch on Linux: Landlock ABI {abi}: a session reaches only the unix "
+                       "sockets it makes itself")
+        else:
+            out.append(f"  NOTE: launch on Linux (Landlock ABI {abi}, below {wt.UNIX_ABI}): "
+                       "--tool claude runs in the inner mode, where Claude Code's own sandbox "
+                       "blocks unix sockets. There launch refuses your own --settings (put them "
+                       "in managed settings or launch's trusted copy), a `--` among Claude Code's "
+                       "arguments (put the prompt last), and Claude Code commands such as `claude "
+                       "mcp` (run those outside launch).")
+            why = wt.inner_sandbox_reason(real, env)
+            if why:
+                refused(f"--tool claude: {why}")
+    if not any(env.get(k) for k in wt.LOGIN_TOKEN_VARS):
+        out.append(f"  NOTE: {wt.LOGIN_NOTE}.")
+    out.append("  " + RUNS_LATER_NOTE)
+    if installed is False and env.get("PHIWARD_DEV") != "1":
+        out.append("  NOTE: this phiward is a source checkout or an editable install, which "
+                   "launch refuses: install it with uv tool or pipx, or set PHIWARD_DEV=1 to "
+                   "start from a checkout.")
+    return out
+
+
 def clean_start_problem() -> Optional[str]:
-    """Why `phiward`, started by name as the plugin and project hooks start it (after
-    CLEAN_ENV), does not start, or None (also when it is not on PATH: that is reported on its
-    own). A phiward whose Python needs PYTHONPATH or LD_LIBRARY_PATH (a module Python, a
-    checkout) stops there, and every tool call is refused."""
+    """Why `phiward`, started by name as the plugin and project hooks start it (after the
+    variables are cleared: the package's `clean-exec.sh`), does not start, or None (also when it
+    is not on PATH: that is reported on its own). A phiward whose Python needs PYTHONPATH or
+    LD_LIBRARY_PATH (a module Python, a checkout) stops there, and every tool call is refused."""
     import shutil
     import subprocess
-    if not shutil.which("phiward") or not os.access("/bin/sh", os.X_OK):
+    if not shutil.which("phiward") or not os.access(install.CLEAN_EXEC, os.X_OK):
         return None
     try:
-        r = subprocess.run(["/bin/sh", "-c", install.CLEAN_ENV + "exec phiward --help >/dev/null"],
+        r = subprocess.run([install.CLEAN_EXEC, "phiward", "--help"],
                            capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
     except (OSError, subprocess.TimeoutExpired) as exc:
         return f"phiward could not be started the way the hooks start it ({type(exc).__name__})"
@@ -989,7 +1299,8 @@ def headless_problems(project: str, home: str) -> List[str]:
                    "can replace them. Run `(cd ~ && phiward install claude --user --write)`")
     secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
     rules = set(_merged_rules(project, home))
-    missing = [r for r in install.permission_rules(list(cfg.all_roots) + secret, home)
+    missing = [r for r in install.permission_rules(list(cfg.all_roots) + hidden.for_sandbox(secret),
+                                                   home)
                if r not in rules]
     if missing:
         out.append(f"{len(missing)} permission deny rule(s) for protected and hidden paths are "
@@ -1011,19 +1322,145 @@ def headless_problems(project: str, home: str) -> List[str]:
                    + " (their command tools may make only gateway calls)")
     if not broker.running(config.spool_dir()):
         out.append("the broker is not running (gateway calls would fail)")
+    else:
+        # a reason, not a note: its old code may lack this version's fixes to the masking
+        old = broker.version_problem(broker.read_status(config.spool_dir()))
+        out += [old] if old else []
+    from phiward import phicheck
+    out += [f"masking check: {f}" for f in phicheck.check(cfg, project).failed]
+    out += project_scan_problems(cfg, project)
+    from phiward import wholetool
+    _listed, _missing, _dropped, cannot = wholetool._sort_write_to(
+        cfg, dict(os.environ), os.path.realpath(project))
+    out += [f"launch would refuse to start: {wholetool.WRITE_TO_STEP.format(e, why)}"
+            for e, why in cannot]
     return out
+
+
+SUBJECTS_WARNING = (
+    "WARNING: your user config enables no pack that masks subject or sample identifiers. The "
+    "gateway masks the names of entries under the protected roots, and the genomics pack masks "
+    "sequence file names, read names and loci; a patient, sample or donor ID inside a file, or in "
+    "a name outside the roots, reaches the model provider. In your user config, add a pack for "
+    "your institution's forms ([sanitize] packs, for example \"msk\"), your own [sanitize] "
+    "patterns or names_from, or record that your data has none: [sanitize] subjects = \"none\" "
+    "(a repo's .phiward.toml cannot do this). `(cd ~ && phiward setup)` asks.")
+
+
+def masking_lines(cfg: config.Config, cwd: str) -> List[str]:
+    """The masking check (phicheck): the ok line, or a WARNING for each failure; a NOTE for each
+    rule or pattern it does not test. A failure does not change doctor's exit status."""
+    from phiward import phicheck
+    r = phicheck.check(cfg, cwd)
+    return ([r.summary] if not r.failed else []) + \
+        [f"WARNING: masking check: {f}." for f in r.failed] + \
+        [f"NOTE: masking check: {n}." for n in r.notes]
+
+
+def no_phi_lines(cfg: config.Config, project: str, home: str, cwd: str) -> List[str]:
+    """`[no_phi] folders`: the list, whether this folder is relaxed (the hook's own test,
+    `claude_settings.no_phi_relaxed`, with its reason and step when it is not), and a NOTE for
+    an entry that is gone or that this folder is only inside. The folders whose settings count
+    are the hook's for a call in `cwd` (`confining_folders`); with no `$CLAUDE_PROJECT_DIR`
+    (the operator's terminal), the project alone."""
+    if not cfg.no_phi_folders:
+        return []
+    from phiward import session_note
+    entry, why = claude_settings.no_phi_relaxed(
+        cfg, project, home, claude_settings.confining_folders(cwd, home) or None)
+    out = ["no-PHI folders (user config): " + ", ".join(cfg.no_phi_folders)
+           + (" (this folder: relaxed)" if entry and why is None else "")]
+    if why:
+        out.append("WARNING: " + session_note.no_phi_refused(why.text, why.step))
+    for e in cfg.no_phi_folders:
+        if not os.path.exists(e):
+            out.append(f"NOTE: [no_phi] folders entry {e} does not exist (moved or removed?); "
+                       "it relaxes nothing")
+        elif not entry and config.inside(os.path.realpath(project), e) and \
+                os.path.realpath(project) != e:
+            out.append(f"NOTE: inside the no-PHI folder {e}, but not {e} itself: not relaxed "
+                       "(entries are exact)")
+    return out
+
+
+def project_scan_lines(cfg: config.Config, project: str, show: bool) -> List[str]:
+    """The project scan (projectscan) with no time limit: counts and kinds; with `show`, the
+    masked path, line number and kinds of each file found. A finding or an error is a WARNING,
+    and does not change doctor's exit status."""
+    from phiward import projectscan
+    why = projectscan.place_problem(cfg, project)
+    if why:
+        return ["project scan: skipped (not a project folder)"]
+    r = projectscan.scan(cfg, project)
+    if r.error:
+        return [f"WARNING: {r.error}."]
+    if r.off:
+        return ["project scan: off (no rule for subject or sample identifiers)"]
+    out = [f"project scan: ok ({r.files} files)"] if not r.hits else [
+        f"WARNING: project scan: found {projectscan.found_text(r)}; `phiward doctor "
+        "--show-paths` in your own terminal lists them."]
+    if r.hits and show:
+        out += [f"  {path}: " + (f"line {n}" if n else "name") + f": {', '.join(kinds)}"
+                for path, n, kinds in r.hits[:projectscan.SHOWN]]
+        if len(r.hits) > projectscan.SHOWN:
+            out.append(f"  ... and {len(r.hits) - projectscan.SHOWN} more")
+    if r.skipped:
+        out.append(f"NOTE: project scan: not read: {projectscan.skipped_text(r)}.")
+    return out
+
+
+def project_scan_problems(cfg: config.Config, project: str) -> List[str]:
+    """`--headless`: the project scan within launch's time budget; a finding or an error is a
+    problem (counts and kinds only), a scan that stops at the budget is not."""
+    from phiward import projectscan
+    if projectscan.place_problem(cfg, project):
+        return []
+    r = projectscan.scan(cfg, project, projectscan.deadline())
+    if r.error:
+        return [r.error + " (run phiward doctor)"]
+    if r.hits:
+        return [f"the project scan found {projectscan.found_text(r)} (`phiward doctor "
+                "--show-paths` in your own terminal lists them)"]
+    return []
+
+
+def _subjects_unmasked(cfg: config.Config) -> bool:
+    """Protected data, no record that it names no subjects, and nothing in the user config that
+    masks subject identifiers. A pack file that cannot be read counts as not masking."""
+    if not cfg.has_protected_paths or cfg.sanitize_subjects == "none":
+        return False
+    from phiward.sanitize import SanitizerError, masks_subjects
+    try:
+        return not masks_subjects(cfg)
+    except SanitizerError:
+        return True
+
+
+def headless_notes(project: str) -> List[str]:
+    """What an unattended run should know but that does not stop it."""
+    cfg = config.load(project)
+    if cfg.problem or not _subjects_unmasked(cfg):
+        return []
+    return ["NOTE: your user config enables no pack that masks subject or sample identifiers "
+            "inside files; `phiward doctor` says how to add one, or record [sanitize] subjects = "
+            "\"none\". It does not stop the run."]
 
 
 def headless(project: str, home: str) -> int:
     problems = headless_problems(project, home)
+    notes = headless_notes(project)
     if not problems:
         print("headless: ready (wired, sandboxed, broker running). Run `claude -p` "
               "without --bare; an Agent SDK app loads the user settings or passes "
               "`phiward install claude --json` as its settings.")
+        for n in notes:
+            print(f"  {n}")
         return 0
     print("headless: NOT READY")
     for p in problems:
         print(f"  - {p}")
+    for n in notes:
+        print(f"  {n}")
     return 1
 
 
@@ -1063,6 +1500,24 @@ def sandbox_needs(platform: str = sys.platform, run=None) -> List[str]:
     return out
 
 
+def launch_network_lines(platform: str = sys.platform, problem: Optional[str] = None) -> List[str]:
+    """Linux: a WARNING when `phiward launch` would refuse because bubblewrap cannot give the
+    session a network namespace of its own (its network goes only through phiward's proxy)."""
+    import shutil
+    if not platform.startswith("linux"):
+        return []
+    if problem is None:
+        bwrap = shutil.which("bwrap", path="/usr/bin:/bin")  # the one launch runs
+        if not bwrap:
+            return []  # sandbox_needs says bwrap is missing
+        problem = confine.net_namespace_problem(bwrap)
+    if not problem:
+        return []
+    return [f"  WARNING: `phiward launch` cannot start here: a session needs a network of its "
+            f"own, and {problem}. Ask the admins to allow user network namespaces, or use "
+            "Mode A (docs/launch.md)."]
+
+
 def launch_settings_report() -> List[str]:
     """The `claude --settings` file that makes the sandbox admin-required (install writes it)."""
     path = config.launch_settings_path()
@@ -1077,12 +1532,48 @@ def launch_settings_report() -> List[str]:
         data = None
     sb = data.get("sandbox") if isinstance(data, dict) else None
     want = install.LAUNCH_SETTINGS["sandbox"]
-    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()):
+    env = data.get("env") if isinstance(data, dict) else None
+    if not isinstance(sb, dict) or any(sb.get(k) != v for k, v in want.items()) or \
+            not isinstance(env, dict) or env.get(install.MENTIONS_OFF) != "1":
         return [f"  WARNING: {path} does not set " + ", ".join(
-            f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()) +
+            [f"sandbox.{k}: {json.dumps(v)}" for k, v in want.items()] +
+            [f"env.{install.MENTIONS_OFF}: \"1\""]) +
             ". Run `(cd ~ && phiward install claude --user --write)` again."]
     return [f"  --settings file: {path}. Start Claude Code with `claude --settings {path}`; "
             "doctor cannot tell whether this session was started with it."]
+
+
+# Claude Code knows the setting from 2.1.299; below 2.1.295 it also has no `onFailure` for hooks
+MENTIONS_MIN_VERSION = (2, 1, 299)
+MENTIONS_PROBLEM_BELOW = (2, 1, 295)
+
+
+_UNREAD = object()
+
+
+def mentions_report(project: Optional[str], home: str, version: Any = _UNREAD) -> List[str]:
+    """`@path` mentions: with them on, a mention puts a file's text into the prompt without a
+    tool call phiward's hook sees. The user (or managed) settings turn them off with
+    `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` (Claude Code v2.1.299+, and ignored in a project's
+    settings, so a project's value is not read). `version` is Claude Code's, when the caller has
+    read it already."""
+    trusted = [lv for lv in claude_settings.levels(project, home) if lv[0] in ("managed", "user")]
+    value = claude_settings._first(trusted, "env", install.MENTIONS_OFF)
+    out: List[str] = []
+    if value != "1":
+        out.append(f"  WARNING: env.{install.MENTIONS_OFF} is not \"1\" in your user settings: an "
+                   "@-mention puts a file's text into the prompt without a tool call the hook "
+                   "sees. Run `(cd ~ && phiward install claude --user --write)`.")
+    if version is _UNREAD:
+        version = claude_settings.claude_version()
+    if version is not None and version < MENTIONS_MIN_VERSION:
+        word = "PROBLEM" if version < MENTIONS_PROBLEM_BELOW else "WARNING"
+        out.append(f"  {word}: Claude Code {claude_settings.version_text(version)} does not know "
+                   f"env.{install.MENTIONS_OFF} (from "
+                   f"{claude_settings.version_text(MENTIONS_MIN_VERSION)} on): an @-mention still "
+                   "puts a file's text into the prompt without a tool call the hook sees. Update "
+                   "Claude Code.")
+    return out
 
 
 def network_report(project: Optional[str], home: str, cfg: config.Config) -> List[str]:
@@ -1099,18 +1590,28 @@ def network_report(project: Optional[str], home: str, cfg: config.Config) -> Lis
         return ["  network for shell commands: open (any host; see [network] in "
                 "docs/configuration.md)"]
     hosts = set(claude_settings._merged_list(trusted, "sandbox", "network", "allowedDomains"))
-    for _lvl, _path, data in trusted:
+    # every level, the project's too: whether a project's rule extends a strict allowlist
+    # depends on how Claude Code was started, so each one is counted as a way out
+    every = claude_settings.levels(project, home)
+    added: List[Tuple[str, str, List[str]]] = []
+    for lvl, path, data in every:
         allow = ((data or {}).get("permissions") or {}).get("allow") or []
-        for rule in allow if isinstance(allow, list) else []:
-            if isinstance(rule, str) and rule.startswith("WebFetch(domain:") and rule.endswith(")"):
-                hosts.add(rule[len("WebFetch(domain:"):-1])
+        rules = [r[len("WebFetch(domain:"):-1] for r in (allow if isinstance(allow, list) else [])
+                 if isinstance(r, str) and r.startswith("WebFetch(domain:") and r.endswith(")")]
+        if rules:
+            added.append((lvl, path, rules))
+            hosts.update(rules)
     n = len(hosts)
     out = [f"  network for shell commands: limited to {n} host{'' if n == 1 else 's'}"
            + (f" ({', '.join(sorted(hosts)[:5])}{', ...' if n > 5 else ''})" if hosts else
               " (none)")
            + "; WebFetch and MCP servers are not limited by it; each listed host is a way out"]
+    for lvl, path, rules in added:
+        out.append(f"  WARNING: {len(rules)} WebFetch(domain:...) allow rule(s) in the {lvl} "
+                   f"settings ({path}) add hosts to the network limit: "
+                   f"{', '.join(sorted(rules)[:5])}{', ...' if len(rules) > 5 else ''}. Remove "
+                   "them if shell commands must not reach those hosts.")
     # every level, the project's too: a command outside the sandbox has no network limit
-    every = claude_settings.levels(project, home)
     if claude_settings._first(every, "sandbox", "enabled") is not True \
             or claude_settings._merged_list(every, "sandbox", "excludedCommands"):
         out.append("  WARNING: the network limit does not hold for every command: the sandbox is "
@@ -1121,10 +1622,10 @@ def network_report(project: Optional[str], home: str, cfg: config.Config) -> Lis
                                                         "allowedDomains"))
                        - set(cfg.allowed_domains))
         if extra:
-            out.append(f"  NOTE: {len(extra)} host(s) in Claude Code's user settings are not in "
-                       "[network] allowed_domains (install only adds hosts): remove them from "
-                       "sandbox.network.allowedDomains in ~/.claude/settings.json if you no "
-                       "longer want them.")
+            out.append(f"  WARNING: {len(extra)} host(s) in Claude Code's user settings are not "
+                       "in [network] allowed_domains: run `(cd ~ && phiward install claude "
+                       "--user --write)` again, which replaces sandbox.network.allowedDomains "
+                       "with that list.")
     return out
 
 

@@ -70,7 +70,10 @@ def hpc(tree, monkeypatch):
                         next((p for p in (f"/usr/bin/{name}", f"/bin/{name}") if os.path.exists(p)), None))
     ssh_cfg = tree / "home" / "phiward-ssh"
     ssh_cfg.write_text(f"Host hpc-test\n  ControlPath {sock}\n  ControlMaster no\n")
-    user_cfg(f'\n[copy]\nremotes = ["hpc-test:/work/me"]\nssh_config = "{ssh_cfg}"\n')
+    # a push lands only under [remote] roots: the folder the pushes go to is one ([copy] stays
+    # last: tests append keys to it)
+    user_cfg('\n[remote]\nroots = ["/work/me"]\n'
+             f'[copy]\nremotes = ["hpc-test:/work/me"]\nssh_config = "{ssh_cfg}"\n')
     yield {"sock": sock, "sink": sink, "srv": srv, "home": home, "key": key}
     srv.close()
     import shutil
@@ -276,7 +279,8 @@ def test_a_pull_lands_in_a_protected_root_through_a_confined_tar(tree, hpc):
 def test_copy_output_masks_remote_roots(tree, hpc):
     from phiward import config
     from phiward.sanitize import Sanitizer
-    user_cfg('\n[remote]\nroots = ["/data/protected"]\n')
+    p = Path(os.environ["PHIWARD_CONFIG"])
+    p.write_text(p.read_text().replace('roots = ["/work/me"]', 'roots = ["/work/me", "/data/protected"]'))
     cfg = config.load(str(tree / "repo"))
     san = Sanitizer.from_config(cfg)
     run.add_remote_roots(san, cfg)
@@ -387,3 +391,32 @@ def test_a_pull_never_shows_the_names_tar_prints(tree, hpc):
     text = out.getvalue()
     assert "Smith_John" not in text and "summary.tsv" not in text, text
     assert "withheld" in text, text
+
+
+@needs_confine
+def test_a_late_stderr_reader_does_not_touch_the_next_pull(tree, hpc, monkeypatch):
+    # the first remote keeps its stderr open past the reader's join: its late line must not
+    # count as a message from the second remote (which prints none)
+    fake_visible(tree)
+    (tree / "pub" / "outbox" / "res2").mkdir()
+    (tree / "pub" / "outbox" / "res2" / "b.tsv").write_text("count\t4\n")
+    fake = tree / "pub" / "fake-ssh"
+    outbox = tree / "pub" / "outbox"
+    text = fake.read_text().replace(
+        '  *"tar -c"*)',
+        f'  *"-- res "*) (sleep 1; echo late >&2) >/dev/null &\n'
+        f'    cd {outbox} && exec tar -c -f - res;;\n'
+        f'  *"-- res2 "*) sleep 3; cd {outbox} && exec tar -c -f - res2;;\n'
+        '  *"tar -c"*)')
+    fake.write_text(text)
+    import threading
+    real_join = threading.Thread.join
+    monkeypatch.setattr(threading.Thread, "join",
+                        lambda self, timeout=None: real_join(self, 0.2 if timeout else None))
+    out = io.StringIO()
+    code = copying.execute(["hpc-test:/work/me/res", "hpc-test:/work/me/res2",
+                            str(tree / "phi" / "pulled")], str(tree / "repo"),
+                           dict(os.environ), out)
+    assert code == 0, out.getvalue()
+    assert (tree / "phi" / "pulled" / "res2" / "b.tsv").read_text() == "count\t4\n"
+    assert "from the remote withheld" not in out.getvalue(), out.getvalue()

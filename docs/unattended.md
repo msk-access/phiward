@@ -17,7 +17,8 @@ phiward doctor --headless
 ```
 
 It exits with 0 when a Claude Code session in this folder would be guarded, and with 1 and the
-reasons when not. Put it first in the script. It checks that:
+reasons when not. Put it first in the script. A NOTE line (for example, that no rule masks
+subject identifiers) does not change the exit status. It checks that:
 
 - your user (or managed) settings run phiward's isolated hook on every tool. That is the `/bin/sh -c
   '...; exec <python> -I -m phiward hook claude'` that `phiward install claude --user --write`
@@ -29,7 +30,7 @@ reasons when not. Put it first in the script. It checks that:
   `allowManagedHooksOnly`) and the project's settings set no `env` that changes the hook;
 - the permission deny rules for protected and hidden paths are there;
 - Claude Code's sandbox confines the shell (on Linux, bubblewrap and socat are installed);
-- the broker is running.
+- the broker is running, with the same phiward version as `doctor` (restart it after an upgrade).
 
 With protected patterns, the shell counts as confined only on macOS (Claude Code 2.1.236 or
 newer, after `install claude --user --write`). Otherwise `--headless` reports it as not ready,
@@ -220,10 +221,15 @@ nothing from quarantine without reading it (`phiward carryover show`).
 
 ## Risks that grow when nobody watches
 
+- **Rules that match nothing.** A scheduled run whose identifier rules match none of its data
+  looks like clean data. After it, read the broker log: `no placeholder shown` on a run over
+  named data means a pack or a pattern is missing.
 - **Prompt injection.** A page or file the agent reads can tell it what to do, and nobody sees it
   happen. phiward still keeps it from reading protected data, but what it can read it can send: the
   network is open by default. In Mode A, `[network] limit` keeps shell commands to the hosts you
-  list ([configuration.md](configuration.md)). The WebFetch tool, MCP servers and Mode B stay open.
+  list ([configuration.md](configuration.md)); the WebFetch tool and MCP servers stay open. In
+  Mode B, `phiward launch`'s proxy refuses this machine and private addresses; public hosts stay
+  open.
 - **Masked output is still content.** Gateway output hides names and identifiers, not other
   content. Write the gateway commands an agent may run so that they print counts and summaries,
   and limit them with `[broker] commands`.

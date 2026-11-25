@@ -1,7 +1,13 @@
 """`phiward install claude [--user|--project] [--write [--yes]]`: wire Claude Code.
 
 It builds two things from the phiward config:
-- the PreToolUse hooks (shell, file tools, MCP tools), each with `onFailure: "block"`;
+- the PreToolUse hooks (shell, file tools, MCP tools), each with `onFailure: "block"`. Each
+  hook runs from a file in the package: `data/clean-exec.sh` is the command, and phiward's own
+  Python with `-I -m phiward ...` are its arguments (exec form; no inline code);
+- the UserPromptSubmit hook (`phiward prompt-scan claude`, `onFailure: "block"`): a prompt that
+  holds an identifier or a path below a protected root is not sent;
+- with --user, `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1"`: an `@path` mention is then a Read
+  the hook sees (Claude Code v2.1.299+ reads it; it ignores it in a project's settings);
 - the sandbox block: `enabled: true`, `allowUnsandboxedCommands: false`;
   `filesystem.denyRead` with every protected root (and the derived ones); `filesystem.denyWrite`
   with the same roots and the phiward config and code; `filesystem.allowWrite` with the
@@ -74,7 +80,7 @@ def pattern_sandbox(patterns: List[str], home: str) -> "tuple":
     from phiward import claude_settings
     entries = []
     for p in patterns:
-        for e in map(lambda x: _home_short(x, home), claude_settings.pattern_entries(p)):
+        for e in (_home_short(x, home) for x in claude_settings.pattern_entries(p)):
             if e not in entries:
                 entries.append(e)
     return entries, (entries if sys.platform == "darwin" else [])
@@ -134,6 +140,29 @@ CLEAN_ENV = ('V=$(/usr/bin/awk "BEGIN{for(k in ENVIRON)if(k~/^(' + "|".join(CLEA
              'IFS=" "; unset $V; ')
 
 
+# the hooks' start: a file in the package (`data/clean-exec.sh`, which runs awk on
+# `data/clean-env.awk`, made from the two lists above) is the command of each entry the user
+# wiring writes. As the command (not `/bin/sh` with the file as its argument), a Claude Code that
+# ignores `args` runs it with no arguments, and it refuses instead of reading the hook's input
+CLEAN_EXEC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "clean-exec.sh")
+_CLEAN_EXEC_TAIL = "/phiward/data/clean-exec.sh"
+HOOK_WHATS = ("hook", "session-note", "prompt-scan")
+
+
+def clean_env_awk() -> str:
+    """The text of `data/clean-env.awk` (a test checks the file against it): the names of the
+    variables the hooks clear, on one line, each followed by a space."""
+    return ("# phiward: the names of the variables its hooks clear (install.CLEARED_PREFIXES and\n"
+            "# install.CLEARED_NAMES, and a TZ that names a file), on one line\n"
+            "BEGIN {\n"
+            "    for (k in ENVIRON)\n"
+            "        if (k ~ /^(" + "|".join(CLEARED_PREFIXES) + ")[A-Za-z0-9_]*$/ ||\n"
+            "            k ~ /^(" + "|".join(CLEARED_NAMES) + ")$/ ||\n"
+            "            (k == \"TZ\" && (ENVIRON[k] ~ /^:?\\// || ENVIRON[k] ~ /\\.\\./)))\n"
+            "            printf \"%s \", k\n"
+            "}\n")
+
+
 def cleared(name: str, value: str = "") -> bool:
     """Whether the hooks' CLEAN_ENV unsets the variable `name` (with `value`)."""
     tz = value[1:] if value.startswith(":") else value
@@ -151,6 +180,30 @@ OLD_PROJECT_HOOKS = (PROJECT_HOOK.replace(
     "install it (step 1 of its quickstart), then start Claude Code again; every tool call is "
     "refused until then", "this project needs it (see its README); every tool call is refused "
     "until it is"),)
+def _prompt_block(reason: str) -> str:
+    """Shell words (inside the hooks' single quotes) that refuse the prompt: the block JSON on
+    stdout and the reason on stderr, exit 2. A plugin's exit 2 with an empty stdout would be no
+    block."""
+    reply = json.dumps({"decision": "block", "reason": reason, "hookSpecificOutput": {
+        "hookEventName": "UserPromptSubmit", "suppressOriginalPrompt": True}})
+    return ('{ echo "' + reply.replace('"', '\\"') + '"; echo "' + reason
+            + '" >&2; exit 2; }')
+
+
+_AWK_FAILS = ('{ echo "phiward: /usr/bin/awk could not list the Python and loader variables to '
+              'clear; every tool call is refused" >&2; exit 2; }')
+# the clean-up of the prompt entry (user and project forms): its awk failure refuses the prompt
+# with the block JSON
+PROMPT_CLEAN_ENV = CLEAN_ENV.replace(_AWK_FAILS, _prompt_block(
+    "phiward: /usr/bin/awk could not list the Python and loader variables to clear; every "
+    "prompt and tool call is refused"))
+# the project form of the prompt entry: both of its failure branches refuse the prompt with
+# the block JSON
+PROJECT_PROMPT_HOOK = (
+    "/bin/sh -c 'command -v phiward >/dev/null 2>&1 || " + _prompt_block(
+        "phiward is not installed or not on PATH: install it (step 1 of its quickstart), then "
+        "start Claude Code again; every prompt and tool call is refused until then") + "; "
+    + PROMPT_CLEAN_ENV + "exec phiward prompt-scan claude'")
 PROJECT_NOTE = ("/bin/sh -c 'command -v phiward >/dev/null 2>&1 || { echo \"phiward is not installed: "
                 "its guards refuse every tool call until it is; ask the operator\"; exit 0; }; "
                 + CLEAN_ENV + "exec phiward session-note claude'")
@@ -185,7 +238,8 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     sp = (lambda xs: _sandbox_paths(list(xs), home))  # ~/... under the home folder
     secret = [h for h in hidden.paths(None, cfg, session=True) if h not in cfg.all_roots]
     if project:
-        hook_cmd, note_cmd = PROJECT_HOOK, PROJECT_NOTE
+        hook_cmd, note_cmd, prompt_cmd = ({"command": c} for c in (
+            PROJECT_HOOK, PROJECT_NOTE, PROJECT_PROMPT_HOOK))
         secret = [h for h in secret if h.startswith(home.rstrip("/") + "/")]
         rel, _other = _project_split(cfg, project_dir or os.getcwd())
         roots_sb, roots_rules = rel, [f"Read({r})" for r in rel] + [f"Read({r}/**)" for r in rel] \
@@ -197,8 +251,9 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     else:
         # phiward's own Python, isolated (-I): PYTHONPATH, PYTHONHOME and the user site folder,
         # which a project's settings could set, cannot choose the code the hook runs
-        hook_cmd = isolated_command(sys.executable, "hook")
-        note_cmd = isolated_command(sys.executable, "session-note")
+        hook_cmd = hook_entry(sys.executable, "hook")
+        note_cmd = hook_entry(sys.executable, "session-note")
+        prompt_cmd = hook_entry(sys.executable, "prompt-scan")
         roots_sb = sp(cfg.all_roots)
         roots_rules = permission_rules(list(cfg.all_roots), home)
         guard = [g for g in config.guard_files() + config.command_paths(cfg) + config.listed_in_home(cfg) if g not in cfg.all_roots]
@@ -214,15 +269,23 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     # not write what git then runs. macOS only: elsewhere the sandbox has no wildcard denyWrite
     git_write = list(claude_settings.GIT_CONTROL_GLOBS) if (
         wild and sys.platform == "darwin") else []
-    entry: Dict[str, Any] = {"type": "command", "command": hook_cmd}
-    note: Dict[str, Any] = {"type": "command", "command": note_cmd}
+    # what the sandbox mounts over: the sockets left out on bubblewrap before 0.5
+    # (hidden.for_sandbox). The permission rules too: Claude Code merges the Read and Edit deny
+    # rules into its sandbox (code.claude.com/docs/en/sandboxing); the hook still refuses a file
+    # tool that names one (guards.protected_paths reads the whole hidden list)
+    secret_sb = hidden.for_sandbox(secret)
+    entry: Dict[str, Any] = {"type": "command", **hook_cmd}
+    note: Dict[str, Any] = {"type": "command", **note_cmd}
     entry.update({"timeout": 10, "onFailure": "block"})
     # the start-of-session note: every session knows the rules before its first refusal
     note["timeout"] = 10
+    # the prompt scan: a prompt that holds an identifier or a protected path is not sent
+    prompt = {"type": "command", **prompt_cmd, "timeout": 10, "onFailure": "block"}
     out = {
         "hooks": {"PreToolUse": [{"matcher": m, "hooks": [dict(entry)]} for m in MATCHERS],
-                  "SessionStart": [{"hooks": [note]}]},
-        "permissions": {"deny": _once(roots_rules + permission_rules(secret, home)
+                  "SessionStart": [{"hooks": [note]}],
+                  "UserPromptSubmit": [{"hooks": [prompt]}]},
+        "permissions": {"deny": _once(roots_rules + permission_rules(secret_sb, home)
                                       + edit_rules(guard, home))},
         "sandbox": {
             "enabled": True,
@@ -233,11 +296,11 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
             "allowUnsandboxedCommands": False,
             "filesystem": {
                 # the hidden list too: a Bash command may not read a key or ticket
-                "denyRead": _once(roots_sb + pat_read + sp(secret) + ticket_globs),
+                "denyRead": _once(roots_sb + pat_read + sp(secret_sb) + ticket_globs),
                 # the project's own Claude Code settings: a Bash command must not rewrite them
                 # (`printf ... > .claude/settings.local.json`)
                 # and all of phiward's own folder (config.sandbox_denied)
-                "denyWrite": _once(roots_sb + pat_write + git_write + sp(guard) + sp(secret)
+                "denyWrite": _once(roots_sb + pat_write + git_write + sp(guard) + sp(secret_sb)
                                    + sp(config.sandbox_denied())
                                    + ([f"./{f}" for f in claude_settings.PROJECT_FILES]
                                       if project else [])),
@@ -251,7 +314,10 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
         out["permissions"].update(_read_blocking(version))
     if not project:
         # the shell pinned to bash (the hook reads commands as bash)
-        out["env"] = {"CLAUDE_CODE_SHELL": claude_settings.BASH}
+        # and `@path` mentions off: a mention would put a file's text into the prompt with no
+        # tool call the hook sees; with them off it is a Read. Claude Code ignores this in a
+        # project's settings, so only the user form carries it
+        out["env"] = {"CLAUDE_CODE_SHELL": claude_settings.BASH, MENTIONS_OFF: "1"}
     if cfg.network_limit and not project:
         # Claude Code honours strictAllowlist only from the user (or managed) settings, and
         # then ignores a repository's allowedDomains and WebFetch allow rules
@@ -260,13 +326,17 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     return out
 
 
+# `@path` mentions off (Claude Code v2.1.299+; unknown before it, and ignored in project settings)
+MENTIONS_OFF = "CLAUDE_CODE_DISABLE_FILE_MENTIONS"
+
 # the file `claude --settings` reads (config.launch_settings_path): `allowUnsandboxedCommands:
 # false` from `--settings` makes the sandbox admin-required (no admin rights needed), so a
 # repository's settings cannot turn it off, exclude commands or add writable paths. Source:
 # code.claude.com/docs/en/sandboxing, "Repository settings under an admin-required sandbox".
 # The hook cannot see this file: it still checks the user and project settings itself
 LAUNCH_SETTINGS: Dict[str, Any] = {"sandbox": {
-    "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False}}
+    "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False},
+    "env": {MENTIONS_OFF: "1"}}
 
 
 def _write_launch_settings() -> int:
@@ -312,39 +382,59 @@ def _once(items: List[str]) -> List[str]:
 
 
 def _entry_key(h: Any) -> "tuple":
-    """A hook entry's command line and whether it is in exec form (written by an older phiward
-    with the shell prefix): the same line in the two forms is two entries."""
+    """A hook entry's command line and whether it is in exec form: the same line in the two
+    forms is two entries."""
     return (_entry_text(h), "args" in h) if isinstance(h, dict) else ("", False)
 
 
 def _entry_text(h: Dict[str, Any]) -> str:
-    """A hook entry as one command line, in shell form or exec form (`/bin/sh` and `-c X`)."""
+    """A hook entry as one command line, in shell form or exec form (the command and its
+    arguments, each quoted)."""
     args = h.get("args")
-    if isinstance(args, list) and h.get("command") == "/bin/sh" and len(args) == 2 \
-            and args[0] == "-c" and isinstance(args[1], str):
-        return "/bin/sh -c " + shlex.quote(args[1])
+    if isinstance(args, list) and all(isinstance(a, str) for a in args):
+        return shlex.join([str(h.get("command", ""))] + args)
     return str(h.get("command", ""))
 
 
-def isolated_command(python: str, what: str) -> str:
-    """The user wiring's command for `phiward <what> claude`: phiward's own Python, isolated
-    (-I: no PYTHON* variable, no user site folder), started by /bin/sh after CLEAN_ENV has
-    unset every PYTHON*, LD_* and DYLD_* variable (-I does not cover the loader's)."""
-    inner = f"{CLEAN_ENV}exec {shlex.quote(python)} -I -m phiward {what} claude"
-    return "/bin/sh -c " + shlex.quote(inner)
+def hook_entry(python: str, what: str) -> Dict[str, Any]:
+    """The user wiring's command for `phiward <what> claude`, in exec form: the package's
+    `clean-exec.sh` unsets every Python and loader variable (-I does not cover the loader's),
+    then runs phiward's own Python, isolated (-I: no PYTHON* variable, no user site folder)."""
+    return {"command": CLEAN_EXEC, "args": [python, "-I", "-m", "phiward", what, "claude"]}
 
 
-def isolated_python(command: str, what: str = "hook") -> str:
-    """The Python of an `isolated_command`, or "" when `command` is not exactly one."""
+def hook_python(h: Any, what: str = "hook") -> str:
+    """The Python of a `hook_entry`, or "" when `h` is not exactly one. Its script may be where
+    another phiward package put it: after a move it is still phiward's, and install replaces it."""
+    if not isinstance(h, dict):
+        return ""
+    command, args = h.get("command"), h.get("args")
+    if isinstance(command, str) and command.startswith("/") and command.endswith(
+            _CLEAN_EXEC_TAIL) and isinstance(args, list) and len(args) == 6 and \
+            all(isinstance(a, str) for a in args) and args[0].startswith("/") and \
+            args[1:] == ["-I", "-m", "phiward", what, "claude"]:
+        return args[0]
+    return ""
+
+
+def _clean_env(what: str) -> str:
+    return PROMPT_CLEAN_ENV if what == "prompt-scan" else CLEAN_ENV
+
+
+def shell_form_python(command: str, what: str = "hook") -> str:
+    """The Python of the user wiring as an earlier phiward wrote it (one `/bin/sh` line: the
+    clean-up, then `exec PYTHON -I -m phiward WHAT claude`), or "" when `command` is not exactly
+    one. Only recognised, so that install replaces it; never written."""
     try:
         words = shlex.split(command)
     except ValueError:
         return ""
+    clean = _clean_env(what)
     if len(words) != 3 or words[:2] != ["/bin/sh", "-c"] or not words[2].startswith(
-            CLEAN_ENV + "exec "):
+            clean + "exec "):
         return ""
     try:
-        rest = shlex.split(words[2][len(CLEAN_ENV) + len("exec "):])
+        rest = shlex.split(words[2][len(clean) + len("exec "):])
     except ValueError:
         return ""
     if len(rest) == 6 and rest[0].startswith("/") and rest[1:] == ["-I", "-m", "phiward",
@@ -354,23 +444,45 @@ def isolated_python(command: str, what: str = "hook") -> str:
 
 
 # a user-wiring entry phiward wrote, in any of its forms (the launcher by path, an earlier
-# `<python> -I -m phiward`, the isolated command): `merge` replaces those it is not writing,
-# so the hook does not run twice
+# `<python> -I -m phiward`, the shell form, the exec form): `merge` replaces those it is not
+# writing, so the hook does not run twice
 _LAUNCHER_FORMS = re.compile(r"^(?:(?:\S*/)?(?:phiward|agent-guards)|(?:'[^']*'|\S+) -I -m phiward) "
-                             r"(?:hook|session-note) claude$")
+                             r"(?:hook|session-note|prompt-scan) claude$")
 
 
-def _is_phiward_user_entry(command: str) -> bool:
-    return bool(_LAUNCHER_FORMS.match(command)) or any(
-        isolated_python(command, w) for w in ("hook", "session-note"))
+def _is_phiward_user_entry(h: Any) -> bool:
+    if not isinstance(h, dict):
+        return False
+    text = _entry_text(h)
+    return bool(_LAUNCHER_FORMS.match(text)) or any(
+        shell_form_python(text, w) or hook_python(h, w) for w in HOOK_WHATS)
 
 
-def _drop_old_commands(groups: List[Any], keep: Set["tuple"]) -> None:
+def is_old_form(h: Any) -> bool:
+    """Whether `h` is a user-wiring entry an earlier phiward wrote, in a form `install` no
+    longer writes (it replaces it)."""
+    return _is_phiward_user_entry(h) and not any(hook_python(h, w) for w in HOOK_WHATS)
+
+
+def _replace_old(groups: List[Any], keep: Set["tuple"], new: Dict[Any, Dict[str, Any]]) -> None:
+    """Each phiward entry in `groups` (one event) that is not in `keep`: the first one in a
+    group whose matcher gets the entry `new[matcher]` becomes that entry, in its place; every
+    other one is dropped. So the order stays, and the hook never runs twice."""
+    present = {_entry_key(h) for g in groups if isinstance(g, dict)
+               and isinstance(g.get("hooks"), list) for h in g["hooks"] if isinstance(h, dict)}
     for g in groups:
-        if isinstance(g, dict) and isinstance(g.get("hooks"), list):
-            g["hooks"] = [h for h in g["hooks"] if not (
-                isinstance(h, dict) and _is_phiward_user_entry(_entry_text(h))
-                and _entry_key(h) not in keep)]
+        if not (isinstance(g, dict) and isinstance(g.get("hooks"), list)):
+            continue
+        out = []
+        for h in g["hooks"]:
+            if not (_is_phiward_user_entry(h) and _entry_key(h) not in keep):
+                out.append(h)
+                continue
+            want = new.get(g.get("matcher"))
+            if want is not None and _entry_key(want) not in present:
+                out.append(dict(want))
+                present.add(_entry_key(want))
+        g["hooks"] = out
     groups[:] = [g for g in groups if not (isinstance(g, dict) and g.get("hooks") == [])]
 
 
@@ -378,7 +490,7 @@ def _isolated_import_problem() -> str:
     """Why the hook as written (this Python, -I) would not start, or "": an install in the user
     site folder is not seen with -I, and then every tool call would be refused without a word."""
     try:
-        r = subprocess.run([sys.executable, "-I", "-c", "import phiward"], cwd="/",
+        r = subprocess.run([sys.executable, "-I", "-m", "phiward", "--version"], cwd="/",
                            stdin=subprocess.DEVNULL, capture_output=True, timeout=30)
     except (OSError, subprocess.SubprocessError) as exc:
         return f"{sys.executable} cannot import phiward with -I ({type(exc).__name__})"
@@ -417,12 +529,15 @@ def fix_own_modes() -> None:
 def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
     out = json.loads(json.dumps(current))
     hooks = out.setdefault("hooks", {}).setdefault("PreToolUse", [])
-    wanted = {_entry_key(h) for k in ("PreToolUse", "SessionStart")
-              for g in want["hooks"].get(k, []) for h in g["hooks"]}
-    if any(_is_phiward_user_entry(c) for c, _x in wanted):  # the user wiring: replace older forms
-        _drop_old_commands(hooks, wanted)
-        if isinstance(out["hooks"].get("SessionStart"), list):
-            _drop_old_commands(out["hooks"]["SessionStart"], wanted)
+    events = ("PreToolUse", "SessionStart", "UserPromptSubmit")
+    want_entries = [h for k in events for g in want["hooks"].get(k, []) for h in g["hooks"]]
+    wanted = {_entry_key(h) for h in want_entries}
+    if any(_is_phiward_user_entry(h) for h in want_entries):
+        # the user wiring: its older forms replaced in place
+        for k in events:
+            if isinstance(out["hooks"].get(k), list):
+                _replace_old(out["hooks"][k], wanted, {g.get("matcher"): g["hooks"][0]
+                                                       for g in want["hooks"].get(k, [])})
     # phiward's own entries under other matchers (an older install's four groups): dropped, so
     # one tool call never runs the hook twice
     mine = {_entry_key(h) for g in want["hooks"]["PreToolUse"] for h in g["hooks"]}
@@ -444,14 +559,15 @@ def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
     for g in want["hooks"]["PreToolUse"]:
         if (g["matcher"], _entry_key(g["hooks"][0])) not in have:
             hooks.append(g)
-    starts = want["hooks"].get("SessionStart", [])
-    if starts:
-        have_start = out["hooks"].setdefault("SessionStart", [])
-        cmds = {_entry_key(h) for g in have_start if isinstance(g, dict)
-                for h in g.get("hooks", []) if isinstance(h, dict)}
-        for g in starts:
-            if _entry_key(g["hooks"][0]) not in cmds:
-                have_start.append(g)
+    for event in ("SessionStart", "UserPromptSubmit"):
+        starts = want["hooks"].get(event, [])
+        if starts:
+            have_start = out["hooks"].setdefault(event, [])
+            cmds = {_entry_key(h) for g in have_start if isinstance(g, dict)
+                    for h in g.get("hooks", []) if isinstance(h, dict)}
+            for g in starts:
+                if _entry_key(g["hooks"][0]) not in cmds:
+                    have_start.append(g)
     sb = out.setdefault("sandbox", {})
     sb["enabled"] = True
     if "failIfUnavailable" in want["sandbox"]:
@@ -468,12 +584,11 @@ def merge(current: Dict[str, Any], want: Dict[str, Any]) -> Dict[str, Any]:
             if v not in have:
                 have.append(v)
     if "network" in want["sandbox"]:
+        # exactly the configured hosts: a host kept from before would be open while the config
+        # lists none (`_network_notes` names each one removed)
         net = sb.setdefault("network", {})
         net["strictAllowlist"] = True
-        domains = net.setdefault("allowedDomains", [])
-        for d in want["sandbox"]["network"]["allowedDomains"]:
-            if d not in domains:
-                domains.append(d)
+        net["allowedDomains"] = list(want["sandbox"]["network"]["allowedDomains"])
     if want.get("env"):
         env = out.get("env") if isinstance(out.get("env"), dict) else {}
         env.update(want["env"])
@@ -511,9 +626,9 @@ def local_wiring(cfg: config.Config, project_dir: str = "") -> Dict[str, Any]:
     allow = [] if os.path.normpath(spool) == config.default_spool(home) else sp([spool])
     return {
         "hooks": {"PreToolUse": []},
-        "permissions": {"deny": permission_rules(roots + machine, home)},
-        "sandbox": {"filesystem": {"denyRead": sp(roots) + sp(machine) + globs,
-                                   "denyWrite": sp(roots) + sp(guard) + sp(machine),
+        "permissions": {"deny": permission_rules(roots + hidden.for_sandbox(machine), home)},
+        "sandbox": {"filesystem": {"denyRead": sp(roots) + sp(hidden.for_sandbox(machine)) + globs,
+                                   "denyWrite": sp(roots) + sp(guard) + sp(hidden.for_sandbox(machine)),
                                    "allowWrite": allow}},
     }
 
@@ -579,9 +694,23 @@ def plugin_state(project: str, home: str) -> "tuple":
 def _env_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:
     """What the merge changes in the settings' `env` that the operator set."""
     before = current.get("env") if isinstance(current.get("env"), dict) else {}
-    return [f"env.{k} was {before[k]!r}; it becomes {after['env'][k]!r} (the hook reads "
-            "commands as bash)" for k in ("CLAUDE_CODE_SHELL",)
-            if k in before and before[k] != after.get("env", {}).get(k)]
+    why = {"CLAUDE_CODE_SHELL": "the hook reads commands as bash",
+           MENTIONS_OFF: "an @-mention becomes a Read the hook sees"}
+    return [f"env.{k} was {before[k]!r}; it becomes {after['env'][k]!r} ({why[k]})"
+            for k in why if k in before and before[k] != after.get("env", {}).get(k)]
+
+
+def _network_notes(current: Dict[str, Any], after: Dict[str, Any]) -> List[str]:
+    """Each host the merge removes from `sandbox.network.allowedDomains` (the network limit
+    keeps exactly the configured ones)."""
+    def hosts(data: Dict[str, Any]) -> List[str]:
+        sb = data.get("sandbox") if isinstance(data.get("sandbox"), dict) else {}
+        net = sb.get("network") if isinstance(sb.get("network"), dict) else {}
+        got = net.get("allowedDomains")
+        return [h for h in got if isinstance(h, str)] if isinstance(got, list) else []
+    keep = set(hosts(after))
+    return [f"[network] removed {h} from sandbox.network.allowedDomains (not in [network] "
+            "allowed_domains)" for h in dict.fromkeys(hosts(current)) if h not in keep]
 
 
 def _write(target: str, want: Dict[str, Any], notes: List[str], argv: List[str]) -> int:
@@ -609,7 +738,7 @@ def _write(target: str, want: Dict[str, Any], notes: List[str], argv: List[str])
     if after_text == before_text or after == current:
         print(f"{target} already has the phiward wiring.")
         return 0
-    notes = notes + _env_notes(current, after)
+    notes = notes + _env_notes(current, after) + _network_notes(current, after)
     diff = difflib.unified_diff(before_text.splitlines(True), after_text.splitlines(True),
                                 fromfile=f"{target} (now)", tofile=f"{target} (new)")
     sys.stdout.writelines(diff)
@@ -690,7 +819,7 @@ Options:
   -h, --help   show this help
 
 Build the Claude Code wiring from the phiward config: the hooks that run before each tool
-call, and the sandbox and permission settings that keep protected data out of the shell.
+call and before each prompt is sent, and the sandbox and permission settings that keep protected data out of the shell.
 Without --write it prints the wiring and changes nothing; printing (and --json) runs only in
 your own terminal, because the wiring names every protected path. It adds entries and turns on what
 the guard needs. It removes only old entries that phiward itself wrote. Without a terminal, --write refuses when PHIWARD_CONFIG, PHIWARD_SPOOL,
@@ -699,7 +828,7 @@ XDG_CONFIG_HOME or XDG_CACHE_HOME is set.
 
 
 def main(argv: List[str]) -> int:
-    if argv[:1] in (["-h"], ["--help"]):
+    if "-h" in argv or "--help" in argv:  # also after `claude`: help prints no wiring
         print(HELP, end="")
         return 0
     if argv[:1] != ["claude"]:
@@ -757,20 +886,26 @@ def main(argv: List[str]) -> int:
               "after you update it.", file=sys.stderr)
     notes = [
         "Claude Code 2.1.295 or newer is needed for onFailure.",
+        "The UserPromptSubmit entry checks each prompt before it is sent: a prompt that holds a "
+        "match of your packs or [sanitize] patterns, or a path below a protected root, is not "
+        "sent. Other prompt hooks run beside it (doctor warns).",
         "Strong form: put the same settings in managed settings. A repository can set "
         "\"disableAllHooks\": true, or add sandbox.excludedCommands, unless managed settings "
         "set allowUnsandboxedCommands to false.",
     ]
     notes.append("sandbox.excludedCommands must be empty, and sandbox.network.allowAllUnixSockets "
-                 "off and allowUnixSockets empty, for the shell to count as confined.")
+                 "off and allowUnixSockets empty, for the shell to count as confined (with an "
+                 "excludedCommands entry, the hook checks the text of every shell command).")
     notes.append("Start the broker outside the agent (`phiward broker` in a terminal, or once "
                  "`(cd ~ && phiward broker --service --write)` for every login): it runs the "
                  "gateway commands, with the grants of your user config.")
     if "network" in want["sandbox"]:
         n = len(cfg.allowed_domains)
-        notes.append(f"[network] limit: shell commands reach only {n} listed host(s) "
-                     "(sandbox.network.strictAllowlist), plus hosts of WebFetch(domain:...) allow "
-                     "rules in your user settings. WebFetch and MCP servers are not limited by it.")
+        notes.append(f"[network] limit: shell commands reach only the {n} host(s) of [network] "
+                     "allowed_domains (sandbox.network.strictAllowlist; no host when the list is "
+                     "empty): install replaces sandbox.network.allowedDomains with that list. "
+                     "WebFetch(domain:...) allow rules at any level add hosts (doctor warns). "
+                     "WebFetch and MCP servers are not limited by it.")
     elif cfg.network_limit and project:
         notes.append("[network] limit is written only by `install claude --user`: Claude Code "
                      "ignores it in a project's settings.")
@@ -781,7 +916,8 @@ def main(argv: List[str]) -> int:
         # wiring keeps its own full-path hooks unless told otherwise
         want["hooks"] = {"PreToolUse": []}
         notes.append("--no-hooks: only the sandbox and permission settings are written here; "
-                     "the hooks must come from your user wiring or the plugin.")
+                     "the hooks (also the prompt check) must come from your user wiring or the "
+                     "plugin.")
     if project:
         why = _claude_folder_problem(cwd)
         if why:

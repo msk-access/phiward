@@ -26,15 +26,15 @@ you use the plugin: a project can turn a plugin off, but not your user wiring.
 In Claude Code, two commands:
 
 ```
-/plugin marketplace add msk-access/phiward#v0.2.0b1
+/plugin marketplace add msk-access/phiward#v0.2.0b2
 ```
 
 ```
 /plugin install phiward@phiward
 ```
 
-`#v0.2.0b1` pins the plugin to the release you installed with `uv`, so their versions agree.
-In a terminal, the same is `claude plugin marketplace add msk-access/phiward#v0.2.0b1`, then
+`#v0.2.0b2` pins the plugin to the release you installed with `uv`, so their versions agree.
+In a terminal, the same is `claude plugin marketplace add msk-access/phiward#v0.2.0b2`, then
 `claude plugin install phiward@phiward`.
 
 ### Offer it to every contributor of a project
@@ -45,7 +45,7 @@ The project's committed `.claude/settings.json` can offer it:
 {
   "extraKnownMarketplaces": {
     "phiward": { "source": { "source": "github", "repo": "msk-access/phiward",
-                             "ref": "v0.2.0b1" } }
+                             "ref": "v0.2.0b2" } }
   },
   "enabledPlugins": { "phiward@phiward": true }
 }
@@ -67,7 +67,7 @@ Each contributor then trusts the folder and installs it (`/plugin install phiwar
   settings stop that. `phiward doctor` warns when a project turns the plugin off or sets `PATH`.
 - **For an organization, managed settings are the strong form.** They can force the plugin on,
   allow only managed and forced hooks, and set the sandbox and permission rules.
-- **The plugin follows the tag you added.** With `#v0.2.0b1`, the marketplace takes the plugin
+- **The plugin follows the tag you added.** With `#v0.2.0b2`, the marketplace takes the plugin
   from that release. Without a tag it follows the repository's `main` branch. The plugin's
   version must match the installed phiward package (`phiward --version`). To move to a new
   release, update both: `uv tool install --force phiward==<version>`, then add the marketplace

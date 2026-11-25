@@ -5,4 +5,4 @@ hook payload into an `Action`; the dispatcher runs every enabled guard on it and
 `Decision`; the adapter turns that into the tool's reply.
 """
 
-__version__ = "0.2.0b1"
+__version__ = "0.2.0b2"

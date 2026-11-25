@@ -195,7 +195,7 @@ def test_b4_a_relative_user_entry_is_relative_to_the_user_folder(tree):
 def test_b8_the_heartbeat_continues_while_every_slot_is_busy(tree, broker):
     p = broker(args=["--max-jobs", "1"])
     rids = []
-    for n in range(2):
+    for _ in range(2):
         rid = uuid.uuid4().hex
         rids.append(rid)
         tmp = os.path.join(broker.spool, f".tmp-{rid}")
@@ -208,8 +208,14 @@ def test_b8_the_heartbeat_continues_while_every_slot_is_busy(tree, broker):
         def started():
             out = [os.path.join(broker.spool, f"out-{r}.log") for r in rids]
             return [n for n in range(2) if os.path.exists(out[n]) and "STARTED" in open(out[n]).read()]
+
+        def claimed(n):
+            return os.path.exists(os.path.join(broker.spool, f"job-{rids[n]}.json"))
+        # the broker may list the spool between the two renames: then the first job can start
+        # before the next pass claims the second, so wait for both
         for _ in range(200):
-            if started():
+            s = started()
+            if len(s) == 1 and claimed(1 - s[0]):
                 break
             time.sleep(0.05)
         assert len(started()) == 1, started()

@@ -607,12 +607,12 @@ def test_doctor_names_a_skill_the_projects_sessions_can_write(tree):
     (home / ".claude" / "skills").mkdir(parents=True)
     (repo / "myskills" / "foo").mkdir(parents=True)
     os.symlink(repo / "myskills" / "foo", home / ".claude" / "skills" / "foo")
-    found = claude_settings.writable_code_roots(str(repo), str(home))
+    found = claude_settings.code_root_report(str(repo), str(home))[0]
     assert [os.path.realpath(repo / "myskills" / "foo")] == [r for r, _l in found], found
     assert found[0][1] == str(home / ".claude" / "skills" / "foo")
     elsewhere = tree / "other"
     elsewhere.mkdir()
-    assert claude_settings.writable_code_roots(str(elsewhere), str(home)) == []
+    assert claude_settings.code_root_report(str(elsewhere), str(home))[0] == []
 
 
 def test_doctor_warns_about_a_skill_the_project_can_write(tree):
@@ -793,6 +793,18 @@ def test_phiwards_own_wiring_and_a_hooks_folder_give_no_warning(tree):
     _settings(home / ".claude" / "settings.json", wiring)
     lines = doctor.settings_script_lines(str(repo), str(home))
     assert len(lines) == 1 and "~/.claude/hooks/" in lines[0], lines
+
+
+def test_phiwards_own_exec_form_hook_is_its_own_where_a_session_can_write_the_package(
+        tree, monkeypatch):
+    # install --user writes {"command": .../clean-exec.sh, "args": [python, -I, ...]}: doctor
+    # must know it by the whole entry, not the command alone, also when the package sits where
+    # a session can write (a home folder under the temp folder, as quickstart-check/mac.sh makes)
+    from phiward import claude_settings, config, doctor, install
+    repo, home = tree / "repo", tree / "home"
+    _settings(home / ".claude" / "settings.json", install.wiring(config.load(str(repo))))
+    monkeypatch.setattr(claude_settings, "agent_writable", lambda project, home: ["/"])
+    assert doctor.settings_script_lines(str(repo), str(home)) == []
 
 
 def test_a_permission_request_hook_is_a_note(tree):

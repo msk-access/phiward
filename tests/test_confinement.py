@@ -60,8 +60,11 @@ def grant(t, body):
 # --- the agent profile: class A of the first review -----------------------------------------------
 
 def test_a_shell_passes_a_gateway_call_to_the_broker(tree):
+    (tree / "phi" / "Doe Jane").mkdir()  # a plain name: masked because it exists
     code, out = agent(tree, f"{PY} -m phiward run -- ls ../phi")
-    assert code == 0 and "<ENTRY>" in out and "FAKE-PT" not in out
+    # FAKE-PT-0001.bam: the genomics rule masks a .bam name whether or not it exists
+    assert code == 0 and "<BAMFILE>" in out and "FAKE-PT" not in out
+    assert "<ENTRY>" in out and "Doe" not in out, out
 
 
 def test_grants_are_refused_without_the_user_config(tree):

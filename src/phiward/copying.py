@@ -1,7 +1,8 @@
 """`phiward copy SRC... DST`: copy protected data without printing it.
 
 The destination must be inside a protected root of the user's own config, or under a configured
-remote (`[copy] remotes = ["host:/abs/prefix"]`). Like `run`, the command the agent types is a
+remote (`[copy] remotes = ["host:/abs/prefix"]`) and, for a push, under `[remote] roots`. Like
+`run`, the command the agent types is a
 client of the broker; the broker calls `execute`. The copy runs with rsync (or
 `cp -R` when rsync is missing and every path is local) in the gateway profile of
 `phiward run`: it can write only at its destination (a folder inside a protected path of the
@@ -22,12 +23,15 @@ from phiward.sanitize import Sanitizer, SanitizerError
 USAGE = "usage: phiward copy [--dry-run] SRC... DST\n"
 HELP = USAGE + """
 Options:
-  --dry-run    check the request and copy nothing
+  --dry-run    check the request and copy nothing (only as the first word)
   -h, --help   show this help
 
 Copy protected data without printing it. DST must be inside a protected root of your user
 config, or under a configured remote (`[copy] remotes = ["host:/abs/prefix"]`). A source or
-destination on a remote is written HOST:/PATH.
+destination on a remote is written HOST:/PATH; a push goes only under `[remote] roots` (where
+remote output is masked). A local path is made absolute once, and every
+check and the copy itself use that path; one with a `..` part, or one that starts with `~` (a
+quoted `~`, which the shell did not expand), is refused: give the full path.
 
 The command is only a client. The broker runs the copy outside the agent's sandbox, so a
 broker must be running (`phiward broker`). The copy writes only at its destination, which
@@ -232,6 +236,10 @@ def _is_remote(arg: str) -> bool:
     return ":" in arg.split("/", 1)[0]
 
 
+NOT_IN_ROOT = ("the destination is not inside a protected path of the user config; results leave "
+               "a root only as `phiward run` output (counts and summaries)")
+
+
 def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
     """Why the copy is refused, or None when it may run."""
     if len(args) < 2:
@@ -245,7 +253,7 @@ def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
         if not _remote_ok(dst, cfg.remotes):
             return "the destination is not under a configured remote ([copy] remotes)"
     elif not _local_inside(dst, cwd, pset):
-        return "the destination is not inside a protected path of the user config"
+        return NOT_IN_ROOT
     from phiward import run
     hidden = paths.ProtectedSet(run.gateway_hidden(cfg), [])
     for src in args[:-1]:
@@ -257,6 +265,13 @@ def plan(args: Sequence[str], cwd: str, cfg: config.Config) -> Optional[str]:
                 # rsync and ssh read credentials for a remote copy, so the profile cannot hide
                 # them: a source that is or holds one is refused here
                 return "a source is or holds a credential or a trace that no copy may read"
+    if _is_remote(dst):
+        # what a push puts on the cluster is masked in remote output only under [remote] roots
+        m = _REMOTE.fullmatch(dst)
+        where = os.path.normpath(m.group(2)) if m else ""
+        if not any(where == r or where.startswith(r.rstrip("/") + "/") for r in cfg.remote_roots):
+            return ("the destination is not under [remote] roots of the user config (what lands "
+                    "there would not be masked)")
     return None
 
 
@@ -290,6 +305,27 @@ def _never() -> bool:
     return False
 
 
+def local_args(args: Sequence[str], cwd: str) -> "Tuple[List[str], str]":
+    """Each local path once, as every check and every program of the copy then use it: absolute
+    and normalized, with rsync's "the folder's contents" marker (`src/`, `src/.`, `.`) kept as
+    written. A path with a `..` part or one that starts with `~` is refused (a reason): the
+    checks and the programs could read it differently. Remote paths and options stay as given
+    (`plan` checks them)."""
+    out = []
+    for a in args:
+        if _is_remote(a) or a.startswith("-"):
+            out.append(a)
+            continue
+        if not a:
+            return [], "an empty path is not a path; give the full path"
+        if a.startswith("~") or ".." in a.split("/"):
+            return [], "a local path holds `..` or starts with `~`; give the full path"
+        full = os.path.normpath(os.path.join(cwd, a))
+        mark = "/." if (a == "." or a.endswith("/.")) else ("/" if a.endswith("/") else "")
+        out.append(full.rstrip("/") + mark if full != "/" else "/")
+    return out, ""
+
+
 def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
             cancelled: Callable[[], bool] = _never) -> int:
     """Run a copy request (in the broker), with `cwd` as the working folder."""
@@ -304,6 +340,10 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
     if cfg.problem:
         out.write("copy refused: the phiward config cannot be used (run phiward doctor)\n")
         return 3
+    args, why = local_args(args, cwd)
+    if why:
+        out.write(f"copy refused: {why}\n")
+        return 2
     why = plan(args, cwd, cfg)
     if why:
         out.write(f"copy refused: {why}\n")
@@ -337,12 +377,14 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
                           "rsync (install it, or copy single files)\n")
                 return 2
             cp = system_program("cp") or "/bin/cp"
-            cmd = [sys.executable, "-c", "pass"] if dry_run else [cp, "-R", "-n", "--"] + list(args)
+            cmd = [system_program("true") or "/usr/bin/true"] if dry_run else \
+                [cp, "-R", "-n", "--"] + list(args)
+        mkdir: List[str] = []
         if not dry_run:
-            # make the destination folder first (Linux rsync has no --mkpath), inside the same
-            # profile and write place as the copy
+            # make the destination folder first (Linux rsync has no --mkpath): its own step, in
+            # the same profile and write place as the copy, which runs only when it succeeded
             folder = dst if (dst.endswith("/") or len(srcs) > 1) else (os.path.dirname(dst) or ".")
-            cmd = ["/bin/sh", "-c", 'mkdir -p -- "$1" && shift && exec "$@"', "sh", folder] + cmd
+            mkdir = ["/bin/mkdir", "-p", "--", folder]
         # a local copy writes only at its destination (inside a protected root), with no
         # network, and reads no credential
         place, why = dest_place(dst, cwd, cfg)
@@ -361,10 +403,15 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
                       "would be copied there (a folder over a file, or a link); nothing was "
                       "copied\n")
             return 2
-        return run.run_confined(cmd, cfg, san, [place], False, out,
-                                label="copy (dry run, nothing copied)" if dry_run else "copy",
-                                env=env, cwd=cwd, cancelled=cancelled,
-                                deny_read=run.gateway_hidden(cfg))
+        steps = ([(mkdir, "copy (make the folder)")] if mkdir else []) + \
+            [(cmd, "copy (dry run, nothing copied)" if dry_run else "copy")]
+        for step, label in steps:
+            code = run.run_confined(step, cfg, san, [place], False, out, label=label, env=env,
+                                    cwd=cwd, cancelled=cancelled,
+                                    deny_read=run.gateway_hidden(cfg))
+            if code != 0:
+                return code
+        return 0
     except confine.ConfineError as exc:
         out.write(f"copy refused: {exc}\n")
         return 3
@@ -431,7 +478,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
           san: Sanitizer, dry_run: bool, env: Dict[str, str], out: TextIO,
           cancelled: Callable[[], bool]) -> int:
     """A pull: `ssh HOST tar -c` (through the shared connection, no credential, no network but
-    its socket) streams into a local `tar -x` that runs in the gateway profile: it writes only
+    its socket) streams into phiward's extractor (`tar_extract.py`), which runs in the gateway profile: it writes only
     at its destination inside a protected path, reads no credential, and has no network at
     all. Only the system
     ssh touches the socket."""
@@ -446,10 +493,6 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
     if dry_run:
         out.write(f"copy (dry run): would pull {len(remote_srcs)} source(s) from the remote\n")
         return 0
-    mkdir, tar = system_program("mkdir"), system_program("tar")
-    if mkdir is None or tar is None:
-        out.write("copy refused: a pull needs mkdir and tar in a system folder\n")
-        return 2
     rt, why = rmt.route(cfg, host)
     if rt is None:
         out.write(f"copy refused: {why}\n")
@@ -461,6 +504,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
         m = _REMOTE.fullmatch(spec)
         assert m is not None
         scratch = tempfile.mkdtemp(prefix="pull-", dir=cfg.cache_dir)
+        argv: List[str] = []
         try:
             argv, fds = confine.gateway_command(
                 rt.ssh + [host, "--", rmt.send_script(m.group(2))], [os.path.realpath(scratch)],
@@ -475,7 +519,7 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
                 for fd in fds:
                     os.close(fd)
 
-            def read_errors() -> None:
+            def read_errors(ssh: subprocess.Popen = ssh, errs: List[str] = errs) -> None:
                 assert ssh.stderr is not None
                 for raw in iter(lambda: ssh.stderr.readline(65536), b""):
                     if len(errs) < 50:
@@ -485,11 +529,12 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             t = threading.Thread(target=read_errors, daemon=True)
             t.start()
 
-            def relay(stdin) -> None:  # the stream, from ssh's output into the local tar
+            # the stream, from ssh's output into the extractor
+            def relay(stdin, ssh: subprocess.Popen = ssh) -> None:
                 assert ssh.stdout is not None
                 shutil.copyfileobj(ssh.stdout, stdin, 1 << 20)
 
-            extract = [sys.executable, "-I", "-c", rmt.EXTRACT_PY, dest]
+            extract = [sys.executable, "-I", rmt.EXTRACTOR, dest]
             try:
                 c = run.run_confined(extract, cfg, san, [place], False, out, label="copy",
                                      env=dict(env, PATH="/usr/bin:/bin"), cwd=cwd,
@@ -520,12 +565,14 @@ def _pull(host: str, remote_srcs: Sequence[str], dst: str, cwd: str, cfg: config
             run._log(f"pull: exit {raw}")
             code = 0 if raw == 0 else 1  # the agent sees success or failure only
         finally:
+            confine.release_profile(argv)
             safeio.remove_tree(scratch)
     return code
 
 
-def main(argv: List[str], out: TextIO = sys.stdout) -> int:
+def main(argv: List[str], out: Optional[TextIO] = None) -> int:
     """The client: the request goes to the broker, which runs it outside the agent's sandbox."""
+    out = sys.stdout if out is None else out  # the stdout of the call, not of the import
     if argv[:1] in (["-h"], ["--help"]):
         out.write(HELP)
         return 0

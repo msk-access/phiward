@@ -16,6 +16,12 @@ The operator's commands (run them in your own terminal, not through an agent):
                      (broker --service [--write]: install it as a login service)
   carryover status|add|show|accept|reset
                      read and keep what `launch` sessions put in quarantine
+  pseudonymize (--new-key NAME | --key NAME) --columns H[=NEW],... IN OUT
+                     a copy of one table (.tsv, .csv, .txt, .maf, each also .gz) with its
+                     ID columns coded (S0042), inside a protected root; the key stays in
+                     ~/.phiward/backups/keys. A .vcf (also .vcf.gz) needs no --columns:
+                     its sample names are coded. A .json (also .json.gz) takes key paths:
+                     --columns 'samples[].id'. A .md (also .md.gz): its pipe tables only
 
 Wire a project and a tool:
   init [--root DIR]  set up a project: AGENTS.md rules, settings, git hooks (it only adds)
@@ -35,6 +41,7 @@ Work with protected data:
 Called by tools (you rarely run these yourself):
   hook claude        read a hook payload on stdin and reply as Claude Code expects
   session-note claude  the start-of-session note (a SessionStart hook)
+  prompt-scan claude   the check of each prompt before it is sent (a UserPromptSubmit hook)
   mcp                an MCP server with the gateway as tools
   git-hook NAME      run a git hook (pre-commit, pre-push), or install them
 """
@@ -70,6 +77,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "session-note":
         from phiward import session_note
         return session_note.main(rest)
+    if cmd == "prompt-scan":
+        from phiward import promptscan
+        return promptscan.main(rest)
     if cmd == "check":
         from phiward.adapters import run_check
         return run_check(rest)
@@ -91,6 +101,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     if cmd == "launch":
         from phiward import wholetool
         return wholetool.main(rest)
+    if cmd == "pseudonymize":
+        from phiward import pseudonymize
+        return pseudonymize.main(rest)
     if cmd == "carryover":
         from phiward import carryover
         return carryover.main(rest)

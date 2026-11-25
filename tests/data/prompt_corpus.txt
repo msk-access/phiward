@@ -1,0 +1,230 @@
+# Made-up ordinary coding prompts, one per line (tests/test_promptscan.py). Written before any
+# pack change. None names a person, a patient or a sample; with the default packs none may block.
+# A second set, written separately, is in prompt_corpus_second.txt.
+Add a --verbose flag to the CLI and update the tests
+Why does pytest fail on test_parse with a KeyError?
+Rename the function load_config to read_config everywhere
+Fix the flake8 warnings in src/utils.py
+Write a docstring for the merge_intervals function
+Can you explain what this regex does: ^\d{3}-\w+$
+Refactor the for loop into a list comprehension
+The CI job on GitHub Actions times out after 6 hours, why?
+git rebase -i HEAD~3 and squash the fixup commits
+How do I undo the last commit but keep the changes?
+Resolve the merge conflict in README.md, keep both sections
+Show me how to cherry-pick commit a1b2c3d onto the release branch
+Why is git status showing every file as modified after the checkout?
+Add .DS_Store and __pycache__/ to .gitignore
+Write a pre-commit hook that runs ruff
+Bump the version to 1.4.2 in pyproject.toml and the changelog
+Tag the release v2.0.0 and write the release notes from the commits since v1.9.0
+Why does `git push` say the remote rejected my branch?
+Split this 800-line module into three smaller ones
+Make the logger write to stderr instead of stdout
+Add type hints to the public functions in io_helpers.py
+Convert this script to use argparse subcommands
+Why is pandas read_csv so slow on a 2 GB file?
+Use polars instead of pandas for the groupby in summarize.py
+Profile the alignment step and tell me where the time goes
+Replace os.path with pathlib in the whole package
+How do I pin numpy below 2.0 in requirements.txt?
+Write a unit test for the edge case where the input list is empty
+Mock the HTTP call in test_fetch so it does not hit the network
+Set up a GitHub Actions matrix for Python 3.9 to 3.13
+The Docker build fails at pip install with a hash mismatch
+Write a Makefile target that runs the tests and the linter
+Explain the difference between a shallow and a deep copy here
+Turn the hard-coded thresholds into config options
+What does this traceback mean: RecursionError: maximum recursion depth exceeded
+Add retries with exponential backoff to the download function
+Why does the snakemake rule run again every time?
+Write a Snakemake rule that sorts and indexes the alignments
+Add a Nextflow process for adapter trimming with cutadapt
+The nf-core pipeline fails at the MULTIQC step, read the log for me
+How do I set the memory for a SLURM job in the Nextflow config?
+Write an sbatch script that runs 20 array tasks
+Why does my R script fail with "object not found" inside dplyr::mutate?
+Convert this base R plot to ggplot2
+Add a facet_wrap by condition to the volcano plot
+How do I install a Bioconductor package in a conda env?
+Use DESeq2 to compare treated and control, with batch as a covariate
+Write an R function that filters genes with low counts
+Explain what the p-adjust method BH does
+Why does Seurat FindMarkers return an empty table?
+Make the heatmap rows clustered but keep the columns in order
+Write a bash one-liner to count lines in every .tsv file in the folder
+How do I loop over files with spaces in their names in bash?
+Use xargs -P to run the jobs in parallel
+Why does my shell script work in bash but not in sh?
+Add set -euo pipefail to the top of the script and fix what breaks
+Explain what awk '{print $2}' does here
+Write a jq filter that keeps only the entries with status ok
+How do I tar and gzip a folder without the top-level path?
+Fix the off-by-one error in the window function
+The variant caller output has the wrong header, fix the VCF writer
+Parse the GTF and build a dict from gene_id to gene_name
+Write a function that reverse-complements a DNA sequence
+Count the GC content of each read in the FASTQ parser test
+Why is samtools sort using so much memory?
+Add a step that runs samtools flagstat and parses the output
+Write a pysam loop that counts reads per chromosome
+How do I compute coverage over the exons with bedtools?
+Merge overlapping intervals in the BED file
+Use bcftools to keep only PASS variants
+Explain the difference between hg19 and GRCh38 coordinates
+Lift over the intervals from hg19 to hg38
+Annotate the variants with VEP in the pipeline
+Why does the MAF converter drop the indels?
+Add unit tests for the codon translation table
+Make the tool accept gzipped input as well as plain text
+Write a small CLI that prints the summary stats of a BAM index
+Speed up the k-mer counter with numpy
+Why does multiprocessing hang on macOS with the spawn start method?
+Use concurrent.futures instead of the thread pool we wrote
+Add a progress bar with tqdm to the long loop
+Cache the reference genome download in CI
+Write the docs page for the new --threads option
+Fix the broken links in docs/index.md
+Add a table of contents to the README
+Convert the docs from reStructuredText to Markdown
+Set up mkdocs with the material theme
+Why does Sphinx autodoc not find my module?
+Write a CONTRIBUTING.md with the branch and review rules
+Add a code of conduct file
+Write a changelog entry for the bug fix in the parser
+Review this pull request and list the risky changes
+Summarize the diff between main and the feature branch
+Why does the test pass locally but fail in CI?
+Make the flaky test deterministic by seeding the random generator
+Add a timeout to the subprocess call
+Handle the case where the config file is missing
+Raise a clear error when the input column is not found
+Log a warning instead of crashing on a malformed line
+Write an integration test with a tiny made-up dataset
+Generate a random test matrix of 100 by 20 with numpy
+Why does json.dumps fail on a numpy float32?
+Serialize the results to parquet instead of CSV
+Read the Excel file with openpyxl and keep only the first sheet
+Write a SQL query that counts rows per group
+Add an index to the table to speed up the join
+Why does SQLAlchemy say the session is closed?
+Write a migration that adds a nullable column
+Explain the difference between INNER and LEFT JOIN with an example
+Add a REST endpoint that returns the job status
+Validate the request body with pydantic
+Why does FastAPI return 422 for this request?
+Add a health check route for the container
+Write a Dockerfile for the pipeline with a slim base image
+Reduce the Docker image size
+Why does the container run as root, and how do I change that?
+Write a docker-compose file with the app and a Postgres service
+Explain what this Kubernetes YAML does
+Add resource limits to the deployment
+Set up a conda environment.yml for the project
+Why does conda take forever to solve the environment?
+Switch the project to uv and write the lock file
+How do I publish the package to PyPI?
+Add a py.typed marker and check with mypy
+Fix the mypy errors in the models module
+Write a dataclass for the sample sheet rows
+Parse the sample sheet CSV and check that each row has a lane and an index
+Add a check that the barcode column has no duplicates
+Explain what this list of read groups means in the header
+Write a function that splits a FASTA file into chunks of 1000 records
+Count the reads that map to the mitochondrial genome
+Plot the insert size distribution
+Make the QC report show the duplication rate
+Add MultiQC config to group the samples by run
+Why is the trimming step dropping so many reads?
+Compare the two versions of the alignment with a diff of the stats
+Write a script to download the reference from Ensembl
+Check the md5 sums after the download
+Explain the CIGAR string 10M2I5M3D20M
+Write a parser for the CIGAR string
+Why is the mapping quality 0 for these reads?
+Filter the alignments with MAPQ below 20
+Add an option to skip secondary and supplementary alignments
+Write a Python wrapper for the bwa mem command
+Pass the number of threads from the config to bwa
+Why does the pipeline write the temp files to /tmp and fill it up?
+Make the temp folder configurable
+Clean up the intermediate files after the step finishes
+Write a function that formats a duration in seconds as h:mm:ss
+Add a --dry-run flag that prints the commands
+Print the commands as they run, like make -n
+Explain the error "Broken pipe" when I pipe the output to head
+Use logging.basicConfig with a format that has the time
+Rotate the log files after 10 MB
+Why does the cron job not see my PATH?
+Write a systemd unit for the worker
+Restart the service when it crashes
+What is the best way to store secrets for the CI job?
+Use GitHub secrets for the API token in the workflow
+Add a step that uploads the coverage report to the CI artifacts
+Why does the coverage report say 0% for the package?
+Add a badge for the CI status to the README
+Fix the YAML indentation in the workflow file
+Run the slow tests only on the main branch
+Add a pytest marker for the slow tests
+Skip the GPU tests when no GPU is present
+Why does torch say CUDA is not available?
+Write a small PyTorch model for the classifier
+Explain what the learning rate scheduler does here
+Save the model checkpoint every epoch
+Split the dataset into train, validation and test sets with a fixed seed
+Compute precision, recall and F1 for the predictions
+Draw a ROC curve with scikit-learn
+Why is the cross-validation score so different from the test score?
+Standardize the features before the PCA
+Plot the first two principal components colored by batch
+Explain the UMAP parameters n_neighbors and min_dist
+Write a notebook cell that loads the AnnData file and shows the obs columns
+Convert the notebook to a script
+Clear the outputs of all notebooks before the commit
+Why does Jupyter not see the kernel from my conda env?
+Add nbstripout to the pre-commit config
+Write a README section on how to run the pipeline on the cluster
+Explain the difference between scratch and home on the cluster
+How do I check how much disk quota I have left?
+Write a function that retries on a stale file handle error
+Why does rsync copy everything again each time?
+Use rsync with --checksum and --partial
+Compress the old logs with zstd
+Explain what the exit code 137 means
+Why did the job get killed with an out-of-memory error?
+Lower the memory use of the merge step by streaming
+Read the big TSV in chunks of 100000 rows
+Add a unit test for the chunked reader
+Write a small benchmark for the two parsers
+Why does the R package fail to build with a missing Rcpp header?
+Add roxygen2 docs to the exported functions
+Run devtools::check and fix the NOTEs
+Explain the difference between a tibble and a data.frame
+Use purrr::map instead of the for loop in the R script
+Why does read.table turn my gene names into factors?
+Write an Rmd report that knits to HTML with the QC plots
+Add renv to the R project and snapshot the packages
+Why does renv restore fail on the cluster?
+Write a test with testthat for the normalize function
+Explain what the edgeR TMM normalization does
+Use limma voom for the comparison and explain the design matrix
+Make the gene set enrichment step use the Hallmark sets
+Why does the enrichment return no significant terms?
+Write the methods section text for the RNA-seq analysis
+Explain what a false discovery rate of 0.05 means here
+Write a function that reads a gzipped FASTA lazily
+Why does gzip.open return bytes and not str?
+Open the file in text mode with gzip.open(path, "rt")
+Explain the difference between bgzip and gzip
+Write a tabix query for a region in the made-up test VCF
+Why does tabix say the file is not sorted?
+Sort the VCF with bcftools sort before indexing
+Add a GitHub issue template for bug reports
+Write a pull request template with a checklist
+Explain the branch protection settings for main
+Why does the required check never start on my PR?
+Rename the workflow job so the required check name matches
+Write a script that lists the open PRs older than a week with gh
+Explain how to use git worktree for a second branch
+Why does git lfs say the object is missing?
+Add a short glossary to the docs for the terms we use

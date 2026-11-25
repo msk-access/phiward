@@ -1,7 +1,20 @@
 # Tests that skip on Linux (CI fails on any other skip: PHIWARD_CHECK_SKIPS=1, tests/conftest.py).
-# macOS-only tests, and a few that need what a system may lack (node, an overlay). Made in
-# Docker (arm64, Python 3.12 and 3.9); remake with PHIWARD_WRITE_SKIPS=FILE.
+# macOS-only tests, and a few that need what a system may lack. Made in Docker (arm64, Python
+# 3.12 and 3.9; scripts/linux-check installs node, as CI's runners have it); remake with
+# PHIWARD_WRITE_SKIPS=FILE. One entry runs on CI and skips only in Docker (no overlay in a user
+# namespace there): test_g3_an_overlay_whose_lower_links_to_the_root_is_an_alias.
+# The sandbox check's letter-case tests need a volume that ignores letter case (macOS).
 tests/test_confinement.py::test_gateway_network_grant
+tests/test_launch_write_to.py::test_on_macos_what_runs_later_cannot_be_made_in_a_listed_folder
+tests/test_macos_gateway_profile_file.py::test_a_launch_session_cannot_read_a_pending_profile
+tests/test_macos_launch_no_helper.py::test_ci_a_sandbox_that_only_tightens_is_not_a_session
+tests/test_macos_launch_no_helper.py::test_ci_doctor_names_a_start_inside_another_sandbox
+tests/test_macos_launch_no_helper.py::test_ci_the_tool_starts_with_sigpipe_at_its_default
+tests/test_macos_processes.py::test_every_process_phiward_starts_meets_the_rule
+tests/test_macos_processes.py::test_launch_listens_on_loopback_only_as_the_page_says
+tests/test_macos_processes.py::test_the_page_lists_exactly_the_shapes_phiward_starts
+tests/test_macos_profile_mount_jobs.py::test_the_gateway_profile_refuses_a_mount_and_a_launchd_job
+tests/test_macos_profile_mount_jobs.py::test_the_tool_profile_refuses_a_mount_and_a_launchd_job
 tests/test_protected_paths.py::test_case_folding_on_macos
 tests/test_round2.py::test_c_no_clipboard
 tests/test_round2.py::test_c_no_notification_state
@@ -10,6 +23,11 @@ tests/test_round4.py::test_bug1_the_profile_holds_the_resolved_place_only
 tests/test_round5.py::test_bug_the_seatbelt_gateway_pattern_rule_has_both_spellings
 tests/test_round5.py::test_k5_an_allow_read_in_another_case_re_opens_the_root
 tests/test_round5.py::test_k6_the_gateway_cannot_write_claude_settings
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[.Claude-.claude]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[.Claude-link-.claude]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[agents.MD-AGENTS.md]
+tests/test_sandbox_check_judge.py::test_a_name_in_other_letter_case_is_refused_where_case_is_ignored[claude.md-CLAUDE.md]
+tests/test_sandbox_check_judge.py::test_another_spelling_of_the_home_folder_is_refused
 tests/test_v2_beta.py::test_l1_a_missing_claude_folder_cannot_be_made_a_link
 tests/test_v2_final_review.py::test_a_name_whose_case_folded_form_is_longer_is_masked_whole[phi_Stra\xdfe O'Brien Pat-Brien Pat]
 tests/test_v2_final_review.py::test_a_name_whose_case_folded_form_is_longer_is_masked_whole[phi_\u0130stanbul O'Neil-Neil]
@@ -19,6 +37,21 @@ tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-nfc-name-U]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-C]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-F]
 tests/test_v2_glob_cases.py::test_the_corpus[mac-r4-upper-name-U]
+tests/test_v2_launch_network.py::test_1_the_profile_allows_only_the_proxys_port
+tests/test_v2_launch_network.py::test_1_the_profiles_one_port_is_tcp_only
+tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v4]
+tests/test_v2_launch_network.py::test_8_a_port_squatted_on_either_loopback_address_is_not_used[v6]
+tests/test_v2_launch_network.py::test_8_launch_refuses_when_the_proxys_port_is_squatted
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[None]
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[SO_REUSEADDR]
+tests/test_v2_launch_network.py::test_8_while_the_session_runs_no_process_can_bind_the_proxys_port[SO_REUSEPORT]
+tests/test_v2_launch_sockets.py::test_a_name_service_socket_stays_reachable
+tests/test_v2_launch_sockets.py::test_a_socket_bound_again_after_the_start_is_not_reachable[claude]
+tests/test_v2_launch_sockets.py::test_a_socket_bound_by_one_name_and_linked_to_another_is_not_reachable[claude]
+tests/test_v2_launch_sockets.py::test_a_socket_made_after_the_start_is_not_reachable[claude]
+tests/test_v2_launch_sockets.py::test_the_helper_stops_when_a_name_service_folder_cannot_be_opened
+tests/test_v2_no_phi.py::test_a_dev_server_folder_on_macos
+tests/test_v2_no_phi.py::test_launch_builds_the_same_profile_with_and_without_the_entry
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[firmlink]
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[upper case]
 tests/test_v2_p0a.py::test_step2_every_spelling_of_a_root_is_inside[volfs]
@@ -61,21 +94,19 @@ tests/test_v2_release_review.py::test_install_writes_sandbox_entries_in_the_cano
 tests/test_v2_release_review.py::test_only_homebrews_admin_group_folders_stay_on_the_broker_path
 tests/test_v2_release_review.py::test_the_config_is_refused_through_the_data_volume_before_its_folder_exists
 tests/test_v2_release_review.py::test_the_user_config_is_refused_in_any_letter_case
-tests/test_v2_review_round4.py::test_phiward_never_calls_remote_what_node_reads_as_this_machine
 tests/test_v2_round12.py::test_a_letter_with_a_longer_case_fold_still_matches[{t}/d/*ss-Stra\xdf]
 tests/test_v2_round12.py::test_a_letter_with_a_longer_case_fold_still_matches[{t}/d/i*-\u0130x_raw]
 tests/test_v2_round13.py::test_a_root_is_found_in_another_case_with_a_longer_fold
 tests/test_v2_round14.py::test_a_pattern_needs_both_of_its_sandbox_entries[0]
 tests/test_v2_round14.py::test_a_pattern_needs_both_of_its_sandbox_entries[1]
 tests/test_v2_round9.py::test_the_named_project_holds_a_folder_written_in_another_case
+tests/test_v2_runs_later.py::test_renv_restore_and_r_run_under_launch
 tests/test_v2_s17.py::test_17_6_a_locked_file_does_not_break_later_launches
 tests/test_v2_s17.py::test_r19_4_a_locked_folder_inside_the_run_does_not_block_removal
 tests/test_v2_unattended.py::test_launch_report_refuses_the_project_in_another_case
-tests/test_v2_unattended.py::test_the_javascript_callback_decides_like_the_python_one
 tests/test_v2_w1.py::test_w1_the_tool_cannot_reach_a_unix_socket_peer
 tests/test_v2_w1b.py::test_a2_a_write_place_replaced_by_a_link_does_not_widen_the_next_session
 tests/test_v2_w1b.py::test_a4_ordinary_permissions_are_not_taken_for_the_sandbox
-tests/test_v2_w1b.py::test_a4_the_foreign_sandbox_check_works
 tests/test_v2_w1b.py::test_b3_preference_writes_are_denied
 tests/test_v2_w1b.py::test_c3_processes_outside_cannot_be_signalled
 tests/test_v2_w1b.py::test_o3_apple_developer_tools_run

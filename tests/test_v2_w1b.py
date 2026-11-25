@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import CONFINE_WHY
+from helpers import CONFINE_WHY, landlock_abi, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -21,7 +21,8 @@ linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux")
 def launch(tree, code, cwd="repo", extra=(), env_extra=None, stdin=subprocess.DEVNULL):
     env = dict(os.environ, PYTHONPATH=SRC)
     env.update(env_extra or {})
-    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--",
+                        tool_py(tree, "generic" if "generic" in extra else "claude"), "-c", code],
                        cwd=str(tree / cwd), capture_output=True, text=True, env=env, timeout=60,
                        stdin=stdin)
     return r.returncode, r.stdout + r.stderr
@@ -80,16 +81,6 @@ def test_a4_ordinary_permissions_are_not_taken_for_the_sandbox(tree):
     assert "REFUSED" in out and not (tree / "home" / ".zshrc").exists(), out
 
 
-@macos
-def test_a4_the_foreign_sandbox_check_works():
-    from phiward import wholetool
-    assert wholetool._sandbox_check_self() is False  # this test process is not sandboxed
-    r = subprocess.run(["/usr/bin/sandbox-exec", "-p", "(version 1)(allow default)", PY, "-c",
-                        f"import sys; sys.path.insert(0, {SRC!r}); from phiward import wholetool;"
-                        " print(wholetool._sandbox_check_self())"], capture_output=True, text=True)
-    assert "True" in r.stdout, r.stdout + r.stderr
-
-
 # --- B: narrow, inert write places --------------------------------------------------------------
 
 @pytest.mark.parametrize("rel", [".cache/uv/x", "Library/Caches/x", ".local/share/claude/versions/x"])
@@ -132,10 +123,11 @@ def test_b2_git_working_files_stay_writable(tree):
     assert "DONE" in out, out
 
 
-def test_b2_claude_commands_stay_writable(tree):
+def test_b2_claude_commands_are_read_only(tree):
+    # a command runs as code later, outside launch: .claude is read-only as a whole
     (tree / "repo" / ".claude" / "commands").mkdir(parents=True)
     _, out = launch(tree, tries(str(tree / "repo" / ".claude" / "commands" / "x.md")))
-    assert "DONE" in out, out
+    assert "REFUSED" in out and "DONE" not in out, out
 
 
 @macos
@@ -190,8 +182,6 @@ def test_c1_an_abstract_socket_outside_is_not_reachable(tree):
         _, out = launch(tree, _connect(name))
     finally:
         srv.close()
-    if "Landlock scope" in out:
-        pytest.skip("this kernel has no Landlock scopes")
     assert "GOT" not in out, out
 
 
@@ -246,11 +236,20 @@ def test_o1_writing_to_stdout_and_stderr_works(tree, dev):
 def test_o2_the_tool_can_use_its_own_sockets(tree):
     code = ("import socket, os, tempfile, threading\n"
             "os.chdir(tempfile.mkdtemp()); p = 's'  # relative: unix socket paths are short\n"
-            "srv = socket.socket(socket.AF_UNIX); srv.bind(p); srv.listen(1)\n"
+            "try:\n"
+            "    srv = socket.socket(socket.AF_UNIX)\n"
+            "except OSError as e:\n"
+            "    print('NO UNIX SOCKETS', e.errno); raise SystemExit\n"
+            "srv.bind(p); srv.listen(1)\n"
             "threading.Thread(target=lambda: srv.accept()[0].sendall(b'OWN'), daemon=True).start()\n"
             "c = socket.socket(socket.AF_UNIX); c.connect(p); print('GOT', c.recv(3))\n")
     _, out = launch(tree, code)
-    assert "GOT b'OWN'" in out, out
+    if sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 the tool's filter denies every unix socket (`--tool generic`):
+        # only Landlock can tell the session's own sockets from those outside
+        assert "NO UNIX SOCKETS 1" in out and "GOT" not in out, out
+    else:
+        assert "GOT b'OWN'" in out, out
 
 
 @macos

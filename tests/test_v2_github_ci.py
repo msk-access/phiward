@@ -6,6 +6,8 @@ through a link, and before this fix every gateway command failed on a machine wi
 ("bwrap: Can't create file at /var/run/docker.sock"), found by the first CI run on GitHub's
 Ubuntu runners. Made-up folders only."""
 
+import contextlib
+import inspect
 import os
 import shutil
 import subprocess
@@ -82,9 +84,14 @@ def test_a_canary_made_by_another_launch_at_the_same_moment_is_fine(tmp_path):
 # scratch folder the agent's command made deep enough stopped its request and stayed behind, and
 # the next broker start (sweep_scratch) failed on it.
 
-def _deep(root, depth=1500):
-    """A folder `depth` levels deep, made one level at a time by descriptor (its path is longer
-    than the system allows, as an agent's command can make it)."""
+DEPTH = 600  # macOS takes about 0.5 s for 600 levels and 15 s for 1500
+
+
+def _deep(root, depth=DEPTH):
+    """A folder `depth` levels deep, made one level at a time by descriptor, as an agent's command
+    can make it. Its path is longer than macOS allows (PATH_MAX 1024) and longer than the
+    900 characters below which `carryover._remove` works by name; Linux allows 4096."""
+    assert 2 * depth > 1024, "too shallow to pass macOS's PATH_MAX"
     root.mkdir(parents=True)
     fd = os.open(str(root), os.O_RDONLY | os.O_DIRECTORY)
     for _ in range(depth):
@@ -105,13 +112,27 @@ def _no_recursive_rmtree(monkeypatch):
     monkeypatch.setattr(_sh, "rmtree", boom)
 
 
+@contextlib.contextmanager
+def _low_recursion_limit(headroom=150):
+    """A recursion limit `headroom` frames above the current stack, restored after: a remover
+    that recurses once per level fails well before `DEPTH`, on every Python version (the default
+    limit, 1000, is above `DEPTH`)."""
+    old = sys.getrecursionlimit()
+    sys.setrecursionlimit(len(inspect.stack(0)) + headroom)
+    try:
+        yield
+    finally:
+        sys.setrecursionlimit(old)
+
+
 def test_a_deep_scratch_folder_is_removed_at_the_broker_start(tmp_path, monkeypatch):
     from phiward import run
     _no_recursive_rmtree(monkeypatch)
     cache = tmp_path / "cache"
     scratch = cache / (run.SCRATCH_PREFIXES[0] + "left")
     _deep(scratch)
-    assert run.sweep_scratch(str(cache)) == 1
+    with _low_recursion_limit():
+        assert run.sweep_scratch(str(cache)) == 1
     assert not scratch.exists()
 
 
@@ -123,7 +144,8 @@ def test_remove_tree_takes_any_depth_and_never_follows_a_link(tmp_path):
     t = tmp_path / "t"
     _deep(t)
     (t / "link").symlink_to(keep, target_is_directory=True)
-    assert safeio.remove_tree(str(t)) is True
+    with _low_recursion_limit():
+        assert safeio.remove_tree(str(t)) is True
     assert not t.exists() and (keep / "k").read_text() == "kept\n"
     assert safeio.remove_tree(str(tmp_path / "absent")) is True
 

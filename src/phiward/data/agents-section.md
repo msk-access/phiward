@@ -13,7 +13,8 @@ Rules:
    broker is running, stop and ask the operator to start the broker. The broker
    runs the program from the operator's PATH with its own environment, not yours.
 3. Write analysis scripts that print aggregates: counts, summaries, tables. Do not print raw
-   records, sample names or identifiers. The sanitizer masks identifiers. It does not mask
+   records, sample names or identifiers. Suppress counts of 7 or fewer, round the rest to 5,
+   and do not let two tables differ by one small cell. The sanitizer masks identifiers. It does not mask
    other content. Draft a script in the project, then ask the operator to read it and move it
    into their scripts folder; after that, run it by its full path:
    `phiward run -- /full/path/NAME.py ARGS`.
@@ -23,9 +24,9 @@ Rules:
    `--write-to DIR` and `--net` work only where the operator granted them in the user config
    (`[broker] write_to`, `[broker] net`). Nothing asks the operator at run time: a grant that is
    not in the config is refused. If you need one, stop and ask the operator. Once a config
-   exists, never run `phiward setup`, `broker`, `pin` or `carryover`: they are for the operator,
-   in their own terminal. The only exception is the guided first setup (`/phiward:setup`),
-   before any config exists.
+   exists, never run `phiward setup`, `broker`, `pin`, `carryover` or `pseudonymize`: they are
+   for the operator, in their own terminal. The only exception is the guided first setup
+   (`/phiward:setup`), before any config exists.
 6. Use `phiward check -- CMD` to see if a command is allowed, before you run it.
 7. For an HPC cluster, do not use `ssh` yourself: your session cannot use the operator's ticket,
    key or connection. Run `phiward run --remote HOST -- CMD [ARG]...`, and move files with
@@ -33,6 +34,10 @@ Rules:
    around the guards. Only the hosts
    and programs the operator listed in the user config are allowed, and the output is masked.
    The command is not confined on the cluster: keep it to counts and states.
+8. If you need a table without its identifiers, ask the operator for a pseudonymized table
+   (`phiward pseudonymize`, which they run in their own terminal). Never make the codes
+   yourself, never run that command, and never give the operator a file or a key name to run
+   it on: they choose both.
 
 A refusal is a decision, not a fault. Read the reason. Do what it says. Do not try another
 spelling, a link, a nested shell, an encoded command or another tool to read the same data.

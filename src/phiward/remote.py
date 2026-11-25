@@ -381,68 +381,10 @@ def send_script(path: str) -> str:
             f"{shlex.quote(os.path.basename(p))}")
 
 
-# "$2" and "$3" are the system mkdir and tar (never found through the request's PATH)
 # The receiving side of a pull, in the gateway profile: a careful extractor in place of tar, the
-# same on every system (bsdtar -k could still change an existing folder's mode). Standard
-# library only; it reads the stream from stdin and writes under argv[1]. What exists is kept;
-# links, special files, `..`, `.claude` are skipped; nothing is followed through a link.
-EXTRACT_PY = r"""
-import os, stat, sys, tarfile
-dest = os.path.realpath(sys.argv[1])
-os.makedirs(dest, mode=0o755, exist_ok=True)
-NF = os.O_NOFOLLOW | os.O_CLOEXEC
-def folder(parts):
-    fd = os.open(dest, os.O_RDONLY | os.O_DIRECTORY | NF)
-    try:
-        for p in parts:
-            try:
-                os.mkdir(p, 0o755, dir_fd=fd)
-            except FileExistsError:
-                pass
-            nfd = os.open(p, os.O_RDONLY | os.O_DIRECTORY | NF, dir_fd=fd)
-            os.close(fd)
-            fd = nfd
-        return fd
-    except OSError:
-        os.close(fd)
-        return None
-kept = skipped = 0
-with tarfile.open(fileobj=sys.stdin.buffer, mode="r|") as t:
-    for m in t:
-        parts = [p for p in m.name.split("/") if p not in ("", ".")]
-        if not parts or ".." in parts or any(p.casefold() == ".claude" for p in parts):
-            skipped += 1
-            continue
-        if m.isdir():
-            fd = folder(parts)
-            if fd is None:
-                kept += 1
-            else:
-                os.close(fd)
-            continue
-        if not m.isreg():
-            skipped += 1
-            continue
-        fd = folder(parts[:-1])
-        if fd is None:
-            kept += 1
-            continue
-        try:
-            try:
-                out = os.open(parts[-1], os.O_WRONLY | os.O_CREAT | os.O_EXCL | NF, 0o644,
-                              dir_fd=fd)
-            except OSError:
-                kept += 1
-                continue
-            src = t.extractfile(m)
-            with os.fdopen(out, "wb") as fh:
-                while True:
-                    b = src.read(1 << 20)
-                    if not b:
-                        break
-                    fh.write(b)
-        finally:
-            os.close(fd)
-sys.stdout.write(f"kept {kept} existing, skipped {skipped}\n")
-"""
+# same on every system (bsdtar -k could still change an existing folder's mode). It is a file in
+# the package, run as `<python> -I EXTRACTOR DEST` (no code in argv). Standard library only; it
+# reads the stream from stdin and writes under DEST. What exists is kept; links, special files,
+# `..`, `.claude` are skipped; nothing is followed through a link.
+EXTRACTOR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tar_extract.py")
 

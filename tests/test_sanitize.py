@@ -83,10 +83,65 @@ def test_msk_table_cases(msk, src, want):
     assert msk.clean(src, table=True) == want
 
 
+@pytest.fixture()
+def msk_only_packs():
+    return Sanitizer._build(config.Config(packs=["genomics", "msk"]), (), ())
+
+
+# What each msk rule is for (the pack's comments, MSK_CASES, the spelling tests): each stays
+# masked, in made-up shapes.
+MSK_INTENDED = [
+    # <DONOR>: a donor name with a number in it
+    ("x DonorFake-7 y", "x <DONOR> y"), ("x DONOR_X1 y", "x <DONOR> y"),
+    ("x Donor_FAKE7 y", "x <DONOR> y"), ("x donorfake12 y", "x <DONOR> y"),
+    ("x Donor-1234567 y", "x <DONOR> y"), ("x id_DonorFake-3 y", "x id_<DONOR> y"),
+    # <CMOID>: C- and six letters or digits, with or without the suffixes; s_C_ forms
+    ("x C-ABC123-L001-d y", "x <CMOID> y"), ("x c-abc123-l001-d y", "x <CMOID> y"),
+    ("x C-FAKE01 y", "x <CMOID> y"), ("x C-ABCDEF y", "x <CMOID> y"),
+    ("x C-ABCDEF-L001 y", "x <CMOID> y"), ("x C-ABC123_P001_d y", "x <CMOID> y"),
+    ("x s_C_FAKE01_P001_d y", "x <CMOID> y"), ("x bam_C-FAKE02-N001 y", "x bam_<CMOID> y"),
+]
+
+
+@pytest.mark.parametrize("src,want", MSK_INTENDED)
+def test_msk_rules_keep_masking_what_they_are_for(msk_only_packs, src, want):
+    assert msk_only_packs.clean(src) == want
+
+
+# Ordinary words of coding prompts (tests/data/prompt_corpus*.txt) that no msk rule masks
+MSK_ORDINARY = [
+    "the donor_id column", "rename donors to participants", "the DonorSearch class",
+    "donor-derived cells", "a Donor", "how a C-string differs", "add a c-header",
+    "move src/clinical/report.py", "under tests/inputs/patient/ here",
+]
+
+
+@pytest.mark.parametrize("src", MSK_ORDINARY)
+def test_msk_rules_leave_ordinary_words(msk_only_packs, src):
+    assert msk_only_packs.clean(src) == src
+
+
 def test_default_pack_is_genomics():
     san = Sanitizer.from_config(config.Config())
     assert san.clean("read A00123:45:HABCDEFXX:1:1101:12345:6789") == "read <READ>"
     assert san.clean("sample P-9990001-T01-IM6") == "sample P-<NUM>-T01-IM6"  # no msk pack
+
+
+@pytest.mark.parametrize("src,want", [
+    ("1234567,7654321", "<NUM>,<NUM>"),  # a CSV row of two long numbers
+    ("FAKE,9990001,12", "FAKE,<NUM>,12"),
+    ("9990001,12", "<NUM>,12"),
+    ("12,9990001", "12,<NUM>"),
+    ("12345,67", "<NUM>,67"),  # a decimal comma: the whole part is masked
+])
+def test_a_long_number_next_to_a_comma_is_masked(genomics, src, want):
+    # configuration.md: any run of five or more digits becomes <NUM>; a comma is no exception
+    assert genomics.clean(src) == want
+
+
+@pytest.mark.parametrize("src", ["12,345 reads", "1,234 and 999,999", "mean=12345.678", "0.0123456"])
+def test_grouped_thousands_and_decimals_are_kept(genomics, src):
+    assert genomics.clean(src) == src
 
 
 def test_msk_pack_has_no_personal_paths():
@@ -155,6 +210,16 @@ def test_name_tokens_and_stop_words():
 def test_placeholder_words_never_become_name_tokens():
     toks = sanitize.name_tokens(["1\t/x/sampleid/NAME/Bamfile/CLINICALPATH/real_Thing9"])
     assert {t.lower() for t in toks} == {"real_thing9", "real", "thing9"}
+
+
+def test_date_is_a_placeholder_word(tmp_path):
+    # the dates pack writes <DATE>: a names file with a path part `date` must not turn it into
+    # another placeholder (`<<NAME>>`)
+    p = tmp_path / "runs.tsv"
+    p.write_text("1\t/x/date/FAKE-PT-0001.bam\n")
+    san = Sanitizer.from_config(config.Config(packs=["genomics", "dates"]), [str(p)])
+    assert "date" not in {t.lower() for t in san.tokens}
+    assert san.clean("seen 2024-03-05 ok") == "seen <DATE> ok"
 
 
 def test_names_file_without_token_fails_closed(tmp_path):
@@ -401,3 +466,74 @@ def test_entry_names_are_masked_through_escapes_and_lookalikes(src):
     san = Sanitizer(entries={"fake-pt-0042.bam", "fake-pt-0042"})
     out = san.clean(src)
     assert "PT-0042" not in out and "\x1b" not in out and "<ENTRY>" in out
+
+
+# --- the label of each built-in rule: identifier or detail (the prompt scan) ---------------------
+# Every built-in pack is listed with the placeholders it labels detail: a new pack must say.
+DETAIL_LABELS = {"genomics": {"<BAMFILE>", "<READ>"}, "msk": set(), "dates": set()}
+
+
+def test_every_built_in_rule_has_a_label():
+    folder = Path(sanitize.__file__).with_name("packs")
+    assert {p.stem for p in folder.glob("*.toml")} == set(DETAIL_LABELS)
+    for name, want in DETAIL_LABELS.items():
+        pack = sanitize.load_pack(name)
+        assert pack.detail == want, name
+        written = {r for _rx, r in pack.paths + pack.identifiers}
+        assert pack.detail <= written, name
+
+
+def _pack_file(tmp_path, body):
+    p = tmp_path / "mine.toml"
+    p.write_text("[pack]\n" + body)
+    return str(p)
+
+
+def test_detail_naming_a_placeholder_the_pack_does_not_write_is_refused(tmp_path):
+    for body in ("identifiers = ['ZQX\\d+ => <BAR>']\ndetail = [\"<FOO>\"]\n",
+                 "identifiers = ['ZQX\\d+ => <BAR>']\ndetail = \"<BAR>\"\n",
+                 # a positions placeholder is no paths or identifiers rule's
+                 "positions = ['ZQX\\d+ => <BAR>']\ndetail = [\"<BAR>\"]\n"):
+        with pytest.raises(SanitizerError) as exc:
+            sanitize.load_pack(_pack_file(tmp_path, body))
+        assert "'detail'" in str(exc.value) and "unknown key" not in str(exc.value)
+
+
+def test_a_pack_file_detail_does_not_drop_its_rule(tmp_path):
+    f = _pack_file(tmp_path, "identifiers = ['ZQX\\d+ => <BAMFILE>']\ndetail = [\"<BAMFILE>\"]\n")
+    assert sanitize.load_pack(f).detail == set()
+    cfg = load_cfg(tmp_path, f'[sanitize]\npacks = ["{f}"]\n')
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.clean("see ZQX123 here") == "see <BAMFILE> here"
+
+
+def _raises(*_a, **_k):
+    raise AssertionError("must not run")
+
+
+def test_identifiers_only_drops_details_positions_names_and_entries(tmp_path, monkeypatch):
+    nf = names_file(tmp_path)
+    cfg = load_cfg(tmp_path, f'[sanitize]\npacks = ["genomics", "msk"]\nnames_from = ["{nf}"]\n')
+    monkeypatch.setattr(sanitize.inventory, "build", _raises)
+    monkeypatch.setattr(sanitize, "_read_names_file", _raises)
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.entries is None and san.re_names is None and not san.pos_rules
+    for line in ("why does Sample7.sorted.bam fail at chr1:1234567",
+                 "read A00123:8:H5:1:1101:1000:2000 has 12345678 bases"):
+        assert san.clean(line) == sanitize.normalize(line)
+    assert san.clean("P-9990001-T01-IM6") == "<SAMPLEID>"
+    # output masking is unchanged
+    out = Sanitizer.from_config(load_cfg(tmp_path, '[sanitize]\npacks = ["genomics"]\n'))
+    assert "<BAMFILE>" in out.clean("Sample7.sorted.bam")
+    assert "<LOCUS>" in out.clean("chr1:1234567")
+
+
+def test_identifiers_only_uses_the_configured_roots_only(tmp_path):
+    root = tmp_path / "phi"
+    root.mkdir()
+    cfg = load_cfg(tmp_path, f'[protected_paths]\nroots = ["{root}"]\n')
+    cfg.derived_roots.append(str(tmp_path / "derivedgit"))
+    san = Sanitizer.from_config(cfg, identifiers_only=True)
+    assert san.clean(f"{root}/FAKE-PT-0001/x") != f"{root}/FAKE-PT-0001/x"
+    lock = f"{tmp_path}/derivedgit/index.lock"
+    assert san.clean(lock) == lock

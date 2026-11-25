@@ -33,6 +33,10 @@ before you choose; they change fast.
 phiward is for **work beside protected data**: the agent helps with the analysis, and the data
 does not reach the model provider.
 
+It is built for an honest user, and for an agent that is honest but can be misled by text it
+reads (prompt injection). It is not built to stop a determined attacker who already runs code on
+the machine ([threat model](threat-model.md#for-reviewers-the-summary)).
+
 1. **Protected data by folder, for the whole tool.** You name the folders that hold protected
    data once. phiward writes that into Claude Code's sandbox and permission rules (Mode A), or
    runs the whole tool in its own kernel profile (Mode B), together with a list of credential
@@ -41,7 +45,7 @@ does not reach the model provider.
    **gateway** (`phiward run`, `phiward copy`). Your **broker** runs the command outside the
    agent, as you, and masks the output: protected paths, the names of files under them, and
    identifier patterns become placeholders. Ask for counts and summaries: masking hides names and
-   identifiers, not other content.
+   identifiers, not other content, and not small counts ([Small counts](daily-use.md#small-counts)).
 3. **HPC without giving the agent your login.** `phiward run --remote` and `phiward copy` go
    through your own shared SSH connection. No request reads your key or Kerberos ticket, and only
    the hosts and programs you list are allowed.
@@ -56,10 +60,11 @@ does not reach the model provider.
 - It reuses the operating system's sandboxes (Seatbelt on macOS; bubblewrap, seccomp and
   Landlock on Linux), Claude Code's own sandbox and permission rules, and the system `ssh`,
   `tar` and `rsync`.
-- It filters the network only where Claude Code's own sandbox can: with `[network] limit`, the
-  shell commands of a Mode A session reach only the hosts you list. The WebFetch tool, MCP
-  servers and Mode B stay open: an agent can still send what it can read there. A network proxy
-  such as the one in `sandbox-runtime` could add that later.
+- It filters the network in two places. With `[network] limit`, the shell commands of a Mode A
+  session reach only the hosts you list; the WebFetch tool and MCP servers stay open. In Mode B,
+  `phiward launch` sends the tool's network through a loopback proxy of its own, which refuses
+  this machine and private addresses. Public hosts stay open in both: an agent can still send
+  what it can read there.
 - Masking hides names and identifiers, not other content in a record. Gateway commands should
   print counts and summaries.
 

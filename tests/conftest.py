@@ -74,7 +74,7 @@ def pytest_sessionfinish(session, exitstatus):
     # a listed test that ran: only for exact lines, in a run of the whole suite
     whole_run = not session.config.option.keyword and not session.config.option.markexpr and \
         [os.path.basename(a.rstrip("/")) for a in session.config.args] in ([], ["tests"])
-    stale = sorted(set(w for w in want if "*" not in w) - set(_SKIPPED))
+    stale = sorted({w for w in want if "*" not in w} - set(_SKIPPED))
     if stale and whole_run:
         print(f"\nNOTE: {len(stale)} test(s) in tests/expected_skips_{sys.platform}.txt ran "
               "this time; remove them from the list if they now always run.", file=sys.stderr)
@@ -142,6 +142,9 @@ def tree(tmp_path, monkeypatch):
     monkeypatch.setenv("PHIWARD_CONFIG", str(cfg))
     monkeypatch.setenv("PHIWARD_DEV", "1")  # tests run from the source checkout
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    # what `launch --tool claude` runs in tests that need Python (helpers.tool_py): a made-up
+    # native build, whose filter launch proves below Landlock ABI 9
+    helpers.fake_native_claude(t / "claude-py" / "claude", python=True)
     yield t
     if sys.platform.startswith("linux"):
         # on Linux `launch` binds every entry next to a protected root into the session's view
@@ -161,7 +164,7 @@ def _temp_is_the_machine(monkeypatch):
     (claude_settings.agent_writable): in tests it stands for the rest of the machine. A test of
     that rule sets `claude_settings._temp_roots` itself."""
     from phiward import claude_settings
-    monkeypatch.setattr(claude_settings, "_temp_roots", lambda: [])
+    monkeypatch.setattr(claude_settings, "_temp_roots", list)
 
 
 @pytest.fixture

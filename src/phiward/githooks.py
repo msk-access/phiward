@@ -37,6 +37,9 @@ Commands:
   install          write both hooks into this repository's hooks folder
   install --force  replace hooks that are there already
 
+Options:
+  -h, --help       show this help
+
 pre-commit refuses a staged file inside a protected folder, and an added line or file name
 that holds an identifier. pre-push refuses a push to a protected branch
 (`[git] protected_branches` in the repo config). The hooks never print a line's content or a
@@ -54,7 +57,7 @@ class GitError(Exception):
 def _git(args: Sequence[str], cwd: str, stdin: Optional[bytes] = None) -> bytes:
     try:
         proc = subprocess.run(["git"] + list(args), cwd=cwd, input=stdin,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                              capture_output=True, check=False)
     except OSError as exc:
         raise GitError(type(exc).__name__)
     if proc.returncode != 0:
@@ -203,7 +206,7 @@ def install(cwd: str, force: bool) -> int:
         target = os.path.join(hdir, name)
         if os.path.lexists(target) and not force:
             try:
-                with open(target, "r", encoding="utf-8", errors="replace") as fh:
+                with open(target, encoding="utf-8", errors="replace") as fh:
                     ours = MARKER in fh.read()
             except OSError:
                 ours = False
@@ -237,6 +240,9 @@ def main(argv: List[str]) -> int:
             data = sys.stdin.buffer.read().decode("utf-8", "replace")
             return pre_push(cwd, data)
         if cmd == "install":
+            if "-h" in rest or "--help" in rest:  # the operator's; never pre-commit or pre-push
+                print(HELP, end="")
+                return 0
             if any(a != "--force" for a in rest):
                 print(USAGE, file=sys.stderr)
                 return 2

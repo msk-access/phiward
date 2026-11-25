@@ -39,12 +39,13 @@ def _reason(tree):
                                               cfg.all_roots, cfg.patterns, config.guard_files())
 
 
-def _hook(tree, monkeypatch):
+def _hook(tree, monkeypatch, command="ls", code=2):
     monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(tree / "repo"))
     payload = {"session_id": "s", "hook_event_name": "PreToolUse", "cwd": str(tree / "repo"),
-               "permission_mode": "default", "tool_name": "Bash", "tool_input": {"command": "ls"}}
+               "permission_mode": "default", "tool_name": "Bash",
+               "tool_input": {"command": command}}
     out, err = io.StringIO(), io.StringIO()
-    assert claude.main(io.StringIO(json.dumps(payload)), out, err) == 2
+    assert claude.main(io.StringIO(json.dumps(payload)), out, err) == code
     return out.getvalue() + err.getvalue()
 
 
@@ -60,8 +61,14 @@ def test_excluded_commands_in_the_user_file_name_that_file_not_install(tree, mon
     r = _reason(tree)
     assert "excludedCommands" in r.text
     assert "~/.claude/settings.json" in r.step and INSTALL not in r.step, r
-    text = _hook(tree, monkeypatch)
+    # b1: with only excludedCommands open, every call gets the text check, not the blanket
+    # refusal: a call that names the root is refused, `ls` runs
+    text = _hook(tree, monkeypatch, f"cat {tree}/phi/FAKE-PT-0001.bam")
+    assert "names a protected path" in text, text
+    # a path the guard cannot see: the refusal gives the same step as doctor
+    text = _hook(tree, monkeypatch, "cat $UNSEEN")
     assert r.step in text and INSTALL not in text, text
+    _hook(tree, monkeypatch, "ls", code=0)
 
 
 def test_an_opener_in_the_user_file_names_that_file(tree):

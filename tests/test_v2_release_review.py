@@ -516,7 +516,7 @@ def test_a_local_copy_and_a_pull_leave_claude_folders_out():
     cmd = copying.rsync_command(["a", "b"], False)
     if cmd is not None:
         assert "--exclude=.claude/" in cmd
-    assert ".claude" in remote.EXTRACT_PY
+    assert ".claude" in Path(remote.EXTRACTOR).read_text()
 
 
 def test_the_destination_checks_compare_by_identity(tree, monkeypatch):
@@ -859,11 +859,12 @@ def test_a_preset_and_a_scripts_folder_in_the_program_list(tree, monkeypatch):
     user = Path(os.environ["PHIWARD_CONFIG"])
     user.write_text(user.read_text() + f'\n[broker]\ncommands = ["@counts", "{scripts}/"]\n')
     cfg = config.load(str(tree / "repo"))
-    assert run.program_listed("wc", "/usr/bin/wc", cfg)
-    assert not run.program_listed("python3", "/usr/bin/python3", cfg)
-    assert run.program_listed(str(mine), os.path.realpath(mine), cfg)
+    cwd, path = os.getcwd(), os.environ.get("PATH", os.defpath)
+    assert run.listed_run_path("wc", "/usr/bin/wc", cfg, cwd, path)
+    assert not run.listed_run_path("python3", "/usr/bin/python3", cfg, cwd, path)
+    assert run.listed_run_path(str(mine), os.path.realpath(mine), cfg, cwd, path)
     other = _tool(tree / "repo", "evil.sh")
-    assert not run.program_listed(str(other), os.path.realpath(other), cfg)
+    assert not run.listed_run_path(str(other), os.path.realpath(other), cfg, cwd, path)
 
 
 def test_listed_scripts_are_protected_from_agent_writes(tree):
@@ -944,7 +945,7 @@ def test_the_pull_extractor_keeps_what_exists_and_skips_what_is_unsafe(tmp_path)
         add(t, "/abs.txt", b"a\n")                       # absolute: lands inside, stripped
         add(t, "lnk", kind=tarfile.SYMTYPE, link="/etc")  # a link
         add(t, "proj/.claude/settings.json", b"{}")       # a .claude folder
-    r = subprocess.run([sys.executable, "-I", "-c", remote.EXTRACT_PY, str(dest)],
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
                        input=buf.getvalue(), capture_output=True, timeout=30)
     assert r.returncode == 0, r.stderr
     assert (dest / "keepdir").is_dir() and (os.stat(dest / "keepdir").st_mode & 0o777) == 0o700
@@ -955,6 +956,42 @@ def test_the_pull_extractor_keeps_what_exists_and_skips_what_is_unsafe(tmp_path)
     assert (dest / "abs.txt").read_text() == "a\n"
     assert not os.path.lexists(dest / "lnk")
     assert not (dest / "proj" / ".claude").exists()
+
+
+def test_the_pull_extractor_writes_nothing_through_links_or_outside_its_folder(tmp_path):
+    import io
+    import subprocess
+    import sys
+    import tarfile
+    from phiward import remote
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "FAKE-PT-0001.txt").write_text("mine\n")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    (dest / "dirlink").symlink_to(outside)                          # a link to a folder
+    (dest / "filelink").symlink_to(outside / "FAKE-PT-0001.txt")    # a link to a file
+
+    def add(t, name, data=b"x", kind=tarfile.REGTYPE, link=""):
+        ti = tarfile.TarInfo(name)
+        ti.type, ti.linkname = kind, link
+        ti.size = len(data) if kind == tarfile.REGTYPE else 0
+        t.addfile(ti, io.BytesIO(data) if kind == tarfile.REGTYPE else None)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as t:
+        add(t, "dirlink/new.txt", b"evil\n")                      # through a folder link
+        add(t, "filelink", b"evil\n")                             # over a file link
+        add(t, "hard", kind=tarfile.LNKTYPE, link="../outside/FAKE-PT-0001.txt")  # a hard link
+        add(t, "a/../../outside/up.txt", b"evil\n")               # `..` inside a name
+        add(t, "a/.claude/x", b"evil\n")                          # a .claude folder
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
+                       input=buf.getvalue(), capture_output=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert sorted(str(p) for p in tmp_path.rglob("*")) == before   # nothing new anywhere
+    assert sorted(os.listdir(outside)) == ["FAKE-PT-0001.txt"]
+    assert (outside / "FAKE-PT-0001.txt").read_text() == "mine\n"
+    assert b"kept 2 existing, skipped 3" in r.stdout, r.stdout
 
 
 # --- defaults that lower the overhead ---------------------------------------------------------
@@ -1045,6 +1082,7 @@ def test_setup_profile_for_real_data_sets_strict_defaults(tree, tmp_path):
                "",                              # results folder: the suggestion
                "",                              # no scripts folder
                "n",                             # no limit on the shell's network
+               "1",                             # subject identifiers: none
                "y", "hpc", "login.example.org", "alice", "/work/alice/proj",  # HPC
                "",                              # cluster folders to mask: the work folder
                "y", "y", "n", "n"]              # write, approve programs, wire, service
@@ -1070,7 +1108,7 @@ def test_setup_profile_for_real_data_sets_strict_defaults(tree, tmp_path):
 
 def test_setup_profile_for_made_up_data_keeps_open_defaults(tree, tmp_path):
     cfg_path = tmp_path / "config.toml"
-    code, out = _drive_setup(tree, ["2", str(tree / "phi"), "", "", "y", "n", "n"], cfg_path)
+    code, out = _drive_setup(tree, ["2", str(tree / "phi"), "", "", "1", "y", "n", "n"], cfg_path)
     assert code == 0, out
     cfg = config.load(str(tree / "repo"), env=dict(os.environ, PHIWARD_CONFIG=str(cfg_path)))
     assert not cfg.problem and cfg.command_lists == [] and cfg.write_to
@@ -1085,7 +1123,7 @@ def test_setup_from_a_team_template(tree, tmp_path):
                "",                            # patterns
                "",                            # write places
                "n", "",                       # programs: keep the team's list, add none
-               "n", "", "n", "n",             # network, remotes, shell network, HPC
+               "n", "", "n", "1", "n",        # network, remotes, shell network, subjects, HPC
                "y", "y", "n", "n"]            # write, approve programs, wire, service
     code, out = _drive_setup(tree, answers, cfg_path, extra=("--from", str(team)))
     assert code == 0, out
@@ -1200,7 +1238,7 @@ def test_claude_folders_in_any_letter_case_are_left_out(tree, tmp_path):
         ti.size = 2
         t.addfile(ti, io.BytesIO(b"{}"))
     dest = tmp_path / "d"
-    r = subprocess.run([sys.executable, "-I", "-c", remote.EXTRACT_PY, str(dest)],
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
                        input=buf.getvalue(), capture_output=True, timeout=30)
     assert r.returncode == 0 and not (dest / "proj" / ".Claude").exists()
     src = tree / "repo" / "proj"
@@ -1219,10 +1257,11 @@ def test_a_program_listed_by_name_is_called_by_its_name(tree, monkeypatch):
     user = Path(os.environ["PHIWARD_CONFIG"])
     user.write_text(user.read_text() + '\n[broker]\ncommands = ["mytool"]\n')
     cfg = config.load(str(tree / "repo"))
-    assert run.program_listed("mytool", os.path.realpath(tool), cfg)
-    assert not run.program_listed(str(tool), os.path.realpath(tool), cfg)
+    cwd, path = os.getcwd(), os.environ.get("PATH", os.defpath)
+    assert run.listed_run_path("mytool", os.path.realpath(tool), cfg, cwd, path)
+    assert not run.listed_run_path(str(tool), os.path.realpath(tool), cfg, cwd, path)
     other = _tool(tree / "elsewhere", "mytool")
-    assert not run.program_listed(str(other), os.path.realpath(other), cfg)
+    assert not run.listed_run_path(str(other), os.path.realpath(other), cfg, cwd, path)
 
 
 @pytest.mark.skipif(__import__("sys").platform != "darwin", reason="the macOS admin group")
@@ -1327,7 +1366,7 @@ def test_values_with_control_characters_are_escaped_when_shown():
 def test_an_hpc_rerun_offers_the_current_settings(tree, tmp_path):
     cfg_path = tmp_path / "cfg" / "config.toml"
     cfg_path.parent.mkdir()
-    first = ["1", str(tree / "phi"), "", "", "", "n",
+    first = ["1", str(tree / "phi"), "", "", "", "n", "1",
              "y", "hpc", "login.example.org", "alice", "/work/alice/proj", "",
              "y", "y", "n", "n"]
     code, out = _drive_setup(tree, first, cfg_path)
@@ -1336,6 +1375,7 @@ def test_an_hpc_rerun_offers_the_current_settings(tree, tmp_path):
     again = ["1", "n", "",            # profile; keep the roots
              "",                      # no scripts folder (the results folder exists)
              "n",                     # no limit on the shell's network
+             "1",                     # subject identifiers: "none" is typed each time
              "y", "", "", "", "", "",  # HPC: Enter keeps each answer
              "y", "n", "n"]           # write, wire, service
     code, out = _drive_setup(tree, again, cfg_path)

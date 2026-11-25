@@ -163,11 +163,17 @@ into a dot-folder either. A push to your home folder could otherwise plant your 
 there; if your cluster names home folders another way, name a work folder yourself.
 
 Copies may go:
-- from an unprotected folder (the project) to an approved remote;
-- from a protected folder to a protected folder or to an approved remote;
+- from an unprotected folder (the project) to an approved remote, under a `[remote] roots`
+  folder;
+- from a protected folder to a protected folder or to an approved remote, under a `[remote]
+  roots` folder;
 - from an approved remote to a protected folder.
 
-Nothing lands where the agent can read it raw.
+Give local paths in full: a local path with a `..` part, or one that starts with a quoted `~`,
+is refused. A push goes only under a `[remote] roots` folder, where remote output is masked;
+with no remote root, every push is refused (setup makes each new copy remote's folder one). Locally,
+what lands is inside a protected root. On the cluster it is masked only under `[remote] roots`,
+and a link there can carry a push outside one.
 
 **A push** (local sources to a remote) does not use rsync. A source may be any file or folder
 that is not a credential, not above one, and not in `/dev`, `/proc` or `/sys`. Your broker checks each source,
@@ -193,17 +199,23 @@ The result is counts (`copy sent: files=N folders=N skipped=N`) and whatever the
 prints, masked like `run --remote` output (your `[remote] roots` included).
 
 **A pull** (remote sources to a protected folder) does not use rsync either: `tar -c` on the
-remote streams through the shared connection into a local `tar -x` that runs in the gateway
+remote streams through the shared connection into phiward's own extractor, a file in the
+installed package (`phiward/tar_extract.py`, run by path with phiward's Python), in the gateway
 profile. It writes only inside protected roots, reads no credential and has no network at all.
 Every pull sends everything named (no resume); files that exist in the protected folder are
 kept, never replaced. What the remote sends lands inside the protected
-folder: plain files and folders only; links and special files are skipped.
+folder: plain files and folders only; links and special files are skipped. A file or folder
+that cannot be made or written in full there (no permission, no space) fails the pull. A
+partly written file is removed, and the rest is still written. A stream that ends early (a
+dropped connection, a killed remote tar) stops the pull and fails it: the file being written
+is removed, and the files that arrived whole before it stay.
 
 A remote path may hold only letters, digits and `. _ + - /`, so it is one plain word for the
 remote shell. An argument with a `:` before its first `/` is remote, as rsync reads it: write a
 local name with a `:` as `./name`. A source that is or holds a credential (`~/.ssh`, your home)
 is refused. A copy between two remotes is refused.
 
+<a id="remote-run"></a>
 ## `phiward run --remote HOST -- CMD`
 
 Your broker runs CMD on the host through your shared connection, and masks what comes back.
@@ -251,17 +263,35 @@ Its sandbox then confines the shell there (Mode A), with phiward's hook. The gat
 only on a kernel with Landlock (see below). Check first that your site allows interactive tools on
 its login nodes.
 
+| Your node (`uname -r`, `bwrap --version`) | The hook and Claude Code's sandbox (Mode A) | The gateway (`phiward run`, `copy`) |
+|---|---|---|
+| Linux 5.19 or newer, bubblewrap 0.4 or newer | yes | yes |
+| RHEL 8: kernel 4.18, bubblewrap 0.4.0 | yes | no: run the agent on your laptop and use `phiward run --remote` |
+
 What the node needs:
 
 - **Landlock ABI 2 or newer** in the kernel (Linux 5.19 or newer) for the gateway: `phiward run`
   refuses to run without it. A RHEL 8 node (kernel 4.18) has no Landlock: there the hook and
   Claude Code's sandbox work, and the gateway does not. `phiward doctor` says which.
 - **bubblewrap 0.4 or newer** with user namespaces (RHEL 8 has 0.4.0). `phiward doctor` checks
-  the version.
+  the version. Below 0.5, Claude Code's sandbox cannot hide a socket by path. There (on Linux
+  x86_64 and aarch64 only) phiward leaves the Docker and Kerberos KCM sockets out of the
+  sandbox's lists and the permission rules (Claude Code merges those into its sandbox; the hook
+  still refuses a file tool that names them), and only Claude Code's seccomp filter for new Unix sockets keeps a shell
+  command from them; `phiward doctor` says so in a NOTE. Check the filter once: ask the agent to
+  run `python3 -c 'import socket; socket.socket(socket.AF_UNIX)'` in Bash. It must fail with
+  "Operation not permitted"; if it works, do not use Mode A on that node. The settings `install`
+  writes then fit only nodes with the same bubblewrap: where one home folder is shared by nodes
+  with bubblewrap below 0.5 and nodes with 0.5 or newer, the shell works on one kind only, so
+  use Claude Code on one kind of node. Before 0.2.0b2, on such a node every Bash call failed
+  with "bwrap: Can't create file at /run/.heim_org.h5l.kcm-socket".
 - **socat on the PATH.** Without admin rights, make a conda environment for it in your own
   space, for example `mamba create -p /scratch/$USER/claude-env -c conda-forge socat`, and put its
   `bin` folder first on the PATH before you start Claude Code. (`sandbox.socatPath` would name
-  it too, but Claude Code reads it only from managed settings.)
+  it too, but Claude Code reads it only from managed settings.) For the release check below,
+  the folder must pass phiward's rule for a PATH folder (no other account can write it or a
+  folder above it), so build socat below your home folder instead, for example in
+  `~/phiward-sbx/tools/bin`.
 - **Claude Code 2.1.295 or newer**, as everywhere. It tells the hook which MCP server each tool
   belongs to. `bash tools/check-claude-mcp-source.sh` (from a phiward
   checkout) shows what yours sends.
@@ -288,7 +318,46 @@ login node (kernel 4.18, bubblewrap 0.4.0) passed all 21 tests:
   written;
 - the direct network was blocked.
 
-A home folder on NFS was not part of that probe.
+A home folder on NFS was not part of that probe. The release check with the real Claude Code
+(`scripts/sandbox-check/check.sh`, [releasing.md](releasing.md)) runs on Linux too. On a RHEL 8
+compute node (2026-11-25) every Mode A line passed; the gateway refused there (no Landlock), as
+documented, so the check's verdict was INCONCLUSIVE for the gateway and for doctor's Landlock
+warning. To run it there, as an interactive job:
+
+1. Make a folder for it below your home folder, `~/phiward-sbx/run` (SBX_BASE), and one for
+   socat, `~/phiward-sbx/tools/bin` (SBX_TOOLS), with socat built into it and nothing else.
+   Run `chmod go-w ~`, and `chmod go-w` on both folders, the folders between, and socat (and
+   what it links to): the check refuses a tools folder or a socat another account could write.
+2. Get the token first: `claude setup-token`, with your `~/.claude` where it is. Keep the
+   token for step 4.
+3. Move away any `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `.claude`, `.git`, `.mcp.json`,
+   `.phiward.toml` or `.agent-guards.toml` in your home folder or a folder above
+   `~/phiward-sbx/run` (your `~/.claude` too). Claude Code and phiward read them from a folder
+   above the session's, so the check refuses while they are there, also right before each
+   session. Start no `claude` until the check is done: it may make `~/.claude` again.
+4. Build the wheel on your laptop, from a clean checkout of the commit to test:
+   `uv build --wheel --out-dir dist .`, then `shasum -a 256 dist/phiward-*.whl` (or
+   `sha256sum`). Copy the wheel to `~/phiward-sbx/wheel/` on the cluster (`chmod go-w` on it and
+   its folder) and keep the sha256. Copy the source of the same commit too, for example
+   `git archive COMMIT | ssh HOST 'mkdir -p ~/phiward-sbx/src && tar -x -C ~/phiward-sbx/src'`:
+   that copy has no `.git`, so the check needs `SBX_SRC`. The `uv` and `claude` on the PATH must
+   pass phiward's rule (no other account can write them or a folder above them): on many
+   clusters `~/.local/bin` and conda are group-writable, so install both into a folder such as
+   `~/phiward-sbx/bin` and put it first. Give uv's Python as the argument when it is not in
+   `~/.local/share/uv/python`. On a node without Landlock (RHEL 8), set `MODES=A`. Then, from
+   `~/phiward-sbx/src`, run
+   `srun --pty --job-name auto-sbx-check env PATH=$HOME/phiward-sbx/bin:/usr/bin:/bin MODES=A
+   SBX_SRC=$HOME/phiward-sbx/src SBX_BASE=$HOME/phiward-sbx/run
+   SBX_TOOLS=$HOME/phiward-sbx/tools/bin SBX_WHEEL=$HOME/phiward-sbx/wheel/phiward-VERSION-py3-none-any.whl
+   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh PYTHON`, with `sh`, not `bash`,
+   and your site's partition options, and paste the token when it asks (`--pty` gives it the
+   terminal it needs). It takes none from the environment. With the wheel, the node
+   needs no package index, only `api.anthropic.com`. The check starts itself again under an
+   empty environment, which drops proxy and CA variables on purpose (`HTTPS_PROXY`, `NO_PROXY`,
+   `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` and the like), so run it on a node that reaches
+   `api.anthropic.com` directly. There is no SBX_ variable for a proxy yet. Without SBX_WHEEL
+   the check builds the wheel itself and needs a package index too.
+5. Put the names back.
 
 ## Rules for the operator
 
@@ -296,7 +365,10 @@ A home folder on NFS was not part of that probe.
 - Until you trust the lists you wrote, read every HPC request the agent proposes before it runs
   (Claude Code asks you before it runs a command, unless you allowed it). This is your habit, not
   a phiward feature: phiward itself never asks at run time; your config decides.
-- Keep `[remote] commands` short. Prefer commands that print counts and states.
+- Keep `[remote] commands` short. Prefer commands that print counts and states, with small counts hidden ([Small counts](daily-use.md#small-counts)).
 - The HPC side's own rules (partitions, job names, where clinical data may be read) still apply.
+- The release check's remote probes (`REMOTE`, `REMOTE_DIR`) use an ssh config of their own that
+  can only join the shared connection you start for them (no key, no ticket). Give a new, empty
+  folder: the check writes only under it, and deletes nothing. Remove it yourself afterwards.
 
 Next: [daily use](daily-use.md).

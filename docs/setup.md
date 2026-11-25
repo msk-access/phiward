@@ -24,16 +24,21 @@ Later: [change the setup](#change-the-setup),
 
 - Python 3.9 or newer.
 - macOS: `/usr/bin/sandbox-exec` (part of macOS; Apple marks it as deprecated, Claude Code uses
-  it too).
+  it too). On a Mac with an endpoint tool, your IT or security team may want the list of every
+  process phiward starts: [endpoint-security.md](endpoint-security.md).
 - Linux:
   - bubblewrap (`bwrap`) on the `PATH`;
   - Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
     gateway uses it as a second layer for its writes and refuses to run without it;
+  - for `phiward launch --tool claude` before Linux 7.1: `socat`, and Claude Code's native
+    build, which carries its seccomp filter; `launch` refuses to start without a filter that
+    works ([launch.md](launch.md#limits-in-this-release));
   - on Ubuntu 24.04, AppArmor can block unprivileged user namespaces
     (`kernel.apparmor_restrict_unprivileged_userns`). Then bubblewrap cannot start. Change the
     setting, or add an AppArmor profile for `bwrap`. `doctor` says when this is the cause.
 - Native Windows has no confinement. Use WSL 2, which is Linux.
-- For Claude Code: version 2.1.295 or newer (it needs `onFailure` on hooks). On Linux, Claude
+- For Claude Code: version 2.1.295 or newer (it needs `onFailure` on hooks); 2.1.299 or newer
+  for `@` mentions off (`doctor` warns below it). On Linux, Claude
   Code's own sandbox (Mode A) also needs bubblewrap and `socat`; `install` sets
   `failIfUnavailable`, so without them Claude Code stops at start instead of running commands
   unsandboxed. `doctor` checks both.
@@ -46,17 +51,17 @@ Install a release from PyPI with `uv` (to get `uv` itself:
 `curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`):
 
 ```bash
-uv tool install --python-preference only-managed phiward==0.2.0b1
+uv tool install --python-preference only-managed phiward==0.2.0b2
 ```
 
 Or with `pipx`:
 
 ```bash
-pipx install phiward==0.2.0b1
+pipx install phiward==0.2.0b2
 ```
 
 Name the version: a beta is not chosen without it. The same release from its GitHub tag, without
-PyPI: `uv tool install git+https://github.com/msk-access/phiward@v0.2.0b1`. Pin a version or a tag;
+PyPI: `uv tool install git+https://github.com/msk-access/phiward@v0.2.0b2`. Pin a version or a tag;
 do not install a branch. Use `uv tool` or `pipx`: they give phiward a Python folder of its own.
 phiward protects the folder of the Python that runs it (the agent may not write there, or it could
 change what the broker runs), so an install into a shared environment (a conda base, a project's
@@ -81,6 +86,9 @@ phiward --help
    yes is suggested; with yes, `git push` and `pip install` fail until you list their hosts),
    and asks about HPC.
 2. **Made-up data**: your folders and a results folder; any program may run.
+
+Every profile also asks which rules mask subject and sample identifiers ([Question
+8](#question-8-subject-and-sample-identifiers-sanitize)).
 3. **Every setting**: the [questions below](#question-1-protected-roots), one by one.
 
 `phiward setup --from team.toml` starts from a team template (a config file with shared
@@ -124,8 +132,9 @@ refuse it.
 
 It can also let the agent write the first config: `phiward setup --first-run --root PATH
 [--root PATH ...] [--remote host:/path ...]`, with the paths that you type in chat. This works
-only while no config exists. It writes protected roots and copy remotes only, never a grant (no
-write places, no network). It refuses a `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` override
+only while no config exists. It writes protected roots and copy remotes only (each remote's
+folder also as a `[remote] root`, so a push can land there), never a grant (no write places, no
+network). It refuses a `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` override
 without a terminal.
 
 **When to use it, and what you trust.** Before your config exists, nothing protects the agent's
@@ -227,6 +236,21 @@ listed: `git push` needs `github.com` (or your git server), `pip install` needs 
 and `files.pythonhosted.org`. Claude Code itself, WebFetch and MCP servers are not limited by
 it. Each listed host is a way out, so list few. Choice 1 asks this too, with yes suggested.
 
+### Question 8: subject and sample identifiers (`[sanitize]`)
+
+The gateway masks the names of files and folders under your protected roots, and the `genomics`
+pack masks sequence file names, read names and loci. A patient, sample or donor ID inside a
+file, or in a name outside the roots, is masked only by a rule for its form. Choose:
+
+1. Your data holds no such IDs beyond the names under the roots: setup records
+   `subjects = "none"`. This is never the default: type 1 each time.
+2. The `msk` pack: one institution's forms. It is an example; copy it for another institution.
+3. Your own rules, one per line (`[sanitize] patterns`), each checked as you type it.
+
+Every profile asks this (in choice 3 it is numbered 8). Setup keeps `genomics` in any pack
+list it writes, also on a re-run over a list you wrote without it. Until one of these is set,
+`phiward doctor` warns.
+
 ### The HPC questions
 
 Choices 1 and 3 then ask whether you work with an HPC cluster. With yes, they ask for its short
@@ -256,8 +280,9 @@ lines to add to your own `~/.ssh/config` ([hpc.md](hpc.md#one-time-setup)).
 6. It prints the next steps: what you did not say yes to, then `phiward doctor` in a project
    folder.
 
-`setup` keeps the other sections of an existing file (`[sanitize]`, `[git]`, `unresolved`), but
-not its comments; the `.bak` file of this run has them. To set those other keys, edit the file by hand; see
+`setup` keeps the other sections of an existing file (`[git]`, `unresolved`) and the other
+`[sanitize]` keys; it writes `[sanitize] subjects`, `packs` or `patterns` from Question 8. It
+does not keep comments; the `.bak` file of this run has them. To set those other keys, edit the file by hand; see
 [configuration.md](configuration.md).
 
 ## 4. Wire the agent tool
@@ -308,27 +333,43 @@ Notes:
   gives `--yes`, before your config exists. After that, do not give `--yes` to an agent: read
   the diff yourself.
 
-The block has four parts.
+The block has five parts.
 
 1. One `PreToolUse` hook entry with the matcher `*` (every tool). It sets `"onFailure": "block"`: without it, Claude
-   Code lets a tool call go on when the hook fails. The command is
-   `/bin/sh -c 'V=$(/usr/bin/awk ...) || { ...; exit 2; }; IFS=" "; unset $V; exec /path/to/python -I -m phiward hook claude'`:
-   every `PYTHON*`, `LD_*` and `DYLD_*` variable is unset (a project's settings could set them to
-   load other code; if `/usr/bin/awk` cannot list them, the hook refuses every call), then
-   phiward's own Python runs isolated (`-I`: no user site folder). Before it writes, `install`
-   checks that this Python finds phiward with `-I` (an install in the user site folder is not
-   seen there) and that `/usr/bin/awk` exists. The plugin's hooks and `install --project` run
-   `phiward` by name after the same unset; a project's `env.PATH` would choose that `phiward`, so
-   the hook refuses every call while a project sets it, and you should wire your user settings
-   too. `install`
-   replaces every earlier form of its own hook entries (`.../bin/phiward hook claude`,
-   `... -I -m phiward ...`).
+   Code lets a tool call go on when the hook fails. The hook runs from files in phiward's
+   package, with no inline code (Claude Code's exec form, `command` and `args`):
+   `"command": "<package>/phiward/data/clean-exec.sh"`,
+   `"args": ["/path/to/python", "-I", "-m", "phiward", "hook", "claude"]`. The script unsets
+   every `PYTHON*`, `LD_*` and `DYLD_*` variable (a project's settings could set them to load
+   other code; the list is `clean-env.awk` beside it, run by `/usr/bin/awk`; if awk cannot list
+   them, the hook refuses every call), then phiward's own Python runs isolated (`-I`: no user
+   site folder). Each failure blocks the call: a script that is not there cannot start
+   (`onFailure: "block"`), and a Python that is not there, or a start without the arguments (a
+   Claude Code that ignores `args`), exits 2. Before it writes, `install` checks that this
+   Python finds phiward with `-I` (an install in the user site folder is not seen there) and
+   that `/usr/bin/awk` exists. The plugin runs its own copy of the script with `phiward` by
+   name; `install --project` runs `phiward` by name after the same unset, in one `/bin/sh`
+   line (a committed file names no path of this machine). A project's `env.PATH` would choose
+   that `phiward`, so the hook refuses every call while a project sets it, and you should wire
+   your user settings too. `install` replaces every earlier form of its own hook entries
+   (`.../bin/phiward hook claude`, `... -I -m phiward ...`, the one `/bin/sh` line an earlier
+   release wrote) in place.
+
+   **After an upgrade that moves phiward's Python** (`uv tool upgrade --python ...`, or another
+   Python version), the script's path in the settings is gone, and every tool call is refused
+   until you run `(cd ~ && phiward install claude --user --write)` again. `doctor` names the
+   cause.
 2. A `SessionStart` hook (`phiward session-note claude`): every session starts with a short note
    on the rules (the gateway is the intended route). It names no protected path.
-3. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
+3. A `UserPromptSubmit` hook (`phiward prompt-scan claude`, `"onFailure": "block"`, the same
+   command form as the first). It checks each prompt before Claude Code sends it. A prompt
+   that the sanitizer would change is not sent: a match of the user config's packs or
+   `[sanitize] patterns`, or a path below a protected root. The message names the kind, never
+   the value. What it does not see: [threat-model.md](threat-model.md#known-prompt-scan).
+4. `permissions.deny`: `Read(...)` and `Edit(...)` rules for every protected root and every entry
    of the hidden list (credentials, tickets, histories). They are a second check on the file
    tools, inside Claude Code.
-4. The sandbox block (shortened here; the real one also lists the hidden list):
+5. The sandbox block (shortened here; the real one also lists the hidden list):
 
 ```json
 {
@@ -367,7 +408,7 @@ hook refuses shell commands other than gateway calls. Protect plain folders (roo
 
 **The `--settings` file.** `install --user --write` also writes
 `~/.config/phiward/claude-settings.json`, which sets `sandbox.enabled`, `failIfUnavailable` and
-`allowUnsandboxedCommands: false`. Start Claude Code with `claude --settings
+`allowUnsandboxedCommands: false`, and turns `@` mentions off (below). Start Claude Code with `claude --settings
 ~/.config/phiward/claude-settings.json` (an alias in your shell startup file does it): a `false`
 given with `--settings` makes the sandbox admin-required, as managed settings would, so a
 repository's `.claude/settings.json` cannot turn the sandbox off, add excluded commands or
@@ -385,6 +426,19 @@ and the hook refuses shell commands (`doctor` says so).
 the hook reads commands as bash does. A project's settings that
 set `CLAUDE_CODE_SHELL` or `CLAUDE_CODE_SHELL_PREFIX` make the hook refuse every call (a
 project's value wins over yours in Claude Code).
+
+**`@` mentions are turned off.** `install --user` sets `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` to
+`1` (also in the `--settings` file). Why: with mentions on, `@path` in a prompt puts the file's
+text into the prompt without a tool call phiward's hook sees. With them off, Claude Code passes
+the path and the agent reads the file with Read, which the hook and the deny rules judge like
+any read. The cost: `@` completion of files no longer inserts their contents; the agent reads
+them with one more tool call. Claude Code ignores the setting in a project's settings, so
+`install --project` does not write it, and it needs Claude Code v2.1.299 or later (older ones
+do not know it). `doctor` reports a missing or different value, and a Claude Code older than
+v2.1.299. It does not cover what an IDE adds to the prompt (the open file and the selection): set
+`claudeCode.attachSelection` and `claudeCode.attachOpenFile` to false in the VS Code settings
+when protected files are open in the editor; `doctor` cannot see them. A session started by the
+Desktop app or a runner whose own environment sets the variable takes that value instead.
 
 An older phiward offered `--shell-prefix`, which ran every shell command through its own kernel
 profile. It is gone: Claude Code's sandbox confines the shell. If you used it, run
@@ -408,15 +462,39 @@ block of `~/.claude/settings.json`; phiward works the same either way.
 The shell counts as confined only when all of these hold:
 
 - the settings in the table above are in force;
-- `excludedCommands` is empty;
+- `excludedCommands` is empty. With an entry set, the hook does not refuse the whole shell: it
+  checks the text of every command, as with `[shell] best_effort`, because Claude Code decides
+  by its own matcher which calls run outside the sandbox. A command that names protected data,
+  or that builds a path the guard cannot see (`$(...)`, a variable it does not know), is
+  refused, and the refusal names the file that holds the entry; the rest run. `ls`, `pytest`
+  and `git status` pass. `phiward doctor` says so;
 - `network.allowAllUnixSockets` is not true, and `network.allowUnixSockets` is empty (a socket
   such as Docker's reaches a process outside the sandbox);
 - no other project settings file that Claude Code may read turns part of the sandbox off;
 - none of these is set, because each lets a command reach past the sandbox:
   `filesystem.disabled`, `enableWeakerNestedSandbox`, `allowAppleEvents`,
-  `allowNestedUserNamespaces`, `network.allowLocalBinding`, `network.allowMachLookup`;
+  `allowNestedUserNamespaces`, `network.allowMachLookup`, and on macOS only
+  `network.allowLocalBinding` (there a sandboxed command can reach every service on localhost;
+  on Linux the key has no effect, so it is not counted). Run a dev server in your own terminal,
+  or list its folder in `[no_phi] folders` (below);
 - no `allowRead` entry re-opens a root;
 - no protected patterns are configured.
+
+**No PHI here.** For a folder you are sure holds no PHI (a website, a tool's code), list it in
+your user config:
+
+```toml
+[no_phi]
+folders = ["/Users/me/code/website"]   # exact folders; not their subfolders
+```
+
+A session whose project is that folder then gets the text check of `[shell] best_effort` for
+Bash, in place of the refusal, when only sandbox openers leave the shell unconfined (not
+`filesystem.disabled`, and not a root missing from `denyRead`). Protected roots are still denied, and
+prompts, the project and files that run later are still checked. The session's start message
+says the folder is relaxed (or why not), and `phiward doctor` lists the folders.
+[Configuration](configuration.md#no_phi) has the rules, and the
+[threat model](threat-model.md#known-no-phi-folders) the limits.
 
 The hook reads the merged settings: managed settings and their `managed-settings.d` drop-ins,
 the project settings, and the user settings in `$CLAUDE_CONFIG_DIR` (or `~/.claude`). The
@@ -491,6 +569,13 @@ prints the commands that remove it. Its log is in `~/Library/Logs/phiward` (macO
 is running. The gateway is then available whenever
 you are logged in; every request is still checked against your config.
 
+**After an upgrade, restart the broker.** A broker that still runs keeps the old code. Its
+status file names its phiward version. `doctor` warns when that differs from its own, or is
+missing (a broker older than this change writes none, and a status it cannot read counts as
+missing), and `doctor --headless` gives it as a reason it
+is not ready. Run `(cd ~ && phiward broker --service --write)` again, or stop `phiward broker`
+and start it again.
+
 ## 6. Pin the derived folders
 
 `phiward setup` does this each time it writes the config. After the
@@ -527,8 +612,15 @@ It prints, among others:
 - for Claude Code: each settings level, whether phiward is wired with `onFailure: "block"`,
   and whether the sandbox confines the shell (and if not, why not).
 
+One WARNING says that your user config enables no pack that masks subject or sample
+identifiers: add one with `phiward setup` (Question 8), or record `[sanitize] subjects = "none"`.
+A repo's `.phiward.toml` cannot clear it.
+
 Fix each line that starts with PROBLEM or WARNING (`doctor` exits with 0 even when there are
 WARNING lines). It also warns when the current folder is inside or above a protected path.
+Its section "launch (Mode B)" runs the start checks of `phiward launch` here, without starting
+anything. What each typical refusal means, and the way around it:
+[refusals.md](refusals.md).
 
 `doctor` shows the protected paths only as counts; add `--show-paths` to list them. It always
 names the files it reads, and a PROBLEM line can quote a path from the config. Run it in your
@@ -545,7 +637,8 @@ covers the new root). The broker must run (step 5). Then, in a project folder:
 phiward run -- ls ~/phiward-trial
 ```
 
-This must print `<ENTRY>` in place of the file name, then `run done: exit=0 ...`.
+This must print `<ENTRY>` in place of the file name, a note that counts it, then
+`run done: exit=0 ...`.
 
 ```bash
 phiward run --net -- true
@@ -568,7 +661,9 @@ settings (by hand).
 A repository can commit `.phiward.toml`. It can only add protection: more roots and
 patterns, built-in packs, protected branches, a stricter `unresolved`, a lower
 `inventory_limit`. It cannot grant anything: `write_to`, `net`, `remotes`, sanitize rules and
-pack files come from the user config only. A root that only a repo config adds is protected from
+pack files come from the user config only. A repo config or a template cannot set
+`[sanitize] subjects`, and a pack a repo config adds masks but does not clear doctor's warning
+about subject identifiers. A root that only a repo config adds is protected from
 the agent, but gateway commands cannot write to it. See
 [configuration.md](configuration.md#the-repo-config).
 

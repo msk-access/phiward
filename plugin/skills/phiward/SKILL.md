@@ -22,6 +22,7 @@ as a login service) runs the command and sends back its sanitized output.
    The broker finds the program on the operator's PATH and uses its own environment, not
    yours: give a path (`./tools/x.py`, `.venv/bin/python`) for a program that only you have.
 3. Write scripts that print aggregates (counts, summaries, tables). Do not print raw records.
+   Suppress counts of 7 or fewer and round the rest to 5 (see `docs/daily-use.md`, Small counts).
    The sanitizer masks identifiers and the names of protected entries. It does not mask other
    content. Content that you print is content that the provider receives.
 4. Copy with `phiward copy SRC... DST`. The destination must be inside a protected folder
@@ -33,8 +34,8 @@ as a login service) runs the command and sends back its sanitized output.
    `--write-to DIR` works only when DIR is a `[broker] write_to` folder or inside one. `--net`
    works only with `[broker] net = true`. A grant that is not configured is refused. If you need
    one, stop and ask the operator to add it. Once a config exists, never run `phiward setup`,
-   `broker`, `pin` or `carryover` (they are for the operator, in their own terminal), and never
-   edit the user config. The only exception is the guided first setup (`/phiward:setup`),
+   `broker`, `pin`, `carryover` or `pseudonymize` (they are for the operator, in their own
+   terminal), and never edit the user config. The only exception is the guided first setup (`/phiward:setup`),
    before any config exists. The operator may also limit your shell commands to listed hosts
    (`[network]`): when one is refused a host, do not reach it another way; ask the operator.
 7. The operator may list the programs gateway commands may run (`[broker] commands`). Then
@@ -47,6 +48,10 @@ as a login service) runs the command and sends back its sanitized output.
    `phiward copy`. The gateway is the intended route, not a way around the guards. Only the hosts and
    programs the operator listed are allowed, the output is masked, and the command is not
    confined on the cluster: keep it to counts and states.
+10. If you need a table without its identifiers, ask the operator for a pseudonymized table
+    (`phiward pseudonymize`, which they run in their own terminal). Never make the codes
+    yourself, never run that command, and never give the operator a file or a key name to run
+    it on: they choose both.
 
 ## What a refusal means
 
@@ -109,9 +114,16 @@ Then run it through the gateway:
 phiward run -- python3 count.py ~/data/patients
 ```
 
-The output has the count and one summary line: `run done: exit=0`. A count of
-5 or more digits shows as `<NUM>`. `--table` keeps numbers, but only when the operator turned
-it on; otherwise it is refused. Do not ask for it to be turned on to see identifiers.
+The output has the count, a note with the placeholders in the lines shown, and one summary
+line: `run done: exit=0`. When the note says no identifier placeholder was shown, tell the
+operator in your reply: their rules may not match this data. A count of
+5 or more digits shows as `<NUM>`. `--table` reads CSV/TSV output by column: cells under an
+identifier header show `<IDCOL>`, numbers in other columns are kept. Print one table per
+command, its header first, with an identifier column. A first line that is not such a header
+(a warning, prose with commas, a table with no identifier column) makes the whole output text,
+and so does every line from the first one that does not fit the table (an empty line, a second
+header). It works only when the operator turned it on; otherwise it is refused. Do
+not ask for it to be turned on to see identifiers.
 
 These examples run `python3`, which works only where the operator set no program list. With
 `[broker] commands` set (the recommended setup for real data), run the operator's listed

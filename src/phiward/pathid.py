@@ -134,7 +134,7 @@ def walk_full(path: str) -> Walk:
                 here = _from_fd(fd)
                 opened = -1
                 if here and (here == "/.vol" or here.startswith("/.vol/")):
-                    for k in range(0, min(len(todo), 3) + 1):
+                    for k in range(min(len(todo), 3) + 1):
                         if any(x == ".." for x in todo[:k]):
                             break
                         full = os.path.join(here, part, *todo[:k])

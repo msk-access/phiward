@@ -137,6 +137,12 @@ sequenceDiagram
 Under `phiward launch` (Mode B) the kernel decides. The hook there is a quick first layer
 (`fasthook.py`).
 
+A prompt goes through another hook, before Claude Code sends it: `phiward prompt-scan claude`
+(`promptscan.py`). It builds the sanitizer from the user config's packs and patterns, without
+the detail rules, positions, names and entries (`Sanitizer.from_config(identifiers_only=True)`),
+and refuses the prompt when the sanitizer would change a line of it, or the absolute form of a
+path-like word in it. `hook claude` and `fasthook` refuse any event but `PreToolUse`.
+
 ## One gateway request
 
 `phiward run -- CMD` is a client only. The broker runs the command, outside the agent.
@@ -167,8 +173,9 @@ flowchart TD
   reads the protected roots. It writes only its scratch folder and the granted folders. It has
   no network unless granted.
 - Every line goes through `sanitize.Sanitizer`. Masking hides names and identifiers, not other
-  content.
-- The agent sees `exit=0` or `exit=1` only. The real exit status goes to the broker's log.
+  content. With `--table`, `sanitize.Columns` reads the lines by column (fresh for each call).
+- The agent sees `exit=0` or `exit=1` only, and a note that counts the placeholders in the
+  lines shown (`run_confined`). The real exit status and the counts go to the broker's log.
 - `phiward copy` and `phiward run --remote` take the same road (`copying.execute`,
   `run._execute_remote`).
 
@@ -191,9 +198,9 @@ flowchart TD
 - Which test files cover which feature: [tests/README.md][tests].
 - Ideas that were turned down already: [decisions.md][decisions].
 
-[contributing]: https://github.com/msk-access/phiward/blob/v0.2.0b1/CONTRIBUTING.md
-[agents]: https://github.com/msk-access/phiward/blob/v0.2.0b1/AGENTS.md
-[rounds]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/review-rounds.md
-[arch]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/architecture.md
-[tests]: https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md
-[decisions]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/decisions.md
+[contributing]: https://github.com/msk-access/phiward/blob/v0.2.0b2/CONTRIBUTING.md
+[agents]: https://github.com/msk-access/phiward/blob/v0.2.0b2/AGENTS.md
+[rounds]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/review-rounds.md
+[arch]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/architecture.md
+[tests]: https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md
+[decisions]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/decisions.md

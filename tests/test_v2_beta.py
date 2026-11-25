@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from phiward import inventory
-from helpers import needs_confine
+from helpers import needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -88,6 +88,7 @@ def test_b8_writing_a_script_that_names_the_data_folder_is_allowed(tree):
 def test_b11_the_cap_holds_with_alternating_lines(tree, broker):
     p = Path(os.environ["PHIWARD_CONFIG"])
     p.write_text(p.read_text() + "[broker]\nmax_output_lines = 50\n")
+    broker()  # a changed config takes effect when the operator restarts the broker
     _, out, _ = ag(["run", "--", PY, "-c", "for i in range(10000): print('a' if i % 4 < 2 else 'b')"],
                    tree / "repo")
     assert len(out.splitlines()) <= 53, len(out.splitlines())
@@ -102,10 +103,13 @@ def test_b1_a_planted_memory_link_does_not_mount_a_root(tree):
     (folder / "projects").mkdir(parents=True)
     os.symlink(os.path.relpath(tree / "phi", folder / "projects"), folder / "projects" / "evil")
     env = dict(os.environ, PYTHONPATH=SRC)
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--memory", "--", PY, "-c",
-                        f"import os\nprint(os.listdir({str(tree / 'phi')!r}))"], cwd=str(tree / "repo"),
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--memory", "--",
+                        tool_py(tree), "-c",
+                        f"import os\ntry:\n    print(os.listdir({str(tree / 'phi')!r}))\n"
+                        "except OSError:\n    pass\nprint('TOOL-RAN')"], cwd=str(tree / "repo"),
                        capture_output=True, text=True, env=env, timeout=120)
     assert "FAKE-PT" not in r.stdout, r.stdout + r.stderr
+    assert "TOOL-RAN" in r.stdout, r.stdout + r.stderr  # a refused start cannot pass
 
 
 # --- HPC variables, settings.local.json, .claude/.vscode ----------------------------------------
@@ -148,6 +152,7 @@ def test_l1_a_missing_claude_folder_cannot_be_made_a_link(tree):
 def test_beta3_long_line_notices_count_toward_the_cap(tree, broker):
     p = Path(os.environ["PHIWARD_CONFIG"])
     p.write_text(p.read_text() + "[broker]\nmax_output_lines = 20\n")
+    broker()  # a changed config takes effect when the operator restarts the broker
     _, out, _ = ag(["run", "--", PY, "-c", "import sys\nfor i in range(200): sys.stdout.write('x' * 70000 + '\\n')"],
                    tree / "repo")
     assert len(out.splitlines()) <= 23, len(out.splitlines())

@@ -1,13 +1,14 @@
 # Quick start
 
 - **For:** anyone who sets phiward up for the first time.
-- **Before:** macOS or Linux, and Claude Code 2.1.295 or newer.
+- **Before:** macOS or Linux, and Claude Code 2.1.295 or newer; 2.1.299 or newer for
+  `@` mentions off (`phiward doctor` warns below it).
 - **You will have:** phiward installed, your protected folders set, Claude Code wired, and a test
   that shows it works.
 
 | Step | Where | What you type | You see |
 |---|---|---|---|
-| 1. Install | Terminal | `uv tool install ... phiward==0.2.0b1` | `phiward --version` prints the version |
+| 1. Install | Terminal | `uv tool install ... phiward==0.2.0b2` | `phiward --version` prints the version |
 | 2. Set up | Terminal (or the plugin) | `cd ~ && phiward setup` | its questions, then the config it wrote |
 | 3. Check | the project folder | `phiward init`, then `phiward doctor` | no `PROBLEM` or `WARNING` line |
 
@@ -26,6 +27,17 @@ people. The stronger **Mode B**
 
 ## 1. Install phiward
 
+**On Linux, first** install bubblewrap and socat (phiward's kernel profile and Claude Code's
+sandbox need them), with your package manager, for example `sudo apt install bubblewrap socat`.
+Without admin rights, see [hpc.md](hpc.md#claude-code-on-the-login-node). On Ubuntu 24.04,
+AppArmor can block bubblewrap: see [setup.md](setup.md#1-requirements).
+
+**On an HPC node with RHEL 8** (`uname -r` starts with `4.18`), the gateway cannot run: that
+kernel has no Landlock. Choose before you start: run the agent on your laptop and reach the
+cluster with `phiward run --remote` ([hpc.md](hpc.md#remote-run)), or run
+Claude Code on the node with the hook and its sandbox only, no gateway
+([hpc.md](hpc.md#claude-code-on-the-login-node)).
+
 In Terminal:
 
 ```bash
@@ -33,7 +45,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ```bash
-uv tool install --python-preference only-managed phiward==0.2.0b1
+uv tool install --python-preference only-managed phiward==0.2.0b2
 ```
 
 ```bash
@@ -46,12 +58,13 @@ uv downloads once (not Xcode's, conda's or the system's, which another account o
 change). The last command puts `~/.local/bin`, where `phiward`
 now is, on your `PATH`.
 
-Then **open a new Terminal**, and **quit and reopen the Claude Code desktop app** (Cmd-Q), so
-that both find `phiward`. In the new Terminal, `phiward --version` prints the version.
+**On a cluster, or with conda**, make sure no other account can write the programs phiward
+trusts, before step 2. On many clusters new folders are group-writable (umask 002), and phiward
+refuses a program in such a folder. Run `chmod go-w ~/.local ~/.local/bin`. Use the `uv` from
+the installer above, not a conda one: `command -v uv` shows which one runs.
 
-**On Linux**, install bubblewrap and socat first (phiward's kernel profile and Claude Code's
-sandbox need them), with your package manager, for example `sudo apt install bubblewrap socat`.
-Without admin rights, see [hpc.md](hpc.md#claude-code-on-the-login-node).
+Then **open a new Terminal**, and **quit and reopen the Claude Code desktop app** (Cmd-Q on
+macOS), so that both find `phiward`. In the new Terminal, `phiward --version` prints the version.
 
 Do not install phiward into conda or another shared Python environment: phiward protects its own
 folder from the agent. Setup also makes phiward's own Python writable by you alone (it says
@@ -67,7 +80,7 @@ Choose one way. Both do the same steps.
 In a Claude Code session, type these two commands:
 
 ```
-/plugin marketplace add msk-access/phiward#v0.2.0b1
+/plugin marketplace add msk-access/phiward#v0.2.0b2
 ```
 
 ```
@@ -112,6 +125,8 @@ safe defaults for you:
 - no network for gateway commands;
 - shell commands in Claude Code reach only the hosts you list (Enter says yes). `git push` and
   `pip install` from a session fail until you list their hosts, such as `github.com`;
+- which rules mask subject and sample IDs inside your files: none (type 1; there is no
+  default), the `msk` example pack, or your own patterns;
 - if you use an HPC cluster: its short name, login host, your user name and work folder.
   `setup` writes phiward's ssh config and prints the lines to add to your `~/.ssh/config`.
 
@@ -170,7 +185,9 @@ protected roots: 1, patterns: 0
 broker: running
 ```
 
-Fix each `WARNING`; each one says how. A `NOTE` is for your information. Before Claude Code is
+Fix each `WARNING`; each one says how. A `NOTE` is for your information. If you kept setup's
+`@genomics` programs, doctor warns about each one the broker does not find (for example
+`samtools`): remove the ones you do not use from `[broker] commands` in your config. Before Claude Code is
 wired, one line gives the next step; `phiward doctor --verbose` lists every check. Then open a
 **new** Claude Code session in that folder and ask the agent to read a file in a protected
 folder: it must be refused. Then ask it to run `phiward run -- wc -l <that file>`: you get a
@@ -216,7 +233,7 @@ request can read your key or Kerberos ticket. The one-time setup is in [hpc.md](
 
 | What you see | What to do |
 |---|---|
-| Every tool call is refused with "phiward is not installed or not on PATH" | The app does not find `phiward`. Quit the app (Cmd-Q) and open it again. If that does not help, check in Terminal that `command -v phiward` prints `~/.local/bin/phiward`, and run `uv tool update-shell` again. |
+| Every tool call is refused with "phiward is not installed or not on PATH" | The app does not find `phiward`. Quit the app (Cmd-Q on macOS) and open it again. If that does not help, check in Terminal that `command -v phiward` prints `~/.local/bin/phiward`, and run `uv tool update-shell` again. |
 | `phiward run` says no broker is running | Start it at every login: `(cd ~ && phiward broker --service --write)` in Terminal. Or run `phiward broker` in a Terminal and keep it open. |
 | A command the agent needs is refused | The refusal says what to run instead. See [daily-use.md](daily-use.md). |
 | `phiward doctor` shows a `PROBLEM` | Fix it before you use the agent; the line says how. |

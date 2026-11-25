@@ -14,7 +14,7 @@ Rules for you while you do this:
   what is needed.
 - When a step is for the user's own terminal, give them the exact command, in its own code
   block, and wait until they say it is done.
-- Once the user config exists, `phiward setup`, `broker`, `pin` and `carryover` are the user's
+- Once the user config exists, `phiward setup`, `broker`, `pin`, `carryover` and `pseudonymize` are the user's
   only: if a later change is needed, tell them to run it in their own terminal.
 - Do not set `PHIWARD_CONFIG`, `PHIWARD_SPOOL` or `XDG_*` variables for these commands.
 
@@ -25,7 +25,7 @@ Rules for you while you do this:
    without uv, give the user the uv install line to run in their own Terminal
    (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`) and stop until they
    have. Then, with their yes, run
-   `uv tool install --python-preference only-managed phiward==0.2.0b1` and
+   `uv tool install --python-preference only-managed phiward==0.2.0b2` and
    `uv tool update-shell`. Tell the user to quit and reopen the desktop app afterwards, so that it
    finds `phiward`. If phiward is also installed in conda or another shared Python, tell the user
    to remove it there (`pip uninstall phiward` in that environment).
@@ -55,7 +55,9 @@ Rules for you while you do this:
    Tell them: choose **1** (real patient data) unless they only try it on made-up data; type
    their protected folders; press Enter to accept the results folder; say yes to limiting the
    network of shell commands, and list the hosts they need (for example `github.com`: without
-   it, `git push` and `pip install` fail), or none; and say yes to writing the file. Then setup
+   it, `git push` and `pip install` fail), or none; for the identifier question, choose what
+   fits their data (1 only if it names no subjects or samples beyond the file names; there is no
+   default); and say yes to writing the file. Then setup
    lists their programs, each with its path, and asks "Approve these N program(s) as they are
    now?": the broker runs only approved programs. On a first run with nothing marked, Enter
    says yes. When a program is marked `(changed)`, or a program in their home folder shadows a
@@ -96,7 +98,7 @@ Rules for you while you do this:
 
 7. **HPC** (only if they gave a remote): explain that HPC goes through their own shared SSH
    connection, and give them the steps of
-   https://github.com/msk-access/phiward/blob/v0.2.0b1/docs/hpc.md#one-time-setup
+   https://github.com/msk-access/phiward/blob/v0.2.0b2/docs/hpc.md#one-time-setup
    to do in their own Terminal (the ssh config lines, `kinit`, `ssh -fN`). After they edit their
    config, the broker refuses requests until they restart it; give them the restart command that
    the refusal names.

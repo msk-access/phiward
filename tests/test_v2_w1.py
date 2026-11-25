@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from helpers import needs_confine
+from helpers import needs_confine, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -25,7 +25,8 @@ pytestmark = needs_confine
 
 def launch(tree, code, cwd="repo", extra=()):
     env = dict(os.environ, PYTHONPATH=SRC)
-    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", *extra, "--",
+                        tool_py(tree, "generic" if "generic" in extra else "claude"), "-c", code],
                        cwd=str(tree / cwd), capture_output=True, text=True, env=env, timeout=60)
     return r.returncode, r.stdout + r.stderr
 
@@ -131,20 +132,33 @@ def test_w1_shared_tmp_is_not_a_write_place(tree):
     finally:
         if os.path.exists(target):
             os.unlink(target)
-    _, out = launch(tree, "import tempfile; print(tempfile.mkstemp()[1])")
-    assert "/.phiward/tools/" in out, out
+    # the temp folder is the session's own: by its full path on macOS; on Linux by /tmp, the name
+    # the view gives the run folder's tmp (a unix socket's path must fit under it)
+    _, out = launch(tree, "import os, tempfile\nt = tempfile.mkstemp()[1]\nprint('TEMP', t)\n"
+                          "own = os.path.join(os.path.dirname(os.environ['XDG_CACHE_HOME']), 'tmp')\n"
+                          "print('OWN', os.path.samefile(os.path.dirname(t), own))\n")
+    if sys.platform == "darwin":
+        assert "/.phiward/tools/" in out, out
+    else:
+        assert "TEMP /tmp/" in out, out
+    assert "OWN True" in out, out
 
 
-def test_w1_launch_inside_launch_runs_directly(tree):
+# macOS: the launch inside looks for the session's run folder under the account's home folder,
+# never HOME, so the test runs there with HOME set to it: on GitHub Actions only
+@pytest.mark.skipif(sys.platform == "darwin" and not os.environ.get("GITHUB_ACTIONS"),
+                    reason="macOS on GitHub Actions only: a launch inside a session uses the "
+                           "account's home")
+def test_w1_launch_inside_launch_runs_directly(tree, monkeypatch):
+    if sys.platform == "darwin":
+        import pwd
+        monkeypatch.setenv("HOME", pwd.getpwuid(os.getuid()).pw_dir)
     inner = (f"import subprocess, os; r = subprocess.run([{PY!r}, '-m', 'phiward', 'launch', '--', "
              f"{PY!r}, '-c', 'print(\"INNER-RAN\")'], capture_output=True, text=True, env=dict(os.environ, "
              f"PYTHONPATH={SRC!r})); print(r.stdout + r.stderr)")
     _, out = launch(tree, inner)
-    if sys.platform.startswith("linux") and "create a new namespace" in out:
-        # Linux wraps again; a host that forbids a user namespace inside bubblewrap (seen on
-        # GitHub's Ubuntu runners) refuses the inner launch: nothing runs, which is safe
-        assert "INNER-RAN" not in out, out
-        return
+    # Linux too: the tool's seccomp fingerprint says it is inside a session, so it does not
+    # wrap again (test_v2_nested_launch.py)
     assert "INNER-RAN" in out, out
 
 
@@ -165,7 +179,7 @@ def test_w1_keystroke_injection_is_refused_in_the_profile(tree):
     env = dict(os.environ, PYTHONPATH=SRC)
     code = ("import fcntl, termios, sys\ntry:\n    fcntl.ioctl(0, termios.TIOCSTI, b'#')\n"
             "    print('INJECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n")
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--", PY, "-c", code],
+    r = subprocess.run([PY, "-m", "phiward", "launch", "--", tool_py(tree), "-c", code],
                        cwd=str(tree / "repo"), stdin=slave, capture_output=True, text=True,
                        env=env, timeout=60)
     os.close(master)

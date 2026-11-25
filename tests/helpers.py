@@ -14,9 +14,29 @@ from phiward.guards import protected_paths
 
 
 # Whether the gateway's confinement works here (None) or why not: one sandboxed `true`, at
-# import (not inside a test, whose HOME and PATH are made up). With PHIWARD_REQUIRE_CONFINE=1
-# (CI) a missing backend fails the run instead of skipping the tests that need it.
-CONFINE_WHY = confine.self_test()
+# import (not inside a test, whose PATH is made up). With PHIWARD_REQUIRE_CONFINE=1 (CI) a
+# missing backend fails the run instead of skipping the tests that need it. HOME is a made-up
+# folder for the call: on macOS the profile is written to ~/.phiward/profiles, never the
+# operator's own.
+
+
+def _self_test():
+    import shutil
+    import tempfile
+    home = tempfile.mkdtemp(prefix="phiward-selftest-home-")
+    before = os.environ.get("HOME")
+    os.environ["HOME"] = os.path.realpath(home)
+    try:
+        return confine.self_test()
+    finally:
+        if before is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = before
+        shutil.rmtree(home, ignore_errors=True)
+
+
+CONFINE_WHY = _self_test()
 if CONFINE_WHY and os.environ.get("PHIWARD_REQUIRE_CONFINE") == "1":
     raise RuntimeError(f"confinement is required here but does not work: {CONFINE_WHY}")
 needs_confine = pytest.mark.skipif(CONFINE_WHY is not None,
@@ -161,3 +181,131 @@ def ready_line(proc, word="READY", seconds=60):
             proc.kill()
             raise AssertionError(f"no {word} line within {seconds} s: {data!r}")
         data += chunk
+
+
+def landlock_abi() -> int:
+    """Linux: the kernel's Landlock ABI version (0 without Landlock, and on other systems)."""
+    import ctypes
+    import sys
+    if not sys.platform.startswith("linux"):
+        return 0
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
+
+
+# A made-up stand-in for Claude Code's `apply-seccomp` (usage: apply-seccomp CMD [ARG]...):
+# it denies socket(AF_UNIX) with EPERM and io_uring with ENOSYS, then runs CMD. With
+# works=False it runs CMD with no filter, as a broken or replaced filter would.
+_FAKE_FILTER = r'''
+import ctypes, os, platform, struct, sys
+if WORKS:
+    m = platform.machine()
+    arch = {"x86_64": 0xC000003E, "aarch64": 0xC00000B7}[m]
+    sock = 41 if m == "x86_64" else 198
+    ld, jeq, ret = 0x20, 0x15, 0x06
+    p = [(ld, 0, 0, 4), (jeq, 1, 0, arch), (ret, 0, 0, 0x80000000), (ld, 0, 0, 0)]
+    for n in (425, 426, 427):
+        p += [(jeq, 0, 1, n), (ret, 0, 0, 0x50026)]
+    p += [(jeq, 0, 3, sock), (ld, 0, 0, 16), (jeq, 0, 1, 1), (ret, 0, 0, 0x50001),
+          (ret, 0, 0, 0x7FFF0000)]
+    b = b"".join(struct.pack("<HBBI", *i) for i in p)
+    buf = ctypes.create_string_buffer(b, len(b))
+    class F(ctypes.Structure):
+        _fields_ = [("len", ctypes.c_ushort), ("f", ctypes.c_void_p)]
+    fp = F(len(p), ctypes.cast(buf, ctypes.c_void_p))
+    libc = ctypes.CDLL(None, use_errno=True)
+    if libc.prctl(38, 1, 0, 0, 0) != 0 or libc.prctl(22, 2, ctypes.byref(fp), 0, 0) != 0:
+        sys.exit("apply-seccomp (made up): the filter could not be set")
+os.execvp(sys.argv[1], sys.argv[1:])
+'''
+
+
+# The help of the made-up native build: commander's layout, as Claude Code prints it. As in the
+# real binary, some commands are hidden from it (CLAUDE_HIDDEN), and an alias is not shown
+CLAUDE_HELP = """Usage: claude [options] [command] [prompt]
+
+Claude Code (made up)
+
+Arguments:
+  prompt                      Your prompt
+
+Options:
+  -d, --debug [filter]        Debug mode, with an optional filter
+  --model <model>             The model for the session
+  -p, --print                 Print the answer and exit
+  --settings <file-or-json>   Settings to load
+  --add-dir <directories...>  More folders
+  -h, --help                  Display help for command
+
+Commands:
+  doctor                      Check the installation
+  logs [options] [id]         Show a background session's log
+  mcp                         Configure MCP servers
+  ultrareview                 Review in the cloud
+  update                      Update Claude Code
+  help [command]              display help for command
+"""
+# its commands: each answers `claude WORD --help` with a Usage line of its own
+# (`help` is not one: the real binary reads it as a prompt), and Remote Control's names print a
+# help of their own form (USAGE, not Usage:)
+CLAUDE_COMMANDS = ("doctor", "logs", "mcp", "ultrareview", "update", "upgrade")
+CLAUDE_HIDDEN = ("daemon", "sandbox", "self-hosted-runner")
+CLAUDE_REMOTE = ("rc", "remote-control", "remote", "sync", "bridge")
+
+
+def fake_native_claude(path, works=True, runs=True, python=False, help=CLAUDE_HELP, bad=None):
+    """A made-up stand-in for Claude Code's native build at `path`: started with
+    ARGV0=apply-seccomp it is the filter (it denies socket(AF_UNIX), unless not `works`, and runs
+    CMD; with runs=False it exits 0 without running CMD), as the real binary carries
+    apply-seccomp; otherwise it prints ARGV and its arguments as JSON, or with `python` runs as
+    Python with its arguments (python -c CODE ignores the --settings launch adds last). Asked
+    `--help` it prints `help`; `WORD --help` prints a Usage of its own for a command (listed or
+    hidden), else `help` (a prompt). `bad` maps a WORD to "hang" or "fail" for WORD --help."""
+    import sys
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(f"#!{sys.executable} -IS\nimport json, os, sys\n"
+                 f"a = sys.argv[1:]\nbad = {dict(bad or {})!r}\n"
+                 "if a == ['--version']:\n    print('2.1.330 (Claude Code)')\n    sys.exit(0)\n"
+                 "if a[-1:] == ['--help'] and len(a) <= 2:\n"
+                 "    w = a[0] if len(a) == 2 else ''\n"
+                 "    if bad.get(w) == 'hang':\n        import time; time.sleep(600)\n"
+                 "    if bad.get(w) == 'fail':\n        sys.exit(1)\n"
+                 f"    if w in {CLAUDE_COMMANDS + CLAUDE_HIDDEN!r}:\n"
+                 "        print('Usage: claude %s [options]\\n\\nA command' % w)\n"
+                 f"    elif w in {CLAUDE_REMOTE!r}:\n"
+                 "        print('USAGE\\n  claude remote-control [flags]')\n"
+                 f"    else:\n        print({help!r}, end='')\n"
+                 "    sys.exit(0)\n"
+                 "if os.environ.get('ARGV0') == 'apply-seccomp':\n"
+                 f"    if not {bool(runs)}:\n        sys.exit(0)\n"
+                 f"    WORKS = {bool(works)}\n" +
+                 "".join("    " + ln + "\n" for ln in _FAKE_FILTER.strip().splitlines()) +
+                 ("os.execv(sys.executable, [sys.executable] + sys.argv[1:])\n" if python else
+                  "print('ARGV', json.dumps(sys.argv[1:]))\n"))
+    os.chmod(p, 0o755)
+    # a script, so launch reads its version from its package's package.json and never starts it
+    (p.parent / "package.json").write_text(
+        '{"name": "@anthropic-ai/claude-code", "version": "2.1.330"}\n')
+    return p
+
+
+def tool_py(tree, tool="claude") -> str:
+    """The Python a test runs under `launch --tool TOOL`: for claude, the made-up native build
+    that runs as Python, which the tree fixture plants (below Landlock ABI 9 launch judges the
+    seccomp filter of the program that runs, and Python itself is not Claude Code); else Python
+    itself."""
+    import sys
+    return str(Path(tree) / "claude-py" / "claude") if tool == "claude" else sys.executable
+
+
+def records_fd() -> int:
+    """A records file for launch's helper run on its own (outside bwrap): an unlinked file whose
+    one record, `/`, matches. The helper always checks its records; the caller closes the fd."""
+    import tempfile
+    st = os.lstat("/")
+    with tempfile.TemporaryFile() as fh:
+        fh.write(json.dumps([[b"/".hex(), st.st_dev, st.st_ino, False]]).encode("ascii"))
+        fh.flush()
+        return os.dup(fh.fileno())

@@ -10,7 +10,11 @@ broker, confined by confine.py, output sanitized) can read them. This guard:
 - when the tool's shell is NOT confined (no sandbox), refuses every command but a whole gateway
   call, `doctor` or `check`; with `[shell] best_effort` it instead also refuses a command that
   runs in, or names, a folder above a protected path, and applies `unresolved` to variables it
-  cannot see (best effort, docs/threat-model.md);
+  cannot see (best effort, docs/threat-model.md). A shell that is not confined only because
+  `sandbox.excludedCommands` is not empty (`Action.text_checked`) gets that same text check for
+  every call: Claude Code decides which calls run outside the sandbox, and phiward does not
+  guess. In a folder the operator lists in `[no_phi] folders` (`cfg.no_phi_here`) the hook acts
+  as with best_effort;
 - refuses file tools (read, search, write) on a protected path, and searches from above one.
   No shell sandbox covers the file tools, so this check always applies;
 - refuses file-tool writes to the files that turn the guards off or widen the gateway: the
@@ -134,10 +138,15 @@ def check(action: Action, cfg: Config) -> Decision:
                                 ask=action.can_ask, tool=action.tool)
                 if d.verdict == DENY:
                     return d
-            if other and action.shape and not cfg.shell_best_effort:
+            # a no-PHI folder (`cfg.no_phi_here`, set by the hook) acts as best_effort, for
+            # Claude Code's own Bash and Monitor only: other shell tools run with no sandbox
+            best_effort = cfg.shell_best_effort or (cfg.no_phi_here and not other)
+            if other and action.shape and not best_effort:
                 return deny(UNSANDBOXED_TOOL.format(why=action.shape, advice=action.advice),
                             step="")
-            if not action.confined and not cfg.shell_best_effort:
+            # text_checked: unconfined only by an excludedCommands entry; the text check below
+            # stands in for the blanket refusal, as with best_effort
+            if not action.confined and not best_effort and not action.text_checked:
                 kind = _kernel_route(action.command)
                 if kind is None:
                     if other:
@@ -590,8 +599,9 @@ def _expand_home_in_text(t: str, home: str) -> str:
 def _check_shell(action: Action, cfg: Config, pset: paths.ProtectedSet, home: str) -> Decision:
     cmd = action.command
     if gateway.is_operator_command(cmd):
-        return deny("`phiward setup`, `pin`, `carryover` and `broker` are the operator's once "
-                    "phiward is set up: ask the operator to run it in their own terminal.",
+        return deny("`phiward setup`, `pin`, `carryover`, `broker` and `pseudonymize` are the "
+                    "operator's once phiward is set up: ask the operator to run it in their own "
+                    "terminal.",
                     step="")
     call = gateway.parse_call(cmd)
     if call is not None:
@@ -627,10 +637,16 @@ def _check_shell(action: Action, cfg: Config, pset: paths.ProtectedSet, home: st
     if action.confined:
         return ALLOWED  # the kernel denies whatever the text missed
     if touch.relation == paths.ABOVE:
-        return deny("This command runs in, or names, a folder that holds protected data, so a "
-                    "listing or a recursive search from there reaches it (this tool's shell is "
-                    "not sandboxed, so the guard must refuse it).")
-    return _unresolved(touch, cfg)
+        d = deny("This command runs in, or names, a folder that holds protected data, so a "
+                 "listing or a recursive search from there reaches it (this tool's shell is "
+                 "not sandboxed, so the guard must refuse it).")
+    else:
+        d = _unresolved(touch, cfg)
+    if action.text_checked and d.verdict != ALLOW:
+        # the cause is the entry, not the command: say which file holds it and the way out
+        d = Decision(d.verdict, f"{d.reason} This shell is text-checked because "
+                     f"{action.unconfined_why}; to run it, {action.unconfined_step}.", NAME)
+    return d
 
 
 # what makes a command unresolved besides a variable's name (`_walk`)

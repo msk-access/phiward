@@ -45,11 +45,15 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "protected_paths": {"roots": "list", "patterns": "list", "unresolved": "choice",
                         "snapshot_names": "list"},
     "sanitize": {"packs": "list", "names_from": "list", "patterns": "list",
-                 "inventory_limit": "int", "table": "bool"},
+                 "inventory_limit": "int", "table": "bool", "subjects": "str",
+                 "id_columns": "list", "examples": "list", "scan_allow": "list"},
     "copy": {"remotes": "list", "ssh_config": "str", "push_limit_gib": "int"},
     "git": {"protected_branches": "list"},
     "broker": {"write_to": "list", "net": "bool", "max_output_lines": "int", "commands": "list"},
-    "launch": {"pass_env": "list"},
+    # `phiward launch`: more variables for the tool; private networks its proxy may reach;
+    # whether this project's transcripts are kept for --resume (USER_ONLY)
+    "launch": {"pass_env": "list", "private_networks": "list", "keep_transcripts": "bool",
+               "write_to": "list"},
     # commands on HPC through the broker; every key is the operator's own (USER_ONLY)
     "remote": {"hosts": "list", "commands": "list", "roots": "list",
                "use_shared_connection": "bool"},
@@ -60,10 +64,14 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     # refusing every such call (USER_ONLY). `strict` and `commands` (strict mode, removed) still
     # load, and do nothing: unconfined calls are refused by default now
     "shell": {"best_effort": "bool", "strict": "bool", "commands": "list"},
+    # exact folders the operator is sure hold no PHI: in Mode A the hook acts there as with
+    # best_effort (USER_ONLY; checked in the hook, `no_phi_match`)
+    "no_phi": {"folders": "list"},
 }
 # built-in program lists for `[broker] commands` (`"@genomics"`): programs that read data and
-# print results, chosen so that none runs code it is given. Each still prints what it reads:
-# print summaries.
+# print results, chosen so that none runs code it is given. Each still prints what it reads,
+# and some (samtools, seqkit) count or select records by a value the agent gives
+# (threat-model.md).
 COMMAND_PRESETS = {
     # not in them: `sort` (--compress-program runs a program), `bcftools` (+plugin loads a
     # library from a path), interpreters, shells, `awk`, `find`, `xargs`, `make`, `git`, pagers
@@ -104,10 +112,14 @@ REMOVED = {("broker", "confirm"), ("broker", "prompt")}
 USER_ONLY = {("copy", "remotes"), ("copy", "ssh_config"), ("sanitize", "patterns"),
              ("copy", "push_limit_gib"), ("remote", "use_shared_connection"),
              ("remote", "hosts"), ("remote", "commands"), ("remote", "roots"),
-             ("sanitize", "names_from"), ("sanitize", "table"),
+             ("sanitize", "names_from"), ("sanitize", "table"), ("sanitize", "subjects"),
+             ("sanitize", "id_columns"),
+             ("sanitize", "examples"), ("sanitize", "scan_allow"),
              ("broker", "write_to"), ("broker", "net"), ("launch", "pass_env"),
+             ("launch", "private_networks"), ("launch", "keep_transcripts"),
+             ("launch", "write_to"),
              ("network", "limit"), ("network", "allowed_domains"), ("shell", "best_effort"),
-             ("shell", "commands")}
+             ("shell", "commands"), ("no_phi", "folders")}
 # an allowed_domains entry: a host name, `*.` and a host name, an IPv4 or bracketed IPv6
 # address; an optional :port. Never `*` alone (that allows every host)
 _LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
@@ -160,6 +172,13 @@ class Config:
     write_to_claude: int = 0  # write_to entries that hold a .claude folder (skipped)
     net: bool = False
     launch_pass_env: List[str] = field(default_factory=list)  # more variables for `launch`
+    # [launch] private_networks (USER_ONLY): private ranges launch's proxy may reach
+    launch_private_networks: List[str] = field(default_factory=list)
+    # [launch] keep_transcripts (USER_ONLY): this project's transcripts kept for --resume and -c
+    launch_keep_transcripts: bool = True
+    # [launch] write_to (USER_ONLY): folders a launch session writes besides the project, `~/`
+    # expanded; their form is checked here, everything else when launch starts
+    launch_write_to: List[str] = field(default_factory=list)
     max_output_lines: int = 2000  # gateway output lines shown; a repo file may only lower it
     # the programs gateway commands may run ([broker] commands): one list per config file that
     # sets one; a program must be in every list. Empty: no list, any program
@@ -171,10 +190,24 @@ class Config:
     unresolved: str = "deny"
     snapshot_names: List[str] = field(default_factory=list)  # site snapshot folder names
     packs: List[str] = field(default_factory=list)
+    # the packs of the user's own file: only these tell doctor that subject identifiers are
+    # masked (a repo file, which the agent can write, may add packs too)
+    user_packs: List[str] = field(default_factory=list)
+    # "none": the operator's record that the protected data holds no subject or sample IDs
+    # beyond the names under the roots ([sanitize] subjects, user config only)
+    sanitize_subjects: str = ""
     names_from: List[str] = field(default_factory=list)
     sanitize_patterns: List[str] = field(default_factory=list)  # "REGEX => <PLACEHOLDER>"
-    # table mode lets bare numbers through (an MRN would pass): the operator's choice only
+    # made-up values of the user's own rules, for the masking check (phicheck; user config only)
+    sanitize_examples: List[str] = field(default_factory=list)
+    # files and folders the project scan does not read (projectscan; user config only, absolute)
+    sanitize_scan_allow: List[str] = field(default_factory=list)
+    # table mode lets numbers through (an MRN in a column whose header is not an identifier
+    # would pass): the operator's choice only
     sanitize_table: bool = False
+    # `phiward run --table`: more column headers whose cells are masked whole (globs, in the
+    # form of sanitize.col_key), added to the built-in list
+    sanitize_id_columns: List[str] = field(default_factory=list)
     remotes: List[str] = field(default_factory=list)
     remote_hosts: List[str] = field(default_factory=list)  # hosts `run --remote` may use
     remote_commands: List[str] = field(default_factory=list)  # programs it may run there
@@ -188,6 +221,10 @@ class Config:
     # [shell] best_effort (USER_ONLY): a shell call that no kernel confines gets the text check
     # instead of a refusal
     shell_best_effort: bool = False
+    # [no_phi] folders (USER_ONLY): absolute, ~ expanded, normalized; nothing is read at load
+    no_phi_folders: List[str] = field(default_factory=list)
+    # set by the hook only: this session's project is a listed folder that passed its check
+    no_phi_here: bool = False
     allowed_domains: List[str] = field(default_factory=list)
     push_limit_gib: int = 5  # a larger push is the operator's to do
     protected_branches: List[str] = field(default_factory=list)
@@ -582,6 +619,17 @@ def _check(data: Dict[str, Any], where: str) -> Tuple[Dict[str, Dict[str, Any]],
                 return {}, f"{where}: '{section}.{key}' must be a non-empty string"
             elif kind == "bool" and type(value) is not bool:
                 return {}, f"{where}: '{section}.{key}' must be true or false"
+            if (section, key) == ("sanitize", "subjects") and value != "none":
+                return {}, (f"{where}: 'sanitize.subjects' can only be \"none\" (your record "
+                            "that the protected data holds no subject or sample identifiers "
+                            "beyond the names under the roots)")
+            if (section, key) == ("sanitize", "id_columns"):
+                from phiward.sanitize import ID_COLUMN_ENTRY, col_key
+                for v in value:
+                    if not ID_COLUMN_ENTRY.fullmatch(v) or not col_key(v):
+                        return {}, (f"{where}: a 'sanitize.id_columns' entry must be a column "
+                                    "header or a glob of at most 64 letters, digits, spaces and "
+                                    "_ - . # * ? [ ] !")
             if section == "protected_paths" and key in ("roots", "patterns"):
                 for v in value:
                     if ".." in v.split("/"):
@@ -606,10 +654,28 @@ def _check_paths(cfg: Config) -> str:
     for p in cfg.roots:
         if any(ch in p for ch in "*?["):
             return f"root '{p}' has a wildcard; put it under 'patterns'"
+    for i, p in enumerate(cfg.remote_roots, 1):
+        if not p.startswith("/"):  # a path on the remote host: no ~ or $HOME to expand here
+            return (f"[remote] roots entry {i} must be an absolute path on the remote host: "
+                    "write the remote's absolute path")
     for d in cfg.allowed_domains:
         why = domain_problem(d)
         if why:
             return f"[network] allowed_domains entry '{d}' {why}"
+    for n in cfg.launch_private_networks:
+        from phiward import netproxy
+        why = netproxy.private_network_problem(n)
+        if why:
+            return f"[launch] private_networks entry '{n}' {why}"
+    for p in cfg.launch_write_to:
+        if not p.startswith("/") or ".." in p.split("/"):
+            return f"[launch] write_to entry '{p}' must be absolute (or start with ~/) and have no '..'"
+    for p in cfg.sanitize_scan_allow:
+        if not p.startswith("/"):
+            return f"[sanitize] scan_allow entry '{p}' must be absolute (or start with ~/)"
+    for p in cfg.no_phi_folders:  # text only: the hook checks the one entry that matches
+        if not p.startswith("/"):
+            return f"[no_phi] folders entry '{p}' must be absolute (or start with ~/)"
     if cfg.ssh_config and not cfg.ssh_config.startswith("/"):
         return "[copy] ssh_config must be absolute (or start with ~/)"  # else the agent's folder
     from phiward import pathmatch
@@ -683,6 +749,33 @@ def runs_later_problem(full: str, env: Optional[Dict[str, str]] = None) -> str:
     return ""
 
 
+def no_phi_match(cfg: "Config", project: str,
+                 env: Optional[Dict[str, str]] = None) -> Tuple[str, str]:
+    """(the `[no_phi] folders` entry that is the folder `project`, why it is not relaxed or
+    ""), or ("", "") when no entry is it. Entries are exact: a subfolder is no match. Only the
+    matching entry is checked, so a missing or moved entry relaxes nothing and costs nothing.
+    It fails closed: a link on the entry's path, a place `launch` would refuse as a project
+    (`wholetool._project_problem`, which has no PATH test), or a folder inside or above a
+    protected path is not relaxed."""
+    env = dict(os.environ if env is None else env)
+    if not cfg.no_phi_folders or not project or not project.startswith("/"):
+        return "", ""
+    names = (os.path.normpath(project), os.path.realpath(project))
+    entry = next((e for e in cfg.no_phi_folders if e in names), "")
+    if not entry:
+        return "", ""
+    if os.path.realpath(entry) != entry:
+        return entry, "it has a link on its path"
+    if not os.path.isdir(entry):
+        return entry, "it is not a folder"
+    from phiward import paths, wholetool
+    why = wholetool._project_problem(entry, env)  # PATH-free: PATH concerns launch only
+    if why:
+        return entry, why
+    rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(entry)
+    return entry, f"it is {rel} a protected path" if rel else ""
+
+
 def _pattern_prefix(pattern: str) -> str:
     cut = min([i for i in (pattern.find("*"), pattern.find("?"), pattern.find("[")) if i >= 0]
               or [len(pattern)])
@@ -719,6 +812,33 @@ def _resolve_write_to(cfg: "Config", env: Dict[str, str]) -> str:
         if full not in cfg.write_to:
             cfg.write_to.append(full)
     return ""
+
+
+def launch_write_to_entries(env: Optional[Dict[str, str]] = None) -> List[str]:
+    """The `[launch] write_to` folders of the user file alone (realpath'd, missing ones too),
+    for what treats them as agent-writable in every project (the broker's PATH filter,
+    `pseudonymize`). Read with `load`'s own reader and checks. A user file that cannot be read
+    or checked gives `["/"]`: every folder counts as agent-writable (fail closed)."""
+    env = os.environ if env is None else env
+    user = user_config_path(env)
+    if not os.path.lexists(user):
+        return []  # not written yet (setup names it first): it lists nothing
+    try:
+        raw, _ = _toml.load_file(user, follow=True)
+    except (OSError, UnicodeDecodeError, _toml.TomlError):
+        return ["/"]
+    data, why = _check(raw, user)
+    if why:
+        return ["/"]
+    out: List[str] = []
+    for v in data.get("launch", {}).get("write_to", []):
+        v = _expand_root(v, pathid.home(env))
+        if not v.startswith("/") or ".." in v.split("/"):
+            return ["/"]
+        real = os.path.realpath(v)
+        if real not in out:
+            out.append(real)
+    return out
 
 
 def stricter(a: str, b: str) -> str:
@@ -765,8 +885,23 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
                 v = _expand_root(v, home)
             if v not in target:
                 target.append(v)
+            if key == "packs" and not repo and v not in cfg.user_packs:
+                cfg.user_packs.append(v)
+    if "subjects" in san:  # USER_ONLY: a repo file's value is ignored (listed in cfg.ignored)
+        cfg.sanitize_subjects = san["subjects"]
     if "table" in san:  # USER_ONLY: a repo file's value is ignored (listed in cfg.ignored)
         cfg.sanitize_table = bool(san["table"])
+    if san.get("id_columns"):  # USER_ONLY; checked in _check
+        from phiward.sanitize import col_key
+        for v in san["id_columns"]:
+            if col_key(v) not in cfg.sanitize_id_columns:
+                cfg.sanitize_id_columns.append(col_key(v))
+    cfg.sanitize_examples.extend(san.get("examples", []))  # USER_ONLY: made-up values
+    for v in san.get("scan_allow", []):  # USER_ONLY; absolute (checked in _check_paths)
+        v = _expand_root(v, home)
+        v = os.path.normpath(v) if v.startswith("/") else v
+        if v not in cfg.sanitize_scan_allow:
+            cfg.sanitize_scan_allow.append(v)
     if "inventory_limit" in san:
         # tighten only: a repo file can lower the limit, never raise it
         lim = san["inventory_limit"]
@@ -800,8 +935,23 @@ def _merge(cfg: Config, data: Dict[str, Dict[str, Any]], home: str, repo: bool) 
     for v in data.get("launch", {}).get("pass_env", []):
         if v not in cfg.launch_pass_env:
             cfg.launch_pass_env.append(v)
+    for v in data.get("launch", {}).get("private_networks", []):  # USER_ONLY
+        if v not in cfg.launch_private_networks:
+            cfg.launch_private_networks.append(v)
+    if "keep_transcripts" in data.get("launch", {}):  # USER_ONLY
+        cfg.launch_keep_transcripts = bool(data["launch"]["keep_transcripts"])
+    for v in data.get("launch", {}).get("write_to", []):  # USER_ONLY; form: _check_paths
+        v = _expand_root(v, home)
+        v = v if ".." in v.split("/") else os.path.normpath(v)  # `..` stays for the check
+        if v not in cfg.launch_write_to:
+            cfg.launch_write_to.append(v)
     if "best_effort" in data.get("shell", {}):  # USER_ONLY
         cfg.shell_best_effort = bool(data["shell"]["best_effort"])
+    for v in data.get("no_phi", {}).get("folders", []):  # USER_ONLY; absolute (_check_paths)
+        v = _expand_root(v, home)
+        v = os.path.normpath(v) if v.startswith("/") else v
+        if v not in cfg.no_phi_folders:
+            cfg.no_phi_folders.append(v)
     nw = data.get("network", {})
     if "limit" in nw:  # USER_ONLY
         cfg.network_limit = bool(nw["limit"])

@@ -49,24 +49,31 @@ extra:
 
 nav:
   - Home: index.md
+  - Status: status.md
+  - Roadmap: roadmap.md
   - Use phiward:
       - Quick start: quickstart.md
       - Daily use: daily-use.md
+      - "Refusals and the way around": refusals.md
       - HPC: hpc.md
       - Plugins: plugins.md
       - Agents with nobody watching: unattended.md
       - "Mode B: phiward launch": launch.md
       - Setup in detail: setup.md
       - Configuration: configuration.md
+      - Commands: cli.md
       - Glossary: glossary.md
   - Decide whether it is enough:
       - Why phiward: why.md
       - The two modes: modes.md
       - Threat model and limits: threat-model.md
+      - "For IT and security teams": endpoint-security.md
   - Change phiward:
       - For contributors: developer.md
       - Releasing: releasing.md
   - Release notes:
+      - v0.2.0b2: release-notes/v0.2.0b2.md
+      - v0.2.0b2: release-notes/v0.2.0b2.md
       - v0.2.0b1: release-notes/v0.2.0b1.md
 
 markdown_extensions:

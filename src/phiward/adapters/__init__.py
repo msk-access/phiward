@@ -11,6 +11,9 @@ from phiward.core import ALLOW, ASK, SHELL, Action, Decision, Guard, dispatch
 from phiward.guards import protected_paths
 
 GUARDS: Dict[str, Guard] = {protected_paths.NAME: protected_paths.check}
+# why a shell call is text-checked (`Action.text_checked`); the refusal and doctor name it
+EXCLUDED_WHY = ("sandbox.excludedCommands is not empty ({file}), so any command may run outside "
+                "the sandbox: the hook checks every command's text")
 
 
 def decide(action: Action, claude_sandbox: bool = False) -> Decision:
@@ -24,11 +27,12 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
         from phiward import claude_settings
         home = pathid.home()
         from phiward import hidden
-        secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+        secret = [h for h in hidden.for_sandbox(hidden.paths(None, cfg, session=True)) if os.path.lexists(h)]
         # the named project must hold the call (otherwise the settings Claude Code reads may be
         # in a folder that cannot be found from it), and it and every project folder in it
         # above the call must confine it (claude_settings.confining_folders)
         folders = claude_settings.confining_folders(action.cwd, home) or [None]
+        listed: List[str] = []
         if not claude_settings.named_project_holds(action.cwd):
             r = (claude_settings.Reason("Claude Code did not give the hook $CLAUDE_PROJECT_DIR",
                                         claude_settings.NO_PROJECT_STEP)
@@ -39,16 +43,35 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
         else:
             r = None
             for p in folders:
-                r = claude_settings.confinement_reason(p, home, cfg.all_roots, cfg.patterns,
-                                                       config.guard_files(), hidden=secret)
+                r = claude_settings.shell_reason(p, home, cfg.all_roots, cfg.patterns,
+                                                 config.guard_files(), hidden=secret)
                 if r is not None:
                     break
+            if r is not None and cfg.no_phi_folders:
+                # a no-PHI folder (the session's project is a listed folder that passes its
+                # check): the hook acts as with `[shell] best_effort`, but only when the
+                # sandbox openers alone leave the shell unconfined (`no_phi_relaxed`, the test
+                # the session note and doctor show)
+                entry, why = claude_settings.no_phi_relaxed(
+                    cfg, os.environ.get("CLAUDE_PROJECT_DIR", ""), home, folders)
+                cfg.no_phi_here = bool(entry) and why is None
+            # Claude Code runs a call that matches an excludedCommands entry outside its
+            # sandbox, by its own matcher; phiward does not guess which calls match, so while
+            # any folder's list is non-empty every call gets the text check
+            listed = [p for p in folders if r is None and claude_settings.excluded_entries(p, home)]
+            if listed:
+                where, step = claude_settings.excluded_step(listed[0], home)
+                r = claude_settings.Reason(EXCLUDED_WHY.format(file=where or "a settings file"),
+                                           step or claude_settings.INSTALL_STEP)
         action = replace(action, confined=r is None, unconfined_why=r.text if r else "",
-                         unconfined_step=r.step if r else "")
+                         unconfined_step=r.step if r else "", text_checked=bool(listed))
     return dispatch(action, cfg, GUARDS)
 
 
 HOOK_HELP = """usage: phiward hook claude
+
+Options:
+  -h, --help   show this help
 
 Read a Claude Code hook payload on stdin and reply as Claude Code expects. Claude Code runs it
 before each tool call; `phiward install claude` writes the wiring. It refuses a tool call that

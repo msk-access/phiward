@@ -45,7 +45,7 @@ def test_a_wrapped_mcp_server_works_and_cannot_read_protected_data(tree):
     key.write_text("FAKE-KEY\n")
     servers = [start(tree), start(tree)]
     try:
-        for i, p in enumerate(servers):
+        for p in servers:
             assert "result" in call(p, 1, "initialize"), p.stderr.read()
             assert read(p, 2, tree / "repo" / "README.md").strip() == "readme"
             assert "SECRET" not in read(p, 3, tree / "phi" / "FAKE-PT-0001.bam")

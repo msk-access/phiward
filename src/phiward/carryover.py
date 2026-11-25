@@ -3,8 +3,9 @@
 Under `launch` the whole tool runs in the profile, so what a session writes matters only for
 what reads it later. Each session therefore runs in a config folder of its own
 (`runs/<id>/config`), built at start from a trusted copy that no session can read or write
-(`~/.phiward/carryover/<tool>/`), and thrown away at exit. Nothing is shared between
-sessions (stateless). No process is ever ended.
+(`~/.phiward/carryover/<tool>/`), and thrown away at exit. Only this project's transcripts are
+kept between sessions, for a resume (`transcripts/<16 hex>/`, moved whole, never read as text;
+`[launch] keep_transcripts = false` turns it off). No process is ever ended.
 
 - Instructions: files the tool loads as instructions or settings (the adapter's list) that the
   session changed, and the notable keys of `.claude.json`, go to quarantine; the operator reads
@@ -25,12 +26,13 @@ import fnmatch
 import hashlib
 import json
 import os
+import re
 import secrets
 import stat
 import sys
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Dict, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 from phiward import claude_settings, safeio
 
@@ -63,6 +65,9 @@ class Spec:
     # keys of json_main set in every session unless the trusted copy says otherwise: UI state
     # only, never instructions (a fresh folder otherwise shows the first-run screens)
     json_defaults: Dict[str, object] = field(default_factory=dict)
+    # the folder of the config folder that holds one folder of transcripts per project (named
+    # by the launcher, CLAUDE_CODE_PROJECT_DIR_NAME): kept between sessions, never read as text
+    transcripts: str = ""
 
     @property
     def enabled(self) -> bool:
@@ -99,7 +104,10 @@ SPECS: Dict[str, Spec] = {
         # instruction names at all: a session's copy is thrown away with its folder
         downloads=["plugins/marketplaces", "plugins/known_marketplaces.json",
                    "plugins/store/*_builtin-*.json"],
-        json_defaults={"hasCompletedOnboarding": True}),
+        json_defaults={"hasCompletedOnboarding": True},
+        # transcripts: `projects/<name>/<session>.jsonl` and the session's folder (the
+        # `.claude` directory and sessions docs); its `memory/` is auto memory (an instruction)
+        transcripts="projects"),
 }
 
 
@@ -119,14 +127,15 @@ def _hash_file(path: str) -> str:
 
 
 class _Budget:
-    def __init__(self) -> None:
+    def __init__(self, scale: int = 1) -> None:
         self.entries = 0
         self.bytes = 0
+        self.scale = scale  # a kept-transcripts merge: the store's copy and the session's adds
 
     def take(self, size: int) -> bool:
         self.entries += 1
         self.bytes += size
-        return self.entries <= MAX_ENTRIES and self.bytes <= MAX_BYTES
+        return self.entries <= MAX_ENTRIES * self.scale and self.bytes <= MAX_BYTES * self.scale
 
 
 TOO_LARGE = "\0too large"
@@ -210,7 +219,9 @@ def _movable(parent_fd: int, name: str) -> None:
         mode = stat.S_IMODE(st.st_mode) | 0o700
         try:
             os.chmod(name, mode, dir_fd=parent_fd, follow_symlinks=False)
-        except NotImplementedError:
+        except (NotImplementedError, ValueError):  # Linux: no chmod without following links
+            # (ValueError with an older C library, RHEL 8); the entry was checked as a real
+            # folder above and no longer changes
             os.chmod(name, mode, dir_fd=parent_fd)
     except OSError:
         pass
@@ -350,7 +361,8 @@ def _remove(p: str) -> None:
                 try:
                     os.chmod(name, stat.S_IMODE(st.st_mode) | 0o700, dir_fd=dir_fd,
                              follow_symlinks=False)
-                except NotImplementedError:  # Linux: the entry no longer changes (trash)
+                except (NotImplementedError, ValueError):  # Linux (ValueError: an older C
+                    # library, RHEL 8): the entry no longer changes (trash)
                     os.chmod(name, stat.S_IMODE(st.st_mode) | 0o700, dir_fd=dir_fd)
         except OSError:
             pass
@@ -441,6 +453,159 @@ def _is_real_dir(p: str) -> bool:
         return stat.S_ISDIR(os.lstat(p).st_mode)
     except OSError:
         return False
+
+
+def _open_below(top: str, parts: Sequence[str]) -> int:
+    """The folder `top/<parts...>`, opened one name at a time without following a link, each one
+    owned by the operator."""
+    fd = _opendir(top)
+    try:
+        for p in parts:
+            nfd = _opendir(p, fd)
+            os.close(fd)
+            fd = nfd
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+# -- kept transcripts ---------------------------------------------------------------------------
+#
+# The tool's format is internal and changes between versions, so a transcript is never read as
+# text: one folder per project is moved whole, by its name. Only plain files with one link and
+# real folders are copied, through descriptors that never follow a link; `memory/` (auto memory,
+# an instruction) and `mcp-tasks/` are left out at any depth.
+
+TRANSCRIPT_KEY = re.compile(r"[0-9a-f]{16}")
+TRANSCRIPTS_LEFT_OUT = ("memory", "mcp-tasks")
+
+
+def _keep_file(dfd: int, name: str, target: str) -> int:
+    """The plain file `name` (one link) copied to `target`, with its times, unless a file there
+    is as new; 1 when it is left out (not a plain file, or a folder at `target`)."""
+    try:
+        fi = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=dfd)
+    except OSError:
+        return 1
+    try:
+        st = os.fstat(fi)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
+            return 1
+        try:
+            old: Optional[os.stat_result] = os.lstat(target)
+        except FileNotFoundError:
+            old = None
+        if old is not None:
+            if not stat.S_ISREG(old.st_mode):
+                return 1
+            if old.st_mtime_ns >= st.st_mtime_ns:
+                return 0  # a resumed session appends: the newer copy wins
+            os.unlink(target)
+        fo = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            left = st.st_size  # what was judged: a file that grows meanwhile is cut there
+            while left > 0:
+                b = os.read(fi, min(left, 1 << 20))
+                if not b:
+                    break
+                _write_all(fo, b)
+                left -= len(b)
+        finally:
+            os.close(fo)
+        os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns))
+        return 0
+    finally:
+        os.close(fi)
+
+
+def _merge_tree(src_fd: int, dst: str, budget: _Budget) -> int:
+    """The folder open at `src_fd` merged into `dst` (made when missing), which only the
+    launcher writes. Returns how many entries were left out; raises CarryoverError past the
+    budget. `src_fd` stays open."""
+    dropped = 0
+    stack: List[Tuple[int, str]] = [(os.dup(src_fd), dst)]
+    try:
+        while stack:
+            dfd, out = stack.pop()
+            try:
+                if not os.path.lexists(out):
+                    os.mkdir(out, 0o700)
+                elif not _is_real_dir(out):
+                    dropped += 1
+                    continue
+                for e in sorted(os.scandir(dfd), key=lambda x: x.name):
+                    if e.name.casefold() in TRANSCRIPTS_LEFT_OUT:  # macOS ignores case
+                        continue
+                    st = e.stat(follow_symlinks=False)
+                    if not budget.take(st.st_size if stat.S_ISREG(st.st_mode) else 0):
+                        raise CarryoverError("too large to keep")
+                    target = os.path.join(out, e.name)
+                    if stat.S_ISDIR(st.st_mode):
+                        try:
+                            cfd = os.open(e.name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                          dir_fd=dfd)
+                        except OSError:  # replaced meanwhile (a link): left out
+                            dropped += 1
+                            continue
+                        stack.append((cfd, target))
+                    elif stat.S_ISREG(st.st_mode):
+                        dropped += _keep_file(dfd, e.name, target)
+                    else:  # a link or a special file
+                        dropped += 1
+            finally:
+                os.close(dfd)
+    finally:
+        for fd, _ in stack:
+            os.close(fd)
+    return dropped
+
+
+def _tree_size(p: str) -> Tuple[int, int]:
+    """(entries, bytes) of a tree only the launcher writes; links are not followed."""
+    n = b = 0
+    stack = [p]
+    while stack:
+        q = stack.pop()
+        st = os.lstat(q)
+        n += 1
+        if stat.S_ISREG(st.st_mode):
+            b += st.st_size
+        elif stat.S_ISDIR(st.st_mode):
+            stack += [os.path.join(q, x) for x in os.listdir(q)]
+    return n, b
+
+
+def _trim(folder: str) -> Set[str]:
+    """The folder kept under MAX_ENTRIES and MAX_BYTES: the oldest sessions go first, each
+    `<name>.jsonl` with its folder `<name>/`. Returns the names of the sessions removed."""
+    units: Dict[str, List[int]] = {}  # name: [mtime, entries, bytes]
+    for e in os.scandir(folder):
+        st = e.stat(follow_symlinks=False)
+        n, b = _tree_size(e.path)
+        stem = _stem(e.name)
+        u = units.setdefault(stem, [st.st_mtime_ns, 0, 0])
+        if e.name.endswith(".jsonl"):
+            u[0] = st.st_mtime_ns
+        u[1] += n
+        u[2] += b
+    entries = sum(u[1] for u in units.values())
+    size = sum(u[2] for u in units.values())
+    removed: Set[str] = set()
+    for stem in sorted(units, key=lambda s: units[s][0]):
+        if entries <= MAX_ENTRIES and size <= MAX_BYTES:
+            break
+        for name in (stem + ".jsonl", stem):
+            if os.path.lexists(os.path.join(folder, name)):
+                _remove(os.path.join(folder, name))
+        removed.add(stem)
+        entries -= units[stem][1]
+        size -= units[stem][2]
+    return removed
+
+
+def _stem(name: str) -> str:
+    return name[:-len(".jsonl")] if name.endswith(".jsonl") else name
 
 
 def _expand(folder: str, pattern: str) -> List[str]:
@@ -640,9 +805,12 @@ class Store:
 
     # -- start ----------------------------------------------------------------------------------------
 
-    def start(self, base: str, run: str, memory: bool = False, edit=None) -> List[str]:
+    def start(self, base: str, run: str, memory: bool = False, edit=None,
+              transcripts: str = "") -> List[str]:
         """Make and lock this session's run folder, finish any session whose launcher is gone,
-        and build `<run>/config` from the trusted copy."""
+        and build `<run>/config` from the trusted copy. `transcripts`: this project's folder of
+        kept transcripts (its 16 hex name), copied in now and kept again at the end; "" keeps
+        none."""
         msgs = _layout(base)
         # made and locked under the lock of runs/, which every cleaner takes too, so no other
         # launcher can finish a folder between its making and its lock
@@ -686,8 +854,101 @@ class Store:
                     raise CarryoverError("not enough disk space to start; see `phiward "
                                          f"carryover status --tool {self.tool}`")
                 raise
+            if self.spec.transcripts and TRANSCRIPT_KEY.fullmatch(transcripts):
+                rec["transcripts"] = transcripts
+                msgs += self._bring_transcripts(config, transcripts)
         _write_json(os.path.join(self.sessions, os.path.basename(run) + ".json"), rec)
         return msgs
+
+    # -- kept transcripts -----------------------------------------------------------------------------
+
+    def transcripts_dir(self) -> str:
+        return os.path.join(self.dir, "transcripts")
+
+    def _bring_transcripts(self, config: str, key: str) -> List[str]:
+        """At the start, under the lock: this project's kept transcripts (only its folder) into
+        the new run folder, by path (no session runs in it yet). A store that cannot be read
+        gives a session with no history, never a stop."""
+        if not os.path.lexists(os.path.join(self.transcripts_dir(), key)):
+            return []
+        dst = os.path.join(config, self.spec.transcripts, key)
+        try:
+            fd = _open_below(self.dir, ["transcripts", key])
+            try:
+                os.makedirs(os.path.dirname(dst), mode=0o700, exist_ok=True)
+                _merge_tree(fd, dst, _Budget())
+            finally:
+                os.close(fd)
+        except (OSError, CarryoverError, RecursionError) as exc:
+            if os.path.lexists(dst):
+                _remove(dst)
+            return [f"phiward launch: NOTE: this project's kept transcripts cannot be read "
+                    f"({_esc(str(exc))}); this session starts with no history"]
+        return []
+
+    def _keep_transcripts(self, t: str, rec: dict) -> List[str]:
+        """At the end, after the rename into trash: the session's folder of this project's
+        transcripts (only that one) merged into the store under the lock, in a copy that
+        replaces the store only when it is whole. Sessions that ended earlier are kept."""
+        key = rec.get("transcripts")
+        if not (self.spec.transcripts and isinstance(key, str) and TRANSCRIPT_KEY.fullmatch(key)):
+            return []
+        try:
+            src = _open_below(t, ["config", self.spec.transcripts, key])
+        except FileNotFoundError:
+            return []  # the session wrote none
+        except (OSError, CarryoverError):
+            return ["phiward launch: NOTE: this session's transcripts were not kept (their folder "
+                    "is a link or not yours)"]
+        try:
+            with self._locked():
+                dropped, whole = self._merge_transcripts(src, key)
+        except (OSError, CarryoverError, RecursionError) as exc:
+            return [f"phiward launch: NOTE: this session's transcripts were not kept "
+                    f"({_esc(str(exc))})"]
+        finally:
+            os.close(src)
+        out = []
+        if whole:
+            out.append("phiward launch: NOTE: this session's transcripts were not kept: they are "
+                       "larger than the cap of kept transcripts")
+        if dropped:
+            out.append(f"phiward launch: NOTE: {dropped} entry(ies) of this session's transcripts "
+                       "were not kept (not a plain file or a folder)")
+        return out
+
+    def _merge_transcripts(self, src: int, key: str) -> Tuple[int, bool]:
+        """(entries left out, whether the cap removed every session of the folder at `src`)."""
+        root = self.transcripts_dir()
+        os.makedirs(root, mode=0o700, exist_ok=True)
+        if os.path.realpath(root) != os.path.normpath(root):
+            raise CarryoverError("the transcript store has a link on its path")
+        for n in os.listdir(root):  # what a merge that stopped left behind
+            if n.startswith(f".{key}."):
+                _remove(os.path.join(root, n))
+        cur = os.path.join(root, key)
+        tag = secrets.token_hex(4)
+        new, old = os.path.join(root, f".{key}.{tag}.new"), os.path.join(root, f".{key}.{tag}.old")
+        try:
+            # the session's folder holds the history it started with and what it added: up to
+            # twice the cap each, brought back under it by _trim
+            if _is_real_dir(cur):
+                cfd = _opendir(cur)
+                try:
+                    _merge_tree(cfd, new, _Budget(2))
+                finally:
+                    os.close(cfd)
+            dropped = _merge_tree(src, new, _Budget(2))
+            mine = {_stem(n) for n in os.listdir(src) if n.casefold() not in TRANSCRIPTS_LEFT_OUT}
+            whole = bool(mine) and mine <= _trim(new)
+            if os.path.lexists(cur):
+                os.rename(cur, old)
+            os.rename(new, cur)
+        finally:
+            for p in (new, old):
+                if os.path.lexists(p):
+                    _remove(p)
+        return dropped, whole
 
     def _move_legacy(self, base: str) -> List[str]:
         """Entries of an older layout (state, caches, a shared temp folder, the old config
@@ -766,6 +1027,7 @@ class Store:
             return msgs  # another launcher finished it, or it could not be moved (it stays)
         if isinstance(rec, dict):
             msgs += self._compare(t, rec, why)
+            msgs += self._keep_transcripts(t, rec)
         else:  # rule D: never lost without a word
             msgs.append("phiward launch: a session's record was missing or could not be read "
                         "(the carry-over folder may have been deleted); its changes were not kept")
@@ -1000,8 +1262,8 @@ class Store:
                 c["paths"], c["json"] = rest_paths, rest_json
                 c["copied"] = [r for r in c.get("copied", []) if r in rest_paths]
                 c["details"] = [d for d in c.get("details", [])
-                                if not any(d == o or d.startswith(o + "/") or d.startswith(o + " ")
-                                           or d.startswith(o + ":") for o in only)]
+                                if not any(d == o or d.startswith((o + "/", o + " ", o + ":"))
+                                           for o in only)]
                 _write_json(os.path.join(qdir, "changes.json"), c)
                 return [n for n, _ in items]
         os.rename(qdir, qdir + ".accepted")
@@ -1139,10 +1401,20 @@ class Store:
             (self.trusted, "the trusted copy; delete: sessions start with no instructions or settings "
                            "of yours, and you add or accept them again"),
         ]
+        if self.spec.transcripts:
+            rows.append((self.transcripts_dir(), "kept transcripts, a folder for each project; "
+                         "delete when no session runs: --resume and -c then find no earlier "
+                         "session (Claude Code's own commands do not reach them)"))
         out = []
         for p, what in rows:
             n, b = size(p)
             out.append(f"{b / (1 << 20):10.1f} MB  {n:7d} entries  {_esc(p)}\n    {what}")
+        kept = self.transcripts_dir()
+        if self.spec.transcripts and _is_real_dir(kept):
+            for k in sorted(os.listdir(kept)):
+                if TRANSCRIPT_KEY.fullmatch(k):
+                    n, b = size(os.path.join(kept, k))
+                    out.append(f"{b / (1 << 20):10.1f} MB  {n:7d} entries    {k} (one project)")
         legacy = [x for x in (os.listdir(base) if _is_real_dir(base) else []) if x.startswith("legacy-")]
         if legacy:
             out.append(f"  {len(legacy)} legacy folder(s) in {_esc(base)}: entries of an older layout, "
@@ -1258,22 +1530,71 @@ class _runs_lock:
         os.close(self.fd)
 
 
+# `runs/<name>.write_to`: the `[launch] write_to` folders of the session in `runs/<name>`, one
+# per line, written by the launcher before the tool starts (no session writes `runs/` itself)
+# and removed after its report; one left by a session that did not finish is named at the next
+# start
+RECORD = ".write_to"
+RECORD_CAP = 64 * 1024
+
+
+def _record_note(rfd: int, name: str) -> List[str]:
+    """The NOTE for the record of the unfinished session `name`, or [] when it has none. Read
+    only as a regular file with no link, of at most RECORD_CAP bytes; anything else: its
+    folders are unknown."""
+    try:
+        os.lstat(name + RECORD, dir_fd=rfd)
+    except OSError:
+        return []
+    folders: Optional[List[str]] = None
+    try:
+        fd = os.open(name + RECORD, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                     dir_fd=rfd)
+        try:
+            if stat.S_ISREG(os.fstat(fd).st_mode):
+                data = os.read(fd, RECORD_CAP + 1)
+                if len(data) <= RECORD_CAP:
+                    folders = [ln for ln in data.decode("utf-8", "replace").splitlines() if ln]
+        finally:
+            os.close(fd)
+    except OSError:
+        folders = None
+    could = (f"it could write {', '.join(_esc(f) for f in folders)}" if folders
+             else "its write folders are unknown")
+    return [f"phiward launch: NOTE: an earlier session ({_esc(name)}) did not finish; {could}; "
+            "read their files that run later (.claude, .vscode, .mcp.json, git hooks ...) and "
+            "the files it changed before you run anything there"]
+
+
+def drop_record(base: str, run: str) -> List[str]:
+    """At the end of a session: its record moved away (after its final report)."""
+    name = os.path.basename(run) + RECORD
+    if not run or not os.path.lexists(os.path.join(base, RUNS, name)):
+        return []
+    return _plain_finish(base, name)
+
+
 def _clean_runs(base: str, current: str, finish) -> List[str]:
     """Every run folder but the current one whose launcher no longer holds its lock is finished
     (`finish(name)`: read, then moved to trash and removed). A locked one is a live session and
-    is left alone (parallel sessions). Trash is emptied; what cannot be removed stays and is
-    reported."""
+    is left alone (parallel sessions). A session's record (RECORD) stays while its run folder
+    does; when the folder is finished, the record is named in a NOTE and moved away. Trash is
+    emptied; what cannot be removed stays and is reported."""
     msgs: List[str] = []
     runs = os.path.join(base, RUNS)
     with _runs_lock(base) as rfd:
         for n in sorted(os.listdir(rfd)):
             if os.path.join(runs, n) == current:
                 continue
+            if n.endswith(RECORD) and os.path.lexists(os.path.join(runs, n[:-len(RECORD)])):
+                continue  # its session's folder decides (finished below, or live)
             try:
                 st = os.lstat(n, dir_fd=rfd)
             except OSError:
                 continue
             if not stat.S_ISDIR(st.st_mode):  # a link or a file: nothing to read, only moved away
+                if n.endswith(RECORD):  # its run folder is gone: the launcher ended mid-report
+                    msgs += _record_note(rfd, n[:-len(RECORD)])
                 msgs += _plain_finish(base, n)
                 continue
             _movable(rfd, n)  # a session may have made its own folder unreadable
@@ -1287,7 +1608,10 @@ def _clean_runs(base: str, current: str, finish) -> List[str]:
                 os.close(fd)
                 continue  # a live session
             try:
+                msgs += _record_note(rfd, n)  # read before the move
                 msgs += finish(n)  # the lock is held through the move
+                if os.path.lexists(os.path.join(runs, n + RECORD)):
+                    msgs += _plain_finish(base, n + RECORD)
             finally:
                 os.close(fd)
     trash = os.path.join(base, TRASH)
@@ -1341,9 +1665,8 @@ RUNS_LATER_NAMES = {"Makefile", "makefile", "GNUmakefile", "package.json", "pypr
                     ".Rprofile", ".Renviron", "activate.R", ".pdbrc", "ipython_config.py",
                     "jupyter_notebook_config.py", "jupyter_server_config.py",
                     "jupyter_lab_config.py", "pytest.ini", "mise.toml", ".mise.toml",
-                    "Taskfile.yml", "Taskfile.yaml"}
+                    "Taskfile.yml", "Taskfile.yaml", ".tool-versions"}
 RUNS_LATER_SUFFIXES = (".sh", ".bash", ".pth")
-SETTINGS_PREFIXES = (".vscode/", ".idea/", ".mcp.json", ".claude/settings")
 TRUNCATED = "\0truncated"
 
 
@@ -1355,7 +1678,7 @@ def project_state(project: str, limit: int = 200_000, scan_limit: int = 2_000_00
     out: Dict[str, tuple] = {}
     # breadth first, dot-folders first: instructions and settings live near the top and in dot
     # folders, so a flood of files deep in the tree is visited last
-    stack: "collections.deque[str]" = collections.deque([""])
+    stack: collections.deque[str] = collections.deque([""])
     seen = 0
     while stack:
         rel = stack.popleft()
@@ -1428,7 +1751,7 @@ def _rank(rel: str, entry: Optional[tuple] = None, project: str = "") -> int:
         if os.path.isdir(os.path.join(repo, "objects")) and (
                 os.path.isfile(os.path.join(repo, "HEAD")) or os.path.isdir(os.path.join(repo, "refs"))):
             return 1  # a folder laid out as a git repository (a bare one, or a gitdir target)
-    if rel.startswith(SETTINGS_PREFIXES) or "/.vscode/" in rel:
+    if _settings_place(rel):
         return 2
     if name in INSTRUCTION_NAMES or rel.startswith((".claude/", ".cursor/rules/", ".github/instructions/")) \
             or "/.claude/" in rel:
@@ -1440,6 +1763,19 @@ def _rank(rel: str, entry: Optional[tuple] = None, project: str = "") -> int:
     if entry is not None and entry[0] == "f" and entry[5] & 0o111:
         return 1  # an executable file: a program on a PATH, a script run by name
     return 3
+
+
+def _settings_place(rel: str) -> bool:
+    """Whether `rel` is in the one list of what other tools run later (claude_settings), at any
+    depth: inside an editor's or another agent tool's folder, `.mcp.json`, `.ripgreprc`, or a
+    `.claude` folder's settings file. The list's other files (`.gitmodules`, `.Rprofile`) are
+    files that run later (RUNS_LATER_NAMES); the rest of a `.claude` is instructions."""
+    parts = rel.split("/")
+    if any(p in claude_settings.WORKSPACE_CODE_DIRS for p in parts[:-1]):
+        return True
+    if parts[-1] in claude_settings.RUNS_LATER_FILES and parts[-1] not in RUNS_LATER_NAMES:
+        return True
+    return len(parts) >= 2 and parts[-2] == ".claude" and parts[-1] in claude_settings.SETTINGS_NAMES
 
 
 # the kinds of changed project files, by `_rank`: the first three are for a person to read
@@ -1475,15 +1811,17 @@ def project_changes(before: Dict[str, tuple], after: Dict[str, tuple],
     return Changes(groups, truncated)
 
 
-def project_report(changes: Changes) -> List[str]:
+def project_report(changes: Changes, where: str = "") -> List[str]:
     """The lines `launch` prints about the project files a session changed
-    (`project_changes`)."""
+    (`project_changes`); `where`: a `[launch] write_to` folder, named in the header (the
+    paths are relative to it)."""
     groups, truncated = changes
     changed = [c for k in sorted(groups) for c in groups[k]]
     lines: List[str] = []
+    place = _esc(where) if where else "the project"
     if changed:
-        lines.append(f"phiward launch: the session changed {len(changed)} file(s) in the "
-                     "project; read them before you run anything outside launch:")
+        lines.append(f"phiward launch: the session changed {len(changed)} file(s) in "
+                     f"{place}; read them before you run anything outside launch:")
         # instructions for models in full (up to 500), so other files cannot push them out of
         # sight
         # instructions, files that run later and settings are never folded into a count
@@ -1501,9 +1839,9 @@ def project_report(changes: Changes) -> List[str]:
             else:
                 lines.append(f"  and {len(rest)} other file(s)")
     if truncated:
-        lines.append("phiward launch: WARNING: the project has more entries than the report "
+        lines.append(f"phiward launch: WARNING: {place} has more entries than the report "
                      "compares; past that point only instructions, files that run later and "
-                     "settings were checked, and other files are not listed. Read the project "
+                     f"settings were checked, and other files are not listed. Read {place} "
                      "before you run anything outside launch.")
     return lines
 
@@ -1518,15 +1856,15 @@ USAGE = ("usage: phiward carryover status [--tool NAME]\n"
 HELP = USAGE + """
 Commands:
   status            show the size of each carry-over folder (sessions, trash, quarantine,
-                    the trusted copy) and what it costs to delete it
+                    the trusted copy, the kept transcripts) and what it costs to delete it
   add PATH          put an instruction file or folder of your own into the trusted copy
-                    (--as NAME: the name it gets there)
   show              list the changes in quarantine, each with its ID and items
   accept ID [ITEM...]  keep a change from quarantine (all of it, or only the named items);
                     every later session starts with it
   reset             make the record again from the trusted copy, when it cannot be read
 
 Options:
+  --as NAME         with add: the name it gets in the trusted copy
   --tool NAME       the agent tool (default: claude)
   -h, --help        show this help
 
@@ -1541,7 +1879,7 @@ an agent tool.
 def main(argv: List[str]) -> int:
     from phiward import wholetool
     args = list(argv)
-    if args[:1] in (["-h"], ["--help"]):
+    if "-h" in args or "--help" in args:  # also after a subcommand: help changes nothing
         sys.stdout.write(HELP)
         return 0
     tool = "claude"

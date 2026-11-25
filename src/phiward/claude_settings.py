@@ -5,12 +5,14 @@ Confined means all of these hold, from the merged settings:
 - `sandbox.enabled` is true;
 - `sandbox.allowUnsandboxedCommands` is false (so the model cannot retry outside the sandbox);
 - `sandbox.failIfUnavailable` is true (else commands run unsandboxed when the sandbox cannot
-  start), and none of the settings in OPENERS is true, and `network.allowMachLookup` is empty;
+  start), and none of the settings in OPENERS is true (on macOS, `network.allowLocalBinding`
+  too), and `network.allowMachLookup` is empty;
 - `sandbox.filesystem.denyRead` and `denyWrite` cover every protected root (the root or a
   folder above it);
 - `sandbox.filesystem.denyWrite` covers the phiward config and code (config.guard_files);
 - `sandbox.excludedCommands` is empty (gateway calls are clients of the broker; they run in the
-  sandbox like any command);
+  sandbox like any command). `shell_reason`, the hook's reading, leaves this one out: while the
+  list is non-empty (`excluded_entries`), the hook checks the text of every shell call instead;
 - `sandbox.network.allowAllUnixSockets` is not true and `allowUnixSockets` is empty (a socket
   such as Docker's reaches a process outside the sandbox);
 - no `sandbox.filesystem.allowRead` entry re-opens any part of a root. Claude Code applies the
@@ -304,7 +306,10 @@ def git_redirects(project: str, home: str) -> List[str]:
     for dot in config.enclosing_git_dirs(project):
         if os.path.isdir(dot):
             common = os.path.join(dot, "commondir")
-            if os.path.lexists(common):
+            # `.` (Claude Code's env scrub writes it on Linux): git's common folder is then this
+            # folder itself, as with no commondir. Only the exact forms with trailing newlines
+            # pass; anything else is reported, also forms git reads the same way (`.\r\n`)
+            if os.path.lexists(common) and _read_raw(common).rstrip("\n") not in (".", "./", "./."):
                 text = _read_line(common)
                 out.append(f"{common} -> {os.path.realpath(os.path.join(dot, text)) if text else '?'}")
             continue
@@ -322,10 +327,18 @@ def _is_repository(d: str) -> bool:
 
 
 def _read_line(path: str) -> str:
+    try:
+        return _read_raw(path).strip().splitlines()[0]
+    except IndexError:
+        return ""
+
+
+def _read_raw(path: str) -> str:
+    """The file's text as it is, or "" when it cannot be read."""
     from phiward import safeio
     try:
-        return safeio.read_text(path, limit=4096).strip().splitlines()[0]
-    except (OSError, UnicodeDecodeError, ValueError, IndexError):
+        return safeio.read_text(path, limit=4096)
+    except (OSError, UnicodeDecodeError, ValueError):
         return ""
 
 
@@ -393,8 +406,9 @@ def levels(project: Optional[str], home: str, env: Optional[Mapping[str, str]] =
     for m in MANAGED:
         # the drop-ins merge on top of the base file in name order, so the last one wins: listed
         # first here (highest precedence first)
-        files += [("managed", p) for p in reversed(sorted(
-            glob.glob(os.path.join(os.path.dirname(m), "managed-settings.d", "*.json"))))]
+        files += [("managed", p) for p in sorted(
+            glob.glob(os.path.join(os.path.dirname(m), "managed-settings.d", "*.json")),
+            reverse=True)]
         files.append(("managed", m))
     if project:
         files += [("project local", local or local_file(project, home)),
@@ -475,7 +489,7 @@ def _paths(levels_, project: str, home: str, env, key: str, deny: bool) -> List[
             if deny and wild:
                 continue
             bases = _bases(level, project, home, env)
-            if deny and level == "managed" and not (v.startswith("/") or v.startswith("~")):
+            if deny and level == "managed" and not v.startswith(("/", "~")):
                 continue
             if wild:  # an allow pattern stays a pattern; _reopened matches it
                 for p in _resolve(v, bases, home):
@@ -534,17 +548,33 @@ def _reopened(root: str, deny: Sequence[str], allow: Sequence[str]) -> bool:
 # sandbox settings that let a sandboxed command reach past the sandbox: with any of them true,
 # the shell does not count as confined
 OPENERS = (("filesystem", "disabled"), ("enableWeakerNestedSandbox",), ("allowAppleEvents",),
-           ("allowNestedUserNamespaces",), ("network", "allowLocalBinding"))
+           ("allowNestedUserNamespaces",))
+# macOS only (read when the check runs): there it lets a sandboxed command reach every service
+# on localhost; on Linux a sandboxed command's localhost is its own and the key has no effect
+# (Claude Code's docs, sandboxing)
+LOCAL_BINDING = ("network", "allowLocalBinding")
+LOCAL_BINDING_STEP = ("a dev server runs in your own terminal, or in a folder with no PHI that "
+                      "the operator lists in [no_phi] folders (user config), not in the "
+                      "session's shell (on macOS this key lets a sandboxed command reach every "
+                      "local service): ")
 
 
-def _opened(lv) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
+def _opened(lv, excluded_opens: bool = True,
+            openers_open: bool = True) -> Optional[Tuple[str, Tuple[str, ...], bool]]:
     """Why these settings let a sandboxed command reach past the sandbox: (the reason, the keys
-    under `sandbox`, whether it is a list), or None."""
-    for keys in OPENERS:
-        if _first(lv, "sandbox", *keys) is True:
+    under `sandbox`, whether it is a list), or None. `excluded_opens`: whether a non-empty
+    `excludedCommands` counts (`shell_reason` leaves it to the hook's text check).
+    `openers_open`: whether the OPENERS and `allowLocalBinding` count (`no_phi_reason`);
+    `filesystem.disabled` always counts, since with it nothing denies a read, and so do the
+    unix socket and Mach service openers."""
+    for keys in OPENERS + ((LOCAL_BINDING,) if sys.platform == "darwin" else ()):
+        if (openers_open or keys == ("filesystem", "disabled")) and \
+                _first(lv, "sandbox", *keys) is True:
             return f"sandbox.{'.'.join(keys)} is true (it opens the sandbox)", tuple(keys), False
-    if _merged_list(lv, "sandbox", "excludedCommands"):
+    if excluded_opens and _merged_list(lv, "sandbox", "excludedCommands"):
         return "sandbox.excludedCommands is not empty", ("excludedCommands",), True
+    # the socket and service openers count always: what answers there (Docker's daemon) runs
+    # outside the sandbox and can read a root
     if _first(lv, "sandbox", "network", "allowAllUnixSockets") is True:
         return ("sandbox.network.allowAllUnixSockets is true",
                 ("network", "allowAllUnixSockets"), False)
@@ -692,6 +722,9 @@ BASH = "/bin/bash"
 VERSION_PATTERNS = (2, 1, 236)  # macOS: a wildcard denyRead holds under a wider allowRead
 VERSION_BLOCK_READS = (2, 1, 257)  # permissions.blockReadsOutsideWorkingDirectories
 VERSION_DENY_PROMPTS = (2, 1, 319)  # permissions.denyInsteadOfPrompting
+# a hook's `onFailure` (2.1.295), and `args` (exec form, older than that): `launch` refuses an
+# older Claude Code, on every platform
+VERSION_HOOK_ARGS = (2, 1, 295)
 
 
 def version_text(version: Tuple[int, int, int]) -> str:
@@ -756,8 +789,11 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
                 guard: Sequence[str] = (), env: Optional[Mapping[str, str]] = None,
                 hidden: Sequence[str] = (),
                 user_data: Optional[Dict[str, Any]] = None,
-                version: Optional[Tuple[int, int, int]] = None) -> Optional[Reason]:
-    """Why the shell is not confined, with its step, or None. `user_data`: the user settings to take in place of the file (what
+                version: Optional[Tuple[int, int, int]] = None,
+                excluded_opens: bool = True, openers_open: bool = True) -> Optional[Reason]:
+    """Why the shell is not confined, with its step, or None. `excluded_opens`: whether a
+    non-empty `excludedCommands` counts (`shell_reason`). `openers_open`: whether the sandbox
+    openers count (`no_phi_reason`). `user_data`: the user settings to take in place of the file (what
     `install claude --user --write` would write, for doctor), in every level whose file is the user
     file (a session started from the home folder reads it as its project file too). `version`:
     the Claude Code version when it is known (doctor; the hook cannot run `claude --version`),
@@ -789,12 +825,115 @@ def confinement_reason(project: Optional[str], home: str, roots: Sequence[str],
         if user_data is not None:
             mine = os.path.normpath(_user_file(home, env))  # install replaces the file there
             lv = [(lvl, f, user_data if os.path.normpath(f) == mine else d) for lvl, f, d in lv]
-        r = _confined_with(lv, project, home, roots, patterns, guard, env, hidden, version)
+        r = _confined_with(lv, project, home, roots, patterns, guard, env, hidden, version,
+                           excluded_opens, openers_open)
         if r is not None:
             if local != candidates[0]:  # not the file Claude Code is thought to read
                 r = Reason(f"{r.text}, with {local} as the settings.local.json Claude Code may "
                            "read", r.step)
             return r
+    return None
+
+
+def shell_reason(project: Optional[str], home: str, roots: Sequence[str],
+                 patterns: Sequence[str], guard: Sequence[str] = (),
+                 env: Optional[Mapping[str, str]] = None,
+                 hidden: Sequence[str] = ()) -> Optional[Reason]:
+    """For the hook only: `confinement_reason` without `excludedCommands`. Claude Code matches
+    an entry against each call's text with its own parser, which phiward does not copy; while
+    the list is non-empty (`excluded_entries`), the hook checks the text of every shell call
+    instead of refusing the whole shell. Every other cause still means not confined."""
+    return confinement_reason(project, home, roots, patterns, guard, env, hidden,
+                              excluded_opens=False)
+
+
+def no_phi_reason(project: Optional[str], home: str, roots: Sequence[str],
+                  patterns: Sequence[str], guard: Sequence[str] = (),
+                  env: Optional[Mapping[str, str]] = None,
+                  hidden: Sequence[str] = ()) -> Optional[Reason]:
+    """For the hook in a no-PHI folder: `shell_reason` without the sandbox openers
+    (`enableWeakerNestedSandbox`, `allowAppleEvents`, `allowNestedUserNamespaces`, macOS
+    `allowLocalBinding`). None: only those leave the shell unconfined, so the folder is
+    relaxed; any other cause (`filesystem.disabled`, a unix socket or Mach service, a root
+    missing from denyRead, a startup folder the sandbox may write, a file that does not parse,
+    patterns) keeps the blanket refusal."""
+    return confinement_reason(project, home, roots, patterns, guard, env, hidden,
+                              excluded_opens=False, openers_open=False)
+
+
+def no_phi_relaxed(cfg: "config.Config", project: str, home: str,
+                   folders: Optional[Sequence[Optional[str]]] = None
+                   ) -> Tuple[str, Optional[Reason]]:
+    """(the `[no_phi] folders` entry that is the session's project `project`, or "" when no
+    entry is; why that folder is not relaxed, with its step, or None when it is). The one test
+    of the hook, the session note and doctor: the entry passes its own check
+    (`config.no_phi_match`, whose reasons have no step) and the settings of every folder in
+    `folders` (the hook's `confining_folders`; by default the project alone) pass
+    `no_phi_reason`. An empty `folders` is not relaxed: no settings were checked."""
+    from phiward import hidden
+    entry, why = config.no_phi_match(cfg, project)
+    if not entry or why:
+        return entry, Reason(why, "") if why else None
+    folders = [project] if folders is None else folders
+    if not folders:
+        return entry, Reason("no settings folder was checked for this call", NO_PROJECT_STEP)
+    secret = [h for h in hidden.for_sandbox(hidden.paths(None, cfg, session=True)) if os.path.lexists(h)]
+    for p in folders:
+        r = no_phi_reason(p, home, cfg.all_roots, cfg.patterns, config.guard_files(),
+                          hidden=secret)
+        if r is not None:
+            return entry, r
+    return entry, None
+
+
+def excluded_entries(project: Optional[str], home: str,
+                     env: Optional[Mapping[str, str]] = None) -> List[str]:
+    """The merged `sandbox.excludedCommands` of every level phiward reads, with each
+    `settings.local.json` Claude Code may read (`local_candidates`). Only "non-empty" is used.
+    An MDM profile, server-managed settings and `--settings` are not read here
+    (docs/threat-model.md)."""
+    out: List[str] = []
+    for local in (local_candidates(project, home) if project else [""]):
+        out += [e for e in _merged_list(levels(project, home, env, local), "sandbox",
+                                        "excludedCommands") if e not in out]
+    return out
+
+
+def excluded_step(project: Optional[str], home: str,
+                  env: Optional[Mapping[str, str]] = None) -> Tuple[str, str]:
+    """(the file that holds an `excludedCommands` entry, as the operator knows it; the step that
+    empties it), from the first level with a non-empty list, or ("", "")."""
+    for local in (local_candidates(project, home) if project else [""]):
+        lv = levels(project, home, env, local)
+        for level in lv:
+            if _merged_list([level], "sandbox", "excludedCommands"):
+                return (_shown_file(level[1], project or "", home),
+                        _step_for(lv, project or "", home, env, ("sandbox", "excludedCommands"),
+                                  _only_old_excludes, True))
+    return "", ""
+
+
+def launch_sandbox_reason(project: str, home: str, env: Optional[Mapping[str, str]],
+                          flag: Dict[str, Any]) -> Optional[str]:
+    """`phiward launch` below Landlock ABI 9: why Claude Code's sandbox, with `flag` given by
+    `--settings` (below managed settings, above every file), would not keep Bash from unix
+    sockets, or None. Every `settings.local.json` Claude Code may read counts. A file that
+    does not parse counts as opening it."""
+    for local in local_candidates(project, home):
+        lv = levels(project, home, env, local)
+        managed = [x for x in lv if x[0] == "managed"]
+        lv = managed + [("command line", "--settings", flag)] + lv[len(managed):]
+        for _l, f, data in lv:
+            if data is None and os.path.lexists(f):
+                return f"{_shown_file(f, project, home)} cannot be read as JSON"
+        for key, want in (("enabled", True), ("allowUnsandboxedCommands", False),
+                          ("failIfUnavailable", True)):
+            if _first(lv, "sandbox", key) is not want:
+                return f"the managed settings set sandbox.{key}"
+        opened = _opened(lv)
+        if opened:
+            return (f"Claude Code's settings open its sandbox ({opened[0]}), so Bash could reach "
+                    "unix sockets outside the session; remove that setting")
     return None
 
 
@@ -805,7 +944,8 @@ OUTSIDE_PROJECT_STEP = "run the command inside the project folder ($CLAUDE_PROJE
 def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: Sequence[str],
                    guard: Sequence[str], env: Optional[Mapping[str, str]],
                    hidden: Sequence[str],
-                   version: Optional[Tuple[int, int, int]] = None) -> Optional[Reason]:
+                   version: Optional[Tuple[int, int, int]] = None,
+                   excluded_opens: bool = True, openers_open: bool = True) -> Optional[Reason]:
     """`confinement_reason` for one set of settings files (`levels`)."""
     for _l, f, data in lv:
         if data is None and os.path.lexists(f):
@@ -820,11 +960,12 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
         if _first(lv, "sandbox", key) is not want:
             # install sets these three in the user file
             return Reason(text, _step_for(lv, project, home, env, ("sandbox", key), True))
-    opened = _opened(lv)
+    opened = _opened(lv, excluded_opens, openers_open)
     if opened:
         text, keys, merged = opened
         fixes = _only_old_excludes if keys == ("excludedCommands",) else False
-        return Reason(text, _step_for(lv, project, home, env, ("sandbox",) + keys, fixes, merged))
+        step = _step_for(lv, project, home, env, ("sandbox",) + keys, fixes, merged)
+        return Reason(text, LOCAL_BINDING_STEP + step if keys == LOCAL_BINDING else step)
     r = _patterns_unconfined(lv, project, home, env, patterns, version)
     if r is not None:
         return r
@@ -874,16 +1015,26 @@ def _confined_with(lv, project: str, home: str, roots: Sequence[str], patterns: 
 # `worktrees`) and under the user config folder (CLAUDE_CONFIG_DIR may have another name). A skill
 # or subagent may hold hooks in its frontmatter, a skill or command `!` lines, a plugin hooks and
 # MCP servers; `launch.json` names what the app's preview starts. The one list: the hook asks
-# before a file tool writes one (`code_place`), and carryover quarantines them.
+# before a file tool writes one (`claude_place`), and carryover quarantines them.
 SETTINGS_NAMES = ("settings.json", "settings.local.json")
 CODE_DIRS = ("skills", "agents", "commands", "hooks", "workflows", "plugins", "routines")
 CODE_FILES = ("launch.json", "scheduled_tasks.json")
-# what an editor or a tool runs from a project, wherever it is in the tree: an editor's workspace
-# settings (tasks, an interpreter path, MCP servers) and the files git and ripgrep read for
-# commands. Claude Code's sandbox denies them to the shell; the hook asks before a file tool
-# writes one, and `launch --entry` makes them read-only
-WORKSPACE_CODE_DIRS = (".vscode", ".idea")
-WORKSPACE_CODE_FILES = (".gitmodules", ".ripgreprc")
+# the one list of what an agent tool, an editor, R or git runs from a project later, outside
+# every sandbox, wherever it is in the tree: Claude Code's, Cursor's, Gemini CLI's and Codex's
+# folders, an editor's workspace settings (tasks, an interpreter path, MCP servers), the files git
+# and ripgrep read for commands, and what R runs at start. Under `launch` (the tool and a wrapped
+# server) each is read-only as a whole (wholetool)
+RUNS_LATER_DIRS = (".claude", ".vscode", ".idea", ".cursor", ".gemini", ".codex")
+RUNS_LATER_FILES = (".mcp.json", ".gitmodules", ".ripgreprc", ".Rprofile", ".Renviron")
+# the hook asks before a file tool writes one of these: the list without `.claude` (judged by
+# `claude_place`, so `.claude/worktrees` stays writable) and `.mcp.json` (asked as Claude's own)
+WORKSPACE_CODE_DIRS = tuple(d for d in RUNS_LATER_DIRS if d != ".claude")
+WORKSPACE_CODE_FILES = tuple(f for f in RUNS_LATER_FILES if f != ".mcp.json")
+# the editors' folders. Claude Code's sandbox denies the working folder's own to the shell, not a
+# nested one (`sub/.vscode/tasks.json`); VS Code and JetBrains read them only at a workspace or
+# project root, and a wildcard rule for them would deny `npm install` and `git pull` in every
+# project, so a nested one is left to the hook's question (`workspace_code`)
+EDITOR_DIRS = (".vscode", ".idea")
 # git's control files below any `.git` folder under the home folder (a submodule's config, a
 # worktree's commondir, hooks): git runs what they name, and Claude Code runs git outside its
 # sandbox. Anchored to the control files themselves, so a branch named `config` or `hooks/x`
@@ -900,9 +1051,11 @@ def workspace_code(path: str) -> bool:
     """Whether `path` is a file an editor or a tool runs commands from (WORKSPACE_CODE_DIRS,
     WORKSPACE_CODE_FILES), as the file system compares names."""
     from phiward import pathid
+    dirs = {pathid.fold(n) for n in WORKSPACE_CODE_DIRS}
+    files = {pathid.fold(n) for n in WORKSPACE_CODE_FILES}
     for v in (os.path.normpath(path), os.path.realpath(path)):
         parts = pathid.fold(v).split("/")
-        if any(p in WORKSPACE_CODE_DIRS for p in parts[:-1]) or parts[-1] in WORKSPACE_CODE_FILES:
+        if any(p in dirs for p in parts[:-1]) or parts[-1] in files:
             return True
     return False
 
@@ -946,7 +1099,15 @@ def _too_wide(real: str, keep: Sequence[str]) -> bool:
     return any((pathid.fold(k).rstrip("/") + "/").startswith(r) for k in keep if k)
 
 
-def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
+def _skipped(path: str, trees: Sequence[str]) -> bool:
+    """Whether the folder `path` is one of `trees` (folder names, or `a/b` for a name below
+    another: `renv/library`)."""
+    parts = path.rstrip("/").split("/")
+    return any(parts[-len(t.split("/")):] == t.split("/") for t in trees)
+
+
+def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = "",
+               skip: Sequence[str] = ()
                ) -> "Tuple[List[Tuple[str, str]], List[Tuple[str, str, str]]]":
     """The code roots below `starts` ([(a real code folder, how deep to walk or None, how it is
     named)]): each start, and where every link inside one leads, a linked folder walked in turn
@@ -954,7 +1115,7 @@ def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
     there)], [(why, real path, link)] for `doctor`: "tree" a tree past TREE_WALK, "total" one not
     walked once LINK_WALK was passed (both still code as a whole; links deep in them not
     followed), "wide" a target that is or holds the home or user config folder, not taken as
-    code)."""
+    code). Folders named in `skip` (`_skipped`) are not walked."""
     roots: List[Tuple[str, str]] = []
     notes: List[Tuple[str, str, str]] = []
     keep = [os.path.realpath(home)] + ([os.path.realpath(user_dir(home))] if home else [])
@@ -997,7 +1158,8 @@ def _code_walk(starts: Sequence[Tuple[str, Optional[int], str]], home: str = ""
                             done.add(real)
                             if not _too_wide(real, keep):
                                 roots.append((real, e.path))  # a file, or nothing yet
-                    elif (limit is None or depth < limit) and e.is_dir(follow_symlinks=False):
+                    elif (limit is None or depth < limit) and e.is_dir(follow_symlinks=False) \
+                            and not (skip and _skipped(e.path, skip)):
                         stack.append((e.path, depth + 1))
                 except OSError:
                     continue  # an entry that vanished, or cannot be read (/dev/fd)
@@ -1129,12 +1291,6 @@ def code_root_report(project: str, home: str, env: Optional[Mapping[str, str]] =
     return out, notes
 
 
-def writable_code_roots(project: str, home: str,
-                        env: Optional[Mapping[str, str]] = None) -> List[Tuple[str, str]]:
-    """The code roots a session in `project` can write (`code_root_report`)."""
-    return code_root_report(project, home, env)[0]
-
-
 def claude_place(path: str, home: str, bases: Sequence[str] = (),
                  env: Optional[Mapping[str, str]] = None,
                  memo: Optional[Dict[Any, Any]] = None) -> str:
@@ -1188,11 +1344,6 @@ def _claude_place(path: str, home: str, bases: Sequence[str],
         if found == "settings":
             return found
     return found
-
-
-def code_place(path: str, home: str, env: Optional[Mapping[str, str]] = None) -> bool:
-    """Whether `path` (absolute) is one Claude Code runs as code (`claude_place`)."""
-    return claude_place(path, home, (), env) == "code"
 
 
 def memory_places(home: str, env: Optional[Mapping[str, str]] = None) -> List[str]:
@@ -1282,10 +1433,11 @@ def agent_writable_anywhere(home: str) -> List[str]:
     """The folders the agent's sandbox may write in every project, as far as they are known
     without one (the broker's PATH): the spool, and the allowWrite and additionalDirectories
     entries of the managed and user settings that are absolute paths (a relative one would be
-    resolved against a project, which is not known here). Real paths. The temp folders are
+    resolved against a project, which is not known here), and the `[launch] write_to` folders of
+    the user config (`/` when that file cannot be read). Real paths. The temp folders are
     `_temp_roots`."""
     lv = levels(None, home)
-    roots = [config.spool_dir()]
+    roots = [config.spool_dir()] + config.launch_write_to_entries()
     for p in _paths(lv, "", home, None, "allowWrite", deny=False):
         cut = min([p.index(c) for c in "*?[" if c in p] or [len(p)])
         roots.append(p if cut == len(p) else os.path.dirname(p[:cut]))

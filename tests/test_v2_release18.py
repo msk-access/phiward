@@ -95,6 +95,33 @@ def test_a_commondir_in_the_projects_git_folder_is_reported(tree):
     assert found and os.path.realpath(str(repo / ".g")) in found[0], found
 
 
+@needs_git
+@pytest.mark.parametrize("text", [".", "./", "./.\n", ".\n\n"])
+def test_a_commondir_that_names_its_own_git_folder_is_not_reported(tree, text):
+    # Claude Code's env scrub (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1, Linux) writes `.` there at
+    # start: git then takes its config and hooks from that same folder, as with no commondir.
+    # only these exact forms pass; anything else is reported (fails safe), also a form git reads
+    # the same way, such as `.\r\n` (git strips a trailing \r too) or `.` then NUL
+    repo = tree / "repo"
+    _git("init", "-q", cwd=repo)
+    (repo / ".git" / "commondir").write_text(text)
+    assert claude_settings.git_redirects(str(repo), str(tree / "home")) == []
+
+
+@needs_git
+@pytest.mark.parametrize("text", ["", "\n", "../.g", "../sub/.git", " .", ". ", ".\r\n",
+                                  "./g/..", "\n."])
+def test_a_commondir_that_names_anything_else_is_still_reported(tree, text):
+    # `.\r\n` is harmless to git (it strips the \r) but is reported on purpose: one exact
+    # list of forms is simpler to trust than a copy of git's parser
+    repo = tree / "repo"
+    _git("init", "-q", cwd=repo)
+    (repo / ".g").mkdir()
+    (repo / "sub" / ".git").mkdir(parents=True)
+    (repo / ".git" / "commondir").write_text(text)
+    assert len(claude_settings.git_redirects(str(repo), str(tree / "home"))) == 1
+
+
 def test_a_git_file_that_leads_into_the_project_is_reported(tree):
     repo = tree / "repo"
     (repo / ".g2").mkdir()
@@ -209,13 +236,13 @@ def test_a_wrapped_server_still_writes_the_project(tree):
 
 
 @needs_confine
-def test_a_plain_launch_still_writes_claude_commands_and_the_index(tree):
+def test_a_plain_launch_still_writes_the_index_but_not_claude_commands(tree):
+    # the tool's profile is the server's now, but for the whole .git folder
     _git_repo(tree)
     r = tree / "repo"
-    targets = [str(r / ".claude" / "commands" / "x.md"), str(r / ".git" / "index")]
-    out = _launch(tree, _tries(targets))
-    for t in targets:
-        assert f"DONE {t}" in out, (t, out)
+    out = _launch(tree, _tries([str(r / ".claude" / "commands" / "x.md"), str(r / ".git" / "index")]))
+    assert f"DONE {r / '.git' / 'index'}" in out, out
+    assert f"REFUSED {r / '.claude' / 'commands' / 'x.md'}" in out, out
 
 
 # --- B: the hidden list (HK-F2, MC-M1, MC-L1, HK-L3, HK-F4) -----------------------------------
@@ -459,6 +486,48 @@ def test_the_broker_removes_leftover_scratch_folders_at_start(tree, broker):
     assert not os.path.exists(old)
 
 
+def test_the_broker_makes_its_cache_folder_at_start(tree, broker):
+    """Claude Code's sandbox on Linux, while a command runs, puts an empty read-only file at a
+    denied path that does not exist (the mount point that blocks its creation), on the host.
+    The cache folder is denied, and the broker makes its scratch there: `phiward run` from the
+    session failed with exit 3 (run failed (FileExistsError)) when the folder was not made yet.
+    The broker makes it when it starts, before a session can ask."""
+    import shutil
+    import stat as st_mod
+    from phiward import config
+    cache = config.cache_dir()
+    shutil.rmtree(cache, ignore_errors=True)
+    broker()  # a restart, with no cache folder
+    st = os.lstat(cache)
+    assert st_mod.S_ISDIR(st.st_mode) and st_mod.S_IMODE(st.st_mode) == 0o700, oct(st.st_mode)
+
+
+@pytest.mark.parametrize("where", ["cache", "parent"])
+def test_the_broker_refuses_to_start_on_a_file_where_its_cache_folder_goes(tree, broker,
+                                                                           where):
+    """Claude Code removes its mount points after each command, but one left behind (a session
+    that ended while a command ran) is an empty read-only file at the cache folder or a folder
+    above it. The broker removes nothing: it refuses to start, names the file and says what to
+    do."""
+    import shutil
+    import subprocess
+    from phiward import config
+    cache = config.cache_dir()
+    shutil.rmtree(cache, ignore_errors=True)
+    spot = cache if where == "cache" else os.path.dirname(cache)
+    shutil.rmtree(spot, ignore_errors=True)
+    os.close(os.open(spot, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o444))
+    r = subprocess.run([sys.executable, "-m", "phiward", "broker"], cwd=str(tree / "home"),
+                       env=dict(os.environ, PYTHONPATH=str(SRC)), stdin=subprocess.DEVNULL,
+                       capture_output=True, text=True, timeout=60)
+    assert r.returncode == 3, (r.returncode, r.stdout, r.stderr)
+    assert spot in r.stderr and "not a folder" in r.stderr and "remove it" in r.stderr, r.stderr
+    assert "Claude Code" in r.stderr, r.stderr
+    assert os.path.isfile(spot) and os.path.getsize(spot) == 0  # left as it was
+    os.chmod(spot, 0o600)
+    os.unlink(spot)
+
+
 def test_a_fifo_named_like_the_heartbeat_does_not_hang_the_broker(tree, broker):
     import time
     alive = os.path.join(broker.spool, "broker.alive")
@@ -669,10 +738,10 @@ def test_a_hook_that_runs_another_environments_python_is_not_isolated(tree):
     py = other / "python3"
     py.write_text("#!/bin/sh\necho {}\n")
     py.chmod(0o755)
-    mine = install.isolated_command(sys.executable, "hook")
-    theirs = mine.replace(sys.executable, str(py))
-    assert doctor.hook_form({"type": "command", "command": mine}) == "isolated"
-    assert doctor.hook_form({"type": "command", "command": theirs}) != "isolated"
+    mine = dict(install.hook_entry(sys.executable, "hook"), type="command")
+    theirs = dict(mine, args=[str(py)] + mine["args"][1:])
+    assert doctor.hook_form(mine) == "isolated"
+    assert doctor.hook_form(theirs) != "isolated"
 
 
 def test_a_guard_file_that_is_a_link_is_denied_in_both_spellings(tree):
@@ -905,8 +974,8 @@ def test_a_listed_name_is_known_by_its_folder_not_its_text(tree, monkeypatch):
         f'[protected_paths]\nroots = ["{tree}/phi"]\n[broker]\ncommands = ["wc"]\n')
     cfg = config.load(str(proj))
     word = str(d / "tools" / ".." / "wc")
-    assert run.program_listed(word, run.resolve_program(word, str(proj), dict(os.environ)),
-                              cfg) is False
+    assert run.listed_run_path(word, run.resolve_program(word, str(proj), dict(os.environ)),
+                               cfg, os.getcwd(), os.environ.get("PATH", os.defpath)) == ""
     # a path never stands for a bare listed name (round 18d), in any spelling: give the name
     (tree / "usrbin").mkdir()
     (tree / "usrbin" / "wc").write_text("#!/bin/sh\necho real\n")
@@ -914,7 +983,9 @@ def test_a_listed_name_is_known_by_its_folder_not_its_text(tree, monkeypatch):
     os.symlink(str(tree / "usrbin"), str(tree / "bin"))
     monkeypatch.setenv("PATH", f"{tree / 'usrbin'}:{os.environ['PATH']}")
     w2 = str(tree / "bin" / "wc")
-    assert run.program_listed(w2, run.resolve_program(w2, str(proj), dict(os.environ)),
-                              config.load(str(proj))) is False
-    assert run.program_listed("wc", run.resolve_program("wc", str(proj), dict(os.environ)),
-                              config.load(str(proj))) is True
+    assert run.listed_run_path(w2, run.resolve_program(w2, str(proj), dict(os.environ)),
+                               config.load(str(proj)), os.getcwd(),
+                               os.environ.get("PATH", os.defpath)) == ""
+    assert run.listed_run_path("wc", run.resolve_program("wc", str(proj), dict(os.environ)),
+                               config.load(str(proj)), os.getcwd(),
+                               os.environ.get("PATH", os.defpath)) != ""

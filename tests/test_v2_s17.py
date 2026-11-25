@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from phiward import carryover
-from helpers import needs_confine, ready_line
+from helpers import landlock_abi, needs_confine, ready_line, tool_py
 
 SRC = str(Path(__file__).resolve().parents[1] / "src")
 PY = sys.executable
@@ -31,8 +31,16 @@ def env():
     return dict(os.environ, PYTHONPATH=SRC)
 
 
-def launch(tree, code, tool="claude"):
-    r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", tool, "--", PY, "-c", code],
+def launch(tree, code, tool="claude", recursion_limit=None):
+    """`phiward launch` running `code` as the tool. With `recursion_limit`, launch's own process
+    (which removes what the session left at its end) gets that recursion limit; the tool is a
+    child of it and keeps the default."""
+    start = ["-m", "phiward"]
+    if recursion_limit:
+        start = ["-c", f"import runpy, sys; sys.setrecursionlimit({recursion_limit}); "
+                       "runpy.run_module('phiward', run_name='__main__', alter_sys=True)"]
+    r = subprocess.run([PY, *start, "launch", "--tool", tool, "--", tool_py(tree, tool),
+                        "-c", code],
                        cwd=str(tree / "repo"), capture_output=True, text=True, env=env(),
                        timeout=120, stdin=subprocess.DEVNULL)
     return r.returncode, r.stdout, r.stderr
@@ -140,11 +148,16 @@ def test_17_6_a_locked_file_does_not_break_later_launches(tree):
 @pytest.mark.slow
 @needs_confine
 def test_17_7_a_deep_tree_does_not_break_the_end(tree):
+    # 600 levels under a recursion limit of 300: a remover that recurses once per level fails, on
+    # every Python version (macOS takes about 0.5 s for 600 levels and 15 s for 1500)
     code, out, err = launch(tree, f"import os\nos.mkdir(os.path.join({CFG}, 'skills'))\n"
                                   f"os.chdir(os.path.join({CFG}, 'skills'))\n"
-                                  "for i in range(1500):\n    os.mkdir('d')\n    os.chdir('d')\nprint('MADE')")
+                                  "for i in range(600):\n    os.mkdir('d')\n    os.chdir('d')\nprint('MADE')",
+                            recursion_limit=300)
+    # the end of this session removes the tree, not only the next start
     assert "MADE" in out and "Traceback" not in err, err
-    code, out, err = launch(tree, "print('AGAIN')")
+    assert "did not finish" not in err and "could not be removed" not in err, err
+    code, out, err = launch(tree, "print('AGAIN')", recursion_limit=300)
     assert "AGAIN" in out and "could not be removed" not in err, err
 
 
@@ -300,7 +313,8 @@ def test_D_the_carry_over_folder_deleted_while_a_session_runs(tree):
     import shutil
     accept_note(tree)
     # the first session waits (on its stdin) until the folder is gone and a second one ran
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                              tool_py(tree), "-c",
                               "import os, sys\nprint('READY', flush=True)\nsys.stdin.read()\n"
                               "print('FIRST', os.path.isdir(os.environ['CLAUDE_CONFIG_DIR']))"],
                              cwd=str(tree / "repo"), env=env(), stdin=subprocess.PIPE,
@@ -340,19 +354,29 @@ def test_r19_2_the_session_can_resolve_and_enter_its_own_folders(tree):
 
 
 @needs_confine
-def test_r19_3_a_session_cannot_reach_another_sessions_socket(tree):
+@pytest.mark.parametrize("tool", ["claude", "generic"])
+def test_r19_3_a_session_cannot_reach_another_sessions_socket(tree, tool):
     # bound by a short relative name: the full path is longer than macOS's 104-byte socket limit;
     # the server waits (on its stdin) until the other session has tried to connect
-    srv = ("import os, socket, sys\nos.chdir(os.environ['TMPDIR'])\n"
-           "s = socket.socket(socket.AF_UNIX)\ns.bind('s')\ns.listen(1)\n"
+    srv = ("import os, socket, sys\nos.chdir(os.environ['TMPDIR'])\ntry:\n"
+           "    s = socket.socket(socket.AF_UNIX)\nexcept OSError as e:\n"
+           "    print('READY NO-SOCKET', e.errno, flush=True); sys.exit()\n"
+           "s.bind('s')\ns.listen(1)\n"
            "print('READY', os.path.join(os.environ['TMPDIR'], 's'), flush=True)\nsys.stdin.read()\n")
-    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c", srv],
+    first = subprocess.Popen([PY, "-m", "phiward", "launch", "--tool", tool, "--",
+                              tool_py(tree, tool), "-c", srv],
                              cwd=str(tree / "repo"), env=env(), stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     path = ready_line(first).split(" ", 1)[1].strip()
-    code, out, err = launch(tree, f"import os, socket\ns = socket.socket(socket.AF_UNIX)\ntry:\n"
+    if tool == "generic" and sys.platform.startswith("linux") and landlock_abi() < 9:
+        # below Landlock ABI 9 the generic tool cannot make a unix socket at all
+        first.communicate(timeout=60)
+        assert path == "NO-SOCKET 1", path
+        return
+    code, out, err = launch(tree, f"import os, socket\ntry:\n    s = socket.socket(socket.AF_UNIX)\n"
                                   f"    os.chdir({os.path.dirname(path)!r})\n    s.connect('s')\n"
-                                  "    print('CONNECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n")
+                                  "    print('CONNECTED')\nexcept OSError as e:\n    print('REFUSED', e.errno)\n",
+                            tool=tool)
     alive = first.poll() is None  # the server still listened while the other session tried
     first.communicate(timeout=60)
     assert alive and "REFUSED" in out and "CONNECTED" not in out, out + err
@@ -390,7 +414,8 @@ def test_k_a_kerberos_ticket_file_cannot_be_read(tree, where):
         extra_env = {"KRB5CCNAME": f"FILE:{f}"}
     f.write_text("FAKE-TICKET\n")
     try:
-        r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--", PY, "-c",
+        r = subprocess.run([PY, "-m", "phiward", "launch", "--tool", "claude", "--",
+                              tool_py(tree), "-c",
                             f"try:\n    print('READ', open({str(f)!r}).read())\nexcept OSError as e:\n"
                             "    print('REFUSED', e.errno)\n"], cwd=str(tree / "repo"),
                            capture_output=True, text=True, env=dict(env(), **extra_env), timeout=120)

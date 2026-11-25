@@ -19,9 +19,10 @@ broker treats everything in it as untrusted data:
   `BASH_ENV`, `RSYNC_RSH` or `LD_PRELOAD` cannot change what an approved command runs.
 
 The broker also writes a status file, `~/.phiward/broker.json` (outside the spool; the
-agent may not write it): the user config, cache folder, roots and patterns that it uses. It
-writes it again when they change, and removes it when it stops. `doctor` reports a difference
-from the agent's own view (the spool too). A reader uses it only while the heartbeat is fresh.
+agent may not write it): its phiward version, and the user config, cache folder, roots and
+patterns that it uses. It writes it again when they change, and removes it when it stops.
+`doctor` reports a difference from the agent's own view (the spool and the version too). A
+reader uses it only while the heartbeat is fresh.
 
 Files: the client writes `req-<id>.json` (through a temporary name and a rename); the broker
 claims it by renaming it to `job-<id>.json`, writes the sanitized output to `out-<id>.log`, then
@@ -532,9 +533,13 @@ class Broker:
                                              path=command_env().get("PATH", ""))
         except Exception:  # noqa: BLE001 - when in doubt, nothing runs
             self.unapproved = ["unreadable"]
+        # the user's rules mask their examples, and the roots a made-up path (phicheck): checked
+        # once; a fixed config is a changed config, so the restart checks again
+        from phiward import phicheck
+        self.masking = phicheck.check(config.load("/"), "/")
         # claimed jobs wait here for one of `max_jobs` workers; the main loop never blocks, so
         # the heartbeat goes on while every worker is busy
-        self.jobs: "queue.Queue[Any]" = queue.Queue()
+        self.jobs: queue.Queue[Any] = queue.Queue()
         self.max_jobs = max_jobs
         self.stop = threading.Event()
 
@@ -547,12 +552,18 @@ class Broker:
         from phiward import run as run_mod
         if run_mod.sweep_scratch(config.cache_dir()):
             self.say("removed scratch folders an earlier broker left")
+        from phiward import confine
+        if confine.prune_profiles():
+            self.say("removed profile files an earlier broker left")
         status = write_status()
         for _ in range(self.max_jobs):
             threading.Thread(target=self.worker, daemon=True).start()
         if self.unapproved:
             self.say(f"ready, but {len(self.unapproved)} listed program(s) are not approved: "
                      "every request is refused until `phiward pin` and a restart")
+        elif self.masking.failed:
+            self.say("ready, but the masking check failed: every request is refused until the "
+                     "config is fixed (`phiward doctor`) and the broker restarted")
         else:
             self.say("ready; requests are read from the spool folder")
         while not self.stop.is_set():
@@ -646,6 +657,13 @@ class Broker:
                       "runs `phiward doctor`, which names them, checks them, runs `phiward pin` "
                       f"in their own terminal, and restarts the broker: {restart_hint()}.\n")
             return 3
+        if self.masking.failed:
+            self.say(f"request {rid[:8]} refused: the masking check failed")
+            out.write("refused: the masking check failed when the broker started: a rule of the "
+                      "phiward config does not mask its example, or a made-up path below a root "
+                      "came out unmasked. The operator runs `phiward doctor`, fixes the config "
+                      f"and restarts the broker: {restart_hint()}.\n")
+            return 3
         if config_print() != self.config_print:
             self.say(f"request {rid[:8]} refused: the config changed since the broker started")
             out.write("refused: the phiward config changed since the broker started. The "
@@ -672,8 +690,9 @@ def _status() -> Dict[str, Any]:
     cfg = config.load("/")
     import socket as _socket
     from phiward import procinfo
+    from phiward import __version__
     me = procinfo.info(os.getpid())
-    return {"v": 1, "pid": os.getpid(), "start": me[1] if me else None,
+    return {"v": 1, "version": __version__, "pid": os.getpid(), "start": me[1] if me else None,
             "host": _socket.gethostname(), "config": config.user_config_path(), "cache": config.cache_dir(),
             "spool": config.spool_dir(),
             "roots": cfg.user_roots, "patterns": cfg.user_patterns,
@@ -729,6 +748,19 @@ def read_status(spool: Optional[str] = None) -> Dict[str, Any]:
     return _read_status_file()
 
 
+def version_problem(status: Dict[str, Any]) -> str:
+    """For doctor and `--headless`, only while a broker runs (`running`): why it may run older
+    code than this phiward, or "". A broker older than this change writes no version; a status
+    that cannot be read (`{}`) counts as one with no version."""
+    from phiward import __version__
+    if status.get("version") == __version__:
+        return ""
+    theirs = status.get("version") or "not given (an older broker, or its status cannot be read)"
+    return (f"the running broker's phiward version is {theirs}, this one's is {__version__}: "
+            "after an upgrade the broker runs the old code until it restarts. Restart it: "
+            "`(cd ~ && phiward broker --service --write)`, or stop and start `phiward broker`")
+
+
 def other_spool(spool: str) -> Optional[str]:
     """The spool of a broker that runs with another spool than `spool`, or None. Only to say
     where the broker is (`doctor`, a refused request): nothing else is taken from the file."""
@@ -768,7 +800,7 @@ def _read_status_file() -> Dict[str, Any]:
         v = data.get(key)
         out[key] = [x for x in v if isinstance(x, str) and os.path.isabs(x)] if isinstance(v, list) else []
     if private:  # who wrote it (`running`): only from the broker's own private file
-        for key, kind in (("pid", int), ("start", int), ("host", str)):
+        for key, kind in (("pid", int), ("start", int), ("host", str), ("version", str)):
             v = data.get(key)
             if isinstance(v, kind) and not isinstance(v, bool):
                 out[key] = v
@@ -791,6 +823,25 @@ def main(argv: List[str]) -> int:
     problem = config.load("/").problem
     if problem:
         sys.stderr.write(f"phiward broker: the user config cannot be used: {problem}\n")
+        return 3
+    # the scratch folders' place, made now: while a command runs, Claude Code's sandbox (Linux)
+    # puts an empty read-only file at a denied path that does not exist (the cache folder is
+    # denied), so a first `phiward run` from a session would find a file there. One left behind
+    # is refused, never removed
+    cache = config.cache_dir()
+    try:
+        os.makedirs(cache, mode=0o700, exist_ok=True)
+    except OSError:
+        spot = cache
+        while not os.path.lexists(spot) and os.path.dirname(spot) != spot:
+            spot = os.path.dirname(spot)
+        if os.path.lexists(spot) and not os.path.isdir(spot):
+            sys.stderr.write(f"phiward broker: {spot} is a file, not a folder, where the cache "
+                             "folder goes; an empty one is likely the placeholder Claude Code's "
+                             "sandbox left there. Read it, remove it, then start the broker "
+                             "again\n")
+        else:
+            sys.stderr.write(f"phiward broker: the cache folder ({cache}) cannot be made\n")
         return 3
     try:
         spool = Spool(config.spool_dir())

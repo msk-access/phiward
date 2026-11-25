@@ -180,4 +180,5 @@ def test_bug12_doctor_warns_when_a_root_is_not_written_canonically(tree):
     env = dict(os.environ, PYTHONPATH=SRC)
     r = subprocess.run([sys.executable, "-m", "phiward", "doctor"], cwd=str(tree / "repo"),
                        capture_output=True, text=True, env=env)
-    assert "spelling" in r.stdout and "WARNING" in r.stdout, r.stdout
+    # one line holds both: other WARNING lines print in this doctor run too
+    assert any("WARNING:" in l and "spelling" in l for l in r.stdout.splitlines()), r.stdout

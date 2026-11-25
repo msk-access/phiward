@@ -2,7 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main, develop]  # not tags: a release tag runs this suite once, from release.yml
+    # develop only: main moves only by a release, whose tag runs this suite from release.yml before
+    # anything is published; not tags, for the same reason
+    branches: [develop]
   pull_request:  # every other branch, once, through its pull request
   workflow_call:  # the release workflow runs the suite before it builds
 
@@ -24,7 +26,11 @@ jobs:
         # Ubuntu 24.04 by name: ubuntu-latest (26.04) has no Python 3.9 build; the newest Ubuntu
         # still runs once, with the newest Python
         os: [ubuntu-24.04, macos-latest]
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        # a pull request runs the oldest and newest Python (5 cells, 2 on macOS, whose runners
+        # queue); a push to develop and a release run every version (13 cells). The rule is "short
+        # only on a pull_request": under workflow_call the event is the caller's (the tag push),
+        # so a release always gets every version. Never decide this by github.ref.
+        python: ${{ fromJSON(github.event_name == 'pull_request' && '["3.9", "3.14"]' || '["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]') }}
         include:
           - os: ubuntu-latest
             python: "3.14"
@@ -37,7 +43,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq bubblewrap
+          sudo apt-get install -y -qq bubblewrap tabix  # tabix: the BGZF copy of pseudonymize
           # Ubuntu 24.04 blocks unprivileged user namespaces through AppArmor; bubblewrap needs them
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
       - name: Install
@@ -49,10 +55,10 @@ jobs:
           PHIWARD_REQUIRE_CONFINE: "1"  # a missing backend fails the run instead of skipping tests
           PHIWARD_CHECK_SKIPS: "1"  # a skip not in tests/expected_skips_<platform>.txt fails
         run: |
-          # on Linux the made-up trees go outside /tmp: a session replaces /tmp, and tests that
-          # need their tree inside the session would skip
-          extra=""
-          if [ "$RUNNER_OS" = "Linux" ]; then extra="--basetemp=$RUNNER_TEMP/pt"; fi
-          python -m pytest -q -rs --timeout=300 $extra
+          # the made-up trees go outside the temp folder: on Linux a session replaces /tmp, and
+          # tests that need their tree inside the session would skip; on macOS the per-user
+          # temp folder is a session's write place, so `launch --tool claude` would not ask the
+          # made-up Claude Code its version there
+          python -m pytest -q -rs --timeout=300 --basetemp="$RUNNER_TEMP/pt"
       - name: Sanitizer self-test
         run: python -m phiward sanitize --selftest

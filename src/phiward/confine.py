@@ -15,13 +15,17 @@ ConfineError. Callers fail closed.
 
 import os
 import platform
+import re
+import secrets
 import shutil
+import stat
 import struct
 import subprocess
 import sys
+import time
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from phiward import pathmatch
+from phiward import pathid, pathmatch
 
 SANDBOX_EXEC = "/usr/bin/sandbox-exec"
 
@@ -169,6 +173,7 @@ def seatbelt_gateway_profile(writable: Sequence[str], patterns: Sequence[str], n
     # Seatbelt matches the resolved path (/tmp is /private/tmp): every spelling of the socket
     profile += "(deny mach-lookup)(deny ipc-posix*)(deny ipc-sysv*)"
     profile += "(deny darwin-notification-post)(deny distributed-notification-post)"
+    profile += "(deny file-mount)(deny job-creation)"
     profile += "(deny signal (require-not (target same-sandbox)))"
     profile += "(deny process-info* (require-not (target same-sandbox)))"
     if socket:
@@ -199,8 +204,8 @@ _BWRAP_BASE = ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--die-with-
 
 def open_place(path: str) -> int:
     """An O_PATH descriptor of the folder `path`, reached part by part without following a
-    link, so the folder checked is the folder bound (check by path, then bind
-    by path, let a swap in between move the bind)."""
+    link. bwrap reads the folder's current name back from it and binds that name; the helper
+    confirms inside the view that the mount at that name is this folder."""
     flags = os.O_PATH | os.O_NOFOLLOW | os.O_DIRECTORY | os.O_CLOEXEC  # type: ignore[attr-defined]
     fd = os.open("/", flags)
     try:
@@ -215,12 +220,35 @@ def open_place(path: str) -> int:
     return fd
 
 
+def _source_stat(path: str) -> os.stat_result:
+    """The stat of what is at `path` itself, a link not followed, its folder reached part by
+    part without following a link: the identity a read-only bind must show inside the view. A
+    link here does not match what bwrap mounts through it, so the helper stops the start."""
+    try:
+        fd = open_place(os.path.dirname(path) or "/")
+    except ConfineError:
+        raise ConfineError("a file the request binds is reached through a link; nothing runs")
+    try:
+        return os.stat(os.path.basename(path), dir_fd=fd, follow_symlinks=False)
+    except OSError:
+        raise ConfineError("a file the request binds is no longer there; nothing runs")
+    finally:
+        os.close(fd)
+
+
 def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bool,
                        fds: Optional[Dict[str, int]] = None,
                        deny_read: Sequence[str] = (), socket: str = "",
-                       allow_read: Sequence[str] = ()) -> List[str]:
+                       allow_read: Sequence[str] = (),
+                       checks: Optional[List[Tuple[str, str, str, str]]] = None,
+                       places: Optional[Sequence[str]] = None) -> List[str]:
     """`fds` maps each place to a descriptor from open_place; each place is bound from its
-    descriptor (/proc/self/fd/N), never by its path."""
+    descriptor (/proc/self/fd/N), never by its path. `places`: the places the caller listed
+    (and opened), so they are listed once; else gateway_places. `checks`, when given, gets one
+    (destination, kind, source, place) for each bind with a host source: kind `w` a place, `r`
+    read only; `place` is the place a `.claude` folder is in. The helper checks each one inside
+    before the command runs."""
+    found: List[Tuple[str, str, str, str]] = [] if checks is None else checks
     args = ["--ro-bind", "/", "/"] + _BWRAP_BASE + [
         "--unshare-ipc", "--new-session"]
     if socket:
@@ -234,15 +262,21 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
     # no empty /tmp: it would hide a request folder (or a root) under /tmp, and bubblewrap would
     # then run the command in $HOME without a word. The host /tmp stays
     # read-only, like all of /; the command's TMPDIR is its private scratch folder.
-    for w in gateway_places(writable, patterns):
+    # shallowest first: a bind is recursive, so a folder bound after a place inside it would
+    # cover that place
+    places = sorted(gateway_places(writable, patterns) if places is None else places,
+                    key=lambda p: p.count("/"))
+    for w in places:
         src = f"/proc/self/fd/{fds[w]}" if fds and w in fds else w
         args += ["--bind", src, w]
+        found.append((w, "w", w, ""))
     # Claude Code settings inside a write place stay read-only; a new one can
     # still be made in a write place that has none (docs/threat-model.md)
-    for w in gateway_places(writable, patterns):
+    for w in places:
         c = os.path.join(w, ".claude")
         if os.path.isdir(c) and not os.path.islink(c):
             args += ["--ro-bind", c, c]
+            found.append((c, "r", c, w))
     # what the command may not read (credentials, traces): masked last, over every bind, each at
     # its real place (bubblewrap cannot make a mount point through a link: /var/run -> /run)
     masked: List[str] = []
@@ -257,11 +291,12 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
             args += ["--ro-bind", "/dev/null", p]
     hidden = [os.path.realpath(h) for h in deny_read]
     for p in allow_read:
-        # the file itself, also when the name is a link (dotfile managers): bound from its
-        # resolved target, unless that target is hidden
+        # the resolved file, unless it is hidden, bound at the name. A name that is itself a
+        # link cannot be bound: bwrap fails to mount at a link (the start stops)
         real = os.path.realpath(p)
         if os.path.isfile(real) and not any(real == h or real.startswith(h + "/") for h in hidden):
             args += ["--ro-bind", real, _mount_point(p)]
+            found.append((_mount_point(p), "r", real, ""))
     if socket:
         # every other socket that has a path (an SSH agent's, X11's, another shared
         # connection's) is masked: a read-only bind does not stop a connect;
@@ -271,9 +306,40 @@ def bwrap_gateway_args(writable: Sequence[str], patterns: Sequence[str], net: bo
                     s == d or s.startswith(d + "/") for d in ("/tmp", "/var/tmp")):
                 args += ["--ro-bind", "/dev/null", s]
         args += ["--bind", socket, LINUX_SOCKET, "--unshare-net"]
+        found.append((LINUX_SOCKET, "r", socket, ""))
     elif not net:
         args.append("--unshare-net")
     return args
+
+
+# `phiward launch` gives the session a network namespace of its own (bwrap --unshare-net)
+NETNS_SYSCTL = "/proc/sys/user/max_net_namespaces"
+
+
+def net_namespace_problem(bwrap: str, sysctl: str = "", run=None, probe: bool = True) -> str:
+    """Why bubblewrap cannot give a session a network namespace of its own here, or "". The
+    sysctl first (0 turns them off), then (with `probe`: doctor) one bwrap with --unshare-net
+    that runs nothing. `launch` reads only the sysctl: any other failure is bwrap's own, at the
+    start, and nothing runs."""
+    path = sysctl or NETNS_SYSCTL
+    try:
+        with open(path, encoding="ascii") as fh:
+            if fh.read().strip() == "0":
+                return f"user.max_net_namespaces is 0 ({path}), so there are none"
+    except (OSError, ValueError):
+        pass
+    if not probe:
+        return ""
+    run = run or subprocess.run
+    try:
+        r = run([bwrap, "--ro-bind", "/", "/", "--unshare-net", "--", "/bin/true"],
+                capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return f"bwrap --unshare-net cannot run ({exc})"
+    if r.returncode != 0:
+        lines = (r.stderr or "").strip().splitlines()
+        return "bwrap --unshare-net fails: " + (lines[-1] if lines else f"exit {r.returncode}")
+    return ""
 
 
 # where the shared connection's socket appears inside a Linux request: a fixed
@@ -351,66 +417,324 @@ def seccomp_program(machine: Optional[str] = None, unix: bool = False) -> bytes:
     return b"".join(struct.pack("<HBBI", *ins) for ins in prog)
 
 
-# Runs inside bubblewrap before the command: Landlock allows writes only below the given paths.
-# argv: N PATH... CMD [ARG]...   Exit 126 when Landlock (ABI 2 or later) is not available.
+# the helper's refusal below Landlock ABI 2 (%s: the kernel's ABI, or "none"), with its step
+LANDLOCK_TOO_OLD = ("Landlock ABI 2 or later is needed (the kernel has %s): it needs Linux 5.19 "
+                    "or newer with Landlock turned on")
+
+# Runs inside bubblewrap before the command. argv: N ENTRY... K FD... CMD [ARG]...
+# ENTRY is HEXPATH:DEV:INO:KIND: the path in the view as hex bytes; KIND `w` a place (checked,
+# and Landlock allows writes below it), `r` a read-only bind (checked only), `d` a device (DEV and
+# INO `-`; writes allowed, no check). A checked entry must be the recorded object (device and
+# inode), and the root of a mount whose mount point is exactly its path: bwrap mounts each source
+# by the name it reads back, so this is what confirms that what was checked is what got mounted.
+# FD: the broker's descriptors of the places, closed first. Any failure, of any kind: exit 126.
 LANDLOCK_HELPER = r"""
-import ctypes, os, struct, sys
-libc = ctypes.CDLL(None, use_errno=True)
-libc.syscall.restype = ctypes.c_long
+import os, sys
+class Stop(Exception):
+    pass
 def fail(msg):
-    sys.stderr.write("phiward gateway: " + msg + "; nothing runs\n"); os._exit(126)
-abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
-if abi < 2:
-    fail("Landlock ABI 2 or later is needed (the kernel has %s)" % ("none" if abi < 0 else abi))
-fs = 0
-for bit in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):  # write, remove, make, refer
-    fs |= 1 << bit
-if abi >= 3: fs |= 1 << 14  # truncate
-if abi >= 5: fs |= 1 << 15  # ioctl on devices
-attr = struct.pack("<Q", fs)
-if abi >= 4: attr += struct.pack("<Q", 0)
-if abi >= 6: attr += struct.pack("<Q", 3)  # scope: abstract unix sockets, signals
-buf = ctypes.create_string_buffer(attr, len(attr))
-rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
-if rs < 0: fail("Landlock cannot make a ruleset")
-n = int(sys.argv[1]); entries = sys.argv[2:2 + n]
-k = int(sys.argv[2 + n]); close = sys.argv[3 + n:3 + n + k]; cmd = sys.argv[3 + n + k:]
-for c in close:  # the broker's descriptors of the places: the command does not get them
+    raise Stop(msg)
+try:
+    import ctypes, re, stat, struct
+    MALFORMED = "the list of binds is malformed"
+    NUM = re.compile("[0-9]+")
+    args = sys.argv[1:]
+    if not args or not NUM.fullmatch(args[0]):
+        fail(MALFORMED)
+    n = int(args[0])
+    if len(args) < n + 2 or not NUM.fullmatch(args[n + 1]):
+        fail(MALFORMED)
+    k = int(args[n + 1]); close = args[n + 2:n + 2 + k]; cmd = args[n + 2 + k:]
+    if len(close) != k or not cmd or not all(NUM.fullmatch(c) for c in close):
+        fail(MALFORMED)
+    recs, seen = [], set()
+    for e in args[1:n + 1]:
+        f = e.split(":")
+        if len(f) != 4 or f[3] not in ("w", "r", "d") or \
+                not re.fullmatch("(?:[0-9a-f]{2})+", f[0]):
+            fail(MALFORMED)
+        path = bytes.fromhex(f[0])
+        if not path.startswith(b"/") or b"\0" in path:
+            fail(MALFORMED)
+        if f[3] == "d":
+            if (f[1], f[2]) != ("-", "-"):
+                fail(MALFORMED)
+            ident = None
+        elif NUM.fullmatch(f[1]) and NUM.fullmatch(f[2]):
+            ident = (int(f[1]), int(f[2]))
+        else:
+            fail(MALFORMED)
+        if path in seen:
+            fail("a bind is listed twice")
+        seen.add(path)
+        recs.append((path, ident, f[3]))
+    for c in close:  # the broker's descriptors of the places: the command does not get them
+        try:
+            os.close(int(c))
+        except OSError:
+            pass
+    libc = ctypes.CDLL(None, use_errno=True)
+    libc.syscall.restype = ctypes.c_long
+    abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
+    if abi < 2:
+        fail(LANDLOCK_TOO_OLD % ("none" if abi < 0 else abi))
+    fs = 0
+    for bit in (1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):  # write, remove, make, refer
+        fs |= 1 << bit
+    if abi >= 3: fs |= 1 << 14  # truncate
+    if abi >= 5: fs |= 1 << 15  # ioctl on devices
+    attr = struct.pack("<Q", fs)
+    if abi >= 4: attr += struct.pack("<Q", 0)
+    if abi >= 6: attr += struct.pack("<Q", 3)  # scope: abstract unix sockets, signals
+    buf = ctypes.create_string_buffer(attr, len(attr))
+    rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+    if rs < 0: fail("Landlock cannot make a ruleset")
+    filebits = (1 << 1) | (fs & ((1 << 14) | (1 << 15)))
+    # each mount's ID and its mount point, as bytes (the kernel escapes space, tab, newline and
+    # backslash as \NNN)
+    with open("/proc/self/mountinfo", "rb") as fh:
+        table = fh.read()
+    points = {}
+    for line in table.split(b"\n"):
+        if line:
+            fl = line.split(b" ")
+            points.setdefault(fl[0], []).append(
+                re.sub(rb"\\([0-7]{3})", lambda m: bytes([int(m.group(1), 8)]), fl[4]))
+    for path, ident, kind in recs:
+        where = path.decode("utf-8", "backslashreplace")
+        try:
+            fd = os.open(path, os.O_PATH | os.O_CLOEXEC | (os.O_NOFOLLOW if kind != "d" else 0))
+        except OSError:
+            fail(where + " cannot be opened")
+        st = os.fstat(fd)
+        if ident is not None:
+            if (st.st_dev, st.st_ino) != ident:
+                fail(where + " is not what was checked before the start")
+            with open("/proc/self/fdinfo/%d" % fd, "rb") as fh:
+                ids = [l.split(b":", 1)[1].strip() for l in fh.read().split(b"\n")
+                       if l.startswith(b"mnt_id:")]
+            if len(ids) != 1 or points.get(ids[0]) != [path]:
+                fail(where + " is not a mount at its name")
+        if kind != "r":
+            bits = fs if stat.S_ISDIR(st.st_mode) else filebits
+            rule = ctypes.create_string_buffer(struct.pack("<Qi", bits, fd), 12)
+            if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1), rule, ctypes.c_uint32(0)) < 0:
+                fail("Landlock cannot add a rule")
+        os.close(fd)
+    if libc.prctl(38, 1, 0, 0, 0) != 0: fail("no_new_privs cannot be set")
+    if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) < 0: fail("Landlock cannot be enforced")
+    os.close(rs)
+except BaseException as exc:
+    why = str(exc) if isinstance(exc, Stop) else "the helper could not check the request"
     try:
-        os.close(int(c))
-    except OSError:
-        pass
-filebits = (1 << 1) | (fs & ((1 << 14) | (1 << 15)))
-for e in entries:
-    p, dev, ino = e.rsplit("|", 2)
-    try:
-        fd = os.open(p, os.O_PATH | os.O_CLOEXEC | (os.O_NOFOLLOW if dev != "-" else 0))
-    except OSError:
-        continue
-    st = os.fstat(fd)
-    if dev != "-" and (st.st_dev, st.st_ino) != (int(dev), int(ino)):
-        fail("a write place changed before the command started")  # the bound folder only
-    bits = fs if os.path.isdir(p) else filebits
-    rule = ctypes.create_string_buffer(struct.pack("<Qi", bits, fd), 12)
-    if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1), rule, ctypes.c_uint32(0)) < 0:
-        fail("Landlock cannot add a rule")
-    os.close(fd)
-if libc.prctl(38, 1, 0, 0, 0) != 0: fail("no_new_privs cannot be set")
-if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) < 0: fail("Landlock cannot be enforced")
-os.close(rs)
+        sys.stderr.write("phiward gateway: " + why + "; nothing runs\n")
+        sys.stderr.flush()
+    finally:
+        os._exit(126)
 try:
     os.execvp(cmd[0], cmd)
 except OSError:
     sys.stderr.write("phiward gateway: the command could not start\n"); os._exit(127)
-"""
+""".replace("LANDLOCK_TOO_OLD", repr(LANDLOCK_TOO_OLD))
 
 _GATEWAY_DEVICES = ("/dev/null", "/dev/zero")  # no /dev/tty: the gateway has no terminal
 
 
+# -- the profile's file (macOS) ----------------------------------------------------------------
+# `sandbox-exec -f FILE`, never `-p TEXT`: no generated text in argv. The file is in
+# ~/.phiward/profiles, which no session can write (Claude Code's sandbox denies all of
+# ~/.phiward; it is not a write place under launch) or read (the hidden list). sandbox-exec
+# opens it by path after phiward wrote it, so what keeps it from being swapped is that folder;
+# the checks below refuse a folder that is not the operator's own and private.
+
+PROFILE_NAME = re.compile(r"[0-9a-f]{32}\.sb")
+PROFILE_MAX_AGE = 86400  # a file older than this is one a stopped broker left
+
+
+def _profile_name() -> str:
+    return secrets.token_hex(16) + ".sb"
+
+
+def profiles_dir(env: Optional[Dict[str, str]] = None) -> str:
+    """Where the gateway and `launch` write their profiles (and the tool profile denies
+    reads)."""
+    return os.path.join(os.path.realpath(pathid.home(env)), ".phiward", "profiles")
+
+
+def _open_folder(parent: int, name: str, shown: str, make: bool) -> int:
+    """`name` in the folder `parent`, opened with no link followed (made 0700 when missing and
+    `make`); refused when it is not a folder of this account."""
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(name, flags, dir_fd=parent)
+    except FileNotFoundError:
+        if not make:
+            raise
+        try:
+            os.mkdir(name, 0o700, dir_fd=parent)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise ConfineError(f"{shown} cannot be made ({_errname(exc)}); nothing "
+                               "runs") from None
+        try:
+            return _open_folder(parent, name, shown, False)
+        except FileNotFoundError:
+            raise ConfineError(f"{shown} was removed while it was opened; nothing "
+                               "runs") from None
+    except OSError as exc:
+        # ELOOP or ENOTDIR: a link or a file at the name; else what the system said
+        raise ConfineError(f"{shown} cannot be opened ({_errname(exc)}: a link, not a folder, "
+                           "or no access); nothing runs") from None
+    st = os.fstat(fd)
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+        os.close(fd)
+        raise ConfineError(f"{shown} belongs to another account; nothing runs")
+    return fd
+
+
+def _errname(exc: OSError) -> str:
+    import errno
+    return errno.errorcode.get(exc.errno or 0, "an error")
+
+
+def _profiles_fd(make: bool) -> int:
+    """~/.phiward/profiles, opened part by part with no link followed. Refused when ~/.phiward
+    is a link, another account's or writable by other accounts (its read bits are fine: older
+    installs made it 0755; it is left as it is); profiles is set to 0700 by its descriptor."""
+    home = os.path.realpath(pathid.home())
+    try:
+        hfd = os.open(home, os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_CLOEXEC", 0))
+    except OSError:
+        raise ConfineError("the home folder cannot be opened; nothing runs") from None
+    try:
+        base = _open_folder(hfd, ".phiward", "~/.phiward", make)
+    finally:
+        os.close(hfd)
+    try:
+        if os.fstat(base).st_mode & 0o022:
+            raise ConfineError("other accounts can write ~/.phiward; nothing runs. Run "
+                               "`chmod go-w ~/.phiward`")
+        fd = _open_folder(base, "profiles", "~/.phiward/profiles", make)
+    finally:
+        os.close(base)
+    try:
+        if stat.S_IMODE(os.fstat(fd).st_mode) != 0o700:
+            os.fchmod(fd, 0o700)
+    except OSError:
+        os.close(fd)
+        raise ConfineError("~/.phiward/profiles cannot be made private; nothing runs") from None
+    return fd
+
+
+def write_profile(text: str) -> str:
+    """Write a profile to a new file in ~/.phiward/profiles and return its path: a fresh name,
+    O_EXCL and O_NOFOLLOW (a name planted there is refused, never used), mode 0600, read back
+    before it is used. Any error raises ConfineError: nothing runs."""
+    data = text.encode("utf-8")
+    dfd = _profiles_fd(make=True)
+    try:
+        name = _profile_name()
+        try:
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW |
+                         getattr(os, "O_CLOEXEC", 0), 0o600, dir_fd=dfd)
+        except OSError:
+            raise ConfineError("the profile file cannot be made; nothing runs") from None
+        try:
+            try:
+                os.fchmod(fd, 0o600)
+                view = memoryview(data)
+                while view:
+                    view = view[os.write(fd, view):]
+                made = os.fstat(fd)
+            finally:
+                os.close(fd)
+            if _read_back(dfd, name, made) != data:
+                raise ConfineError("the profile file changed after it was written; nothing "
+                                   "runs")
+        except BaseException as exc:
+            try:
+                os.unlink(name, dir_fd=dfd)
+            except OSError:
+                pass
+            if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
+                raise
+            raise ConfineError("the profile file cannot be written; nothing runs") from None
+        return os.path.join(profiles_dir(), name)
+    finally:
+        os.close(dfd)
+
+
+def _read_back(dfd: int, name: str, made: os.stat_result) -> bytes:
+    """The file at `name`, when it is still the one written (same file, one link, ours, 0600)."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0), dir_fd=dfd)
+    try:
+        st = os.fstat(fd)
+        if (st.st_dev, st.st_ino) != (made.st_dev, made.st_ino) or not stat.S_ISREG(st.st_mode) \
+                or st.st_nlink != 1 or st.st_uid != os.getuid() or \
+                stat.S_IMODE(st.st_mode) != 0o600:
+            return b""
+        chunks = []
+        while True:
+            b = os.read(fd, 1 << 16)
+            if not b:
+                return b"".join(chunks)
+            chunks.append(b)
+    finally:
+        os.close(fd)
+
+
+def release_profile(argv: Sequence[str]) -> None:
+    """Remove the profile file a `gateway_command` argv names, once its process has ended. Only
+    a profile's name in ~/.phiward/profiles; an error leaves it for `prune_profiles`."""
+    if len(argv) < 3 or argv[0] != SANDBOX_EXEC or argv[1] != "-f":
+        return
+    folder, name = os.path.split(argv[2])
+    if folder != profiles_dir() or not PROFILE_NAME.fullmatch(name):
+        return
+    try:
+        dfd = _profiles_fd(make=False)
+    except (OSError, ConfineError):
+        return
+    try:
+        os.unlink(name, dir_fd=dfd)
+    except OSError:
+        pass
+    finally:
+        os.close(dfd)
+
+
+def prune_profiles(max_age: int = PROFILE_MAX_AGE) -> int:
+    """At the broker's start: remove profile files older than `max_age` seconds (left by a
+    broker that was stopped). Plain files with a profile's name only, by the folder's
+    descriptor. How many were removed."""
+    try:
+        dfd = _profiles_fd(make=False)
+    except (OSError, ConfineError):
+        return 0
+    n = 0
+    try:
+        cutoff = time.time() - max_age
+        for name in os.listdir(dfd):
+            if not PROFILE_NAME.fullmatch(name):
+                continue
+            try:
+                st = os.stat(name, dir_fd=dfd, follow_symlinks=False)
+                if stat.S_ISREG(st.st_mode) and st.st_mtime < cutoff:
+                    os.unlink(name, dir_fd=dfd)
+                    n += 1
+            except OSError:
+                continue
+    finally:
+        os.close(dfd)
+    return n
+
+
 # -- entry points -------------------------------------------------------------------------------
 
-_NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
-               "bubblewrap)")
+NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
+              "bubblewrap): on Linux, install bubblewrap (bwrap) with the system's package "
+              "manager and have it on the PATH; see Requirements in docs/setup.md")
 
 
 def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequence[str],
@@ -418,54 +742,86 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
                     socket: str = "", allow_read: Sequence[str] = ()) -> Tuple[List[str], List[int]]:
     """`argv` wrapped so that it writes only to `writable` (and pattern matches), with no
     network unless `net`, and the file descriptors that must stay open for it (Linux: the
-    seccomp program). The caller closes the descriptors after the process starts."""
+    seccomp program). The caller closes the descriptors after the process starts, and calls
+    `release_profile` with the argv once the process has ended (macOS: the profile's file).
+    `socket` is a resolved path (remote.shared_socket gives one): a link in it stops the
+    request."""
     b = backend()
     if b == "seatbelt":
-        return [SANDBOX_EXEC, "-p", seatbelt_gateway_profile(writable, patterns, net, deny_read,
-                                                            socket, allow_read)] + \
-            list(argv), []
+        path = write_profile(seatbelt_gateway_profile(writable, patterns, net, deny_read,
+                                                      socket, allow_read))
+        return [SANDBOX_EXEC, "-f", path] + list(argv), []
     if b == "bwrap":
         prog = seccomp_program(unix=bool(socket))
         r, w = os.pipe()
         os.write(w, prog)  # small: it fits in the pipe buffer
         os.close(w)
         fds: Dict[str, int] = {}
+        checks: List[Tuple[str, str, str, str]] = []
         try:
-            for p in gateway_places(writable, patterns):
+            places = gateway_places(writable, patterns)  # once: what is opened is what is bound
+            for p in places:
                 fds[p] = open_place(p)
-        except ConfineError:
+            bw = bwrap_gateway_args(writable, patterns, net, fds, deny_read, socket, allow_read,
+                                    checks, places)
+            entries = []
+            for dest, kind, src, place in checks:
+                # each identity from the name bwrap binds, a link not followed
+                if kind == "w":
+                    st = os.fstat(fds[src])
+                elif place:
+                    st = os.stat(os.path.basename(src), dir_fd=fds[place],
+                                 follow_symlinks=False)
+                else:
+                    st = _source_stat(src)
+                entries.append(f"{os.fsencode(dest).hex()}:{st.st_dev}:{st.st_ino}:{kind}")
+        except BaseException as exc:
             for fd in list(fds.values()) + [r]:
                 os.close(fd)
-            raise
-        entries = []
-        for p, fd in fds.items():
+            if isinstance(exc, ConfineError) or not isinstance(exc, Exception):
+                raise
+            raise ConfineError("the request's binds could not be recorded; nothing runs") \
+                from None
+        for fd in fds.values():
             os.set_inheritable(fd, True)
-            st = os.fstat(fd)
-            entries.append(f"{p}|{st.st_dev}|{st.st_ino}")
-        entries += [f"{d}|-|-" for d in _GATEWAY_DEVICES]
+        entries += [f"{os.fsencode(d).hex()}:-:-:d" for d in _GATEWAY_DEVICES]
         held = [str(fd) for fd in fds.values()]
         helper = [sys.executable, "-I", "-S", "-c", LANDLOCK_HELPER, str(len(entries))] + \
             entries + [str(len(held))] + held
-        return [shutil.which("bwrap") or "bwrap", "--seccomp", str(r)] + \
-            bwrap_gateway_args(writable, patterns, net, fds, deny_read, socket, allow_read) + \
+        return [shutil.which("bwrap") or "bwrap", "--seccomp", str(r)] + bw + \
             ["--"] + helper + \
             list(argv), \
             [r] + list(fds.values())
-    raise ConfineError(_NO_BACKEND)
+    raise ConfineError(NO_BACKEND)
+
+
+def _seatbelt_failure(code: int, why: List[str]) -> str:
+    """What `sandbox-exec -f FILE true` failing says: inside another sandbox (macOS cannot apply
+    a second one), or a profile that does not compile here."""
+    last = f": {why[-1]}" if why else ""
+    if any("sandbox_apply" in w for w in why):
+        return ("this process is inside another sandbox, and macOS cannot apply a second one "
+                f"(exit {code}{last}); run phiward from a plain terminal")
+    return f"the profile does not compile or cannot be applied here (exit {code}{last})"
 
 
 def self_test() -> Optional[str]:
     """Why the gateway's confinement does not work here, or None. It runs `true` in the
-    gateway profile."""
+    gateway profile (on macOS by its full path: no program is found on PATH)."""
     try:
-        cmd, fds = gateway_command(["true"], [], [], False)
+        b = backend()
+        cmd, fds = gateway_command(["/usr/bin/true" if b == "seatbelt" else "true"], [], [],
+                                   False)
         try:
             r = subprocess.run(cmd, capture_output=True, timeout=30, pass_fds=fds)
         finally:
             for fd in fds:
                 os.close(fd)
+            release_profile(cmd)
         if r.returncode != 0:
             why = r.stderr.decode("utf-8", "replace").strip().splitlines()
+            if b == "seatbelt":
+                return _seatbelt_failure(r.returncode, why)
             return f"the gateway profile cannot start a process here (exit {r.returncode}" + \
                 (f": {why[-1]}" if why else "; on Ubuntu 24.04, unprivileged user namespaces "
                  "may be blocked by AppArmor") + ")"

@@ -4,38 +4,47 @@ The tool itself starts inside the profile, so everything it does (its file tools
 and hooks), and every child it starts, is decided by the kernel, not by a path check. The text
 users see is HELP below; this docstring is for developers.
 
-Writes are denied by default. They are allowed only in the project, this session's own run
-folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A write place that is a link, or has
-a link on its path, is not used. Inside the project, files that run code later stay read-only:
-git's control files, `.git`, `.claude` and `.vscode` themselves, Claude Code's and VS Code's
-settings and `.mcp.json`. On Linux, missing settings files are made as read-only `{}`
-placeholders, and the git control files are compared after the session.
+Writes are denied by default. They are allowed only in the project, the `[launch] write_to`
+folders, this session's own run folder (`~/.phiward/tools/<tool>/runs/<id>`) and the spool. A
+write place that is a link, or has a link on its path, is not used. Inside the project, files
+that other tools run later stay read-only: git's control files and `.git` entries, and the one list
+(`claude_settings.RUNS_LATER_DIRS`, `RUNS_LATER_FILES`) as a whole, at any depth, with the targets
+of the links inside them. The tool and a wrapped MCP server differ only in the whole `.git`
+folder. On Linux, `.claude`, `.vscode` and `.idea` are made at start and `.mcp.json` as a
+read-only `{}` placeholder; nested ones are bound when they exist at start. The git control files
+are compared after the session.
 
 Carry-over (see carryover): each session runs in its own config folder, built from a trusted
-copy and thrown away at exit. Reads of protected data and credentials are denied, and credential
-variables are removed. The launcher runs the tool through a helper that closes every descriptor
-it holds, writes the tool's settings without following links, and runs "launch inside launch"
-directly only when a canary that only this profile denies is denied with EPERM.
+copy and thrown away at exit; only this project's transcripts are kept, by a folder name launch
+sets (`CLAUDE_CODE_PROJECT_DIR_NAME`). Reads of protected data and credentials are denied, and credential
+variables are removed. On Linux the launcher runs the tool through a helper inside bubblewrap
+that checks the session's view and closes every descriptor it holds; on macOS it runs
+`sandbox-exec -f FILE TOOL` with nothing in between (the profile is a file, as the gateway's).
+"Launch inside launch" runs directly only when the session's own profile is found: on macOS a
+canary at the account's home that only this profile denies is denied with EPERM, and a file can
+be made in the session's own run folder (`PHIWARD_RUN`); on Linux the tool's seccomp filter
+gives its fingerprint errno.
 """
 
 import errno
 import hashlib
 import json
 import os
+import re
 import secrets
 import shutil
 import stat
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from phiward import carryover, config, confine, pathid, pathmatch, safeio
-from phiward.hidden import (CREDENTIALS, IPC_PATHS, KRB5_CACHE_NAMES,  # noqa: F401 (moved)
-                            KRB5_CACHE_PATTERNS, _kerberos_caches, _ssh_identity_files,
-                            _token_paths)
+from phiward import (carryover, claude_settings, config, confine, install, netproxy, pathid,
+                     pathmatch, safeio)
+from phiward.hidden import IPC_PATHS, KRB5_CACHE_NAMES, KRB5_CACHE_PATTERNS
 from phiward.hidden import credentials as _credentials  # noqa: E402
 
 USAGE = ("Run an agent tool, or one program, in phiward's kernel profile (Mode B), for example "
@@ -56,8 +65,8 @@ Options:
                 must be outside every place the session can write (the project, the spool,
                 the temp folder, ~/.phiward); otherwise nothing runs.
   --entry ID    written by `phiward mcp wrap` into a wrapped MCP server's entry: the
-                server's profile (also keeps the project's .git folders, .claude and .vscode
-                read-only). Not for you to type.
+                server's profile (also keeps the project's .git folders read-only as a
+                whole). Not for you to type.
   --            ends the options. PROGRAM and its arguments follow. With --tool generic,
                 PROGRAM is required.
   -h, --help    show this help.
@@ -69,20 +78,55 @@ read protected data. It works with protected data only through the gateway (`phi
 Start it from the project folder, in your own terminal. It refuses to start in /, in your
 home or a folder above it, in a dot folder of your home, in a folder that holds a phiward
 folder, or in a folder inside or above protected data. It also refuses when the config has a
-problem or when no protected paths are configured.
+problem or when no protected paths are configured. An activated .venv puts a project folder on
+PATH, which launch refuses: run `deactivate` first, and in the session use .venv/bin/python or
+uv run.
 
 What the session can do:
-- Write: only the project, its own session folder (in ~/.phiward/tools/<tool>/runs/) and the
-  spool. Files in the project that run code later stay read-only: git control files,
-  .claude and .vscode settings, and .mcp.json.
+- Write: only the project, the [launch] write_to folders of the user config (checked at the
+  start; one that does not exist is skipped with a NOTE; --tool claude gets --add-dir for each),
+  its own session folder (in ~/.phiward/tools/<tool>/runs/) and the spool. Files in the project
+  and in those folders that other tools run later stay read-only, at any depth: git
+  control files, the .claude, .vscode, .idea, .cursor, .gemini and .codex folders as a whole,
+  .mcp.json, .gitmodules, .ripgreprc, .Rprofile and .Renviron, and what links inside them lead
+  to. So skills, agents, hooks and editor settings are not written inside launch (edit them in a
+  plain terminal, or `phiward carryover add`), Claude Code's --worktree and /loop tasks do not
+  work there, and renv::init() (it writes .Rprofile) runs once outside launch. On Linux, launch
+  makes .claude, .vscode and .idea if there are none, and one made in a subfolder during the
+  session is reported, not read-only.
 - Read: everything except the protected paths and credentials (~/.ssh, ~/.aws, tool logins,
   Kerberos tickets, and similar). Credential variables such as SSH_AUTH_SOCK are removed.
 - Other processes: no keystroke injection, no signals to processes outside, no scripting of
-  other apps. The network is open in this release.
+  other apps.
+- Network: only through phiward's proxy, which launch runs outside the profile, and only to
+  public addresses (not this machine, its link or private ranges; private ranges you list in
+  [launch] private_networks in the user config). It takes HTTPS (CONNECT) only, and chains to
+  the HTTPS_PROXY of your own environment by checked address. Tools that ignore the proxy
+  variables, and UDP, have no network. On Linux the session has a network of its own (launch
+  refuses where network namespaces are not available); on macOS it cannot reach servers on
+  this machine, its own too (use unix sockets or IPC transports). A refusal says why in its
+  403 status line, and the refused hosts are listed at exit. With --tool claude, an
+  ANTHROPIC_BASE_URL the proxy would refuse (not https://, this machine, a private range not
+  listed) stops the start.
+- Unix sockets on Linux (the SSH agent, a shared SSH connection, docker): from Linux 7.1
+  (Landlock ABI 9) the session reaches only the sockets it made itself. Before it,
+  --tool claude relies on Claude Code's own sandbox, which blocks unix sockets for Bash: launch
+  turns it on (--settings, always passed last; another --settings or a Claude Code command
+  such as `claude mcp` is refused) and refuses to start unless the seccomp filter of the
+  program that runs blocks unix sockets in the session (run Claude Code's native binary
+  itself, which carries it; a JavaScript build is refused); hooks, MCP servers and Claude Code itself are outside that
+  sandbox. Any other tool cannot make unix sockets at all.
+- --tool claude: Claude Code 2.1.295 or newer. Before the start, launch asks the native
+  binary `TOOL --version`, or reads the npm build's package.json; it never starts a script or
+  a program inside the project or the session's folders. The hooks launch writes into the
+  session's settings run phiward's entry.py file with arguments and onFailure, which an older
+  one would not honour. No Claude Code version (another program, a wrapper, a shim) is
+  refused: start Claude Code's own program directly, or use --tool generic.
 
 When the session ends:
 - The session's folder is thrown away. Each session starts from a trusted copy that no session
-  can read or write.
+  can read or write. With --tool claude, this project's transcripts are kept for --resume and
+  -c, never read by phiward ([launch] keep_transcripts in the user config turns it off).
 - Changes to the tool's instructions and settings go to quarantine. Read and keep them with
   `phiward carryover show` and `phiward carryover accept ID`.
 - Every file the session changed in the project is reported.
@@ -99,39 +143,57 @@ class Adapter:
     name: str
     program: str = ""  # the tool's command, found on the operator's PATH
     config_env: str = ""  # the variable that moves its config folder
-    # state folders under HOME the tool uses; not write places: the operator's plain tool
-    # reads them, so XDG_STATE_HOME and XDG_DATA_HOME point into the run folder instead
-    home_writes: List[str] = field(default_factory=list)
     extra_env: Dict[str, str] = field(default_factory=dict)
 
     def turn_own_sandbox_off(self, folder_fd: int) -> None:
         """The tool's settings in its own folder: its sandbox off on macOS (sandboxes do not
-        nest; this profile replaces it) and the fast hook as a first layer."""
+        nest; this profile replaces it), on Linux no retry of a Bash command outside it, the
+        fast hook as a first layer, and the prompt scan (the session can remove it: a stated
+        limit)."""
         if self.name != "claude":
             return
         data = _read_json_at(folder_fd, "settings.json")
         before = json.dumps(data, sort_keys=True)
+        sb = data.setdefault("sandbox", {})
+        if not isinstance(sb, dict):
+            sb = data["sandbox"] = {}
         if sys.platform == "darwin":
-            sb = data.setdefault("sandbox", {})
-            if isinstance(sb, dict):
-                sb["enabled"] = False
-        import shlex
-        pkg = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        code = f"import sys; sys.path.insert(0, {pkg!r}); from phiward.cli import main; sys.exit(main())"
-        cmd = f"{shlex.quote(sys.executable)} -I -S -c {shlex.quote(code)} hook claude --launched"
+            sb["enabled"] = False
+        else:
+            sb["allowUnsandboxedCommands"] = False
+        # exec form, from a file in the package (entry.py): no inline code. A Claude Code that
+        # ignores `args` would run the Python alone, so launch refuses one older than
+        # VERSION_HOOK_ARGS on every platform (claude_version_problem)
+        entry = os.path.join(os.path.dirname(os.path.abspath(__file__)), "entry.py")
+
+        def launched(words: List[str], timeout: int) -> Dict[str, Any]:
+            return {"type": "command", "command": sys.executable,
+                    "args": ["-I", "-S", entry] + words, "timeout": timeout,
+                    "onFailure": "block"}
         hooks = data.setdefault("hooks", {})
         if not isinstance(hooks, dict):
             hooks = data["hooks"] = {}
-        pre = hooks.get("PreToolUse") if isinstance(hooks.get("PreToolUse"), list) else []
-        # our entry replaced each time (phiward may have moved; a decoy left by a session
-        # is dropped); other entries kept
-        pre = [g for g in pre if not (isinstance(g, dict) and any(
-            isinstance(h, dict) and "hook claude" in str(h.get("command", ""))
-            and any(n in str(h.get("command", "")) for n in config.PROGRAMS)
-            for h in g.get("hooks", []) if isinstance(g.get("hooks"), list)))]
+
+        def text(h: Dict[str, Any]) -> str:
+            args = h.get("args") if isinstance(h.get("args"), list) else []
+            return " ".join([str(h.get("command", ""))] + [str(a) for a in args])
+
+        def others(event: str, what: str) -> list:
+            # our entry replaced each time (phiward may have moved; a decoy left by a session
+            # is dropped); other entries kept
+            groups = hooks.get(event) if isinstance(hooks.get(event), list) else []
+            return [g for g in groups if not (isinstance(g, dict) and any(
+                isinstance(h, dict) and what in text(h)
+                and any(n in text(h) for n in config.PROGRAMS)
+                for h in g.get("hooks", []) if isinstance(g.get("hooks"), list)))]
+
+        pre = others("PreToolUse", "hook claude")
         pre.append({"matcher": "Read|Grep|Glob|Bash|Edit|Write|NotebookEdit|MultiEdit",
-                    "hooks": [{"type": "command", "command": cmd, "timeout": 5}]})
+                    "hooks": [launched(["hook", "claude", "--launched"], 5)]})
         hooks["PreToolUse"] = pre
+        prompt = others("UserPromptSubmit", "prompt-scan claude")
+        prompt.append({"hooks": [launched(["prompt-scan", "claude"], 10)]})
+        hooks["UserPromptSubmit"] = prompt
         if json.dumps(data, sort_keys=True) != before:
             _write_at(folder_fd, "settings.json", json.dumps(data, indent=2) + "\n")
 
@@ -139,7 +201,6 @@ class Adapter:
 ADAPTERS: Dict[str, Adapter] = {
     "generic": Adapter("generic"),
     "claude": Adapter("claude", "claude", "CLAUDE_CONFIG_DIR",
-                      [".local/state/claude", "Library/Caches/claude-cli-nodejs"],
                       # no auto-update; no download of the official plugin catalog into each fresh
                       # folder (~14 MB and 830 files every session)
                       {"DISABLE_AUTOUPDATER": "1",
@@ -150,15 +211,16 @@ ADAPTERS: Dict[str, Adapter] = {
 # the operator adds more with [launch] pass_env in the user config
 PASS_ENV = {"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TERM_PROGRAM",
             "TERM_PROGRAM_VERSION", "COLORTERM", "LANG", "TZ", "EDITOR", "VISUAL", "PAGER", "LESS",
-            "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "SHLVL", "PWD", "HTTP_PROXY",
-            "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "no_proxy",
-            "all_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
+            "COLUMNS", "LINES", "NO_COLOR", "FORCE_COLOR", "SHLVL", "PWD", "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
             "NODE_EXTRA_CA_CERTS", "JAVA_HOME", "GOPATH", "GOROOT", "CONDA_PREFIX",
             "CONDA_DEFAULT_ENV", "VIRTUAL_ENV", "__CF_USER_TEXT_ENCODING",
             # module systems on HPC (Lmod, Environment Modules) and build paths
             "LD_LIBRARY_PATH", "MODULEPATH", "MODULESHOME", "LOADEDMODULES", "PKG_CONFIG_PATH",
             "MANPATH", "CPATH", "LIBRARY_PATH", "_LMFILES_"}
 PASS_PREFIXES = ("LC_", "ANTHROPIC_", "CLAUDE_", "PHIWARD_", "LMOD_", "__LMOD_")
+# the tool's proxy variables: all name the session's own proxy (netproxy), and nothing bypasses it
+PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")
+NO_PROXY_VARS = ("NO_PROXY", "no_proxy")
 
 
 def _keep_env(k: str, extra: Sequence[str] = ()) -> bool:
@@ -176,23 +238,31 @@ SESSION_CACHE_ENV = {"XDG_CACHE_HOME": "cache", "npm_config_cache": "cache/npm",
                      "XDG_STATE_HOME": "state", "XDG_DATA_HOME": "data"}
 GIT_CONTROL = ("config", "commondir", "gitdir", "hooks", "info", "modules", "worktrees",
                "config.worktree", "shallow", "objects/info/alternates")
-# .claude/settings.local.json can hold hooks too, which run later outside launch: read-only
-#; the tool keeps its permission answers in its own folder
-# a wrapped MCP server's profile: the project's folders that Claude Code, an editor or git runs
-# code from, read-only as a whole (with every `.git` folder and entry in the project)
-SERVER_READ_ONLY = (".claude", ".vscode", ".idea", ".gitmodules", ".ripgreprc")
-PROJECT_SETTINGS = (".mcp.json", ".claude/settings.json", ".claude/settings.local.json",
-                    ".vscode/settings.json", ".vscode/tasks.json", ".vscode/launch.json")
+# what other tools run later from the project: read-only as a whole, for the tool and a wrapped
+# server alike (the server's profile adds every `.git` folder as a whole)
+RUNS_LATER_DIRS = claude_settings.RUNS_LATER_DIRS
+RUNS_LATER_FILES = claude_settings.RUNS_LATER_FILES
+# made at start when missing on Linux, so a bind covers them (a bind needs a folder that exists);
+# on macOS the profile covers a missing one by name, and `.claude` is made there too
+MADE_ON_LINUX = (".claude",) + claude_settings.EDITOR_DIRS
+# a settings file or folder that is already a link would carry the session's writes to a file a
+# later plain run reads: the start refuses
+LINK_REFUSED = RUNS_LATER_DIRS + RUNS_LATER_FILES + (
+    ".claude/settings.json", ".claude/settings.local.json", ".vscode/settings.json",
+    ".vscode/tasks.json", ".vscode/launch.json")
 MACH_ALLOW = (
-    "com.apple.SecurityServer", "com.apple.securityd.xpc", "com.apple.trustd",
-    "com.apple.trustd.agent", "com.apple.ocspd", "com.apple.SystemConfiguration.configd",
+    # certificates: only the user's trustd agent, which reads the OS trust store (Claude Code
+    # trusts it by default); the system trustd and ocspd, which fetch certificate URLs outside
+    # the profile, are not needed for that
+    "com.apple.SecurityServer", "com.apple.securityd.xpc",
+    "com.apple.trustd.agent", "com.apple.SystemConfiguration.configd",
     "com.apple.SystemConfiguration.DNSConfiguration", "com.apple.dnssd.service",
     "com.apple.system.opendirectoryd.libinfo", "com.apple.system.DirectoryService.libinfo_v1",
     "com.apple.system.notification_center", "com.apple.system.logger", "com.apple.logd",
     "com.apple.diagnosticd", "com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent",
     "com.apple.bsd.dirhelper", "com.apple.FSEvents", "com.apple.CoreServices.coreservicesd",
-    "com.apple.lsd.mapdb", "com.apple.analyticsd", "com.apple.networkd",
-    "com.apple.nsurlsessiond", "com.apple.nesessionmanager.content-filter",
+    "com.apple.lsd.mapdb", "com.apple.analyticsd",
+    "com.apple.nesessionmanager.content-filter",
 )
 _TIOCSTI_MACOS = 0x80017472
 CANARY = "launch-canary"
@@ -200,6 +270,30 @@ CANARY = "launch-canary"
 
 class LaunchError(Exception):
     pass
+
+
+# refusals and notes that `phiward doctor` gives too (doctor.launch_report), each with its step
+NO_PATHS = ("no protected paths are configured: there is nothing to confine; run "
+            "`(cd ~ && phiward setup)` first")
+PROJECT_STEP = "this folder cannot be the project ({}); start the tool in a project folder"
+PROTECTED_STEP = ("this folder is inside or above a protected path; start the tool in a project "
+                  "folder")
+LINK_STEP = "{} in the project is a link; replace it with a real file or folder"
+DASH_DASH = ("launch passes --add-dir (for [launch] write_to) or --settings to Claude Code as the "
+             "last arguments, so `--` cannot be among them: drop the `--` and put the prompt last")
+CLAUDE_STEP = ("run Claude Code's own program directly (the native binary, or the npm package's "
+               "cli.js), not a wrapper or a shim, or use --tool generic for another tool")
+# a `[launch] write_to` folder the session may not write, and one that does not exist
+WRITE_TO_STEP = "[launch] write_to {}: {}; fix or remove it in [launch] write_to of the user config"
+WRITE_TO_MISSING = "[launch] write_to {} does not exist, so the session does not write there"
+WRITE_TO_BROKER = ("it is, holds or is inside a [broker] write_to folder: the gateway writes "
+                   "unmasked output there; keep the two apart")
+# the variables that give Claude Code a login without asking (launch and doctor say LOGIN_NOTE when
+# none is set)
+LOGIN_TOKEN_VARS = ("CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+LOGIN_NOTE = ("each session starts with a fresh config folder, so Claude Code asks you to log in "
+              "every time; to log in once, run `claude setup-token` and set "
+              "CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)")
 
 
 # -- safe file work in agent-writable folders -----------------------------------
@@ -252,10 +346,155 @@ def _project_problem(project: str, env: Dict[str, str]) -> str:
             return "it holds a phiward file or folder"
     if sys.platform == "darwin" and _inside(project, os.path.join(home, "Library")):
         return "it is in ~/Library (LaunchAgents and preferences run later)"
-    for e in (env.get("PATH") or "").split(":"):
-        if e and os.path.isabs(e) and _inside(os.path.realpath(e), project):
-            return "it holds a folder on PATH (programs there run later, outside launch)"
     return ""
+
+
+PATH_INSIDE = "it holds a folder on PATH (programs there run later, outside launch)"
+
+
+PATH_RELATIVE = ("PATH holds an empty or relative entry (it names the folder your shell is in, "
+                 "and programs there run later, outside launch); remove it from PATH")
+EMPTY_PATH_ENTRY = "an empty entry"
+
+
+def _path_reason(entry: str) -> str:
+    """The short reason for a PATH entry `_path_entry_inside` found (write_to, the scan)."""
+    return PATH_INSIDE if os.path.isabs(entry) else PATH_RELATIVE
+
+
+def _path_entry_inside(project: str, env: Dict[str, str]) -> str:
+    """The first PATH entry, as written, that is the project or inside it, or "": the operator's
+    own shell runs what is there after the session (an activated `.venv/bin`). An empty entry
+    (EMPTY_PATH_ENTRY) or a relative one counts, fail-closed: it is resolved against the folder
+    the shell stands in, the project or a folder of it, which cannot be known."""
+    path = env.get("PATH")
+    if path is None:
+        return ""
+    for e in path.split(":"):
+        if not os.path.isabs(e):
+            return e or EMPTY_PATH_ENTRY
+        if _inside(os.path.realpath(e), project):
+            return e
+    return ""
+
+
+def _path_step(entry: str, env: Dict[str, str], shown: str = "") -> str:
+    """The refusal for a PATH entry inside the project, with the way out; `shown` is how the
+    entry is named (doctor names it relative to the project)."""
+    if not os.path.isabs(entry):
+        name = entry if entry == EMPTY_PATH_ENTRY else f"the relative entry {entry}"
+        return (f"PATH holds {name}: it names a folder of the "
+                "project when your shell is in it, and programs there run in your terminal after "
+                "the session. Remove the empty or relative entry from PATH (a leading or "
+                "trailing `:`, `::`, `.`, a name without a leading `/`), then start again")
+    name = shown or entry
+    why = (f"PATH holds {name}, inside the project; programs there run in your terminal after "
+           "the session. ")
+    venv = env.get("VIRTUAL_ENV") or ""
+    if venv and os.path.realpath(venv) == os.path.dirname(os.path.realpath(entry)):
+        return why + (f"Run `deactivate` (or take {name} off PATH), then start again; in the "
+                      "session, use .venv/bin/python or uv run")
+    return why + f"Take {name} off PATH (direnv: `direnv deny`), then start again"
+
+
+def _folder_checks(full: str, cfg: config.Config, env: Dict[str, str]) -> Tuple[str, str]:
+    """The checks of a folder the session writes as a whole (the project, a `[launch]
+    write_to` folder): (what failed, its detail), or ("", ""). "protected": inside or above a
+    protected path (only the configured roots count for "above": a derived git folder inside
+    the project must not stop work there); "place": `_project_problem`; "path": a PATH entry
+    in it; "link": a name of LINK_REFUSED in it is a link (it would carry the session's writes
+    to a file a later plain run reads)."""
+    from phiward import paths
+    if paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(full) == paths.INSIDE or \
+            paths.ProtectedSet(cfg.roots, cfg.patterns).relation(full) == paths.ABOVE:
+        return "protected", ""
+    why = _project_problem(full, env)
+    if why:
+        return "place", why
+    entry = _path_entry_inside(full, env)
+    if entry:
+        return "path", entry
+    for rel in LINK_REFUSED:
+        if os.path.islink(os.path.join(full, rel)):
+            return "link", rel
+    return "", ""
+
+
+def folder_step(kind: str, what: str, env: Dict[str, str], shown: str = "") -> str:
+    """The refusal, with its step, for the project folder that failed `_folder_checks` with
+    (`kind`, `what`); launch and doctor both say it. `shown` names a PATH entry (doctor names it
+    relative to the project). A kind with no step of its own still refuses."""
+    if kind == "protected":
+        return PROTECTED_STEP
+    if kind == "path":  # this is the project folder: the step is to take the entry off PATH
+        return _path_step(what, env, shown)
+    if kind == "link":
+        return LINK_STEP.format(what)
+    return PROJECT_STEP.format(what or kind)
+
+
+def launch_write_problem(full: str, cfg: config.Config, env: Dict[str, str]) -> str:
+    """Why the `[launch] write_to` folder `full` may not be written by a session, or "" (also
+    for one that does not exist: the caller skips it). The project's own checks
+    (`_folder_checks`), the gateway's grant check, no overlap with what a session may not read
+    (credentials, `[broker] write_to` folders), and the startup places."""
+    full = os.path.normpath(full)
+    if not os.path.lexists(full):
+        return ""
+    if os.path.islink(full) or not _no_link_on_path(full):
+        return ("it is a link or has a link on its path (whoever can change the link would "
+                "choose the place); name the real folder")
+    if not os.path.isdir(full):
+        return "it is not a folder"
+    kind, what = _folder_checks(full, cfg, env)
+    if kind:
+        return {"protected": "it is inside or above a protected path",
+                "path": _path_reason(what), "link": f"its {what} is a link"}.get(kind, what or kind)
+    why = config.grant_problem(full, cfg, env)
+    if why:
+        return why
+    for h in _credentials(env, cfg):
+        if config._deny_inside(full, h) or config._deny_inside(h, full):
+            if h in cfg.write_to:
+                return WRITE_TO_BROKER
+            return "it is, holds or is inside a place no session may read (credentials, logs)"
+    return claude_settings.startup_write_problem(full, _real_home(env))
+
+
+def _sort_write_to(cfg: config.Config, env: Dict[str, str], project: str
+                   ) -> Tuple[List[str], List[str], List[str], List[Tuple[str, str]]]:
+    """The `[launch] write_to` entries as (the folders the session writes, the missing ones,
+    the ones dropped as already in the project, the refused ones with why). One inside
+    another listed folder is dropped (the outer one is kept); equal ones count once."""
+    listed: List[str] = []
+    missing: List[str] = []
+    dropped: List[str] = []
+    refused: List[Tuple[str, str]] = []
+    for e in cfg.launch_write_to:
+        full = os.path.normpath(e)
+        if _inside(full, project):
+            dropped += [] if full in dropped else [full]
+        elif not os.path.lexists(full):
+            missing += [] if full in missing else [full]
+        else:
+            why = launch_write_problem(full, cfg, env)
+            if why:
+                refused.append((full, why))
+            elif full not in listed:
+                listed.append(full)
+    listed = [p for p in listed if not any(q != p and _inside(p, q) for q in listed)]
+    return listed, missing, dropped, refused
+
+
+def extra_write_places(cfg: config.Config, env: Dict[str, str], project: str
+                       ) -> Tuple[List[str], List[str], List[str]]:
+    """The `[launch] write_to` folders launch adds to the write places, the missing ones
+    (skipped, with a NOTE) and the ones already in the project (dropped); LaunchError on the
+    first one the session may not write."""
+    listed, missing, dropped, refused = _sort_write_to(cfg, env, project)
+    if refused:
+        raise LaunchError(WRITE_TO_STEP.format(*refused[0]))
+    return listed, missing, dropped
 
 
 def _fixed_folders(folder: str) -> None:
@@ -297,13 +536,15 @@ def _darwin_user_dir(name: str) -> str:
         return ""
 
 
-def write_places(project: str, env: Dict[str, str], run: str = "") -> List[str]:
-    """The folders the tool may write; each one a real folder with no link on its path. In the
-    tool folder only this session's run folder: not the folder itself, not `trash/`, not
-    an earlier session's run folder."""
+def write_places(project: str, env: Dict[str, str], run: str = "",
+                 extra: Sequence[str] = ()) -> List[str]:
+    """The folders the tool may write; each one a real folder with no link on its path: the
+    project, the `[launch] write_to` folders (`extra`), the run folder, the spool and on macOS
+    the per-user temp folder. In the tool folder only this session's run folder: not the
+    folder itself, not `trash/`, not an earlier session's run folder."""
     spool = config.spool_dir(env)
     spool = os.path.join(os.path.realpath(os.path.dirname(spool)), os.path.basename(spool))
-    want = [project] + ([run] if run else []) + [spool]
+    want = [project] + list(extra) + ([run] if run else []) + [spool]
     # the adapter's HOME state folders are not write places (the operator's
     # plain tool reads them); XDG_STATE_HOME and XDG_DATA_HOME point into the run folder
     if sys.platform == "darwin":  # D16: the per-user temp folder (clang and Apple tools use it,
@@ -343,7 +584,12 @@ def _rx(path: str) -> str:
 
 def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: str,
                           env: Dict[str, str], folder: str, canary: str,
-                          server: bool = False) -> str:
+                          server: bool = False, proxy_port: int = 0,
+                          listed: Sequence[str] = ()) -> str:
+    """The tool's Seatbelt profile. Its only IP connection is to `proxy_port` on loopback (the
+    session's proxy, which holds that port on 127.0.0.1 and [::1]); 0: none at all. `listed`:
+    the `[launch] write_to` folders (in `places` too), which get the project's read-only rules
+    (a wrapped server has none)."""
     s = confine._sb_str
     rules = confine._sb_paths(cfg.all_roots, cfg.patterns)
     allow = [f"(subpath {s(p)})" for p in places]  # exactly as given: no resolved spellings
@@ -355,18 +601,33 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     allow += [f"(literal {s(t)})" for t in _own_ttys()]
     ctl = "|".join(c.replace(".", "\\.").replace("/", "\\/") for c in GIT_CONTROL)
     ro: List[str] = []
-    for gd, entry in git_dirs_in(project):
-        ro.append(f'(regex #"^{_rx(gd)}/({ctl})(/.*)?$")')
-        ro.append(f"(literal {s(entry)})")  # the .git entry itself: no rename or replacement
-    # .claude is made at start (build); a missing .vscode cannot be made, so neither can become a
-    # link to settings elsewhere
-    ro += [f"(literal {s(os.path.join(project, t))})" for t in (".claude", ".vscode")]
-    ro += [f"(literal {s(os.path.join(project, r))})" for r in PROJECT_SETTINGS]
+    # the project and each `[launch] write_to` folder get the same rules
+    tops = [project] + ([] if server else [t for t in listed if t != project])
+    dirs = "|".join(_ci_rx(n) for n in RUNS_LATER_DIRS)
+    files = "|".join(_ci_rx(n) for n in RUNS_LATER_FILES)
+    # but not inside the trees of installed code (SKIP_TREES; `.claude/worktrees` stays read-only
+    # with `.claude`)
+    trees = "|".join(_rx(t) for t in SKIP_TREES if t.split("/")[0] not in RUNS_LATER_DIRS)
+    later: List[str] = []
+    for top in tops:
+        for gd, entry in git_dirs_in(top):
+            rule = f'(regex #"^{_rx(gd)}/({ctl})(/.*)?$")'
+            if rule not in ro:
+                ro.append(rule)
+                ro.append(f"(literal {s(entry)})")  # the .git entry itself: no rename or replacement
+        # what other tools run later from the folder, read-only as a whole at any depth, made
+        # before the session or not (so none can be made, or made a link); and where the links
+        # among and inside them lead, when that is a place the session writes
+        inside = f'(require-not (regex #"^{_rx(top)}/(.*/)?({trees})/(.*/)?({dirs}|{files})(/.*)?$"))'
+        ro.append(f'(require-all (regex #"^{_rx(top)}/(.*/)?({dirs})(/.*)?$") {inside})')
+        ro.append(f'(require-all (regex #"^{_rx(top)}/(.*/)?({files})$") {inside})')
+        later += [e for e in runs_later_in(top) if e not in later]
+    linked = runs_later_links(later, places, _real_home(env))
+    ro += [f"(subpath {s(t)})" for t in confine._spellings(linked)]
     if server:
         # a wrapped MCP server (`--entry`) runs inside a Mode A session that is not confined:
-        # what Claude Code, an editor or git later runs from the project is read-only as a
-        # whole, made before the server starts or not (SERVER_READ_ONLY)
-        ro += [f"(subpath {s(os.path.join(project, t))})" for t in SERVER_READ_ONLY]
+        # every git folder of the project is read-only as a whole too, made before the server
+        # starts or not
         ro += [f"(subpath {s(gd)})" for gd, _entry in git_dirs_in(project)]
         ro.append(f'(regex #"^{_rx(project)}/(.*/)?\\.git(/.*)?$")')
     creds = [f"(subpath {s(c)})" for c in confine._spellings(_credentials(env, cfg))]
@@ -381,6 +642,10 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     # (sessions cannot read each other or the trusted copy's neighbours)
     own = [q for q in places if q.startswith(os.path.join(folder, "runs") + os.sep)]
     p += f"(deny file-read* (subpath {s(folder)}))"
+    # the profile files (confine.write_profile), the gateway's and this session's own: not
+    # readable in the session (not a write place either, so not writable)
+    p += "".join(f"(deny file-read* (subpath {s(d)}))"
+                 for d in confine._spellings([confine.profiles_dir(env)]))
     p += "".join(f"(allow file-read* (subpath {s(q)}))" for q in own)
     # the folders above the run folder may be looked at (not listed), or path resolution fails
     # (Node's realpath, a shell's cd)
@@ -398,6 +663,7 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     if anc:
         p += "(deny file-write* " + " ".join(anc) + ")"
     p += "(deny process-info* (require-not (target same-sandbox)))"
+    p += "(deny file-mount)(deny job-creation)"
     p += "(deny signal (require-not (target same-sandbox)))"
     p += f"(deny file-ioctl (ioctl-command #x{_TIOCSTI_MACOS:x}))"
     p += "(deny network-outbound (remote unix-socket))"
@@ -406,6 +672,15 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     p += "".join(f"(allow network-outbound (remote unix-socket (subpath {s(q)})))" for q in own)
     # name lookups go through mDNSResponder's socket
     p += '(allow network-outbound (remote unix-socket (subpath "/private/var/run/mDNSResponder")))'
+    # no IP connection except TCP to the session's proxy: an allow list (`localhost` here is
+    # 127.0.0.1 and ::1, and a deny list of loopback misses ::ffff:127.0.0.1); `tcp`, as the
+    # proxy holds only TCP on that port, and UDP to it would reach whoever binds it
+    p += '(deny network-outbound (remote ip "*:*"))'
+    # binds stay allowed: the profile's `(local ip "localhost:*")` also matches 0.0.0.0 and ::,
+    # so loopback cannot be kept alone, and a total deny breaks localhost servers and Claude
+    # Code's sign-in (the limit: threat-model.md)
+    if proxy_port:
+        p += f'(allow network-outbound (remote tcp "localhost:{int(proxy_port)}"))'
     p += "(deny lsopen)(deny appleevent-send)(deny user-preference-write)"
     p += "(deny mach-lookup)(allow mach-lookup " + " ".join(
         f"(global-name {s(m)})" for m in MACH_ALLOW) + ")"
@@ -418,26 +693,108 @@ def seatbelt_tool_profile(cfg: config.Config, places: Sequence[str], project: st
     return p
 
 
-def _sandbox_check_self() -> bool:
-    """macOS: whether this process is already in any sandbox."""
-    import ctypes
-    for lib in ("/usr/lib/libSystem.B.dylib", "/usr/lib/system/libsystem_sandbox.dylib"):
-        try:
-            fn = ctypes.CDLL(lib).sandbox_check
-        except (OSError, AttributeError):
-            continue
-        fn.restype = ctypes.c_int
-        fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int]
-        return bool(fn(os.getpid(), None, 0))
-    return True  # cannot tell: refuse (fail closed)
-
-
 # -- Linux -------------------------------------------------------------------------------------
 
-def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
+# The session's fingerprint: the tool's filter answers one unassigned syscall number with an
+# errno that no kernel and no common filter returns; a launch that sees it is inside phiward's
+# session (already_confined). The fingerprint is not a secret: any process may install such a
+# filter on itself and its children. Forging it needs code running in the launcher or one of its
+# ancestors, which could skip `launch` anyway. 360 is unassigned on x86_64 (335-423) and aarch64
+# (295-402), and new syscalls take numbers from 424 up on every architecture. The errno is
+# below 4096, so the C library reports it as errno.
+FINGERPRINT_SYSCALL = 360
+FINGERPRINT_ERRNO = 3917
+
+# Landlock ABI 9 (Linux 7.1) limits connect() to pathname unix sockets made outside the session
+UNIX_ABI = 9
+# what launch gives Claude Code below ABI 9, by --settings (above the project's and the user's
+# files; with the unsandboxed retry off there, Claude Code ignores a repository's settings that
+# loosen its sandbox): the file `install` writes for `claude --settings`, so launch drops that
+# file (a shell alias adds it) with nothing lost
+INNER_SETTINGS = install.LAUNCH_SETTINGS
+# the file v0.2.0b1's `install` wrote (no env): launch passes its own, stricter, in its place
+OLDER_SETTINGS = {"sandbox": {"enabled": True, "failIfUnavailable": True,
+                              "allowUnsandboxedCommands": False}}
+# Claude Code's sandbox has a seccomp filter for these only
+INNER_ARCH = ("x86_64", "aarch64")
+def _without_launch_settings(argv: List[str]) -> List[str]:
+    """argv less a --settings that says just what launch passes (INNER_SETTINGS, the file
+    `install` writes for `claude --settings`) or what an older install wrote (OLDER_SETTINGS),
+    decided from its content, never its path.
+    Claude Code keeps one --settings, the last, so any other (one more key, another value, a
+    file that does not parse) would be dropped without a word: it stops the start."""
+    out, i = [argv[0]], 1
+    while i < len(argv):
+        a = argv[i]
+        if a == "--settings" or a.startswith("--settings="):
+            if a == "--settings":
+                if i + 1 >= len(argv):
+                    raise LaunchError("--settings has no value")
+                val, i = argv[i + 1], i + 2
+            else:
+                val, i = a.split("=", 1)[1], i + 1
+            try:
+                if val.lstrip().startswith("{"):
+                    data = json.loads(val)
+                else:
+                    with open(val, encoding="utf-8") as fh:
+                        data = json.loads(fh.read(1 << 20))
+            except (OSError, ValueError):
+                data = None
+            if data != INNER_SETTINGS and data != OLDER_SETTINGS:
+                raise LaunchError(
+                    "launch passes its own --settings to Claude Code, which keeps only one, so "
+                    f"these ({val}) would be dropped. If this is phiward's file, rerun `phiward "
+                    "install claude --user --write`. Under launch Claude Code reads a config "
+                    "folder of its own, not ~/.claude: put other settings in managed settings, "
+                    "or in the settings.json of launch's trusted copy (`phiward carryover add "
+                    "FILE --as settings.json --tool claude`)")
+            continue
+        out.append(a)
+        i += 1
+    return out
+
+
+def _with_add_dirs(argv: List[str], listed: Sequence[str]) -> List[str]:
+    """argv with `--add-dir D` (two words) for each `[launch] write_to` folder, at the end:
+    Claude Code's --add-dir takes several values, so a prompt after it would be read as one.
+    The operator's own --add-dir is left as it is."""
+    out = list(argv)
+    for d in listed:
+        out += ["--add-dir", d]
+    return out
+
+
+def landlock_abi() -> int:
+    """The kernel's Landlock ABI version (0 without Landlock)."""
+    import ctypes
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return 0
+    libc.syscall.restype = ctypes.c_long
+    return max(0, libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)))
+
+
+def inner_sandbox_reason(project: str, env: Dict[str, str],
+                         machine: Optional[str] = None) -> Optional[str]:
+    """Why Claude Code's sandbox would not block unix sockets for Bash below ABI 9, or None:
+    an architecture with no filter, or settings (merged under INNER_SETTINGS, as Claude Code
+    merges them; `env` is the session's) that open the sandbox. Whether the filter is installed
+    and works is checked in the session's view (HELPER)."""
+    machine = machine or confine._machine()
+    if machine not in INNER_ARCH:
+        return (f"Claude Code's sandbox has no seccomp filter for the {machine} architecture, "
+                "so it cannot block unix sockets below Linux 7.1")
+    return claude_settings.launch_sandbox_reason(project, _real_home(env), env, INNER_SETTINGS)
+
+
+def tool_seccomp_program(machine: Optional[str] = None, deny_unix: bool = False) -> bytes:
     """No keystroke injection (ioctl TIOCSTI, TIOCLINUX: compared on the low 32 bits) and no
     kernel keyrings (keyctl, add_key, request_key: Kerberos KEYRING tickets); the x32 ABI is
-    refused on x86_64."""
+    refused on x86_64; the fingerprint syscall fails with FINGERPRINT_ERRNO. With `deny_unix`
+    (below Landlock ABI 9, a tool with no inner sandbox): socket(AF_UNIX) fails with EPERM and
+    io_uring with ENOSYS (it could make sockets past the filter); socketpair stays."""
     machine = machine or confine._machine()
     if machine not in confine._AUDIT_ARCH:
         raise confine.ConfineError(f"no seccomp filter for the {machine} architecture")
@@ -450,35 +807,17 @@ def tool_seccomp_program(machine: Optional[str] = None) -> bytes:
             (ld, 0, 0, 0)]
     if machine == "x86_64":
         prog += [(jge, 0, 1, 0x40000000), (ret, 0, 0, eperm)]
+    prog += [(jeq, 0, 1, FINGERPRINT_SYSCALL), (ret, 0, 0, 0x00050000 | FINGERPRINT_ERRNO)]
     for k in keys:
         prog += [(jeq, 0, 1, k), (ret, 0, 0, eperm)]
+    if deny_unix:
+        for k in ("io_uring_setup", "io_uring_enter", "io_uring_register"):
+            prog += [(jeq, 0, 1, confine._DENY[k][col]), (ret, 0, 0, 0x00050026)]
+        prog += [(jeq, 0, 4, confine._SOCKET[col]), (ld, 0, 0, 16), (jeq, 0, 1, 1),
+                 (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     prog += [(jeq, 0, 4, ioctl), (ld, 0, 0, 24), (jeq, 1, 0, 0x5412), (jeq, 0, 1, 0x541C),
              (ret, 0, 0, eperm), (ret, 0, 0, allow)]
     return b"".join(struct.pack("<HBBI", *i) for i in prog)
-
-
-# system name-service sockets stay reachable (user and group lookups on clusters: sssd, nscd)
-_NSS_SOCKETS = ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb")
-
-
-def _outside_sockets(places: Sequence[str]) -> List[str]:
-    """Path unix sockets bound outside the tool's places (from /proc/net/unix; the path is the
-    rest of the line after seven fields, so it may hold spaces)."""
-    out: List[str] = []
-    try:
-        with open("/proc/net/unix", encoding="utf-8", errors="replace") as fh:
-            next(fh, None)
-            for line in fh:
-                parts = line.rstrip("\n").split(None, 7)
-                if len(parts) == 8 and parts[7].startswith("/") and \
-                        not any(_inside(parts[7], n) for n in _NSS_SOCKETS):
-                    p = parts[7]
-                    if not any(_inside(p, pl) for pl in places) and os.path.lexists(p) and \
-                            p not in out:
-                        out.append(p)
-    except OSError:
-        pass
-    return out
 
 
 def git_dirs_in(project: str, limit: int = 50000) -> List[Tuple[str, str]]:
@@ -528,54 +867,127 @@ def _gitdir_of(dot_git: str) -> str:
     return os.path.normpath(os.path.join(os.path.dirname(dot_git), line[7:].strip()))
 
 
-def _placeholders(project: str) -> List[str]:
-    """D15: settings files that do not exist yet are made as read-only `{}` placeholders, so
-    bubblewrap can cover them."""
-    made = []
-    rels = [".mcp.json", ".claude/settings.json", ".claude/settings.local.json"]
-    if os.path.isdir(os.path.join(project, ".vscode")):
-        rels += [".vscode/settings.json", ".vscode/tasks.json", ".vscode/launch.json"]
-    nofollow = os.O_NOFOLLOW | os.O_CLOEXEC
-    for rel in rels:
-        sub, name = os.path.split(rel)
-        # by descriptor, never through a link, and a file another launch made meanwhile is
-        # simply there already (two wrapped MCP servers start at once)
+# trees of installed or built code, which runs anyway and is not what an editor or agent tool
+# reads as a project's settings: the walks for files that run later (runs_later_in and the link
+# walk) do not enter them, and on macOS the names of the list inside them stay writable
+# (`npm install` unpacks packages that ship a `.vscode`). `.claude/worktrees` is read-only with
+# `.claude` as a whole; only its links are not followed. The project scan (projectscan) does not
+# read them either
+SKIP_TREES = ("node_modules", ".venv", "venv", "site-packages", "renv/library", ".tox", "target",
+              ".git", "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache",
+              ".claude/worktrees")
+RUNS_LATER_WALK = 50000  # entries runs_later_in looks at, past SKIP_TREES
+# where runs_later_in stopped at its bound, said at the start and again in the exit report
+WALK_NOTES: List[str] = []
+
+
+def runs_later_in(project: str, limit: Optional[int] = None) -> List[str]:
+    """Every entry in the project at launch named in the one list (RUNS_LATER_DIRS,
+    RUNS_LATER_FILES), at the top and nested, as names compare case-folded; a link is listed,
+    never followed. Not walked: the inside of a listed folder (it is read-only as a whole) and
+    SKIP_TREES. Bounded at RUNS_LATER_WALK entries: where it stops is said (WALK_NOTES). Entries
+    made during the session are not in it (on Linux a stated limit; macOS covers them by
+    name)."""
+    limit = RUNS_LATER_WALK if limit is None else limit
+    names = {n.casefold() for n in RUNS_LATER_DIRS + RUNS_LATER_FILES}
+    out: List[str] = []
+    seen = 0
+    stack = [project]
+    while stack:
+        d = stack.pop()
         try:
-            top = os.open(project, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+            it = sorted(os.scandir(d), key=lambda e: e.name)
         except OSError:
             continue
-        try:
-            dfd = top
-            if sub:
-                try:
-                    os.mkdir(sub, 0o755, dir_fd=top)
-                except FileExistsError:
-                    pass
-                try:
-                    dfd = os.open(sub, os.O_RDONLY | os.O_DIRECTORY | nofollow, dir_fd=top)
-                except OSError:
-                    continue  # a link or not a folder: not covered here
-            try:
-                fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o644,
-                             dir_fd=dfd)
-            except FileExistsError:
-                continue
-            except OSError:
-                continue
-            finally:
-                if dfd != top:
-                    os.close(dfd)
-            with os.fdopen(fd, "w") as fh:
-                fh.write("{}\n")
-            made.append(rel)
-        finally:
-            os.close(top)
-    return made
+        for e in it:
+            if seen >= limit:
+                note = (f"phiward launch: NOTE: the walk for files that run later stopped at "
+                        f"{limit} entries in {d}; below it and in the folders not yet walked, "
+                        "they are not read-only on Linux, and links in them are not followed")
+                if note not in WALK_NOTES:
+                    WALK_NOTES.append(note)
+                    sys.stderr.write(note + "\n")
+                return out
+            seen += 1
+            if e.name.casefold() in names:
+                out.append(e.path)
+            elif e.is_dir(follow_symlinks=False) and not claude_settings._skipped(e.path,
+                                                                                 SKIP_TREES):
+                stack.append(e.path)
+    return out
+
+
+def runs_later_links(entries: Sequence[str], places: Sequence[str], home: str) -> List[str]:
+    """Where the links among and inside `entries` (runs_later_in) really lead, for those that
+    lead into a place the session writes: each is made read-only too, so a write through
+    `.claude/skills -> ../shared/skills` or to `shared/skills` itself fails. A target outside
+    every write place is read-only already. The walk is claude_settings' link walk (each linked
+    tree in turn, bounded by TREE_WALK and LINK_WALK). Raises LaunchError where it cannot decide:
+    a walk past its bound, a target too wide to be code (`/`, the home folder), or one that holds
+    a write place (the project itself)."""
+    starts: List[Tuple[str, Optional[int], str]] = []
+    out: List[str] = []
+
+    def judge(real: str, via: str) -> None:
+        if any(_inside(real, p) for p in places):
+            if real not in out:
+                out.append(real)
+        elif any(_inside(p, real) for p in places):
+            raise LaunchError(f"{via} leads to {real}, which holds a place the session writes, so "
+                              "it cannot be made read-only; replace the link")
+    for e in entries:
+        if os.path.islink(e):
+            real = os.path.realpath(e)
+            if os.path.isdir(real):
+                starts.append((real, None, e))
+            else:
+                judge(real, e)  # a file, or nothing yet
+        elif os.path.isdir(e):
+            starts.append((os.path.realpath(e), None, ""))
+    roots, notes = claude_settings._code_walk(starts, home, SKIP_TREES)
+    for why, real, via in notes:
+        what = {"wide": "leads to a folder too wide to make read-only"}.get(
+            why, f"has more entries than launch walks for links ({claude_settings.TREE_WALK} "
+                 f"in one tree, {claude_settings.LINK_WALK} in all)")
+        raise LaunchError(f"{via or real} {what}: {real}; replace the link or move files out")
+    for real, via in roots:
+        if via:
+            judge(real, via)
+    return out
+
+
+def _ci_rx(name: str) -> str:
+    """`name` as a seatbelt regex that matches it in any letter case (APFS compares names that
+    way, so `.VSCode` is the same folder)."""
+    return "".join(f"[{c.lower()}{c.upper()}]" if c.isalpha() else _rx(c) for c in name)
+
+
+def _placeholders(project: str) -> List[str]:
+    """D15: a missing `.mcp.json` is made as a read-only `{}` placeholder, so bubblewrap can
+    cover it (the folders of the one list are bound as a whole)."""
+    nofollow = os.O_NOFOLLOW | os.O_CLOEXEC
+    # by descriptor, never through a link, and a file another launch made meanwhile is simply
+    # there already (two wrapped MCP servers start at once)
+    try:
+        top = os.open(project, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+    except OSError:
+        return []
+    try:
+        fd = os.open(".mcp.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow, 0o644,
+                     dir_fd=top)
+    except OSError:
+        return []
+    finally:
+        os.close(top)
+    with os.fdopen(fd, "w") as fh:
+        fh.write("{}\n")
+    return [".mcp.json"]
 
 
 def _open_no_follow(path: str) -> int:
-    """An O_PATH descriptor of a file or folder reached part by part without following a link:
-    what is checked is what gets mounted."""
+    """An O_PATH descriptor of a file or folder reached part by part without following a link.
+    bwrap reads the name back from it and mounts that name, so the helper checks inside the
+    session that what got mounted is this file (_write_checks)."""
     if os.path.isdir(path) and not os.path.islink(path):
         return confine.open_place(path)
     parent = confine.open_place(os.path.dirname(path))
@@ -584,6 +996,48 @@ def _open_no_follow(path: str) -> int:
                        dir_fd=parent)
     finally:
         os.close(parent)
+
+
+def _identities(paths: Sequence[str]) -> Dict[str, Optional[Tuple[int, int]]]:
+    """(st_dev, st_ino) of each path, its folder reached part by part without following a
+    link and the entry itself not followed; None when it is gone, is a link, or a link is on
+    its way."""
+    out: Dict[str, Optional[Tuple[int, int]]] = {}
+    by_dir: Dict[str, List[str]] = {}
+    for p in paths:
+        by_dir.setdefault(os.path.dirname(p), []).append(p)
+    for d, inside in by_dir.items():
+        try:
+            pfd = confine.open_place(d)
+        except (OSError, confine.ConfineError):
+            pfd = -1
+        try:
+            for p in inside:
+                out[p] = None
+                if pfd < 0 or not os.path.basename(p):
+                    continue
+                # a folder is opened (O_DIRECTORY), which mounts an automount point as bwrap's
+                # bind will (a plain stat would see the trigger, not the folder mounted there)
+                try:
+                    fd = os.open(os.path.basename(p), os.O_PATH | os.O_NOFOLLOW |  # type: ignore[attr-defined]
+                                 os.O_DIRECTORY | os.O_CLOEXEC, dir_fd=pfd)
+                    try:
+                        st = os.fstat(fd)
+                    finally:
+                        os.close(fd)
+                except OSError:
+                    try:
+                        st = os.stat(os.path.basename(p), dir_fd=pfd, follow_symlinks=False)
+                    except OSError:
+                        continue
+                    if stat.S_ISDIR(st.st_mode):
+                        continue  # a folder that could not be opened: not what bwrap would bind
+                if not stat.S_ISLNK(st.st_mode):
+                    out[p] = (st.st_dev, st.st_ino)
+        finally:
+            if pfd >= 0:
+                os.close(pfd)
+    return out
 
 
 # bwrap takes at most 9000 arguments; the snapshot view may use this many, the rest of the command
@@ -630,6 +1084,9 @@ def hidden_view(literal: Sequence[str], patterns: Sequence[str], replaced: Seque
     `may_skip`: credential files that need no hiding when they belong to another user and
     cannot be read (a system keytab); never protected paths. `soft_patterns`: patterns that
     are skipped where a folder cannot be listed, instead of refused (the Kerberos cache names).
+
+    An entry the host removes while the session starts is left out of the view; one it replaces
+    then stops the start (bwrap_tool_args, the helper's check).
 
     Operations: ("tmpfs", dir), ("bind", path), ("symlink", target, path), ("mask", path).
     Paths under `replaced` (the session's own /tmp, the hidden tool folder) are left to the
@@ -856,11 +1313,23 @@ def _view_ops(split: Dict[str, str], hidden: Dict[str, str], whole: Set[str],
 
 def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                     env: Dict[str, str], folder: str, run: str,
-                    server: bool = False) -> Tuple[List[str], List[int]]:
+                    server: bool = False, listed: Sequence[str] = ()
+                    ) -> Tuple[List[str], List[int], List[Tuple[str, bool, object]]]:
+    """The bwrap arguments, the descriptors they name, and what the helper checks inside the
+    session before the tool runs: (the path in the view, whether it is an entry of the view
+    (named; it may be left out), its name or its descriptor), for every bind no later mount
+    covers. `listed`: the `[launch] write_to` folders (in `places` too), which get the
+    project's read-only binds of what exists at the start (nothing is made in them)."""
     # a root that does not exist is hidden like the others: its folder is split, so a root made
-    # later is not in the view either (inside a session, every root is missing: launch nests)
+    # later is not in the view either (a launch inside another sandbox may see no root at all)
     args: List[str] = []
     fds: List[int] = []
+    checks: Dict[str, Tuple[bool, object]] = {}
+
+    def over(dest: str) -> None:  # a later mount covers dest and what is below it
+        checks.pop(dest, None)
+        for k in [k for k in checks if k.startswith(dest.rstrip("/") + "/")]:
+            del checks[k]
     hide = (confine._spellings(list(cfg.all_roots)) + _credentials(env, cfg) + list(IPC_PATHS) +
             [os.path.join(_real_home(env), config.LEGACY_STATE)])
     ops, split, whole = hidden_view(hide, list(cfg.patterns), replaced=["/tmp", folder],
@@ -872,12 +1341,19 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                          "many entries to rebuild, so they are shown whole with their protected "
                          "entries masked; a protected entry made or replaced in them during the "
                          "session is not hidden\n")
-    gits = git_dirs_in(project)
+    tops = [project] + ([] if server else [t for t in listed if t != project])
+    gits: List[Tuple[str, str]] = []
+    later: List[str] = []
+    for top in tops:
+        gits += [g for g in git_dirs_in(top) if g not in gits]
+        later += [e for e in runs_later_in(top) if e not in later]
+    linked = runs_later_links(later, places, _real_home(env))
     guards = confine._spellings(config.guard_files(env))
-    # a descriptor for every bind: the view's, then the places, the tool's /tmp, the project's
-    # .claude and .vscode, the git control files, the settings files and the guard files
-    _raise_fd_limit(sum(1 for o in ops if o[0] == "bind") + len(places) + 3 +
-                    len(gits) * (len(GIT_CONTROL) + 1) + len(PROJECT_SETTINGS) + len(guards) + 64)
+    # a descriptor for every bind except the view's (those are named, below): the places, the
+    # tool's /tmp, what runs later and where its links lead, the git control files and the
+    # guard files
+    _raise_fd_limit(len(places) + 3 + len(gits) * (len(GIT_CONTROL) + 1) +
+                    len(later) + len(linked) + len(guards) + 64)
 
     def bind(path: str, ro: bool, dest: Optional[str] = None) -> None:
         try:
@@ -890,11 +1366,22 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
                 raise LaunchError(f"{path} cannot be opened to mount it in the session's view "
                                   f"({why}); nothing runs")
             return  # a link on the way: not mounted (and so not reachable through it)
+        if stat.S_ISLNK(os.fstat(fd).st_mode):  # checked as no link a moment before
+            os.close(fd)
+            raise LaunchError(f"{path} became a link while the session's view was made; "
+                              "nothing runs")
         os.set_inheritable(fd, True)
         fds.append(fd)
         args.extend(["--ro-bind" if ro else "--bind", f"/proc/self/fd/{fd}", dest or path])
+        over(dest or path)
+        checks[dest or path] = (False, fd)
 
-    # the snapshot view first: nothing hidden is in it, and every later mount lands on top
+    # the snapshot view first: nothing hidden is in it, and every later mount lands on top.
+    # Its entries are bound by name: bwrap resolves even a descriptor to a name and mounts that,
+    # and a descriptor of an entry the host removes cannot be mounted at all. An entry that is
+    # gone, or is a link now, is left out (`-try` also leaves out one removed before bwrap
+    # looks); what is bound is checked inside before the tool runs (HELPER)
+    now = _identities([op[1] for op in ops if op[0] == "bind"])
     for op in ops:
         if op[0] == "tmpfs":
             args += ["--tmpfs", op[1]]
@@ -903,31 +1390,36 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
         elif op[0] == "mask":
             args += ["--tmpfs", op[1]] if os.path.isdir(op[1]) and not os.path.islink(op[1]) \
                 else ["--ro-bind", "/dev/null", op[1]]
-        else:
-            n = len(args)
-            bind(op[1], True)
-            if len(args) == n:
-                raise LaunchError("an entry of the session's view changed while it was made; "
-                                  "start again")
+        elif now.get(op[1]) is not None:
+            args += ["--ro-bind-try", op[1], op[1]]
+            checks[op[1]] = (True, op[1])
+    # a network of its own: no way to this machine's loopback or any address but through the
+    # session's proxy (the relay's socket pair, inherited by the helper)
     args += ["--dev", "/dev", "--proc", "/proc", "--unshare-pid", "--unshare-ipc",
-             "--die-with-parent"]
-    # outside sockets first (before /tmp is replaced), then the tool's own temp folder as /tmp,
-    # then the write places on top (a project under /tmp stays visible)
-    for sock in _outside_sockets(list(places)):
-        args += ["--ro-bind-try", "/dev/null", sock]
+             "--unshare-net", "--die-with-parent"]
+    # the tool's own temp folder as /tmp, then the write places on top (a project under /tmp
+    # stays visible). Unix sockets are not masked by name (a name in /proc/net/unix is the one
+    # a socket was bound with): the kernel limits them (HELPER, tool_seccomp_program)
     # the tool folder is hidden: a session sees only its own run folder, bound back below
     # (sessions cannot read each other)
     args += ["--tmpfs", folder]
+    over(folder)
     bind(os.path.join(run, "tmp"), False, "/tmp")
-    for p in places:
+    # outer first: a listed folder that holds the project does not cover the project's bind
+    for p in sorted(places, key=lambda q: q.count("/")):
         if os.path.isdir(p) and _no_link_on_path(p):
             bind(p, False)
-    # files that run code later, by descriptor: folders as mount points (no rename), control and
-    # settings files read-only
-    for top in (".claude", ".vscode"):
-        q = os.path.join(project, top)
-        if os.path.isdir(q) and _no_link_on_path(q):
-            bind(q, server)  # a wrapped MCP server: read-only as a whole
+    # files that run code later, by descriptor, read-only: what other tools run later, as a whole
+    # (top and nested, as they are at the start; one that is a link is not bound, where it leads
+    # is), and the git control files (a wrapped MCP server: the whole git folder)
+    for q in later:
+        if _no_link_on_path(q):
+            bind(q, True)
+    for t in linked:
+        if not os.path.lexists(t):
+            raise LaunchError(f"a link in the project leads to {t}, which does not exist, so "
+                              "it cannot be made read-only; make it or replace the link")
+        bind(t, True)
     for gd, entry in gits:
         if _no_link_on_path(entry):
             bind(entry, not os.path.isdir(entry) or server)
@@ -940,10 +1432,6 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             q = os.path.join(gd, c)
             if os.path.lexists(q) and _no_link_on_path(q):
                 bind(q, True)
-    for rel in PROJECT_SETTINGS:
-        q = os.path.join(project, rel)
-        if os.path.lexists(q) and _no_link_on_path(q):
-            bind(q, True)
     for g in guards:
         if os.path.lexists(g) and _no_link_on_path(g):
             bind(g, True)
@@ -958,6 +1446,9 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
             args += ["--tmpfs", r]
         elif os.path.lexists(r):
             args += ["--ro-bind", "/dev/null", r]
+        else:
+            continue
+        over(r)
     # the split folders are read-only, like the host they stand for (each one mount only)
     made = {op[1] for op in ops if op[0] == "tmpfs"} | {"/"}
     for d in reversed(split):
@@ -970,7 +1461,32 @@ def bwrap_tool_args(cfg: config.Config, places: Sequence[str], project: str,
         for fd in fds:
             os.close(fd)
         raise LaunchError(_too_long(need))
-    return args, fds
+    return args, fds, [(d, view, x) for d, (view, x) in checks.items()]
+
+
+def _write_checks(fd: int, checks: Sequence[Tuple[str, bool, object]]) -> None:
+    """What the helper compares inside the session, taken right before bwrap starts: for each
+    bind, the path in the view (its bytes, as hex: the helper may decode names otherwise), the
+    (st_dev, st_ino) it must have there ((-1, -1): it must be
+    absent), and whether it may be absent (an entry of the view, left out by `--ro-bind-try`).
+    An entry of the view is taken again now, by its name, its folder reached without following
+    a link; a bind by descriptor from its descriptor."""
+    now = _identities([str(x) for _d, view, x in checks if view])
+    recs = []
+    for dest, view, x in checks:
+        if view:
+            ident = now.get(str(x))
+            dev, ino = ident if ident is not None else (-1, -1)
+        else:
+            st = os.fstat(int(x))  # type: ignore[call-overload]
+            dev, ino = st.st_dev, st.st_ino
+        recs.append([os.fsencode(dest).hex(), dev, ino, view])
+    data = json.dumps(recs).encode("ascii")
+    os.ftruncate(fd, 0)
+    os.lseek(fd, 0, os.SEEK_SET)
+    while data:
+        data = data[os.write(fd, data):]
+    os.lseek(fd, 0, os.SEEK_SET)
 
 
 def _too_long(n: int) -> str:
@@ -999,36 +1515,303 @@ def _raise_fd_limit(need: int) -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (need, hard))
 
 
-# the helper the tool starts through: it closes the launcher's descriptors, applies the Landlock
-# scope for abstract unix sockets and signals where the kernel has it (ABI 6), and execs the tool
+# the helper the tool starts through, on Linux only (inside bubblewrap): it first checks that each
+# bind in the session's view is what the launcher checked (_write_checks: bwrap mounts by name,
+# and the host may change a name in between; with no records file, nothing runs), then it closes
+# the launcher's descriptors, starts the relay to the proxy on the session's own 127.0.0.1
+# (PHIWARD_PROXY_RELAY, `PORT:FD`: FD is its end of the proxy's socket pair; it dies with the
+# tool, PR_SET_PDEATHSIG, and starts before the limits below, which are the tool's), limits unix
+# sockets as the launcher decided (UNIX: `landlock`, `inner` or `deny`), and execs the tool.
+# argv: CHK UNIX N FD... CMD [ARG]...
+# - landlock (ABI 9 and later): RESOLVE_UNIX for the whole tool (sockets made outside the
+#   session are refused, the session's own are not), the name-service folders allowed, REFER
+#   granted on / (cross-folder renames), abstract sockets and signals scoped. Any failure: 126.
+# - inner (Claude Code below ABI 9): Claude Code's sandbox blocks unix sockets for Bash with
+#   apply-seccomp, which the native build carries (run as itself with ARGV0=apply-seccomp). CMD,
+#   found on the view's PATH, is judged and then run by its real path: a JavaScript program, one
+#   the session could replace, or one that does not make socket(AF_UNIX) fail with EPERM when
+#   run as Claude Code runs its filter, stops the start (126).
+# - deny and inner: the ABI 6 scope for abstract sockets and signals where the kernel has it.
 HELPER = r"""
 import os, sys, ctypes, struct
-n = int(sys.argv[1]); close = sys.argv[2:2 + n]; cmd = sys.argv[2 + n:]
+chk = int(sys.argv[1]); unix = sys.argv[2]
+n = int(sys.argv[3]); close = sys.argv[4:4 + n]; cmd = sys.argv[4 + n:]; run = cmd[0]
+# each record: [the path in the view as hex bytes, st_dev, st_ino, may it be absent]. The start
+# goes on only when every record was read and compared; anything else (no records file) stops it
+import json
+where, clean = "the list of checks", False
+try:
+    os.lseek(chk, 0, 0)
+    with os.fdopen(chk, "rb") as fh:
+        recs = json.loads(fh.read().decode("ascii"))
+    if type(recs) is not list or not recs:
+        raise ValueError("no records")
+    for rec in recs:
+        if type(rec) is not list or len(rec) != 4:
+            raise ValueError("a malformed record")
+        name, dev, ino, may_go = rec
+        if type(name) is not str or type(dev) is not int or type(ino) is not int or \
+                type(may_go) is not bool:
+            raise ValueError("a malformed record")
+        path = bytes.fromhex(name)
+        where = path.decode("utf-8", "backslashreplace")
+        if not path.startswith(b"/") or b"\0" in path:
+            raise ValueError("a malformed path")
+        try:
+            st = os.lstat(path)
+        except (FileNotFoundError, NotADirectoryError):
+            if may_go:  # an entry of the view, left out by --ro-bind-try
+                continue
+            raise
+        if (st.st_dev, st.st_ino) != (dev, ino):
+            raise ValueError("changed")
+    clean = True
+except BaseException:
+    clean = False
+if not clean:
+    sys.stderr.write("phiward launch: the session's view is not what was checked before the "
+                     "start (%s changed while the session started); nothing runs, start "
+                     "again\n" % where)
+    sys.stderr.flush()
+    os._exit(126)
 for c in close:
     try:
         os.close(int(c))
     except OSError:
         pass
-if sys.platform.startswith("linux"):
+# the relay, where the session reaches the proxy through it (PHIWARD_PROXY_RELAY); macOS has no
+# helper: the profile lets the tool reach the proxy's one port directly
+relay = os.environ.pop("PHIWARD_PROXY_RELAY", "")
+if relay:
+    import socket, threading
+    rport, _, rfd = relay.partition(":")
+    try:
+        ctl = socket.socket(fileno=int(rfd))
+        ls = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ls.bind(("127.0.0.1", int(rport)))
+        ls.listen(128)
+    except (OSError, ValueError) as e:
+        sys.stderr.write("phiward launch: the session's network relay cannot start (%s); nothing runs\n" % e)
+        os._exit(126)
+    parent = os.getpid()
+    if os.fork() == 0:
+        try:
+            ctypes.CDLL(None).prctl(1, 9, 0, 0, 0)  # PR_SET_PDEATHSIG: SIGKILL when the tool ends
+            if os.getppid() != parent:
+                os._exit(0)
+            nul = os.open("/dev/null", os.O_RDWR)
+            os.dup2(nul, 0)
+            os.dup2(nul, 1)
+            keep = sorted((ls.fileno(), ctl.fileno()))
+            os.closerange(3, keep[0])
+            os.closerange(keep[0] + 1, keep[1])
+            os.closerange(keep[1] + 1, 65536)
+            asking = threading.Lock()
+
+            def pump(a, b):
+                try:
+                    while True:
+                        d = a.recv(65536)
+                        if not d:
+                            break
+                        b.sendall(d)
+                except OSError:
+                    pass
+                try:
+                    b.shutdown(socket.SHUT_WR)
+                except OSError:
+                    pass
+
+            def serve(c):
+                # one end of a new pair to the proxy, or the connection is closed: never a
+                # direct dial, and no socket with a path
+                try:
+                    with asking:
+                        ctl.sendall(b"c")
+                        msg, fds, _f, _a = socket.recv_fds(ctl, 1, 4)
+                except OSError:
+                    msg, fds = b"", []
+                for f in fds[1:]:
+                    os.close(f)
+                if msg != b"y" or not fds:
+                    if fds:
+                        os.close(fds[0])
+                    c.close()
+                    return
+                u = socket.socket(fileno=fds[0])
+                t = threading.Thread(target=pump, args=(u, c), daemon=True)
+                t.start()
+                pump(c, u)
+                t.join()
+                c.close()
+                u.close()
+            while True:
+                c, _ = ls.accept()
+                threading.Thread(target=serve, args=(c,), daemon=True).start()
+        finally:
+            os._exit(0)
+    ls.close()
+    ctl.close()
+def stop(why):
+    sys.stderr.write("phiward launch: %s; nothing runs\n" % why)
+    sys.stderr.flush()
+    os._exit(126)
+if unix == "landlock":
+    RESOLVE_UNIX, REFER = 1 << 16, 1 << 13
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        libc.syscall.restype = ctypes.c_long
+        attr = struct.pack("<QQQ", RESOLVE_UNIX | REFER, 0, 3)  # scope: abstract unix, signals
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
+        if rs < 0:
+            raise OSError(ctypes.get_errno(), "landlock_create_ruleset")
+        def allow(fd, access):
+            rule = struct.pack("<Qi", access, fd)  # struct landlock_path_beneath_attr (packed)
+            if libc.syscall(445, ctypes.c_int(rs), ctypes.c_int(1),
+                            ctypes.create_string_buffer(rule, len(rule)), ctypes.c_uint32(0)) != 0:
+                raise OSError(ctypes.get_errno(), "landlock_add_rule")
+        fds = [os.open("/", os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)]
+        allow(fds[0], REFER)
+        # the system's name-service sockets (sssd, nscd, userdb): user and group lookups
+        for d in ("/var/lib/sss/pipes", "/var/run/nscd", "/run/nscd", "/run/systemd/userdb"):
+            try:
+                fds.append(os.open(d, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC))
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+            allow(fds[-1], RESOLVE_UNIX | REFER)
+        if libc.prctl(38, 1, 0, 0, 0) != 0:
+            raise OSError(ctypes.get_errno(), "prctl(PR_SET_NO_NEW_PRIVS)")
+        if libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) != 0:
+            raise OSError(ctypes.get_errno(), "landlock_restrict_self")
+        for fd in fds + [rs]:
+            os.close(fd)
+    except Exception as e:
+        stop("Landlock could not limit unix sockets (%s)" % e)
+elif unix in ("inner", "deny"):
     libc = ctypes.CDLL(None, use_errno=True)
     libc.syscall.restype = ctypes.c_long
-    abi = libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1))
-    if abi >= 6:
+    if libc.syscall(444, None, ctypes.c_size_t(0), ctypes.c_uint32(1)) >= 6:
         attr = struct.pack("<QQQ", 0, 0, 3)  # no file rights handled; scope: abstract unix, signals
-        buf = ctypes.create_string_buffer(attr, len(attr))
-        rs = libc.syscall(444, buf, ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
-        ok = rs >= 0 and libc.prctl(38, 1, 0, 0, 0) == 0 and libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0)) == 0
+        rs = libc.syscall(444, ctypes.create_string_buffer(attr, len(attr)),
+                          ctypes.c_size_t(len(attr)), ctypes.c_uint32(0))
         if rs >= 0:
+            if libc.prctl(38, 1, 0, 0, 0) == 0:
+                libc.syscall(446, ctypes.c_int(rs), ctypes.c_uint32(0))
             os.close(rs)
-        if not ok:
-            sys.stderr.write("phiward launch: WARNING: the Landlock scope could not be applied: abstract unix sockets outside stay reachable\n")
-    else:
-        sys.stderr.write("phiward launch: no Landlock scope on this kernel: abstract unix sockets outside stay reachable\n")
+if unix == "inner":
+    import shutil, subprocess
+    if os.uname().machine not in ("x86_64", "aarch64"):
+        stop("Claude Code's sandbox has no seccomp filter for %s" % os.uname().machine)
+    # judged is the program that runs: CMD, found on PATH here as execvp would, then run by its
+    # real path. Only the native build (one binary: no JavaScript file, no node line) is
+    # accepted: it carries apply-seccomp and runs it as itself with ARGV0=apply-seccomp
+    env = dict(os.environ, ARGV0="apply-seccomp")
+    run = cmd[0] if "/" in cmd[0] else shutil.which(cmd[0])
+    if not run:
+        stop("%s is not on the session's PATH" % cmd[0])
+    found = run = os.path.realpath(run)
+    try:
+        with open(run, "rb") as fh:
+            head = fh.read(256).split(b"\n")[0]
+    except OSError as e:
+        stop("Claude Code (%s) cannot be read (%s)" % (run, e.strerror))
+    if run.endswith((".js", ".mjs", ".cjs")) or (head.startswith(b"#!") and b"node" in head):
+        stop("%s is a JavaScript program, not Claude Code's native build; update Claude Code "
+             "to the native build: `claude install`, or `npm install -g "
+             "@anthropic-ai/claude-code@latest`" % run)
+    p = found
+    while True:  # neither the program nor a folder above it may be writable in the session
+        if os.access(p, os.W_OK):
+            stop("Claude Code (%s) can be changed by the session; install "
+                 "Claude Code outside the project and the session's folders" % found)
+        if p == "/":
+            break
+        p = os.path.dirname(p)
+    # the probe prints a word only it knows when socket(AF_UNIX) fails with EPERM: a filter
+    # that exits 0 without running it does not pass
+    word = os.urandom(8).hex()
+    probe = ("import errno, socket, sys\ntry:\n    socket.socket(socket.AF_UNIX)\n"
+             "except OSError as e:\n    e.errno == errno.EPERM and print(sys.argv[1])\n")
+    try:
+        r = subprocess.run([found, sys.executable, "-I", "-S", "-c", probe, word],
+                           stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL, timeout=60, env=env)
+        ok = r.returncode == 0 and r.stdout.split() == [word.encode()]
+    except (OSError, subprocess.SubprocessError):
+        ok = False
+    if not ok:
+        stop("Claude Code's seccomp filter (%s, as apply-seccomp) does not block unix sockets "
+             "here; run the Claude Code binary directly: a wrapper that adds arguments, or "
+             "another program (env, npx, node), is not its filter" % found)
+    # a Claude Code command (`claude mcp list`, `claude daemon run`) is no session: some take
+    # no --settings, some ignore it and run, and some are hidden from the help. So the binary
+    # itself is asked: `claude WORD --help` prints a help of its own for a command (any
+    # alias, hidden or not), the root's for a prompt. After -p too: launch does not rely on how
+    # Claude Code reads a word there. The root takes positional options: the
+    # first word that is neither an option nor an option's value (the arity from the root's
+    # help) is WORD; a word that may be an optional value is asked too. Any help that cannot be
+    # read stops the start. Cost: the root help, and one more for each word asked
+    import re
+    del env["ARGV0"]
+
+    def helped(words):
+        try:
+            r = subprocess.run([found] + words + ["--help"], stdin=subprocess.DEVNULL,
+                               stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=20,
+                               env=env)
+        except (OSError, subprocess.SubprocessError):
+            r = None
+        text = r.stdout.decode("utf-8", "replace") if r is not None and r.returncode == 0 else ""
+        if not text.strip():
+            stop("`%s %s--help` cannot be read; launch cannot tell a Claude Code command from a "
+                 "prompt" % (found, "".join(w + " " for w in words)))
+        return text
+
+    text = helped([])
+    if not any(ln.startswith("Usage:") for ln in text.splitlines()):
+        stop("`%s --help` has no Usage line; launch cannot tell a Claude Code command from a "
+             "prompt" % found)
+    arity, part = {}, None
+    for ln in text.splitlines():
+        if ln and not ln[0].isspace():
+            part = ln.strip()
+            continue
+        m = re.match(r"  (-\S.*?)(?:  |$)", ln)
+        if part == "Options:" and m:
+            spec = m.group(1)
+            kind = ("many" if re.search(r"\.\.\.[>\]]", spec) else "one" if "<" in spec else
+                    "maybe" if "[" in spec else "none")
+            for flag in re.findall(r"(?:^|, )(-[-\w]+)", spec):
+                arity[flag] = kind
+
+    def command(word):  # a help other than the root's, in any way, is a command's
+        if helped([word]) != text:
+            stop("`claude %s` is a Claude Code command, not a session, and does not take "
+                 "--settings: run it outside launch" % word)
+
+    args, i = cmd[1:-2], 0  # less the --settings launch adds last
+    while i < len(args):
+        a = args[i]
+        i += 1
+        if not a.startswith("-") or a == "-":
+            command(a)
+            break
+        kind = "none" if "=" in a else arity.get(a, "maybe")
+        if kind == "one":
+            i += 1
+        elif kind == "many":
+            while i < len(args) and not args[i].startswith("-"):
+                i += 1
+        elif kind == "maybe" and i < len(args) and not args[i].startswith("-"):
+            command(args[i])  # a value, or the command
+            i += 1
 try:
-    os.execvp(cmd[0], cmd)
+    os.execvp(run, cmd)
 except OSError as e:
     sys.stderr.write("phiward launch: the tool could not start (%s)\n" % e.strerror); os._exit(127)
 """
+
 
 
 def _git_snapshot(project: str, limit: int = 20000) -> Dict[str, str]:
@@ -1055,6 +1838,14 @@ def _git_snapshot(project: str, limit: int = 20000) -> Dict[str, str]:
                         out[x] = _digest(x)
             elif os.path.isfile(q):
                 out[q] = _digest(q)
+    return out
+
+
+def _git_snapshots(tops: Sequence[str]) -> Dict[str, str]:
+    """`_git_snapshot` of the project and each `[launch] write_to` folder, as one."""
+    out: Dict[str, str] = {}
+    for top in tops:
+        out.update(_git_snapshot(top))
     return out
 
 
@@ -1093,18 +1884,100 @@ def _make_canary(canary: str) -> None:
         fh.write("the agent profile denies this file; launch checks it\n")
 
 
-def already_confined(env: Dict[str, str]) -> bool:
-    """True only when the canary that only this profile denies is denied with EPERM (ordinary
-    permissions give EACCES and do not count)."""
-    if sys.platform != "darwin":
-        return False  # Linux nests: always wrap again
-    # both must hold: this process is in a sandbox at all, and the canary that only phiward's
-    # profile denies is denied. A canary replaced by a link into a folder macOS guards (privacy
-    # folders give EPERM too), or another sandbox that denies ~/.phiward, must not let launch
-    # skip its own profile
-    if not _sandbox_check_self():
+def _fingerprint_errno() -> int:
+    """Linux: the errno the fingerprint syscall fails with (0 when it does not fail)."""
+    import ctypes
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+    except OSError:
+        return 0
+    libc.syscall.restype = ctypes.c_long
+    ctypes.set_errno(0)
+    if libc.syscall(ctypes.c_long(FINGERPRINT_SYSCALL)) != -1:
+        return 0
+    return ctypes.get_errno()
+
+
+def _account_home() -> str:
+    """The account's home folder (the password database, never `HOME`), with the links above
+    it resolved; "" when it cannot be found."""
+    import pwd
+    try:
+        return os.path.realpath(pwd.getpwuid(os.getuid()).pw_dir)
+    except (KeyError, OSError):
+        return ""
+
+
+RUN_NAME = re.compile(r"[0-9]{8}-[0-9]{6}-[0-9a-f]{8}")  # build's run folder names
+
+
+def _own_run_folder(env: Dict[str, str], home: str) -> str:
+    """`PHIWARD_RUN` when it is exactly `<home>/.phiward/tools/<adapter>/runs/<id>` and each
+    part below the home is a real folder of this account (no link on the way); else ""."""
+    run = env.get("PHIWARD_RUN") or ""
+    parts = [".phiward", "tools"]
+    rest = run[len(home):].split("/") if home and run.startswith(home + "/") else []
+    if len(rest) != 6 or rest[1:3] != parts or rest[3] not in ADAPTERS or rest[4] != "runs" \
+            or not RUN_NAME.fullmatch(rest[5]):
+        return ""
+    p = home
+    for name in rest[1:]:
+        p = os.path.join(p, name)
+        try:
+            st = os.lstat(p)
+        except OSError:
+            return ""
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+            return ""
+    return run
+
+
+def _can_make_a_file_in(folder: str) -> bool:
+    """A new file can be made in `folder` (O_EXCL, no link followed), then removed."""
+    try:
+        dfd = os.open(folder, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError:
         return False
-    canary = _canary_path(env)
+    try:
+        st, now = os.lstat(folder), os.fstat(dfd)
+        if (st.st_dev, st.st_ino) != (now.st_dev, now.st_ino):
+            return False
+        name = f".phiward-probe-{secrets.token_hex(8)}"
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                     0o600, dir_fd=dfd)
+        os.close(fd)
+        os.unlink(name, dir_fd=dfd)
+        return True
+    except OSError:
+        return False
+    finally:
+        os.close(dfd)
+
+
+def already_confined(env: Dict[str, str]) -> bool:
+    """macOS: True only when both facts hold: the canary at the account's home folder (never
+    `HOME`), which only the session's profile denies, is denied with EPERM (ordinary
+    permissions give EACCES and do not count); and a new file can be made in this session's own
+    run folder (`PHIWARD_RUN`, of one exact shape under the account's home). Linux: True only
+    when the fingerprint syscall fails with exactly FINGERPRINT_ERRNO; no filter (ENOSYS),
+    another filter (EPERM or any other errno), or a filter set later inside the session that
+    answers it too, all build the full profile."""
+    if sys.platform.startswith("linux"):
+        return confine._machine() in confine._AUDIT_ARCH and \
+            _fingerprint_errno() == FINGERPRINT_ERRNO
+    if sys.platform != "darwin":
+        return False
+    # Only a phiward session can write a run folder: Claude Code's sandbox denies every write to
+    # ~/.phiward, and the gateway cannot write there. So a sandbox that only tightens (one that
+    # also denies the canary) fails the second fact, and a process in no sandbox fails the first.
+    # The run folder's shape is checked first, so nothing is opened for a launch outside one
+    home = _account_home()
+    run = _own_run_folder(env, home)
+    if not run:
+        return False
+    # a canary replaced by a link into a folder macOS guards (privacy folders give EPERM too)
+    # does not count
+    canary = os.path.join(home, ".phiward", CANARY)
     try:
         st = os.lstat(canary)
         if stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
@@ -1119,55 +1992,312 @@ def already_confined(env: Dict[str, str]) -> bool:
     except OSError as exc:
         if exc.errno != errno.EPERM:
             return False
-    # and the spool, a write place of phiward's own profile, is readable: another sandbox that
-    # denies all of ~/.phiward does not pass for phiward's
+    return _can_make_a_file_in(run)
+
+
+START_WINDOW = 5.0  # seconds: a non-zero exit sooner may be sandbox-exec's own refusal
+
+
+class ToolNotFound(LaunchError):
+    pass
+
+
+def _find_tool(word: str, env: Dict[str, str]) -> str:
+    """The program `word` names, as execvp would find it with the session's PATH, by its full
+    path; ToolNotFound when there is none."""
+    if "/" in word:
+        found = os.path.abspath(word)
+        if os.path.isfile(found) and os.access(found, os.X_OK):
+            return found
+        raise ToolNotFound(f"the tool could not start (no such program: {word})")
+    found = shutil.which(word, path=env.get("PATH") or os.defpath) or ""
+    if found:
+        return os.path.abspath(found)
+    raise ToolNotFound(f"the tool could not start ({word}: no such program on the session's "
+                       "PATH)")
+
+
+CLAUDE_PACKAGE = "@anthropic-ai/claude-code"  # the npm package of Claude Code
+_PACKAGE_JSON_CAP = 64 * 1024
+
+
+def _read_regular(path: str, cap: int, whole: bool = True) -> Optional[bytes]:
+    """Up to `cap` bytes of the regular file `path`, or None: not a regular file, not
+    readable, or (with `whole`) longer than `cap`. Opened without blocking (a FIFO would hang
+    a plain open) and judged by fstat, so what is read is what was judged."""
     try:
-        fd = os.open(config.spool_dir(env), os.O_RDONLY | os.O_DIRECTORY)
-        os.close(fd)
+        fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0))
     except OSError:
-        return False
-    return True
-
-
-def _make_dot_claude(project: str) -> None:
-    """`.claude` is made before the tool starts (after every check), so the session cannot make
-    it a link."""
-    p = os.path.join(project, ".claude")
+        return None
     try:
-        os.mkdir(p, 0o755)
-    except FileExistsError:
-        pass  # there already, or another launch in this project made it just now
-    st = os.lstat(p)
-    if not stat.S_ISDIR(st.st_mode):
-        raise OSError(errno.ENOTDIR, "the project's .claude is not a folder (a link?)", p)
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            return None
+        data = os.read(fd, cap + 1)
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    return data[:cap] if len(data) <= cap or not whole else None
+
+
+def _npm_version(script: str, places: Sequence[str]) -> Optional[Tuple[int, int, int]]:
+    """The version in the package.json beside `script` (npm's `<package>/cli.js`), when that
+    file is Claude Code's package (by its name) and outside the session's write `places`; else
+    None. Read, never run."""
+    pkg = os.path.realpath(os.path.join(os.path.dirname(script), "package.json"))
+    if any(pathid.inside(pkg, os.path.realpath(p)) for p in places):
+        return None
+    data = _read_regular(pkg, _PACKAGE_JSON_CAP)
+    try:
+        doc = json.loads(data) if data is not None else None
+    except ValueError:
+        return None
+    if not isinstance(doc, dict) or doc.get("name") != CLAUDE_PACKAGE or \
+            not isinstance(doc.get("version"), str):
+        return None
+    m = re.match(r"(\d+)\.(\d+)\.(\d+)(?![\d.])", doc["version"])
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
+def _native_version(real: str, env: Optional[Dict[str, str]]) -> Optional[Tuple[int, int, int]]:
+    """What the native binary `real` says it is (`--version`, from /), or None."""
+    try:
+        out = subprocess.run([real, "--version"], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=20, env=env,
+                             cwd="/").stdout
+    except (OSError, subprocess.SubprocessError, ValueError):
+        out = ""
+    m = re.match(r"\s*(\d+)\.(\d+)\.(\d+) \(Claude Code\)", out)
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3))) if m else None
+
+
+def claude_version_problem(tool: str, places: Sequence[str],
+                           env: Optional[Dict[str, str]] = None,
+                           ask: Optional[Callable[[str, Optional[Dict[str, str]]],
+                                                  Optional[Tuple[int, int, int]]]] = None) -> str:
+    """Why `tool` cannot run under `--tool claude`, or "": it is not a Claude Code of
+    VERSION_HOOK_ARGS or newer. The launched hooks are in exec form (`args`) with `onFailure`,
+    and an older one would run their Python alone. Only a native binary outside the session's
+    write `places` is started to ask (`--version`, from /), as that runs outside the profile.
+    A script (an npm build) is never started: its interpreter is found on PATH, and a shim
+    reads the project's config, so either could be the session's. Its version is read from
+    its npm package's package.json. No Claude Code version (another program, a wrapper, a
+    shim) is a refusal too. `ask` gives a native binary's version in place of starting it
+    (doctor, which starts nothing here)."""
+    need = claude_settings.version_text(claude_settings.VERSION_HOOK_ARGS)
+    unknown = f"`{tool}` gives no Claude Code version: {CLAUDE_STEP}"
+    real = os.path.realpath(tool)
+    for p in places:
+        if pathid.inside(real, os.path.realpath(p)):
+            return (f"Claude Code ({real}) is in a folder the session can write; install it "
+                    "outside the project and the session's folders")
+    head = _read_regular(real, 256, whole=False)  # read, never started
+    if head is None:
+        return unknown
+    head = head.split(b"\n")[0]
+    if sys.platform != "darwin" and (real.endswith((".js", ".mjs", ".cjs")) or (
+            head.startswith(b"#!") and b"node" in head)):
+        # Linux needs the native build (its seccomp filter): the refusal the start gives there,
+        # before a JavaScript program would be started to ask its version
+        return (f"{real} is a JavaScript program, not Claude Code's native build; update Claude "
+                "Code to the native build: `claude install`, or `npm install -g "
+                "@anthropic-ai/claude-code@latest`")
+    if head.startswith(b"#!"):
+        version = _npm_version(real, places)
+        if version is None:
+            return unknown
+    else:
+        version = (ask or _native_version)(real, env)
+        if version is None:
+            return unknown
+    if version < claude_settings.VERSION_HOOK_ARGS:
+        return (f"Claude Code {claude_settings.version_text(version)} is older than {need}, "
+                "which launch needs (an older one would not run phiward's hooks); update "
+                "Claude Code")
+    return ""
+
+
+def _make_folders(project: str, names: Sequence[str]) -> List[str]:
+    """The folders `names` are made before the tool starts (after every check), so the session
+    cannot make one a link, and on Linux a bind covers each. The ones made are returned."""
+    made = []
+    for n in names:
+        p = os.path.join(project, n)
+        try:
+            os.mkdir(p, 0o755)
+            made.append(n)
+        except FileExistsError:
+            pass  # there already, or another launch in this project made it just now
+        st = os.lstat(p)
+        if not stat.S_ISDIR(st.st_mode):
+            raise OSError(errno.ENOTDIR, f"the project's {n} is not a folder (a link?)", p)
+    return made
+
+
+def _proxy_env(url: str) -> Dict[str, str]:
+    """The tool's proxy variables: each names the session's proxy, and nothing bypasses it."""
+    out = dict.fromkeys(PROXY_VARS, url)
+    out.update(dict.fromkeys(NO_PROXY_VARS, ""))
+    return out
+
+
+RESUME_FLAGS = ("--resume", "-r", "--continue", "-c")
+
+
+def _asks_resume(args: Sequence[str]) -> bool:
+    """Whether Claude Code's arguments, before any `--`, ask for an earlier session."""
+    for a in args:
+        if a == "--":
+            return False
+        if a in RESUME_FLAGS or a.startswith(("--resume=", "--continue=")):
+            return True
+    return False
+
+
+def _shown_url(url: str) -> str:
+    """`scheme://host[:port]` of a URL, without a login or a path: for a message."""
+    from urllib.parse import urlsplit  # parsing only
+    try:
+        u = urlsplit(url.strip())
+    except ValueError:
+        return "not a URL"
+    host = u.netloc.rpartition("@")[2]
+    return netproxy._one_line(f"{u.scheme}://{host}" if u.scheme else host or u.path)
+
+
+def base_url_refusal(url: str, allow: Sequence[str]) -> str:
+    """Why a session could not reach the model at ANTHROPIC_BASE_URL `url` (the proxy's own
+    rules), with the step, or ""."""
+    why = netproxy.base_url_problem(url, allow)
+    if not why:
+        return ""
+    step = ("list its range in [launch] private_networks (user config), or run Claude Code in "
+            "Mode A") if why.endswith(netproxy.PRIVATE_WHY) else "run Claude Code in Mode A"
+    return (f"ANTHROPIC_BASE_URL ({_shown_url(url)}) {why}; a launch session reaches only HTTPS "
+            f"on public addresses and listed private ranges: {step}")
+
+
+def _start_proxy(cfg: config.Config, env: Dict[str, str], pair: bool = False) -> "netproxy.Proxy":
+    try:
+        return netproxy.start(env, cfg.launch_private_networks, pair)
+    except netproxy.ProxyError as exc:
+        raise LaunchError(f"the session's network proxy cannot start: {exc}") from None
+
+
+SCAN_FIX = ("move the data under a protected root, pseudonymize it (phiward pseudonymize), or "
+            "allow the files ([sanitize] scan_allow); phiward doctor --show-paths lists them")
+
+
+def _scan_tops(cfg: config.Config, project: str, listed: Sequence[str]) -> None:
+    """The project scan of the project and each `[launch] write_to` folder, under one budget:
+    first the instruction files of every folder (Claude Code sends those at its start, from an
+    --add-dir folder too), then the rest of each in turn. A finding or an error refuses, naming
+    a listed folder; instruction files not read in time refuse; the rest not read in time is a
+    NOTE, and so are the project's own instruction files (its rule before listed folders)."""
+    from phiward import projectscan
+    until = projectscan.deadline()
+    tops = [project] + list(listed)
+    done: Dict[str, List[projectscan.Result]] = {t: [] for t in tops}
+
+    def judged(top: str, r: projectscan.Result) -> projectscan.Result:
+        if r.error:
+            raise LaunchError("the project scan could not run; run phiward doctor")
+        if r.hits:
+            where = "" if top == project else f" in {top}"
+            raise LaunchError(f"the project scan found {projectscan.found_text(r)}{where}: "
+                              + SCAN_FIX)
+        done[top].append(r)
+        return r
+    stopped: List[str] = []
+    for top in tops:
+        if judged(top, projectscan.scan(cfg, top, until, part="first")).complete:
+            continue
+        if top == project:  # the project keeps its own rule: the NOTE below
+            stopped.append(top)
+            continue
+        raise LaunchError(f"the project scan could not read the instruction files of {top} "
+                          f"in {projectscan.BUDGET:g} s; run phiward doctor, or make them "
+                          "smaller")
+    for top in tops:
+        if top in stopped:
+            continue
+        if stopped or not judged(top, projectscan.scan(cfg, top, until, part="rest")).complete:
+            stopped.append(top)
+    files = sum(r.files for rs in done.values() for r in rs)
+    if stopped:
+        named = "" if not listed else " (not finished: " + ", ".join(
+            "the project" if t == project else t for t in stopped) + ")"
+        sys.stderr.write(f"phiward launch: NOTE: the project scan stopped at its "
+                         f"{projectscan.BUDGET:g} s limit after {files} files{named}; run "
+                         "phiward doctor for the full scan\n")
+        return
+    for top in tops:
+        skipped: Dict[str, int] = {}
+        for r in done[top]:
+            for k, n in r.skipped.items():
+                skipped[k] = skipped.get(k, 0) + n
+        text = projectscan.skipped_text(done[top][0]._replace(skipped=skipped),
+                                        projectscan.PARTIAL)
+        if text:
+            sys.stderr.write("phiward launch: NOTE: the project scan did not read all of "
+                             f"{'the project' if top == project else top} ({text}); phiward "
+                             "doctor gives the counts\n")
 
 
 def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
           memory: bool = False, store: Optional[carryover.Store] = None,
-          server: bool = False) -> Tuple[List[str], Dict[str, str], List[int], str]:
+          server: bool = False, info: Optional[Dict[str, Any]] = None
+          ) -> Tuple[List[str], Dict[str, str], List[int], str, Callable[[], None],
+                     "netproxy.Proxy"]:
+    """The tool's command, its environment, the descriptors it is given, the project, the last
+    step before it starts, and the session's proxy (serving; the caller closes it). `info`, when
+    given, gets "write_to" (the `[launch] write_to` folders the session writes) and "notes"
+    (the NOTEs said about them at the start)."""
     cfg = config.load(cwd, env=env)
     if cfg.problem:
         raise LaunchError("the phiward config cannot be used (run phiward doctor)")
     if not cfg.has_protected_paths:
-        raise LaunchError("no protected paths are configured: there is nothing to confine")
-    from phiward import paths
+        raise LaunchError(NO_PATHS)
+    from phiward import phicheck
+    masking = None if server else phicheck.check(cfg, cwd)
+    if masking and masking.failed:
+        raise LaunchError(f"the masking check failed: {masking.failed[0]}; run phiward doctor")
     project = os.path.realpath(cwd)
-    # only the configured roots count for "above": a derived git folder inside the project
-    # must not stop work there
-    if paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(project) == paths.INSIDE or \
-            paths.ProtectedSet(cfg.roots, cfg.patterns).relation(project) == paths.ABOVE:
-        raise LaunchError("this folder is inside or above a protected path; start the tool in a "
-                          "project folder")
-    why = _project_problem(project, env)
-    if why:
-        raise LaunchError(f"this folder cannot be the project ({why}); start the tool in a "
-                          "project folder")
-    # a settings path that is already a link would carry the session's writes to a file a later
-    # plain run reads: refused
-    for rel in (".claude", ".vscode") + PROJECT_SETTINGS:
-        if os.path.islink(os.path.join(project, rel)):
-            raise LaunchError(f"{rel} in the project is a link; replace it with a real file or "
-                              "folder")
+    kind, what = _folder_checks(project, cfg, env)
+    if kind:
+        raise LaunchError(folder_step(kind, what, env))
+    # the `[launch] write_to` folders, and the project scan of them all: not for a wrapped MCP
+    # server, which writes only its own folder (not the agent's project)
+    listed: List[str] = []
+    if not server:
+        listed, missing, dropped = extra_write_places(cfg, env, project)
+        notes = [f"phiward launch: NOTE: {WRITE_TO_MISSING.format(m)}" for m in missing]
+        for line in notes:
+            sys.stderr.write(line + "\n")
+        if listed or dropped:
+            sys.stderr.write("phiward launch: the session also writes: " + ", ".join(
+                listed + [f"{d} (already in the project)" for d in dropped]) + "\n")
+        if info is not None:
+            info["write_to"], info["notes"] = list(listed), notes
+        _scan_tops(cfg, project, listed)
+    if project in cfg.no_phi_folders:  # Mode A's opt-out; launch stays all or nothing
+        sys.stderr.write("phiward launch: NOTE: the operator lists this folder in [no_phi] "
+                         "folders; launch confines it all the same (plain claude here is "
+                         "relaxed).\n")
+    claude = adapter.name == "claude" and not server
+    if claude and listed:
+        # Claude Code's file tools write the listed folders through --add-dir; after a `--`
+        # it would be read as an argument, so the start is refused
+        if "--" in argv[1:]:
+            raise LaunchError(DASH_DASH)
+        argv = _with_add_dirs(list(argv), listed)
+    if claude and env.get("ANTHROPIC_BASE_URL"):
+        # the proxy's own rules, once: a model the session cannot reach is said at the start
+        why = base_url_refusal(env["ANTHROPIC_BASE_URL"], cfg.launch_private_networks)
+        if why:
+            raise LaunchError(why)
+    # this project's transcripts, for --resume and -c: one folder, by a name of its own
+    transcripts = hashlib.sha256(os.fsencode(project)).hexdigest()[:16] if claude else ""
     folder = tool_folder(adapter, env)
     _fixed_folders(folder)
     # this session's own folder: its config folder, built from the trusted copy, and its
@@ -1175,15 +2305,23 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     run = os.path.join(folder, carryover.RUNS, time.strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(4))
     store = store if store is not None else carryover.Store(adapter.name, _real_home(env))
     try:
-        for line in store.start(folder, run, memory, adapter.turn_own_sandbox_off):
+        for line in store.start(folder, run, memory, adapter.turn_own_sandbox_off,
+                                transcripts if cfg.launch_keep_transcripts else ""):
             sys.stderr.write(line + "\n")
     except (carryover.CarryoverError, OSError, RecursionError) as exc:
         raise LaunchError(f"carry-over: {exc}")
-    if adapter.name == "claude" and not any(env.get(k) for k in (
-            "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
-        sys.stderr.write("phiward launch: each session starts with a fresh config folder, so "
-                         "Claude Code asks you to log in every time; to log in once, run `claude "
-                         "setup-token` and set CLAUDE_CODE_OAUTH_TOKEN (the agent can read it)\n")
+    if listed:
+        # the record of the write set, in runs/ (no session writes there): a session that does
+        # not finish is named with its folders at the next start (carryover._clean_runs)
+        with carryover._runs_lock(folder) as rfd:
+            _write_at(rfd, os.path.basename(run) + carryover.RECORD,
+                      "".join(p + "\n" for p in listed))
+    if adapter.name == "claude" and not any(env.get(k) for k in LOGIN_TOKEN_VARS):
+        sys.stderr.write(f"phiward launch: {LOGIN_NOTE}\n")
+    if claude and not cfg.launch_keep_transcripts and _asks_resume(argv[1:]):
+        sys.stderr.write("phiward launch: NOTE: keep_transcripts is off, so this session starts "
+                         "with no history and --resume and --continue find nothing from earlier "
+                         "sessions ([launch] keep_transcripts, user config)\n")
     tmp = os.path.join(run, "tmp")
     os.makedirs(tmp, mode=0o700, exist_ok=True)
     canary = _canary_path(env)
@@ -1212,8 +2350,10 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
             child_env["CLAUDE_CODE_TMPDIR"] = tmp
     child_env["PHIWARD_HOOK_ROOTS"] = json.dumps(sorted(set(cfg.all_roots)))
     child_env["PHIWARD_LAUNCH_DEPTH"] = str(int(env.get("PHIWARD_LAUNCH_DEPTH", "0") or 0) + 1)
+    if transcripts:  # set last: an operator's own value (it passes CLAUDE_) never wins
+        child_env["CLAUDE_CODE_PROJECT_DIR_NAME"] = transcripts
     os.makedirs(config.spool_dir(env), mode=0o700, exist_ok=True)
-    places = write_places(project, env, run)
+    places = write_places(project, env, run, extra=listed)
     # phiward's own files as installed, unchanged, owned by the operator or root
     from phiward import selfcheck
     installed, problems = selfcheck.check_isolated()
@@ -1224,40 +2364,121 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     if problems:
         raise LaunchError(selfcheck.refusal(problems) + "; " +
                           selfcheck.fix_text(problems, selfcheck._running_package()))
+    if adapter.name == "claude":
+        # the Claude Code floor, on every platform: the hooks written into the session's
+        # settings need it (claude_version_problem)
+        why = claude_version_problem(_find_tool(argv[0], child_env), places, child_env)
+        if why:
+            raise LaunchError(why)
     backend = confine.backend()
-    helper = [sys.executable, "-I", "-S", "-c", HELPER]
     if backend == "seatbelt":
-        if _sandbox_check_self():
-            raise LaunchError("this process is inside another sandbox; macOS cannot apply a second "
-                              "one (start the tool from a plain terminal)")
-        _make_dot_claude(project)
-        prof = seatbelt_tool_profile(cfg, places, project, env, folder, canary, server)
-        return [confine.SANDBOX_EXEC, "-p", prof] + helper + ["0"] + list(argv), child_env, [], \
-            project
+        # no helper: `sandbox-exec -f FILE TOOL ARGS...`, the tool by its full path, found on the
+        # session's PATH now (sandbox-exec would look it up itself, with no message of ours).
+        # Inside another sandbox sandbox-exec refuses to apply the profile, and nothing runs
+        tool = _find_tool(argv[0], child_env)
+        # the session's own run folder: a launch inside the session checks it (already_confined)
+        child_env["PHIWARD_RUN"] = run
+        _make_folders(project, [".claude"])
+        proxy = _start_proxy(cfg, env)
+        try:
+            child_env.update(_proxy_env(proxy.url()))
+            child_env.pop("PHIWARD_PROXY_RELAY", None)  # no relay on macOS
+            confine.prune_profiles()
+            path = confine.write_profile(seatbelt_tool_profile(cfg, places, project, env, folder,
+                                                               canary, server,
+                                                               proxy_port=proxy.port,
+                                                               listed=listed))
+        except BaseException:
+            proxy.close()
+            raise
+        return [confine.SANDBOX_EXEC, "-f", path, tool] + list(argv[1:]), child_env, \
+            [], project, lambda: None, proxy
     if backend == "bwrap":
+        helper = [sys.executable, "-I", "-S", "-c", HELPER]
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
                               "run phiward setup first")
-        _make_dot_claude(project)
+        bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
+        why = confine.net_namespace_problem(bwrap, probe=False)
+        if why:
+            raise LaunchError(f"the session needs a network of its own, and {why} (phiward "
+                              "doctor says so too)")
+        # a write place bound at /tmp or above it would cover the session's own /tmp (which the
+        # temp variables below name) with the host's shared one
+        for p in places:
+            if os.path.isdir(p) and _inside("/tmp", os.path.realpath(p)):
+                raise LaunchError(f"a write place ({p}) is /tmp or holds it, and on Linux the "
+                                  "session's own /tmp would be the shared one; start the tool in "
+                                  "a folder below /tmp, or elsewhere")
+        # the temp folders by the name the view gives the run's tmp, /tmp: a unix socket's path
+        # holds at most 107 bytes, and Claude Code's sandbox bridges (`claude-http-<hex>.sock`)
+        # and tmux's sockets do not fit under the run folder's full path
+        for k in ("TMPDIR", "TMUX_TMPDIR", "CLAUDE_CODE_TMPDIR"):
+            if k in child_env:
+                child_env[k] = "/tmp"
+        made = _make_folders(project, MADE_ON_LINUX)
+        if made:
+            sys.stderr.write("phiward launch: made empty, read-only folders in the project: "
+                             f"{', '.join(made)}\n")
         made = _placeholders(project)
         if made:
             sys.stderr.write("phiward launch: made read-only placeholders in the project: "
                              f"{', '.join(made)}\n")
-        args, fds = bwrap_tool_args(cfg, places, project, env, folder, run, server)
-        r, w = os.pipe()
-        os.write(w, tool_seccomp_program())
-        os.close(w)
-        os.set_inheritable(r, True)
-        held = [str(fd) for fd in fds]
-        bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
+        # unix sockets: Landlock where the kernel can tell the session's own from those
+        # outside (ABI 9); below it, Claude Code's own sandbox blocks them for Bash, and a tool
+        # without one cannot make any
+        if landlock_abi() >= UNIX_ABI:
+            unix = "landlock"
+        elif adapter.name == "claude" and not server:
+            unix = "inner"
+            why = inner_sandbox_reason(project, child_env)
+            if why:
+                raise LaunchError(why)
+            # whatever runs (claude, a versioned binary, a wrapper), the flag goes last; after a
+            # `--` it would be read as an argument, so the start is refused
+            if "--" in argv[1:]:
+                raise LaunchError(DASH_DASH)
+            argv = _without_launch_settings(argv)
+            argv = list(argv) + ["--settings", json.dumps(INNER_SETTINGS)]
+        else:
+            unix = "deny"
+        # the session reaches the proxy through the relay on its own 127.0.0.1, which asks for
+        # each connection on its end of the proxy's socket pair (no socket with a path)
+        proxy = _start_proxy(cfg, env, pair=True)
+        opened: List[int] = []  # every descriptor made here: closed with the proxy on a refusal
         try:
-            cmd = _bwrap_command(bwrap, r, args, project, helper, held, argv)
-        except LaunchError:
-            for fd in fds + [r]:
+            relay = netproxy.random_port()
+            child_env.update(_proxy_env(proxy.url(relay)))
+            args, fds, checks = bwrap_tool_args(cfg, places, project, env, folder, run, server,
+                                                listed)
+            opened += fds
+            end = proxy.take_session_end()
+            opened.append(end)
+            child_env["PHIWARD_PROXY_RELAY"] = f"{relay}:{end}"
+            r, w = os.pipe()
+            opened.append(r)
+            try:
+                os.write(w, tool_seccomp_program(deny_unix=unix == "deny"))
+            finally:
+                os.close(w)
+            os.set_inheritable(r, True)
+            # the helper's checks, written by `ready` right before bwrap starts (an unlinked
+            # file: a pipe holds too little for a large view)
+            with tempfile.TemporaryFile() as fh:
+                chk = os.dup(fh.fileno())
+            opened.append(chk)
+            os.set_inheritable(chk, True)
+            held = [str(fd) for fd in fds]
+            cmd = _bwrap_command(bwrap, r, args, project, helper + [str(chk), unix], held,
+                                 argv)
+        except BaseException:  # any refusal (also confine's): nothing is left open
+            for fd in opened:
                 os.close(fd)
+            proxy.close()
             raise
-        return cmd, child_env, fds + [r], project
-    raise LaunchError("no confinement backend on this system")
+        return cmd, child_env, fds + [r, chk, end], project, \
+            lambda: _write_checks(chk, checks), proxy
+    raise LaunchError(confine.NO_BACKEND)
 
 
 class _Run:
@@ -1270,9 +2491,15 @@ class _Run:
         self.groups: Dict[int, List[Tuple[str, str]]] = {}  # changed project files by kind
         self.git: List[str] = []         # changed git control files (Linux)
         self.truncated = False           # the project scan was cut short
+        self.write_to: List[str] = []    # the [launch] write_to folders the session wrote
+        self.record: Optional[Tuple[str, str]] = None  # (tool folder, run): its record's place
+        self.signalled = False           # SIGHUP or SIGTERM ended the wait
 
     def say(self, line: str) -> None:
-        sys.stderr.write(line + "\n")
+        try:
+            sys.stderr.write(line + "\n")
+        except (OSError, ValueError):  # the terminal is gone (SIGHUP): the report still has it
+            pass
         self.notes.append(line)
 
     def data(self, code: Optional[int]) -> Dict[str, object]:
@@ -1281,7 +2508,8 @@ class _Run:
                 "needs_review": (not self.ran or bool(self.carryover) or bool(self.git)
                                  or self.truncated or any(kinds[k] for k in carryover.KINDS[:3])),
                 "carryover": self.carryover, "project_changed": kinds,
-                "git_control_changed": self.git, "notes": self.notes}
+                "git_control_changed": self.git, "write_to": self.write_to,
+                "notes": self.notes}
 
 
 def main(argv: List[str]) -> int:
@@ -1296,7 +2524,7 @@ def main(argv: List[str]) -> int:
     while rest[:1] in (["--tool"], ["--memory"], ["--report"], ["--entry"]):
         if rest[0] == "--entry" and len(rest) >= 2:
             # the id `phiward mcp wrap` gives an entry: part of this launcher's record, and a
-            # wrapped MCP server's profile (SERVER_READ_ONLY)
+            # wrapped MCP server's profile (the whole `.git` folders read-only too)
             rest, server = rest[2:], True
         elif rest[0] == "--memory":
             memory, rest = True, rest[1:]
@@ -1321,8 +2549,18 @@ def main(argv: List[str]) -> int:
         code = _launch(tool, memory, rest, env, run, report, server)
     finally:
         mcp_config.end_launch(record)
+    return _end(report, run, code)
+
+
+def _end(report: str, run: _Run, code: int) -> int:
+    """The final report, then the session's record moved away. The record stays after a signal
+    end (on macOS the tool may outlive the launcher) or when the report cannot be written: the
+    next start names its folders."""
     if report and not _write_report(report, run.data(code)):
         return code or 2
+    if run.record and not run.signalled:
+        for line in carryover.drop_record(*run.record):
+            run.say(line)
     return code
 
 
@@ -1364,51 +2602,137 @@ def _launch(tool: str, memory: bool, rest: List[str], env: Dict[str, str], run: 
         return 2
     store = carryover.Store(adapter.name, _real_home(env))
     folder = tool_folder(adapter, env)
+    info: Dict[str, Any] = {}
     try:
-        cmd, child_env, fds, project = build(rest, os.getcwd(), env, adapter, memory, store,
-                                             server)
+        cmd, child_env, fds, project, ready, proxy = build(rest, os.getcwd(), env, adapter,
+                                                           memory, store, server, info)
     except (LaunchError, confine.ConfineError, OSError, RecursionError) as exc:
         run.say(f"phiward launch: {exc}; nothing runs")
         if store.run:  # only a session this launcher built: closed, it never ran
             try:
                 store.end(folder)
+                carryover.drop_record(folder, store.run)
             except (carryover.CarryoverError, OSError):
                 pass
-        return 126
-    # wait for the tool; then carry-over: the session's instruction changes to
-    # quarantine and its folder discarded, the project's changes reported, and on Linux git
-    # control files outside the project compared too
-    import signal
-    git_before = _git_snapshot(project) if sys.platform.startswith("linux") else {}
-    proj_before = carryover.project_state(project)
-    proc = subprocess.Popen(cmd, env=child_env, pass_fds=fds)
-    run.ran = True
-    for fd in fds:
-        os.close(fd)
-    old = signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl-C goes to the tool, not to us
+        return 127 if isinstance(exc, ToolNotFound) else 126
+    run.write_to = list(info.get("write_to", []))
+    run.notes += info.get("notes", [])
+    if store.run:
+        run.record = (folder, store.run)  # moved away by `_end`, after the final report
     try:
-        code = proc.wait()
+        _raise_open_files()
+        return _run_tool(cmd, child_env, fds, project, ready, store, folder, run, run.write_to)
     finally:
-        signal.signal(signal.SIGINT, old)
-        # no process is ever ended: on Linux the PID namespace ends them with the tool; on
-        # macOS a process left behind can still write the project and the temp folders, but
-        # not a run folder a later session reads
+        refused = proxy.refusal_line()  # the operator's own terminal, at exit (and the report)
+        if refused:
+            run.say(refused)
+        confine.release_profile(cmd)  # macOS: the profile's file, once the tool has ended
+        proxy.close()  # after the tool, the carry-over and the report
+
+
+OPEN_FILES_CAP = 10240  # OPEN_MAX on macOS
+
+
+def _raise_open_files() -> None:
+    """The launcher's soft limit of open files, up to its hard limit (at most OPEN_FILES_CAP):
+    the proxy holds two descriptors for each of its 64 tunnels, and carry-over and the report
+    still need their own while a session (or a process it left behind) holds them."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = OPEN_FILES_CAP if hard == resource.RLIM_INFINITY else min(hard, OPEN_FILES_CAP)
+    if soft != resource.RLIM_INFINITY and soft < want:
         try:
-            run.carryover = store.end(folder)
-        except Exception as exc:  # the session stays open: the next start tries again
-            run.carryover = [f"phiward launch: carry-over did not finish ({exc}); the next "
-                             "launch tries again before the tool starts"]
-        proj_after = carryover.project_state(project)
-        changes = carryover.project_changes(proj_before, proj_after, project)
-        run.groups, run.truncated = changes
-        for line in run.carryover + carryover.project_report(changes):
+            resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
+        except (OSError, ValueError):
+            pass  # the limit stays: the proxy refuses what it cannot hold
+
+
+def _run_tool(cmd: List[str], child_env: Dict[str, str], fds: List[int], project: str,
+              ready: Callable[[], None], store: carryover.Store, folder: str, run: _Run,
+              listed: Sequence[str] = ()) -> int:
+    # wait for the tool; then carry-over: the session's instruction changes to
+    # quarantine and its folder discarded, the changes in the project and in each `[launch]
+    # write_to` folder (`listed`) reported, and on Linux git control files compared too.
+    # SIGHUP (the terminal closes) and SIGTERM end the wait, not the launcher: the report still
+    # comes, and the exit is 128 + the signal
+    import signal
+    tops = [project] + [t for t in listed if t != project]
+    linux = sys.platform.startswith("linux")
+    git_before = _git_snapshots(tops) if linux else {}
+    before = [carryover.project_state(t) for t in tops]
+    try:
+        ready()  # last, so the host has the least time to change what was checked
+    except Exception as exc:  # any failure (a name fsencode cannot encode): nothing runs
+        for fd in fds:
+            os.close(fd)
+        run.say(f"phiward launch: the session's checks cannot be written ({exc}); nothing runs")
+        try:
+            store.end(folder)
+            carryover.drop_record(folder, store.run)
+        except (carryover.CarryoverError, OSError):
+            pass
+        return 126
+
+    def stop(signum: int, _frame: Any) -> None:
+        raise SystemExit(128 + signum)
+    # a signal the launcher inherited ignored (`nohup`) stays ignored
+    stops = {s: signal.signal(s, stop) for s in (signal.SIGHUP, signal.SIGTERM)
+             if signal.getsignal(s) != signal.SIG_IGN}
+    try:
+        quick = False
+        try:
+            started = time.monotonic()
+            proc = subprocess.Popen(cmd, env=child_env, pass_fds=fds)
+            run.ran = True
+            for fd in fds:
+                os.close(fd)
+            old = signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ctrl-C goes to the tool
+            try:
+                code = proc.wait()
+                quick = time.monotonic() - started < START_WINDOW
+            finally:
+                signal.signal(signal.SIGINT, old)
+        except SystemExit as exc:  # SIGHUP or SIGTERM: the tool is not signalled by phiward
+            code = int(exc.code)  # type: ignore[arg-type]
+            run.signalled = True  # on macOS the tool may outlive this: the record stays
+        finally:
+            for s in stops:  # the report is not cut short by another one
+                signal.signal(s, signal.SIG_IGN)
+            # no process is ever ended: on Linux the PID namespace ends them with the tool; on
+            # macOS a process left behind can still write the project and the temp folders, but
+            # not a run folder a later session reads
+            try:
+                run.carryover = store.end(folder)
+            except Exception as exc:  # the session stays open: the next start tries again
+                run.carryover = [f"phiward launch: carry-over did not finish ({exc}); the next "
+                                 "launch tries again before the tool starts"]
+            lines: List[str] = []
+            for top, b in zip(tops, before):
+                changes = carryover.project_changes(b, carryover.project_state(top), top)
+                if top == project:
+                    run.groups, run.truncated = changes
+                    lines += carryover.project_report(changes)
+                    continue
+                for k, items in changes.groups.items():
+                    run.groups.setdefault(k, []).extend((os.path.join(top, r), how)
+                                                        for r, how in items)
+                run.truncated = run.truncated or changes.truncated
+                lines += carryover.project_report(changes, top)
+            for line in run.carryover + lines:
+                run.say(line)
+        git_after = _git_snapshots(tops) if linux else {}
+        run.git = sorted(k for k in set(git_before) | set(git_after)
+                         if git_before.get(k) != git_after.get(k))
+        for line in _git_lines(run.git) + WALK_NOTES:
             run.say(line)
-    git_after = _git_snapshot(project) if sys.platform.startswith("linux") else {}
-    run.git = sorted(k for k in set(git_before) | set(git_after)
-                     if git_before.get(k) != git_after.get(k))
-    for line in _git_lines(run.git):
-        run.say(line)
-    return code
+        # sandbox-exec fails at the start; a session that ends with an error later gets no hint
+        if code and quick and cmd[:2] == [confine.SANDBOX_EXEC, "-f"]:
+            run.say(f"phiward launch: the tool exited with {code}; if sandbox-exec printed an "
+                    "error above, run `phiward doctor`")
+        return code
+    finally:
+        for s, h in stops.items():
+            signal.signal(s, h)
 
 
 def _report_place(path: str, env: Dict[str, str]) -> Tuple[str, str]:
@@ -1427,11 +2751,14 @@ def _report_place(path: str, env: Dict[str, str]) -> Tuple[str, str]:
         return full, "it is a folder; give a file name"
     home = _real_home(env)
     project = os.path.realpath(os.getcwd())
-    places = write_places(project, env) + [os.path.join(home, ".phiward")]
-    if any(config._deny_inside(full, os.path.realpath(p)) for p in places):
-        return full, ("it is in a place the session can write (the project, the spool, the "
-                      "temp folder or ~/.phiward); give a path outside them")
     cfg = config.load(project, env=env)
+    places = write_places(project, env, extra=[os.path.normpath(p) for p in
+                                               cfg.launch_write_to]) + [
+        os.path.join(home, ".phiward")]
+    if any(config._deny_inside(full, os.path.realpath(p)) for p in places):
+        return full, ("it is in a place the session can write (the project, a [launch] write_to "
+                      "folder, the spool, the temp folder or ~/.phiward); give a path outside "
+                      "them")
     guards = config.guard_files(env) + hidden.paths(None, cfg, session=True) + [
         claude_settings.user_dir(home, env)] + list(claude_settings.MANAGED)
     if any(config._deny_inside(full, os.path.realpath(g)) for g in guards):

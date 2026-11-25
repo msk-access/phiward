@@ -33,7 +33,11 @@ In both, work on protected data goes through the gateway.
 tools' and the Claude app's logins, browser profiles), Kerberos ticket caches and keytabs, SSH
 keys your ssh configs name, shell and REPL histories, the Trash, thumbnails, local IPC sockets.
 In Mode A, `install` puts it in Claude Code's sandbox and permission rules, and the hook refuses
-it; in Mode B the kernel hides it. Gateway commands cannot read it either. In Mode A,
+it; in Mode B the kernel hides it. Gateway commands cannot read it either. One exception, in
+Mode A on Linux with bubblewrap older than 0.5 (RHEL 8): that bubblewrap cannot hide a socket,
+so the Docker and Kerberos KCM sockets stay out of the sandbox's lists and the permission rules
+(the hook still refuses a file tool that names them), and only Claude Code's
+seccomp filter for new Unix sockets keeps a shell command from them (`doctor` says so). In Mode A,
 Claude Code's own folder (`~/.claude`: memory, plans, skills, saved tool output) stays usable;
 only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
 
@@ -47,6 +51,8 @@ only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
 | Hooks | your full rights | confined |
 | Your `~/.claude` (skills, rules, MCP config) | used as it is | each session starts from a trusted copy (`carryover add`); changes go to quarantine |
 | Work on protected data | the gateway | the gateway |
+| Prompts | checked before they are sent: one with an identifier of your packs or a path below a root is not sent ([threat-model.md](threat-model.md#known-prompt-scan)) | the same check, written beside the fast hook in the session's own settings (the session can remove it) |
+| How phiward's hooks start | from files in phiward's package, no inline code: a script that clears the Python and loader variables, then phiward's own Python ([setup.md](setup.md)) | from a file in phiward's package (`entry.py`); Claude Code 2.1.295 or newer, on macOS and Linux |
 | Use it for | day-to-day work, every protected step through the gateway | long sessions close to protected data, or untrusted input (web pages, other people's repositories) |
 
 ## What Mode A does not do
@@ -58,6 +64,11 @@ only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
   app, load the user settings (`settingSources: ["user", "project", "local"]`), pass
   `phiward install claude --json` as its `settings`, or run the whole program under
   `phiward launch`. See [unattended.md](unattended.md).
+- **`@path` mentions are turned off** (`CLAUDE_CODE_DISABLE_FILE_MENTIONS=1`, written by
+  `install --user`; Claude Code v2.1.299+): a mention would put a file's text into the prompt
+  without a tool call phiward sees. Now it is a Read, which the hook judges. `@` completion no
+  longer inserts contents. The IDE's open-file and selection context is not covered
+  ([setup.md](setup.md)).
 - The file tools are refused inside Claude Code, not by the kernel. A path spelling that both the
   permission rules and the hook miss reads the file. The hook resolves links and spellings, and
   Claude Code's deny rules also match a link's target, so this needs a gap in both.
@@ -184,7 +195,8 @@ What `list` may say about a server, and what to do:
 Know that:
 - phiward must be installed with an install record (`uv tool install`), or the server needs
   `PHIWARD_DEV=1`;
-- `launch` makes a `.claude` folder in the project if there is none;
+- `launch` makes `.claude`, `.vscode` and `.idea` if there are none (on macOS only `.claude`),
+  and keeps the files that other tools run later read-only for the server, as for the tool;
 - the `env` keys of the MCP config reach the server only if `[launch] pass_env` lists them, and
   that setting passes them to every `launch` session, the agent's included;
 - on macOS, when Claude Code stops the server, only the launcher gets the signal: a server that

@@ -70,13 +70,17 @@ def test_project_wiring_never_writes_the_network_limit(tree):
     assert "network" not in w["sandbox"]
 
 
-def test_merge_turns_the_limit_on_and_keeps_the_users_own_domains(tree):
+def test_merge_turns_the_limit_on_and_replaces_the_users_own_domains(tree):
+    # the user's own hosts are not kept: with them, "no domains" would silently allow them
     _add('[network]\nlimit = true\nallowed_domains = ["github.com"]\n')
     w = install.wiring(config.load(str(tree / "repo")))
     have = {"sandbox": {"network": {"strictAllowlist": False, "allowedDomains": ["mine.example"]}}}
     m = install.merge(have, w)
     assert m["sandbox"]["network"]["strictAllowlist"] is True
-    assert m["sandbox"]["network"]["allowedDomains"] == ["mine.example", "github.com"]
+    assert m["sandbox"]["network"]["allowedDomains"] == ["github.com"]
+    assert install._network_notes(have, m) == [
+        "[network] removed mine.example from sandbox.network.allowedDomains (not in [network] "
+        "allowed_domains)"]
     assert install.merge(m, w) == m
 
 
@@ -130,6 +134,7 @@ def test_setup_profile_for_real_data_asks_for_the_network_limit(tree, tmp_path):
                "",                              # no scripts folder
                "",                              # limit the shell's network: the default (yes)
                "github.com", "",                # the hosts
+               "1",                             # subject identifiers: none
                "n",                             # no HPC
                "y", "y", "n", "n"]              # write, approve programs, wire, service
     code, out = _drive_setup(tree, answers, cfg_path)
@@ -142,7 +147,7 @@ def test_setup_profile_for_real_data_asks_for_the_network_limit(tree, tmp_path):
 def test_setup_refuses_a_bad_host(tree, tmp_path):
     cfg_path = tmp_path / "config.toml"
     answers = ["1", str(tree / "phi"), "", "", "",
-               "y", "http://x", "", "n", "y", "y", "n", "n"]
+               "y", "http://x", "", "1", "n", "y", "y", "n", "n"]
     code, out = _drive_setup(tree, answers, cfg_path)
     assert code == 0, out
     assert "Refused" in out

@@ -38,7 +38,8 @@ from dataclasses import dataclass, field
 from typing import BinaryIO, Callable, Dict, Iterator, List, Optional, Sequence, TextIO, Tuple
 
 from phiward import config, confine, paths, safeio
-from phiward.sanitize import Sanitizer, SanitizerError
+from phiward.sanitize import (IDCOL, NO_HEADER_NOTE, WITHHELD, _PLACEHOLDER, Columns,
+                              Sanitizer, SanitizerError, fmt_n, placeholder_note)
 
 MAX_LINE = 64 * 1024  # bytes; a longer output line is withheld, not held in memory
 USAGE = ("usage: phiward run [--write-to DIR]... [--net] [--names-from FILE]... [--table] "
@@ -50,7 +51,16 @@ Options:
                      of the user config, or inside one.
   --net              let CMD use the network (needs `[broker] net = true`)
   --names-from FILE  also mask the names listed in FILE
-  --table            mask the output as a table (numeric cells are kept)
+  --table            read CSV/TSV output by column: cells under an identifier header are
+                     masked whole, numbers in other columns are kept; other lines are masked
+                     as text. One table per output: the header is the first non-empty line,
+                     and it must name an identifier column (else the whole output is text, so
+                     a table without one keeps no numbers). The first line that is not a row
+                     of it (an empty line, another field count, a quote, no number cell,
+                     another header) ends column mode for the rest. A first line that only
+                     looks like a header (prose with commas, data printed without its header
+                     as by `tail -n +2`) is read as one when it holds an identifier word.
+                     Needs `[sanitize] table = true` in the user config.
   --remote HOST      run CMD on an HPC host, through your own ssh setup. HOST must be in
                      `[remote] hosts`, and CMD in `[remote] commands`.
   --                 ends the options; CMD and its arguments follow (required)
@@ -69,7 +79,8 @@ give paths in full. Nothing confines CMD on a remote host; the list of programs 
 there.
 
 Print counts and summaries, not records: masking hides names and identifiers, not other
-content.
+content. The last lines count the placeholders in the lines shown, and say when no identifier
+placeholder was shown in 20 lines or more.
 """
 
 
@@ -223,11 +234,13 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                  socket: str = "", allow_read: Sequence[str] = (),
                  stdin_feed: Optional[Callable[[BinaryIO], None]] = None,
                  quiet: bool = False,
-                 in_scratch: bool = False) -> int:
+                 in_scratch: bool = False,
+                 report_placeholders: bool = False) -> int:
     """Run `cmd` in the gateway profile and write its masked output to `out`. `stdin_feed`, when
     given, writes the command's input from the broker (a push's tar stream) in a thread."""
     os.makedirs(cfg.cache_dir, mode=0o700, exist_ok=True)
     scratch = tempfile.mkdtemp(prefix="run-", dir=cfg.cache_dir)
+    argv: List[str] = []
     try:
         # the gateway writes only its scratch folder and the places granted for this request
         # (`write_to`, or a copy's destination): never a protected root or pattern match as
@@ -287,11 +300,19 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
         assert proc.stdout is not None
         lines = changed = 0
         last, repeats, shown, withheld = None, 0, 0, 0
+        # `--table`: the output read by column, with state for this call only
+        cols = Columns(san, cfg.sanitize_id_columns) if table else None
+        # the placeholders in the lines the agent is shown, counted where a line is written
+        known = san.placeholders() | ({IDCOL} if cols else set())
+        counts: Dict[str, int] = {}
+        content = held = 0
         cap = max(1, cfg.max_output_lines)
         try:
             for raw, too_long in _raw_lines(proc, cancelled):
                 if too_long:
                     # a line too long to hold: the rest of it is dropped, a fixed notice shown
+                    if cols:
+                        cols.reset()  # its cells are unknown: text until an empty line
                     lines += 1
                     changed += 1
                     if shown >= cap:  # the notice counts as a line too
@@ -304,7 +325,7 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                     out.flush()
                     continue
                 text = raw.decode("utf-8", "replace").rstrip("\r\n")
-                clean = san.clean(text, table=table)
+                clean = cols.line(text) if cols else san.clean(text)
                 lines += 1
                 changed += clean != text
                 if quiet:
@@ -329,6 +350,13 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
                 last = clean
                 out.write(clean + "\n")
                 shown += 1
+                content += 1
+                if clean == WITHHELD:
+                    held += 1
+                else:
+                    for tok in _PLACEHOLDER.findall(clean):
+                        if tok in known:
+                            counts[tok] = counts.get(tok, 0) + 1
                 out.flush()
             # no counts in these notes: a count is a number the command chooses
             if repeats and shown < cap:
@@ -358,13 +386,26 @@ def run_confined(cmd: Sequence[str], cfg: config.Config, san: Sanitizer, write_t
         # the agent sees success or failure only: an exit status (0-255) and counts are numbers
         # a command chooses, so code written to leak could encode data in them. The real
         # status goes to the operator's broker log. Cancelled stays 130 (phiward's own).
-        _log(f"{label}: exit {code}, {lines} line(s), {changed} masked")
+        # the placeholder note is counted from the lines written above: the agent could count
+        # them itself, so it adds nothing; it tells a run that masked nothing from clean data
+        kinds = ", ".join(f"{fmt_n(n)} {p}" for p, n in
+                          sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+        _log(f"{label}: exit {code}, {lines} line(s), {changed} masked; "
+             + (f"placeholders shown: {kinds}" if kinds else "no placeholder shown"))
+        if cols and lines and not cols.headers:
+            out.write(NO_HEADER_NOTE + "\n")
+        if report_placeholders:
+            text = placeholder_note(counts, held, content, san.identifier_placeholders()
+                                    | ({IDCOL} if cols else set()))
+            if text:
+                out.write(text + "\n")
         seen = 0 if code == 0 else (130 if cancelled() else 1)
         out.write(f"{label} done: exit={seen}" + ("" if seen != 1 else
                   " (the command failed; its exit status is in the operator's broker log)")
                   + "\n")
         return seen
     finally:
+        confine.release_profile(argv)
         safeio.remove_tree(scratch)
 
 
@@ -456,14 +497,6 @@ def listed_run_path(word: str, program: str, cfg: config.Config, cwd: str,
     return chosen or program
 
 
-def program_listed(word: str, program: str, cfg: config.Config, cwd: str = "",
-                   path_env: Optional[str] = None) -> bool:
-    """Whether the program may run under `[broker] commands` (`listed_run_path`)."""
-    return bool(listed_run_path(word, program, cfg, cwd or os.getcwd(),
-                                os.environ.get("PATH", os.defpath) if path_env is None
-                                else path_env))
-
-
 def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
             cancelled: Callable[[], bool] = _never) -> int:
     """Run a request (in the broker). `env` is the command's environment; the config in force
@@ -550,7 +583,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
         listed = bool(cfg.command_lists)
         code = run_confined(cmd, cfg, san, write_to, a.net, watch, a.table, env=env, cwd=cwd,
                             cancelled=cancelled, deny_read=gateway_hidden(cfg),
-                            in_scratch=listed)
+                            in_scratch=listed, report_placeholders=True)
         if listed and any(w and not w.startswith(("/", "-")) for w in a.cmd[1:]):
             # said whatever exists there (no file name is looked up for the agent)
             out.write("run: with [broker] commands set, a command starts in a private folder "
@@ -604,8 +637,9 @@ _HOST = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 _UNQUOTABLE = re.compile(r"[!\\\x00-\x1f\x7f]")
 
 
-TABLE_OFF = ("--table is off: table mode lets bare numbers through (a record number would "
-             "pass); the operator turns it on with [sanitize] table = true in the user config")
+TABLE_OFF = ("--table is off: it lets numbers through (`phiward run --table` in columns not "
+             "named as identifiers; a record number could pass); the operator turns it on with "
+             "[sanitize] table = true in the user config")
 
 
 NAMES_OUTSIDE = ("a --names-from file must be a plain file inside a protected path of the user "
@@ -764,7 +798,8 @@ def _execute_remote(a: RunArgs, cwd: str, env: Dict[str, str], out: TextIO, cfg:
         # through the shared connection: no credential, no network but its socket
         return run_confined(ssh, cfg, san, [], rt.net, out, a.table, label="remote run",
                             env=env, cwd=cwd, cancelled=cancelled, deny_read=rt.deny_read,
-                            socket=rt.socket, allow_read=rt.allow_read)
+                            socket=rt.socket, allow_read=rt.allow_read,
+                            report_placeholders=True)
     except confine.ConfineError as exc:
         out.write(f"run refused: {exc}\n")
         return 3
@@ -773,8 +808,9 @@ def _execute_remote(a: RunArgs, cwd: str, env: Dict[str, str], out: TextIO, cfg:
         return 3
 
 
-def main(argv: List[str], out: TextIO = sys.stdout) -> int:
+def main(argv: List[str], out: Optional[TextIO] = None) -> int:
     """The client: the request goes to the broker, which runs it outside the agent's sandbox."""
+    out = sys.stdout if out is None else out  # the stdout of the call, not of the import
     if argv[:1] in (["-h"], ["--help"]):
         out.write(HELP)
         return 0

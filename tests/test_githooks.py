@@ -43,7 +43,7 @@ class Env:
     def git(self, *args: str, check: bool = True) -> "subprocess.CompletedProcess[str]":
         return subprocess.run(["git", *args], cwd=str(self.repo), env=self.env(),
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              universal_newlines=True, check=check)
+                              text=True, check=check)
 
     def init(self, repo: Optional[Path] = None) -> None:
         if repo is not None:
@@ -68,8 +68,7 @@ class Env:
     def hook(self, *args: str, stdin: str = "") -> "subprocess.CompletedProcess[str]":
         return subprocess.run([sys.executable, "-m", "phiward", "git-hook", *args],
                               cwd=str(self.repo), env=self.env(), input=stdin,
-                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              universal_newlines=True)
+                              capture_output=True, text=True)
 
 
 @pytest.fixture
@@ -289,6 +288,28 @@ def test_install_refuses_to_clobber_foreign_hook(ctx: Env) -> None:
     r = ctx.hook("install", "--force")
     assert r.returncode == 0
     assert "phiward git-hook pre-push" in foreign.read_text()
+
+
+@pytest.mark.parametrize("args", [("install", "--help"), ("install", "--force", "--help"),
+                                  ("install", "-h", "--force")])
+def test_help_after_install_prints_the_help_and_installs_nothing(ctx: Env, args) -> None:
+    r = ctx.hook(*args)
+    assert r.returncode == 0 and "Commands:" in r.stdout and not r.stderr, out(r)
+    assert not (hooks_dir(ctx) / "pre-commit").exists() and not (hooks_dir(ctx) / "pre-push").exists()
+
+
+def test_a_hook_given_help_still_checks_and_prints_no_help(ctx: Env) -> None:
+    # git runs pre-commit and pre-push; an argument never turns their check off
+    use_msk_pack(ctx)
+    ctx.write("report.txt", "sample %s was run\n" % FAKE_ID)
+    ctx.stage("report.txt")
+    for args in (("pre-commit", "--help"), ("pre-commit", "-h")):
+        r = ctx.hook(*args)
+        assert r.returncode == 1 and "<SAMPLEID>" in out(r) and "Commands:" not in out(r), out(r)
+    protect_main(ctx)
+    for args in (("pre-push", "--help"), ("pre-push", "-h")):
+        r = ctx.hook(*args, stdin=push_line("main"))
+        assert r.returncode == 1 and "Commands:" not in out(r), out(r)
 
 
 def test_install_respects_core_hooks_path(ctx: Env) -> None:
