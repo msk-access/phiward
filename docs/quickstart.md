@@ -174,7 +174,9 @@ protected roots: 1, patterns: 0
 broker: running
 ```
 
-Fix each `WARNING`; each one says how. A `NOTE` is for your information. Before Claude Code is
+Fix each `WARNING`; each one says how. A `NOTE` is for your information. If you kept setup's
+`@genomics` programs, doctor warns about each one the broker does not find (for example
+`samtools`): remove the ones you do not use from `[broker] commands` in your config. Before Claude Code is
 wired, one line gives the next step; `phiward doctor --verbose` lists every check. Then open a
 **new** Claude Code session in that folder and ask the agent to read a file in a protected
 folder: it must be refused. Then ask it to run `phiward run -- wc -l <that file>`: you get a
