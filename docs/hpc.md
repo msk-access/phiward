@@ -215,6 +215,7 @@ remote shell. An argument with a `:` before its first `/` is remote, as rsync re
 local name with a `:` as `./name`. A source that is or holds a credential (`~/.ssh`, your home)
 is refused. A copy between two remotes is refused.
 
+<a id="remote-run"></a>
 ## `phiward run --remote HOST -- CMD`
 
 Your broker runs CMD on the host through your shared connection, and masks what comes back.
