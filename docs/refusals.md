@@ -160,6 +160,7 @@ the file yourself.
 **A program not on the broker's PATH.** The broker keeps the PATH of the terminal that started
 it. Doctor warns about each listed program it does not find there. Start the broker again from a
 terminal where the program works (after `conda activate`), or list the program by its full path.
+A program you do not use (setup's `@genomics` lists several): remove it from `[broker] commands`.
 
 **The config changed.** The broker refuses requests after any change to the config, the pins or
 the listed programs. Restart the broker. Doctor does not compare the config's content with the

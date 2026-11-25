@@ -1121,7 +1121,8 @@ def broker_path_lines(cfg: config.Config, status: Dict[str, Any]) -> List[str]:
     return [f"WARNING: {len(missing)} program(s) of [broker] commands are not on the broker's "
             "PATH, so `phiward run` refuses them: " + ", ".join(f"`{n}`" for n in missing[:10])
             + ". The operator starts the broker again from a terminal where they work (for "
-            "example after `conda activate`), or lists them by their full path."]
+            "example after `conda activate`), or lists them by their full path, or removes the "
+            "ones they do not use from [broker] commands."]
 
 
 CACHE_NOTE = (

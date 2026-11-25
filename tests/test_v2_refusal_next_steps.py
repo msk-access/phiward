@@ -276,6 +276,8 @@ def test_doctor_warns_about_a_listed_program_not_on_the_brokers_path(tree):
     out = _text(doctor.broker_path_lines(cfg, {"path": "/usr/bin:/bin"}))
     assert "WARNING" in out and "fake-tool-not-here" in out and "conda activate" in out, out
     assert "`sh`" not in out, out
+    # a program the user does not use (setup's @genomics lists several): the step is to remove it
+    assert "removes the ones they do not use from [broker] commands" in out, out
     assert doctor.broker_path_lines(cfg, {}) == []
 
 
