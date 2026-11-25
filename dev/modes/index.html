@@ -1296,7 +1296,8 @@ keys your ssh configs name, shell and REPL histories, the Trash, thumbnails, loc
 In Mode A, <code>install</code> puts it in Claude Code's sandbox and permission rules, and the hook refuses
 it; in Mode B the kernel hides it. Gateway commands cannot read it either. One exception, in
 Mode A on Linux with bubblewrap older than 0.5 (RHEL 8): that bubblewrap cannot hide a socket,
-so the Docker and Kerberos KCM sockets stay out of the sandbox's lists, and only Claude Code's
+so the Docker and Kerberos KCM sockets stay out of the sandbox's lists and the permission rules
+(the hook still refuses a file tool that names them), and only Claude Code's
 seccomp filter for new Unix sockets keeps a shell command from them (<code>doctor</code> says so). In Mode A,
 Claude Code's own folder (<code>~/.claude</code>: memory, plans, skills, saved tool output) stays usable;
 only its login files (<code>.credentials.json</code>, <code>~/.claude.json</code>) are hidden.</p>
