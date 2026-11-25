@@ -20,7 +20,8 @@ then in Claude Code, `/plugin marketplace add msk-access/phiward#v0.2.0b1`,
 
 > **Status: v0.2.0b1, a beta.** Tested with the real Claude Code on macOS, in the desktop app
 > and in the terminal, and against a real HPC cluster. On Linux, the maintainer's sandbox check
-> with the real Claude Code has passed in Docker since 2026-11-22. Read
+> with the real Claude Code has passed in Docker since 2026-11-22, and its Mode A on a RHEL 8
+> compute node (the gateway cannot run there: no Landlock). Read
 > [docs/threat-model.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/docs/threat-model.md) before you rely on it for real data.
 
 It is a Python package with no dependencies. It makes no network connection of its own and

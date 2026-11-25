@@ -49,10 +49,13 @@ This page says what is protected, against whom, and where the limits are.
 | HPC through the shared SSH connection | macOS to a real cluster | remote runs, push, pull, refused push of `~/.ssh`, refusal without the connection |
 | A typical session replayed through phiward's own entry points (the session note, the prompt scan, the hook, the gateway, `phiward mcp`), with made-up values planted under a root, in the project and in pasted prompts; Mode A with a full and a default config, and under `phiward launch` ([what it does not cover](#known-leak-test)) | macOS, Linux (launch: Linux) | under the root: refused or masked (only placeholders left; `--table` keeps numbers outside identifier columns); in prompts: your identifiers blocked, entry names, file and read names and positions sent; in the project: sent in Mode A (the session note warns), refused at the start under `phiward launch` (the project scan). A pack file weakened, a pattern edited or a root removed in the config is found |
 | The maintainer's sandbox check with the real Claude Code (`scripts/sandbox-check/linux.sh`) | Linux, in Docker | passed, since 2026-11-22 |
+| The same check (`scripts/sandbox-check/check.sh`) | macOS | every line passed except Mode B's wrapped MCP server, which cannot start in the check's own home folder; with the account's own home folder, in a macOS virtual machine, it started and could not read the protected file (2026-11-25) |
+| The same check, Mode A only | Linux: a RHEL 8 compute node (kernel 4.18, bubblewrap 0.4.0, x86_64) | every Mode A line passed: the protected file hidden, writes to phiward's folder and the settings refused, a session with permission prompts off refused, new unix sockets refused; the gateway refused (no Landlock), as documented (2026-11-25) |
 | The full test suite (over 1,000 tests) | macOS; Linux (bubblewrap) | passes |
 
 - **Not tested:**
-  - the real Claude Code on a real Linux machine (it has passed only in Docker);
+  - the full check, the gateway included, on a real Linux machine with Landlock (it has passed
+    only in Docker);
   - `phiward launch` driven from the app with Remote Control;
   - a published MCP server under `launch` on macOS (on Linux it was);
   - a protected folder on a mounted HPC volume;
@@ -779,7 +782,10 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   engine (`@anthropic-ai/sandbox-runtime` 0.0.81) passed on a RHEL 8 HPC login node with bubblewrap
   0.4.0, for one user without admin rights. It showed: a root under `/scratch` hidden by its real
   path, through a home link and by a wildcard; settings files and startup files not writable; no
-  direct network. Claude Code needs `bwrap` and `socat` there (`doctor` checks them).
+  direct network. Claude Code needs `bwrap` and `socat` there (`doctor` checks them). The release
+  check's Mode A, with the real Claude Code, passed on a RHEL 8 compute node (2026-11-25); there
+  the Docker and Kerberos KCM sockets rest on Claude Code's filter for new unix sockets
+  ([hpc.md](hpc.md#claude-code-on-the-login-node)).
 - <a id="known-unconfined-shell"></a>**A shell that no kernel confines** (Claude Code's sandbox off or not there): the hook refuses its
   commands, except a phiward command written whole (the gateway, `doctor`, `check`). This covers
   GitHub Copilot, which runs the hook without a sandbox. With `[shell] best_effort` (user config
@@ -999,8 +1005,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
   session) are harder to forge, but a process the session leaves running could still reach
   them before the judge reads them.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
-  `use_shared_connection = false`, RHEL 8, NFS home folders, sssd or Kerberos; and the first
-  check after your own install is yours.
+  `use_shared_connection = false`, NFS home folders, or Kerberos tickets (on RHEL 8 it ran Mode A
+  only); and the first check after your own install is yours.
 - <a id="known-spool-folder"></a>**The spool folder** is writable by the agent: it can fill it or move it, which stops the gateway
   (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
   run a command through a shell.
