@@ -179,9 +179,12 @@ Then push `main`, `develop` and the tag.
    is stopped, into the judge's folder: next to the home folder, outside the folders the check
    gives the session. The check does not prove that the sandbox cannot write there; a process
    left running in a session of its own could, before the judge reads it.
-   On Linux too the wrapped MCP server must start in Mode B: its launch inside the session runs
-   it directly (the session's seccomp fingerprint). A server that does not start leaves the mode
-   INCONCLUSIVE, as on macOS.
+   On Linux the wrapped MCP server must start in Mode B: its launch inside the session runs it
+   directly (the session's seccomp fingerprint). A server that does not start leaves the mode
+   INCONCLUSIVE. On macOS, in Mode B, it cannot start in this check: a launch inside a session
+   looks for its proof under the account's home folder, never HOME, and the check runs with a
+   home folder of its own. Mode B there is INCONCLUSIVE with only that line; every other line
+   must pass. The tests cover that path on GitHub's macOS runners (`test_v2_nested_launch`).
    What the session writes in its project folder (`results.txt`, `server.out`) a model could
    forge, line by line. The checks made outside the session are harder to forge: a probe's file
    on the host, the settings file's hash, the marker or the token in the stream, and the
