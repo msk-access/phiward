@@ -34,7 +34,7 @@ AppArmor can block bubblewrap: see [setup.md](setup.md#1-requirements).
 
 **On an HPC node with RHEL 8** (`uname -r` starts with `4.18`), the gateway cannot run: that
 kernel has no Landlock. Choose before you start: run the agent on your laptop and reach the
-cluster with `phiward run --remote` ([hpc.md](hpc.md#phiward-run---remote-host----cmd)), or run
+cluster with `phiward run --remote` ([hpc.md](hpc.md#phiward-run-remote-host-cmd)), or run
 Claude Code on the node with the hook and its sandbox only, no gateway
 ([hpc.md](hpc.md#claude-code-on-the-login-node)).
 
