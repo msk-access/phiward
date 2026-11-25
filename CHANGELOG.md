@@ -440,7 +440,8 @@ The release notes have the same steps as a checklist:
   Claude Code's sandbox cannot hide a socket by path there. On such a node only (Linux x86_64
   and aarch64), phiward now leaves the Docker and KCM sockets out of the sandbox's lists, and
   Claude Code's seccomp filter for new Unix sockets keeps a shell command from them; doctor
-  says so in a NOTE, and the file tools' permission rules keep them. Elsewhere nothing changes.
+  says so in a NOTE. They leave the Read and Edit deny rules too, which Claude Code merges into
+  its sandbox; phiward's hook still refuses a file tool that names them. Elsewhere nothing changes.
   The sandbox check has a new probe for that filter (`unix-socket`). Run
   `(cd ~ && phiward install claude --user --write)` again on the node.
 - After an upgrade, `doctor` said "broker: running" for a broker that still ran the old code.

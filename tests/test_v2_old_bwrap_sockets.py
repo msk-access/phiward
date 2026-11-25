@@ -58,8 +58,13 @@ def test_the_sockets_leave_the_sandbox_lists_only_on_old_bubblewrap_with_the_fil
     w = install.wiring(config.load(str(tree / "repo")))
     listed = [e for e in _sandbox_entries(w) if "kcm-socket" in e or "docker.sock" in e]
     assert bool(listed) == kept, listed
-    # the file tools refuse them everywhere
-    assert any("kcm-socket" in r for r in w["permissions"]["deny"]), w["permissions"]["deny"]
+    # Claude Code merges the Read and Edit deny rules into its sandbox too ("Paths and domains
+    # from both sandbox settings and permission rules are merged into the final sandbox
+    # configuration", code.claude.com/docs/en/sandboxing), so the whole file must leave them out
+    # (the HPC rerun of 2026-11-25 failed on the rules); phiward's hook still refuses a file tool
+    # that names them
+    text = json.dumps(w)
+    assert ("kcm-socket" in text or "docker.sock" in text) == kept, text
     # the folders of the IPC list stay: bubblewrap mounts over a folder
     assert any(e.endswith("/run/munge") for e in _sandbox_entries(w)), _sandbox_entries(w)
 
@@ -131,3 +136,18 @@ def test_a_bubblewrap_that_hangs_or_is_missing_keeps_the_sockets(monkeypatch, tm
     assert hidden._bwrap_version() is None
     monkeypatch.setattr(hidden, "_platform", lambda: ("linux", "x86_64"))
     assert hidden.sockets_left_out() is False
+
+
+def test_the_hook_still_refuses_a_file_tool_on_a_left_out_socket(tree, monkeypatch):
+    from phiward.core import DENY, FILE_READ
+    _node(monkeypatch, "linux", "x86_64", (0, 4))
+    d = decide(Action(FILE_READ, str(tree / "repo"), paths=["/run/.heim_org.h5l.kcm-socket"],
+                      tool="Read"))
+    assert d.verdict == DENY, d.reason
+
+
+def test_the_local_file_leaves_the_sockets_out_too(tree, monkeypatch):
+    _node(monkeypatch, "linux", "x86_64", (0, 4))
+    w = install.local_wiring(config.load(str(tree / "repo")), str(tree / "repo"))
+    text = json.dumps(w)
+    assert "kcm-socket" not in text and "docker.sock" not in text, text
