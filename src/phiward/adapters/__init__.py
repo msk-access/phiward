@@ -27,7 +27,7 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
         from phiward import claude_settings
         home = pathid.home()
         from phiward import hidden
-        secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+        secret = [h for h in hidden.for_sandbox(hidden.paths(None, cfg, session=True)) if os.path.lexists(h)]
         # the named project must hold the call (otherwise the settings Claude Code reads may be
         # in a folder that cannot be found from it), and it and every project folder in it
         # above the call must confine it (claude_settings.confining_folders)

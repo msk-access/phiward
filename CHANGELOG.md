@@ -435,6 +435,14 @@ The release notes have the same steps as a checklist:
 
 ### Fixed
 
+- **Mode A on Linux with bubblewrap before 0.5 (RHEL 8):** every Bash call failed where the
+  Kerberos KCM socket exists ("bwrap: Can't create file at /run/.heim_org.h5l.kcm-socket"):
+  Claude Code's sandbox cannot hide a socket by path there. On such a node only (Linux x86_64
+  and aarch64), phiward now leaves the Docker and KCM sockets out of the sandbox's lists, and
+  Claude Code's seccomp filter for new Unix sockets keeps a shell command from them; doctor
+  says so in a NOTE, and the file tools' permission rules keep them. Elsewhere nothing changes.
+  The sandbox check has a new probe for that filter (`unix-socket`). Run
+  `(cd ~ && phiward install claude --user --write)` again on the node.
 - After an upgrade, `doctor` said "broker: running" for a broker that still ran the old code.
   The broker now writes its phiward version into its status file. `doctor` warns when it
   differs from its own or is missing (an older broker writes none; a status that cannot be

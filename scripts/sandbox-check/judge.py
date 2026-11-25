@@ -21,6 +21,9 @@ fixed lists; no text of the output is kept or printed). The Read tool's refusal 
 phiward's, as a hidden file (Linux), or in Mode A as Claude Code's own permission deny ("File is
 in a directory that is denied by your permission settings."), which `install` writes for each
 protected root, when the marker (the file's content) is in no line of the stream.
+unix-socket (Linux, required in Mode A): a new unix socket must be refused with EPERM, by Claude
+Code's seccomp filter; a connect that got as far as "no such file" is FAIL (a note for the
+stand-in), any other line INCONCLUSIVE.
 parent-environ: the probe reads the environ of every process in /proc but its own, and records
 how many it could read or was refused, how many hold a credential variable's name (the list in
 token-names.txt), how many of those are the session's own ancestors, and whether a step of the
@@ -319,6 +322,21 @@ def judge(results, stream_lines, server, marker, created, facts):
             ok = line == "-" or (len(words) <= 30 and all(LINE.fullmatch(w) for w in words))
             report.append("note gateway-run, its first line: " +
                           ("(none)" if line == "-" else line if ok else "unknown"))
+
+    # Linux: a new unix socket must be refused by Claude Code's seccomp filter (EPERM). Mode A
+    # rests on it for the sockets bubblewrap before 0.5 cannot hide (hidden.sockets_left_out)
+    got = lines.get("unix-socket")
+    if got == "DENIED not-permitted":
+        report.append("ok   unix-socket: a new unix socket was refused (Claude Code's filter)")
+    elif got is not None and platform == "linux" and mode == "A" and got in (
+            "OK", "DENIED no-such"):
+        line = "unix-socket: a shell command could make a unix socket (no seccomp filter)"
+        if facts.get("stub") == "yes":
+            report.append(f"note {line} (the stand-in, with no sandbox of its own)")
+        else:
+            fails.append(line)
+    elif got is not None and mode == "A":
+        unsure.append(f"unix-socket: {got}")
 
     got = lines.get("control-commit")
     if got is not None and got != "OK":

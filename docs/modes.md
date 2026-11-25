@@ -33,7 +33,10 @@ In both, work on protected data goes through the gateway.
 tools' and the Claude app's logins, browser profiles), Kerberos ticket caches and keytabs, SSH
 keys your ssh configs name, shell and REPL histories, the Trash, thumbnails, local IPC sockets.
 In Mode A, `install` puts it in Claude Code's sandbox and permission rules, and the hook refuses
-it; in Mode B the kernel hides it. Gateway commands cannot read it either. In Mode A,
+it; in Mode B the kernel hides it. Gateway commands cannot read it either. One exception, in
+Mode A on Linux with bubblewrap older than 0.5 (RHEL 8): that bubblewrap cannot hide a socket,
+so the Docker and Kerberos KCM sockets stay out of the sandbox's lists, and only Claude Code's
+seccomp filter for new Unix sockets keeps a shell command from them (`doctor` says so). In Mode A,
 Claude Code's own folder (`~/.claude`: memory, plans, skills, saved tool output) stays usable;
 only its login files (`.credentials.json`, `~/.claude.json`) are hidden.
 
