@@ -795,6 +795,18 @@ def test_phiwards_own_wiring_and_a_hooks_folder_give_no_warning(tree):
     assert len(lines) == 1 and "~/.claude/hooks/" in lines[0], lines
 
 
+def test_phiwards_own_exec_form_hook_is_its_own_where_a_session_can_write_the_package(
+        tree, monkeypatch):
+    # install --user writes {"command": .../clean-exec.sh, "args": [python, -I, ...]}: doctor
+    # must know it by the whole entry, not the command alone, also when the package sits where
+    # a session can write (a home folder under the temp folder, as quickstart-check/mac.sh makes)
+    from phiward import claude_settings, config, doctor, install
+    repo, home = tree / "repo", tree / "home"
+    _settings(home / ".claude" / "settings.json", install.wiring(config.load(str(repo))))
+    monkeypatch.setattr(claude_settings, "agent_writable", lambda project, home: ["/"])
+    assert doctor.settings_script_lines(str(repo), str(home)) == []
+
+
 def test_a_permission_request_hook_is_a_note(tree):
     from phiward import doctor
     _settings(tree / "home" / ".claude" / "settings.json", {"hooks": {"PermissionRequest": [

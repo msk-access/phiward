@@ -422,22 +422,23 @@ def path_risks(project: str, home: str, path: str) -> List[Tuple[str, str, int]]
 _COMMAND_KEYS = ("apiKeyHelper", "awsAuthRefresh", "awsCredentialExport", "otelHeadersHelper")
 
 
-def _settings_commands(data: Dict[str, Any]) -> List[Tuple[str, str]]:
-    """(where, command) for each command a settings file makes Claude Code run."""
-    out: List[Tuple[str, str]] = []
+def _settings_commands(data: Dict[str, Any]) -> List[Tuple[str, str, Dict[str, Any]]]:
+    """(where, command, entry) for each command a settings file makes Claude Code run; entry is
+    the whole hook entry (with its `args`), or {} for the keys that are not hooks."""
+    out: List[Tuple[str, str, Dict[str, Any]]] = []
     hooks = data.get("hooks") if isinstance(data.get("hooks"), dict) else {}
     for event, groups in hooks.items():
         for g in groups if isinstance(groups, list) else []:
             for h in (g.get("hooks") if isinstance(g, dict) else None) or []:
                 if isinstance(h, dict) and isinstance(h.get("command"), str):
-                    out.append((f"a {event} hook", h["command"]))
+                    out.append((f"a {event} hook", h["command"], h))
     for key in ("statusLine", "fileSuggestion"):
         v = data.get(key)
         if isinstance(v, dict) and isinstance(v.get("command"), str):
-            out.append((key, v["command"]))
+            out.append((key, v["command"], {}))
     for key in _COMMAND_KEYS:
         if isinstance(data.get(key), str):
-            out.append((key, data[key]))
+            out.append((key, data[key], {}))
     return out
 
 
@@ -542,9 +543,10 @@ def settings_script_lines(project: str, home: str) -> List[str]:
             out.append(f"  NOTE: the {level} settings ({path}) have a PermissionRequest hook: it "
                        "can answer the prompts phiward's hook asks (code files, writes outside "
                        "the sandbox's folders) without you; know what it allows")
-        for where, command in _settings_commands(data):
-            if hook_form({"type": "command", "command": command}):
-                continue  # phiward's own
+        for where, command, entry in _settings_commands(data):
+            if entry and (hook_form(entry) or
+                          any(install.hook_python(entry, w) for w in install.HOOK_WHATS)):
+                continue  # phiward's own (its guard, session note and prompt scan)
             for f in _script_files(command, project, home):
                 real = os.path.realpath(f)
                 key = pathid.fold(real)
