@@ -1666,8 +1666,10 @@ login node (kernel 4.18, bubblewrap 0.4.0) passed all 21 tests:</p>
 <li>the direct network was blocked.</li>
 </ul>
 <p>A home folder on NFS was not part of that probe. The release check with the real Claude Code
-(<code>scripts/sandbox-check/check.sh</code>, <a href="../releasing/">releasing.md</a>) runs on Linux too; it has not
-been run on the cluster yet. To run it there, as an interactive job:</p>
+(<code>scripts/sandbox-check/check.sh</code>, <a href="../releasing/">releasing.md</a>) runs on Linux too. On a RHEL 8
+compute node (2026-11-25) every Mode A line passed; the gateway refused there (no Landlock), as
+documented, so the check's verdict was INCONCLUSIVE for the gateway and for doctor's Landlock
+warning. To run it there, as an interactive job:</p>
 <ol>
 <li>Make a folder for it below your home folder, <code>~/phiward-sbx/run</code> (SBX_BASE), and one for
    socat, <code>~/phiward-sbx/tools/bin</code> (SBX_TOOLS), with socat built into it and nothing else.
@@ -1683,11 +1685,20 @@ been run on the cluster yet. To run it there, as an interactive job:</p>
 <li>Build the wheel on your laptop, from a clean checkout of the commit to test:
    <code>uv build --wheel --out-dir dist .</code>, then <code>shasum -a 256 dist/phiward-*.whl</code> (or
    <code>sha256sum</code>). Copy the wheel to <code>~/phiward-sbx/wheel/</code> on the cluster (<code>chmod go-w</code> on it and
-   its folder) and keep the sha256. Then run
-   <code>srun --pty --job-name auto-sbx-check env SBX_BASE=$HOME/phiward-sbx/run
+   its folder) and keep the sha256. Copy the source of the same commit too, for example
+   <code>git archive COMMIT | ssh HOST 'mkdir -p ~/phiward-sbx/src &amp;&amp; tar -x -C ~/phiward-sbx/src'</code>:
+   that copy has no <code>.git</code>, so the check needs <code>SBX_SRC</code>. The <code>uv</code> and <code>claude</code> on the PATH must
+   pass phiward's rule (no other account can write them or a folder above them): on many
+   clusters <code>~/.local/bin</code> and conda are group-writable, so install both into a folder such as
+   <code>~/phiward-sbx/bin</code> and put it first. Give uv's Python as the argument when it is not in
+   <code>~/.local/share/uv/python</code>. On a node without Landlock (RHEL 8), set <code>MODES=A</code>. Then, from
+   <code>~/phiward-sbx/src</code>, run
+   <code>srun --pty --job-name auto-sbx-check env PATH=$HOME/phiward-sbx/bin:/usr/bin:/bin MODES=A
+   SBX_SRC=$HOME/phiward-sbx/src SBX_BASE=$HOME/phiward-sbx/run
    SBX_TOOLS=$HOME/phiward-sbx/tools/bin SBX_WHEEL=$HOME/phiward-sbx/wheel/phiward-VERSION-py3-none-any.whl
-   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh</code>, with <code>sh</code>, not <code>bash</code>, and
-   paste the token when it asks. It takes none from the environment. With the wheel, the node
+   SBX_WHEEL_SHA256=SHA256 sh scripts/sandbox-check/check.sh PYTHON</code>, with <code>sh</code>, not <code>bash</code>,
+   and your site's partition options, and paste the token when it asks (<code>--pty</code> gives it the
+   terminal it needs). It takes none from the environment. With the wheel, the node
    needs no package index, only <code>api.anthropic.com</code>. The check starts itself again under an
    empty environment, which drops proxy and CA variables on purpose (<code>HTTPS_PROXY</code>, <code>NO_PROXY</code>,
    <code>SSL_CERT_FILE</code>, <code>REQUESTS_CA_BUNDLE</code> and the like), so run it on a node that reaches

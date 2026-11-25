@@ -1351,7 +1351,9 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    (see docs/hpc.md). uv's Python is found in
    <code>~/.local/share/uv/python</code>; give its path as an argument if yours is elsewhere.
    - <code>sh scripts/sandbox-check/check.sh</code> on macOS, and on a real Linux machine with
-     <code>SBX_BASE</code> set (Landlock ABI 2 or newer for the gateway). SBX_BASE holds the check's
+     <code>SBX_BASE</code> set (Landlock ABI 2 or newer for the gateway). On a node without Landlock
+     (RHEL 8), run it with <code>MODES=A</code>: the gateway refuses there, and the check reports
+     INCONCLUSIVE for it and for doctor's Landlock warning; every other Mode A line must pass. SBX_BASE holds the check's
      folders; it may not be under /tmp or the temp folder, nor your home folder itself, nor
      anywhere the settings phiward installs let the session write (the check refuses). A
      folder below your home folder is fine. The check refuses SBX_BASE when it or any folder

@@ -1276,12 +1276,12 @@ tested yet. It lists only results that passed. Each line names its source; the t
 <a href="../threat-model/">threat model</a> before you rely on phiward for real data.</p>
 <h2 id="read-this-first">Read this first<a class="headerlink" href="#read-this-first" title="Permanent link">&para;</a></h2>
 <ul>
-<li><strong>On Linux, the real Claude Code has passed only in Docker.</strong> The maintainer's sandbox check
-  has passed in Docker since 2026-11-22. No run on a real Linux machine has passed yet
-  (<a href="../threat-model/#for-reviewers-the-summary">threat model</a>).</li>
+<li><strong>On Linux, the full check has passed only in Docker.</strong> The maintainer's sandbox check has
+  passed in Docker since 2026-11-22. On a real Linux machine, only Mode A has passed: on a RHEL 8
+  compute node on 2026-11-25 (<a href="../threat-model/#for-reviewers-the-summary">threat model</a>).</li>
 <li><strong>On RHEL 8 (kernel 4.18) the gateway cannot run.</strong> That kernel has no Landlock, and
-  <code>phiward run</code> refuses to run without it. The hook and Claude Code's sandbox are meant to work
-  there, but no run on RHEL 8 has passed yet (<a href="../hpc/">hpc.md</a>).</li>
+  <code>phiward run</code> refuses to run without it. The hook and Claude Code's sandbox work there: every
+  Mode A line of the release check passed on such a node (<a href="../hpc/">hpc.md</a>).</li>
 </ul>
 <h2 id="what-passed">What passed<a class="headerlink" href="#what-passed" title="Permanent link">&para;</a></h2>
 <table>
@@ -1294,11 +1294,11 @@ tested yet. It lists only results that passed. Each line names its source; the t
 <tbody>
 <tr>
 <td>macOS</td>
-<td>Mode A: the real Claude Code desktop app, wired by <code>install claude</code>: reads of protected data and credentials refused, <code>ssh</code> to HPC failed, normal work unaffected. Mode A with the plugin only, in the desktop app: reads refused by the hook (no sandbox or permission rules without <code>install</code>). Mode B: the real Claude Code under <code>phiward launch</code>. A small stdio MCP server wrapped in <code>phiward launch</code>. HPC through the shared SSH connection, against a real cluster. The full test suite.</td>
+<td>The maintainer's sandbox check with the real Claude Code (2026-11-25): every line passed except Mode B's wrapped MCP server, which cannot start in the check's own home folder; with the account's own home folder, in a macOS virtual machine, it started and could not read the protected file. Mode A: the real Claude Code desktop app, wired by <code>install claude</code>: reads of protected data and credentials refused, <code>ssh</code> to HPC failed, normal work unaffected. Mode A with the plugin only, in the desktop app: reads refused by the hook (no sandbox or permission rules without <code>install</code>). Mode B: the real Claude Code under <code>phiward launch</code>. A small stdio MCP server wrapped in <code>phiward launch</code>. HPC through the shared SSH connection, against a real cluster. The full test suite.</td>
 </tr>
 <tr>
 <td>Linux</td>
-<td>The maintainer's sandbox check with the real Claude Code, in Docker (since 2026-11-22). The full test suite, with bubblewrap. The published <code>@modelcontextprotocol/server-filesystem</code> 2.3.0, wrapped in <code>phiward launch</code>: it read ordinary files and could neither read nor list a protected folder.</td>
+<td>The maintainer's sandbox check with the real Claude Code, in Docker (since 2026-11-22). Mode A of the same check on a RHEL 8 compute node (kernel 4.18, bubblewrap 0.4.0, x86_64; 2026-11-25): the protected file hidden, writes to phiward's folder and the settings refused, a session with permission prompts off refused, new unix sockets refused; the gateway refused there (no Landlock), as documented. The full test suite, with bubblewrap. The published <code>@modelcontextprotocol/server-filesystem</code> 2.3.0, wrapped in <code>phiward launch</code>: it read ordinary files and could neither read nor list a protected folder.</td>
 </tr>
 </tbody>
 </table>
@@ -1306,7 +1306,8 @@ tested yet. It lists only results that passed. Each line names its source; the t
 <h2 id="not-tested-yet">Not tested yet<a class="headerlink" href="#not-tested-yet" title="Permanent link">&para;</a></h2>
 <p>From the threat model, "Not tested":</p>
 <ul>
-<li>the real Claude Code on a real Linux machine (it has passed only in Docker);</li>
+<li>the full check, the gateway included, on a real Linux machine with Landlock (it has passed only
+  in Docker);</li>
 <li><code>phiward launch</code> driven from the app with Remote Control;</li>
 <li>a published MCP server under <code>launch</code> on macOS (on Linux it was);</li>
 <li>a protected folder on a mounted HPC volume;</li>
@@ -1318,8 +1319,8 @@ tested yet. It lists only results that passed. Each line names its source; the t
 <ul>
 <li><strong>Claude Code's real sandbox</strong> is not tested by phiward's test suite: the suite never runs the
   real <code>claude</code>. The release check does, run by the operator. It does not cover MCP tools,
-  WebFetch, IDEs on Linux, remote with <code>use_shared_connection = false</code>, RHEL 8, NFS home
-  folders, sssd or Kerberos; and the first check after your own install is yours
+  WebFetch, IDEs on Linux, remote with <code>use_shared_connection = false</code>, NFS home folders, or
+  Kerberos tickets (on RHEL 8 it ran Mode A only); and the first check after your own install is yours
   (<a href="../threat-model/#known-limits">threat model, known limits</a>).</li>
 <li><strong>A plugin carried over into <code>launch</code></strong> (such as ECC) is not tested yet
   (<a href="../plugins/">plugins.md</a>).</li>

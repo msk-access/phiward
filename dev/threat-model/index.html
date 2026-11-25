@@ -1705,6 +1705,16 @@
 <td>passed, since 2026-11-22</td>
 </tr>
 <tr>
+<td>The same check (<code>scripts/sandbox-check/check.sh</code>)</td>
+<td>macOS</td>
+<td>every line passed except Mode B's wrapped MCP server, which cannot start in the check's own home folder; with the account's own home folder, in a macOS virtual machine, it started and could not read the protected file (2026-11-25)</td>
+</tr>
+<tr>
+<td>The same check, Mode A only</td>
+<td>Linux: a RHEL 8 compute node (kernel 4.18, bubblewrap 0.4.0, x86_64)</td>
+<td>every Mode A line passed: the protected file hidden, writes to phiward's folder and the settings refused, a session with permission prompts off refused, new unix sockets refused; the gateway refused (no Landlock), as documented (2026-11-25)</td>
+</tr>
+<tr>
 <td>The full test suite (over 1,000 tests)</td>
 <td>macOS; Linux (bubblewrap)</td>
 <td>passes</td>
@@ -1713,7 +1723,8 @@
 </table>
 <ul>
 <li><strong>Not tested:</strong></li>
-<li>the real Claude Code on a real Linux machine (it has passed only in Docker);</li>
+<li>the full check, the gateway included, on a real Linux machine with Landlock (it has passed
+    only in Docker);</li>
 <li><code>phiward launch</code> driven from the app with Remote Control;</li>
 <li>a published MCP server under <code>launch</code> on macOS (on Linux it was);</li>
 <li>a protected folder on a mounted HPC volume;</li>
@@ -2450,7 +2461,10 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
   engine (<code>@anthropic-ai/sandbox-runtime</code> 0.0.81) passed on a RHEL 8 HPC login node with bubblewrap
   0.4.0, for one user without admin rights. It showed: a root under <code>/scratch</code> hidden by its real
   path, through a home link and by a wildcard; settings files and startup files not writable; no
-  direct network. Claude Code needs <code>bwrap</code> and <code>socat</code> there (<code>doctor</code> checks them).</li>
+  direct network. Claude Code needs <code>bwrap</code> and <code>socat</code> there (<code>doctor</code> checks them). The release
+  check's Mode A, with the real Claude Code, passed on a RHEL 8 compute node (2026-11-25); there
+  the Docker and Kerberos KCM sockets rest on Claude Code's filter for new unix sockets
+  (<a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>).</li>
 <li><a id="known-unconfined-shell"></a><strong>A shell that no kernel confines</strong> (Claude Code's sandbox off or not there): the hook refuses its
   commands, except a phiward command written whole (the gateway, <code>doctor</code>, <code>check</code>). This covers
   GitHub Copilot, which runs the hook without a sandbox. With <code>[shell] best_effort</code> (user config
@@ -2672,8 +2686,8 @@ from elsewhere (for example Homebrew's OpenSSL).
   session) are harder to forge, but a process the session leaves running could still reach
   them before the judge reads them.
   It does not cover MCP tools, WebFetch, IDEs on Linux, remote with
-  <code>use_shared_connection = false</code>, RHEL 8, NFS home folders, sssd or Kerberos; and the first
-  check after your own install is yours.
+  <code>use_shared_connection = false</code>, NFS home folders, or Kerberos tickets (on RHEL 8 it ran Mode A
+  only); and the first check after your own install is yours.
 - <a id="known-spool-folder"></a><strong>The spool folder</strong> is writable by the agent: it can fill it or move it, which stops the gateway
   (the broker stops when its folder is moved). It cannot make the broker write outside the folder or
   run a command through a shell.
