@@ -1447,6 +1447,11 @@ people. The stronger <strong>Mode B</strong>
 sandbox need them), with your package manager, for example <code>sudo apt install bubblewrap socat</code>.
 Without admin rights, see <a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>. On Ubuntu 24.04,
 AppArmor can block bubblewrap: see <a href="../setup/#1-requirements">setup.md</a>.</p>
+<p><strong>On an HPC node with RHEL 8</strong> (<code>uname -r</code> starts with <code>4.18</code>), the gateway cannot run: that
+kernel has no Landlock. Choose before you start: run the agent on your laptop and reach the
+cluster with <code>phiward run --remote</code> (<a href="../hpc/#remote-run">hpc.md</a>), or run
+Claude Code on the node with the hook and its sandbox only, no gateway
+(<a href="../hpc/#claude-code-on-the-login-node">hpc.md</a>).</p>
 <p>In Terminal:</p>
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-LsSf<span class="w"> </span>https://astral.sh/uv/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
 </code></pre></div>
@@ -1459,6 +1464,10 @@ Homebrew, <code>brew install uv</code> does the same. The second gives phiward a
 uv downloads once (not Xcode's, conda's or the system's, which another account or tool can
 change). The last command puts <code>~/.local/bin</code>, where <code>phiward</code>
 now is, on your <code>PATH</code>.</p>
+<p><strong>On a cluster, or with conda</strong>, make sure no other account can write the programs phiward
+trusts, before step 2. On many clusters new folders are group-writable (umask 002), and phiward
+refuses a program in such a folder. Run <code>chmod go-w ~/.local ~/.local/bin</code>. Use the <code>uv</code> from
+the installer above, not a conda one: <code>command -v uv</code> shows which one runs.</p>
 <p>Then <strong>open a new Terminal</strong>, and <strong>quit and reopen the Claude Code desktop app</strong> (Cmd-Q on
 macOS), so that both find <code>phiward</code>. In the new Terminal, <code>phiward --version</code> prints the version.</p>
 <p>Do not install phiward into conda or another shared Python environment: phiward protects its own

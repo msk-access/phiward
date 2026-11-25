@@ -1575,6 +1575,7 @@ is removed, and the files that arrived whole before it stay.</p>
 remote shell. An argument with a <code>:</code> before its first <code>/</code> is remote, as rsync reads it: write a
 local name with a <code>:</code> as <code>./name</code>. A source that is or holds a credential (<code>~/.ssh</code>, your home)
 is refused. A copy between two remotes is refused.</p>
+<p><a id="remote-run"></a></p>
 <h2 id="phiward-run-remote-host-cmd"><code>phiward run --remote HOST -- CMD</code><a class="headerlink" href="#phiward-run-remote-host-cmd" title="Permanent link">&para;</a></h2>
 <p>Your broker runs CMD on the host through your shared connection, and masks what comes back.</p>
 <div class="highlight"><pre><span></span><code><span class="k">[remote]</span>
@@ -1615,6 +1616,27 @@ is refused. A copy between two remotes is refused.</p>
 Its sandbox then confines the shell there (Mode A), with phiward's hook. The gateway works there
 only on a kernel with Landlock (see below). Check first that your site allows interactive tools on
 its login nodes.</p>
+<table>
+<thead>
+<tr>
+<th>Your node (<code>uname -r</code>, <code>bwrap --version</code>)</th>
+<th>The hook and Claude Code's sandbox (Mode A)</th>
+<th>The gateway (<code>phiward run</code>, <code>copy</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Linux 5.19 or newer, bubblewrap 0.4 or newer</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr>
+<td>RHEL 8: kernel 4.18, bubblewrap 0.4.0</td>
+<td>yes</td>
+<td>no: run the agent on your laptop and use <code>phiward run --remote</code></td>
+</tr>
+</tbody>
+</table>
 <p>What the node needs:</p>
 <ul>
 <li><strong>Landlock ABI 2 or newer</strong> in the kernel (Linux 5.19 or newer) for the gateway: <code>phiward run</code>

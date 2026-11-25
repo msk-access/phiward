@@ -1307,6 +1307,15 @@ the agent useful for real research work.</p>
 </ol>
 <h2 id="next-020-trust-and-evidence">Next: 0.2.0, trust and evidence<a class="headerlink" href="#next-020-trust-and-evidence" title="Permanent link">&para;</a></h2>
 <ul>
+<li><strong>Easy to adopt:</strong></li>
+<li>setup and <code>phiward doctor</code> say first what this machine can run (Mode A, the gateway,
+    Mode B), and give one step for each part that cannot;</li>
+<li>setup keeps only the programs it finds, and offers to make the folders of <code>uv</code>, <code>claude</code>
+    and phiward writable by you alone;</li>
+<li>with the plugin and no config, a session says to type <code>/phiward:setup</code>;</li>
+<li><code>phiward doctor --json</code>, so an agent can read the state and the next step (the
+    configuration report below uses the same format);</li>
+<li>doctor warns when the plugin and the package have different versions.</li>
 <li><strong>A full review of the threat model.</strong> Before 0.2.0, the threat model is reviewed end to end, and
   each limit is stated with what you can do about it.</li>
 <li><strong>A local decision log, on by default.</strong> It records each refusal and each gateway run: the date,
@@ -1338,8 +1347,9 @@ the agent useful for real research work.</p>
 <li>the hook-only gaps that have small fixes;</li>
 <li><code>MODULEPATH</code> and <code>PYTHONPATH</code> under launch;</li>
 <li>a warning for Claude Code versions that do not protect project settings themselves.</li>
-<li><strong>Real machines:</strong> the full check on a recent Linux kernel, the hook on RHEL 8 clusters, and local
-  macOS checks.</li>
+<li><strong>Real machines:</strong> the full check on a recent Linux kernel; Mode A on RHEL 8 clusters, with the
+  result in the release notes; and the macOS check in a virtual machine, with the account's own
+  home folder.</li>
 </ul>
 <h2 id="then-03-research-workflows">Then: 0.3, research workflows<a class="headerlink" href="#then-03-research-workflows" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1356,7 +1366,8 @@ the agent useful for real research work.</p>
 <li>flowcell and instrument IDs;</li>
 <li>a measure of recall on a made-up corpus.</li>
 <li><strong>Lab rollout:</strong> one config for the whole lab, from a managed place, that can only tighten
-  protection.</li>
+  protection; a page for organizations (managed Claude Code settings, a plugin turned on for
+  everyone); a Linux dev container for a first trial.</li>
 <li><strong>macOS profiles tested on a set of real research workloads.</strong></li>
 </ul>
 <h2 id="later-or-when-asked">Later, or when asked<a class="headerlink" href="#later-or-when-asked" title="Permanent link">&para;</a></h2>
