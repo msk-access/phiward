@@ -1316,6 +1316,9 @@ no protected paths are configured: there is nothing to confine; run <code>(cd ~ 
 a dot folder in your home, <code>~/Library</code> on macOS, and a folder that holds a phiward folder. Each
 of them is writable as a whole in a session, and other programs run what is there later. The
 message ends: ); start the tool in a project folder</p>
+<p>Launch also refuses a folder inside or above a protected path, and doctor warns about it: the
+session would reach the protected data. The message is: this folder is inside or above a
+protected path; start the tool in a project folder</p>
 <p><strong>A folder on PATH inside the project</strong> (an activated <code>.venv</code>, direnv, <code>node_modules/.bin</code>). Your
 own shell runs what is there after the session, and the session could write there. The message
 names the entry and the step. For an activated <code>.venv</code>: run <code>deactivate</code> (or take the entry

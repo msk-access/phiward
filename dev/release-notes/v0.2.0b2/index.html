@@ -1374,7 +1374,9 @@ the others in the checklist next. Every change is in the
 <li><strong>Plugin users:</strong> add the marketplace again with the new tag,
    <code>/plugin marketplace add msk-access/phiward#v0.2.0b2</code> (<a href="../../plugins/">plugins.md</a>). The
    plugin stays at the tag you added, with that release's hooks.</li>
-<li>Run <code>phiward doctor</code> and fix each WARNING. Each one names its step.</li>
+<li>Run <code>phiward doctor</code> and fix each WARNING. Each one names its step. <code>doctor</code> does not
+   check the plugin's version: plugin users check step 5 by hand, in <code>/plugin</code> in Claude
+   Code. The plugin's version must match <code>phiward --version</code>.</li>
 </ol>
 <p><strong>Claude Code:</strong> 2.1.295 or newer, as before. 2.1.299 or newer turns <code>@</code> mentions off;
 <code>doctor</code> warns below it.</p>

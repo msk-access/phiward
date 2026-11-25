@@ -1320,7 +1320,7 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
      config.py, names.py and pyproject.toml).</li>
 </ol>
 <p>The workflow refuses a tag when an install line (<code>phiward==</code>), a <code>/blob/v.../</code> link, a
-   plugin tag (<code>#v</code>), a GitHub install (<code>@v</code>), a marketplace <code>"ref"</code> or a status line in
+   plugin tag (<code>#v</code>), a GitHub install (<code>phiward@v</code>), a marketplace <code>"ref"</code> or a status line in
    README.md, CHANGELOG.md, <code>plugin/commands/setup.md</code> or <code>docs/*.md</code> names another version.
    It does not check the release notes link or the mkdocs.yml nav entry: grep for them.
 2. In <code>CHANGELOG.md</code>, replace "unreleased" with the date (UTC), and write the release notes in
@@ -1468,10 +1468,10 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
 <ol>
 <li>The <code>release</code> workflow runs the whole test suite (macOS and Linux, Python 3.9 to 3.14),
    checks that the tag is on <code>main</code>, that it names the version in the three version files, that
-   no install line (<code>phiward==</code>), <code>/blob/v.../</code> link, plugin tag (<code>#v</code>), GitHub install (<code>@v</code>),
-   marketplace <code>"ref"</code> or status line in README.md, CHANGELOG.md, <code>plugin/commands/setup.md</code>
-   or <code>docs/*.md</code> names another version, and that the
-   newest CHANGELOG entry no longer says unreleased. It builds the wheel and the source archive,
+   no install line (<code>phiward==</code>), <code>/blob/v.../</code> link, plugin tag (<code>#v</code>), GitHub install
+   (<code>phiward@v</code>), marketplace <code>"ref"</code> or status line in README.md, CHANGELOG.md,
+   <code>plugin/commands/setup.md</code> or <code>docs/*.md</code> names another version, and that the newest
+   CHANGELOG entry no longer says unreleased. It builds the wheel and the source archive,
    checks them (<code>twine check --strict</code>), installs the wheel and runs it. Only then does the
    publish job start; nothing waits for an approval, so push the tag only when the release is
    ready. Its actions are pinned by commit; update a pin by its release's commit, not a tag.</li>
