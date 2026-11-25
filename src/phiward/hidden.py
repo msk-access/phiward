@@ -233,7 +233,7 @@ def _bwrap_version() -> Optional[Tuple[int, int]]:
     if not found:
         return None
     try:
-        r = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=10)
+        r = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=3)
     except (OSError, subprocess.SubprocessError):
         return None
     m = re.search(r"(\d+)\.(\d+)", r.stdout or "")

@@ -647,9 +647,10 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
     if hidden.sockets_left_out():
         lines.append("  NOTE: bubblewrap here is older than 0.5, which cannot hide a socket by path: "
                      "the Docker and Kerberos KCM sockets are not in the sandbox's lists, and only "
-                     "Claude Code's seccomp filter keeps a shell command from them. Claude Code "
-                     "warns at its start when it cannot load that filter: then do not use Mode A "
-                     "on this node.")
+                     "Claude Code's seccomp filter keeps a shell command from them. Check it once: "
+                     "ask the agent to run `python3 -c 'import socket; "
+                     "socket.socket(socket.AF_UNIX)'` in Bash; it must fail with \"Operation not "
+                     "permitted\". If it works, do not use Mode A on this node.")
     rules = set(_merged_rules(project, home))
     want = install.permission_rules(secret, home)
     have = sum(1 for r in want if r in rules)

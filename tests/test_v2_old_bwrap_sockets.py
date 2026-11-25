@@ -102,3 +102,32 @@ def test_doctor_counts_a_fresh_install_and_says_what_the_sockets_rest_on(tree, m
     out = "\n".join(doctor.mode_report(str(tree / "repo"), str(tree / "home"), cfg))
     line = next(ln for ln in out.splitlines() if "hidden list in the sandbox" in ln)
     assert "WARNING" in line and "seccomp" not in out, (sock, out)
+
+
+@pytest.mark.parametrize("stdout, want", [("bubblewrap 0.4.0\n", (0, 4)),
+                                          ("bubblewrap 0.11.1\n", (0, 11)), ("", None),
+                                          ("no version here\n", None)])
+def test_the_bubblewrap_version_is_read_or_none(monkeypatch, tmp_path, stdout, want):
+    import subprocess
+    import shutil
+    from phiward import service
+    monkeypatch.setattr(service, "_safe_path_entries", lambda p: [str(tmp_path)])
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: str(tmp_path / "bwrap"))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a[0], 0, stdout=stdout, stderr=""))
+    assert hidden._bwrap_version() == want
+
+
+def test_a_bubblewrap_that_hangs_or_is_missing_keeps_the_sockets(monkeypatch, tmp_path):
+    import subprocess
+    import shutil
+
+    def hang(*a, **k):
+        raise subprocess.TimeoutExpired(a[0], k.get("timeout", 0))
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: str(tmp_path / "bwrap"))
+    monkeypatch.setattr(subprocess, "run", hang)
+    assert hidden._bwrap_version() is None
+    monkeypatch.setattr(shutil, "which", lambda name, path=None: None)
+    assert hidden._bwrap_version() is None
+    monkeypatch.setattr(hidden, "_platform", lambda: ("linux", "x86_64"))
+    assert hidden.sockets_left_out() is False
