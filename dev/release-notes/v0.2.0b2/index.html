@@ -1393,6 +1393,9 @@ the others in the checklist next. Every change is in the
   <code>launch</code>, and every MCP server wrapped by <code>phiward mcp wrap</code>: such a server then "failed to
   connect". <code>phiward doctor</code> names the entry. Remove it from <code>PATH</code> (often a trailing <code>:</code> in
   your shell startup file).</li>
+<li><strong>A <code>[broker] commands</code> program the broker does not find.</strong> <code>doctor</code> now warns about each
+  one (setup's <code>@genomics</code> lists several, such as <code>samtools</code>). Start the broker from a terminal
+  where the program works, list it by its full path, or remove the ones you do not use.</li>
 <li><strong><code>launch --tool claude</code> and the program it runs.</strong> On macOS and Linux it refuses a Claude
   Code older than 2.1.295, a tool that gives no Claude Code version, a shim or wrapper (<code>npx</code>,
   <code>env</code>, a script), and an npm build without its <code>package.json</code>. Run Claude Code's own

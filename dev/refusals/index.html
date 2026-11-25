@@ -1420,7 +1420,8 @@ the file yourself.</p>
 <h2 id="the-gateway-phiward-run-and-phiward-copy">The gateway: <code>phiward run</code> and <code>phiward copy</code><a class="headerlink" href="#the-gateway-phiward-run-and-phiward-copy" title="Permanent link">&para;</a></h2>
 <p><strong>A program not on the broker's PATH.</strong> The broker keeps the PATH of the terminal that started
 it. Doctor warns about each listed program it does not find there. Start the broker again from a
-terminal where the program works (after <code>conda activate</code>), or list the program by its full path.</p>
+terminal where the program works (after <code>conda activate</code>), or list the program by its full path.
+A program you do not use (setup's <code>@genomics</code> lists several): remove it from <code>[broker] commands</code>.</p>
 <p><strong>The config changed.</strong> The broker refuses requests after any change to the config, the pins or
 the listed programs. Restart the broker. Doctor does not compare the config's content with the
 broker's yet.</p>

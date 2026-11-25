@@ -1547,7 +1547,9 @@ folder:</p>
   sandbox confines the shell: yes
 broker: running
 </code></pre></div>
-<p>Fix each <code>WARNING</code>; each one says how. A <code>NOTE</code> is for your information. Before Claude Code is
+<p>Fix each <code>WARNING</code>; each one says how. A <code>NOTE</code> is for your information. If you kept setup's
+<code>@genomics</code> programs, doctor warns about each one the broker does not find (for example
+<code>samtools</code>): remove the ones you do not use from <code>[broker] commands</code> in your config. Before Claude Code is
 wired, one line gives the next step; <code>phiward doctor --verbose</code> lists every check. Then open a
 <strong>new</strong> Claude Code session in that folder and ask the agent to read a file in a protected
 folder: it must be refused. Then ask it to run <code>phiward run -- wc -l &lt;that file&gt;</code>: you get a
