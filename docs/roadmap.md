@@ -17,6 +17,15 @@ The plan can change. What is built is in the CHANGELOG. What is not protected is
 
 ## Next: 0.2.0, trust and evidence
 
+- **Easy to adopt:**
+  - setup and `phiward doctor` say first what this machine can run (Mode A, the gateway,
+    Mode B), and give one step for each part that cannot;
+  - setup keeps only the programs it finds, and offers to make the folders of `uv`, `claude`
+    and phiward writable by you alone;
+  - with the plugin and no config, a session says to type `/phiward:setup`;
+  - `phiward doctor --json`, so an agent can read the state and the next step (the
+    configuration report below uses the same format);
+  - doctor warns when the plugin and the package have different versions.
 - **A full review of the threat model.** Before 0.2.0, the threat model is reviewed end to end, and
   each limit is stated with what you can do about it.
 - **A local decision log, on by default.** It records each refusal and each gateway run: the date,
@@ -48,8 +57,9 @@ The plan can change. What is built is in the CHANGELOG. What is not protected is
   - the hook-only gaps that have small fixes;
   - `MODULEPATH` and `PYTHONPATH` under launch;
   - a warning for Claude Code versions that do not protect project settings themselves.
-- **Real machines:** the full check on a recent Linux kernel, the hook on RHEL 8 clusters, and local
-  macOS checks.
+- **Real machines:** the full check on a recent Linux kernel; Mode A on RHEL 8 clusters, with the
+  result in the release notes; and the macOS check in a virtual machine, with the account's own
+  home folder.
 
 ## Then: 0.3, research workflows
 
@@ -66,7 +76,8 @@ The plan can change. What is built is in the CHANGELOG. What is not protected is
   - flowcell and instrument IDs;
   - a measure of recall on a made-up corpus.
 - **Lab rollout:** one config for the whole lab, from a managed place, that can only tighten
-  protection.
+  protection; a page for organizations (managed Claude Code settings, a plugin turned on for
+  everyone); a Linux dev container for a first trial.
 - **macOS profiles tested on a set of real research workloads.**
 
 ## Later, or when asked

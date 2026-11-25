@@ -215,6 +215,7 @@ remote shell. An argument with a `:` before its first `/` is remote, as rsync re
 local name with a `:` as `./name`. A source that is or holds a credential (`~/.ssh`, your home)
 is refused. A copy between two remotes is refused.
 
+<a id="remote-run"></a>
 ## `phiward run --remote HOST -- CMD`
 
 Your broker runs CMD on the host through your shared connection, and masks what comes back.
@@ -261,6 +262,11 @@ You can also run Claude Code on the HPC login node itself, as one user without a
 Its sandbox then confines the shell there (Mode A), with phiward's hook. The gateway works there
 only on a kernel with Landlock (see below). Check first that your site allows interactive tools on
 its login nodes.
+
+| Your node (`uname -r`, `bwrap --version`) | The hook and Claude Code's sandbox (Mode A) | The gateway (`phiward run`, `copy`) |
+|---|---|---|
+| Linux 5.19 or newer, bubblewrap 0.4 or newer | yes | yes |
+| RHEL 8: kernel 4.18, bubblewrap 0.4.0 | yes | no: run the agent on your laptop and use `phiward run --remote` |
 
 What the node needs:
 

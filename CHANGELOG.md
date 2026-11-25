@@ -523,6 +523,10 @@ The release notes have the same steps as a checklist:
 
 ### Docs
 
+- The quick start says, before install, what a RHEL 8 node cannot run (the gateway) and which
+  way to choose, and how to keep `~/.local/bin` and `uv` writable by you alone on a cluster.
+  hpc.md has a table of what works on which node. Setup's programs question says that doctor
+  warns about a listed program it cannot find.
 - `docs/endpoint-security.md`, for IT and security teams: what phiward installs and writes,
   and every process it starts on macOS, with its parent, image, how often it runs, its exact
   command line and a command-line regex of at most 256 characters. A test records what phiward
