@@ -270,7 +270,8 @@ What the node needs:
 - **bubblewrap 0.4 or newer** with user namespaces (RHEL 8 has 0.4.0). `phiward doctor` checks
   the version. Below 0.5, Claude Code's sandbox cannot hide a socket by path. There (on Linux
   x86_64 and aarch64 only) phiward leaves the Docker and Kerberos KCM sockets out of the
-  sandbox's lists, and only Claude Code's seccomp filter for new Unix sockets keeps a shell
+  sandbox's lists and the permission rules (Claude Code merges those into its sandbox; the hook
+  still refuses a file tool that names them), and only Claude Code's seccomp filter for new Unix sockets keeps a shell
   command from them; `phiward doctor` says so in a NOTE. Check the filter once: ask the agent to
   run `python3 -c 'import socket; socket.socket(socket.AF_UNIX)'` in Bash. It must fail with
   "Operation not permitted"; if it works, do not use Mode A on that node. The settings `install`

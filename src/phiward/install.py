@@ -269,8 +269,10 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
     # not write what git then runs. macOS only: elsewhere the sandbox has no wildcard denyWrite
     git_write = list(claude_settings.GIT_CONTROL_GLOBS) if (
         wild and sys.platform == "darwin") else []
-    # what the sandbox mounts over: the sockets left out where its seccomp filter refuses them
-    # (hidden.for_sandbox); the permission rules keep every hidden path
+    # what the sandbox mounts over: the sockets left out on bubblewrap before 0.5
+    # (hidden.for_sandbox). The permission rules too: Claude Code merges the Read and Edit deny
+    # rules into its sandbox (code.claude.com/docs/en/sandboxing); the hook still refuses a file
+    # tool that names one (guards.protected_paths reads the whole hidden list)
     secret_sb = hidden.for_sandbox(secret)
     entry: Dict[str, Any] = {"type": "command", **hook_cmd}
     note: Dict[str, Any] = {"type": "command", **note_cmd}
@@ -283,7 +285,7 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
         "hooks": {"PreToolUse": [{"matcher": m, "hooks": [dict(entry)]} for m in MATCHERS],
                   "SessionStart": [{"hooks": [note]}],
                   "UserPromptSubmit": [{"hooks": [prompt]}]},
-        "permissions": {"deny": _once(roots_rules + permission_rules(secret, home)
+        "permissions": {"deny": _once(roots_rules + permission_rules(secret_sb, home)
                                       + edit_rules(guard, home))},
         "sandbox": {
             "enabled": True,
@@ -624,7 +626,7 @@ def local_wiring(cfg: config.Config, project_dir: str = "") -> Dict[str, Any]:
     allow = [] if os.path.normpath(spool) == config.default_spool(home) else sp([spool])
     return {
         "hooks": {"PreToolUse": []},
-        "permissions": {"deny": permission_rules(roots + machine, home)},
+        "permissions": {"deny": permission_rules(roots + hidden.for_sandbox(machine), home)},
         "sandbox": {"filesystem": {"denyRead": sp(roots) + sp(hidden.for_sandbox(machine)) + globs,
                                    "denyWrite": sp(roots) + sp(guard) + sp(hidden.for_sandbox(machine)),
                                    "allowWrite": allow}},

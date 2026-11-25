@@ -652,7 +652,7 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
                      "socket.socket(socket.AF_UNIX)'` in Bash; it must fail with \"Operation not "
                      "permitted\". If it works, do not use Mode A on this node.")
     rules = set(_merged_rules(project, home))
-    want = install.permission_rules(secret, home)
+    want = install.permission_rules(sandboxed, home)
     have = sum(1 for r in want if r in rules)
     lines.append(f"  permission rules for the hidden list: {have} of {len(want)}"
                  + ("" if have == len(want) else " (WARNING: run `(cd ~ && phiward install claude --user --write)` again)"))
@@ -1299,7 +1299,8 @@ def headless_problems(project: str, home: str) -> List[str]:
                    "can replace them. Run `(cd ~ && phiward install claude --user --write)`")
     secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
     rules = set(_merged_rules(project, home))
-    missing = [r for r in install.permission_rules(list(cfg.all_roots) + secret, home)
+    missing = [r for r in install.permission_rules(list(cfg.all_roots) + hidden.for_sandbox(secret),
+                                                   home)
                if r not in rules]
     if missing:
         out.append(f"{len(missing)} permission deny rule(s) for protected and hidden paths are "

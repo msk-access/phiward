@@ -254,9 +254,10 @@ def sockets_left_out() -> bool:
 
 
 def for_sandbox(hidden_paths: List[str]) -> List[str]:
-    """The hidden paths Claude Code's sandbox mounts over (denyRead, denyWrite): all of them,
-    except the sockets of the IPC list where `sockets_left_out`. The file tools' permission
-    rules keep every path."""
+    """The hidden paths for Claude Code's settings that reach its sandbox: denyRead, denyWrite,
+    and the Read and Edit deny rules (Claude Code merges those into the sandbox too). All of
+    them, except the sockets of the IPC list where `sockets_left_out`. phiward's hook refuses a
+    file tool on every hidden path (guards.protected_paths reads `paths`)."""
     if not sockets_left_out():
         return list(hidden_paths)
     return [p for p in hidden_paths if p not in IPC_SOCKETS]
