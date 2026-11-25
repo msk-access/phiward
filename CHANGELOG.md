@@ -36,7 +36,9 @@ The release notes have the same steps as a checklist:
 5. **Plugin users:** add the marketplace again with this release's tag, as
    [docs/plugins.md](docs/plugins.md) says. The plugin stays at the tag you added, with that
    release's hooks.
-6. Run `phiward doctor` and fix each WARNING. Each one names its step.
+6. Run `phiward doctor` and fix each WARNING. Each one names its step. `doctor` does not
+   check the plugin's version: plugin users check step 5 by hand, in `/plugin` in Claude
+   Code. The plugin's version must match `phiward --version`.
 
 **Claude Code:** 2.1.295 or newer, as before. 2.1.299 or newer turns `@` mentions off;
 `doctor` warns below it.
@@ -446,7 +448,8 @@ The release notes have the same steps as a checklist:
 - A pull counted any file it could not write as "kept", and a write that failed partway left a
   truncated file that the next pull kept. Only a file that exists is kept now. A file or folder
   it cannot make or write in full (no permission, no space) fails the pull; a partly written
-  file is removed.
+  file is removed. A stream that ends early (a dropped connection, a killed remote tar) stops
+  the pull with one line, not a traceback, and the file it was writing is removed too.
 - `phiward doctor`'s launch section decides the project folder with launch's own checks, not a
   copy of them. It now also warns when the folder is inside or above a protected path, and,
   as launch does, names the first problem only.

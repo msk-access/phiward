@@ -958,6 +958,42 @@ def test_the_pull_extractor_keeps_what_exists_and_skips_what_is_unsafe(tmp_path)
     assert not (dest / "proj" / ".claude").exists()
 
 
+def test_the_pull_extractor_writes_nothing_through_links_or_outside_its_folder(tmp_path):
+    import io
+    import subprocess
+    import sys
+    import tarfile
+    from phiward import remote
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "FAKE-PT-0001.txt").write_text("mine\n")
+    dest = tmp_path / "dest"
+    dest.mkdir()
+    (dest / "dirlink").symlink_to(outside)                          # a link to a folder
+    (dest / "filelink").symlink_to(outside / "FAKE-PT-0001.txt")    # a link to a file
+
+    def add(t, name, data=b"x", kind=tarfile.REGTYPE, link=""):
+        ti = tarfile.TarInfo(name)
+        ti.type, ti.linkname = kind, link
+        ti.size = len(data) if kind == tarfile.REGTYPE else 0
+        t.addfile(ti, io.BytesIO(data) if kind == tarfile.REGTYPE else None)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as t:
+        add(t, "dirlink/new.txt", b"evil\n")                      # through a folder link
+        add(t, "filelink", b"evil\n")                             # over a file link
+        add(t, "hard", kind=tarfile.LNKTYPE, link="../outside/FAKE-PT-0001.txt")  # a hard link
+        add(t, "a/../../outside/up.txt", b"evil\n")               # `..` inside a name
+        add(t, "a/.claude/x", b"evil\n")                          # a .claude folder
+    before = sorted(str(p) for p in tmp_path.rglob("*"))
+    r = subprocess.run([sys.executable, "-I", remote.EXTRACTOR, str(dest)],
+                       input=buf.getvalue(), capture_output=True, timeout=30)
+    assert r.returncode == 0, r.stderr
+    assert sorted(str(p) for p in tmp_path.rglob("*")) == before   # nothing new anywhere
+    assert sorted(os.listdir(outside)) == ["FAKE-PT-0001.txt"]
+    assert (outside / "FAKE-PT-0001.txt").read_text() == "mine\n"
+    assert b"kept 2 existing, skipped 3" in r.stdout, r.stdout
+
+
 # --- defaults that lower the overhead ---------------------------------------------------------
 
 def test_a_single_write_place_needs_no_write_to(tree):
