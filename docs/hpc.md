@@ -262,6 +262,11 @@ Its sandbox then confines the shell there (Mode A), with phiward's hook. The gat
 only on a kernel with Landlock (see below). Check first that your site allows interactive tools on
 its login nodes.
 
+| Your node (`uname -r`, `bwrap --version`) | The hook and Claude Code's sandbox (Mode A) | The gateway (`phiward run`, `copy`) |
+|---|---|---|
+| Linux 5.19 or newer, bubblewrap 0.4 or newer | yes | yes |
+| RHEL 8: kernel 4.18, bubblewrap 0.4.0 | yes | no: run the agent on your laptop and use `phiward run --remote` |
+
 What the node needs:
 
 - **Landlock ABI 2 or newer** in the kernel (Linux 5.19 or newer) for the gateway: `phiward run`

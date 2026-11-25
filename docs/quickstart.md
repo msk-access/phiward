@@ -32,6 +32,12 @@ sandbox need them), with your package manager, for example `sudo apt install bub
 Without admin rights, see [hpc.md](hpc.md#claude-code-on-the-login-node). On Ubuntu 24.04,
 AppArmor can block bubblewrap: see [setup.md](setup.md#1-requirements).
 
+**On an HPC node with RHEL 8** (`uname -r` starts with `4.18`), the gateway cannot run: that
+kernel has no Landlock. Choose before you start: run the agent on your laptop and reach the
+cluster with `phiward run --remote` ([hpc.md](hpc.md#phiward-run---remote-host----cmd)), or run
+Claude Code on the node with the hook and its sandbox only, no gateway
+([hpc.md](hpc.md#claude-code-on-the-login-node)).
+
 In Terminal:
 
 ```bash
@@ -51,6 +57,11 @@ Homebrew, `brew install uv` does the same. The second gives phiward a Python of 
 uv downloads once (not Xcode's, conda's or the system's, which another account or tool can
 change). The last command puts `~/.local/bin`, where `phiward`
 now is, on your `PATH`.
+
+**On a cluster, or with conda**, make sure no other account can write the programs phiward
+trusts, before step 2. On many clusters new folders are group-writable (umask 002), and phiward
+refuses a program in such a folder. Run `chmod go-w ~/.local ~/.local/bin`. Use the `uv` from
+the installer above, not a conda one: `command -v uv` shows which one runs.
 
 Then **open a new Terminal**, and **quit and reopen the Claude Code desktop app** (Cmd-Q on
 macOS), so that both find `phiward`. In the new Terminal, `phiward --version` prints the version.
