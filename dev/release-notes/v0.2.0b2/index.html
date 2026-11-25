@@ -1440,6 +1440,11 @@ the others in the checklist next. Every change is in the
   checks each one at its start. Nothing to do unless you need it.</li>
 <li>Also new: <code>[launch] private_networks</code>, <code>[sanitize] examples</code>, <code>scan_allow</code> and
   <code>id_columns</code>.</li>
+<li>Fixed: on Linux with bubblewrap before 0.5 (RHEL 8), Mode A's shell now starts where the
+  Kerberos KCM socket exists (before, every Bash call failed with "bwrap: Can't create file at
+  /run/.heim_org.h5l.kcm-socket"). There the Docker and KCM sockets rest on Claude Code's seccomp
+  filter alone; <code>doctor</code> says so. Run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again
+  on the node.</li>
 </ul>
 <h2 id="tested-on-made-up-data">Tested, on made-up data<a class="headerlink" href="#tested-on-made-up-data" title="Permanent link">&para;</a></h2>
 <ul>
