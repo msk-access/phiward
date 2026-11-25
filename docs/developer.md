@@ -198,9 +198,9 @@ flowchart TD
 - Which test files cover which feature: [tests/README.md][tests].
 - Ideas that were turned down already: [decisions.md][decisions].
 
-[contributing]: https://github.com/msk-access/phiward/blob/v0.2.0b1/CONTRIBUTING.md
-[agents]: https://github.com/msk-access/phiward/blob/v0.2.0b1/AGENTS.md
-[rounds]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/review-rounds.md
-[arch]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/architecture.md
-[tests]: https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md
-[decisions]: https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/decisions.md
+[contributing]: https://github.com/msk-access/phiward/blob/v0.2.0b2/CONTRIBUTING.md
+[agents]: https://github.com/msk-access/phiward/blob/v0.2.0b2/AGENTS.md
+[rounds]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/review-rounds.md
+[arch]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/architecture.md
+[tests]: https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md
+[decisions]: https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/decisions.md

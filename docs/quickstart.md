@@ -8,7 +8,7 @@
 
 | Step | Where | What you type | You see |
 |---|---|---|---|
-| 1. Install | Terminal | `uv tool install ... phiward==0.2.0b1` | `phiward --version` prints the version |
+| 1. Install | Terminal | `uv tool install ... phiward==0.2.0b2` | `phiward --version` prints the version |
 | 2. Set up | Terminal (or the plugin) | `cd ~ && phiward setup` | its questions, then the config it wrote |
 | 3. Check | the project folder | `phiward init`, then `phiward doctor` | no `PROBLEM` or `WARNING` line |
 
@@ -45,7 +45,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 ```bash
-uv tool install --python-preference only-managed phiward==0.2.0b1
+uv tool install --python-preference only-managed phiward==0.2.0b2
 ```
 
 ```bash
@@ -80,7 +80,7 @@ Choose one way. Both do the same steps.
 In a Claude Code session, type these two commands:
 
 ```
-/plugin marketplace add msk-access/phiward#v0.2.0b1
+/plugin marketplace add msk-access/phiward#v0.2.0b2
 ```
 
 ```

@@ -6,7 +6,7 @@
 
 The setup is in the [quick start](quickstart.md). The agent's own rules are the ones
 `phiward init` adds to your project's `AGENTS.md`
-([the text](https://github.com/msk-access/phiward/blob/v0.2.0b1/src/phiward/data/agents-section.md)),
+([the text](https://github.com/msk-access/phiward/blob/v0.2.0b2/src/phiward/data/agents-section.md)),
 and the skill.
 
 **How to ask the agent.** Ask for counts and summaries of protected data, and let the agent run

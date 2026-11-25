@@ -10,7 +10,7 @@
     {
       "name": "phiward",
       "source": "./plugin",
-      "version": "0.2.0b1",
+      "version": "0.2.0b2",
       "description": "phiward's hooks (the guard and the start-of-session note) and its skill. It needs the phiward package (uv tool install) and `phiward install claude` for Claude Code's sandbox and permission rules."
     }
   ]

@@ -3,7 +3,7 @@
 All notable changes to phiward. Dates are UTC. Versions follow semantic versioning; until
 1.0, a minor version may change behaviour.
 
-## [0.2.0b2] - unreleased
+## [0.2.0b2] - 2026-11-25
 
 ### What changes for you (upgrading from 0.2.0b1)
 

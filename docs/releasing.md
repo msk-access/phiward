@@ -58,7 +58,7 @@ Then push `main`, `develop` and the tag.
    It does not check the release notes link or the mkdocs.yml nav entry: grep for them.
 2. In `CHANGELOG.md`, replace "unreleased" with the date (UTC), and write the release notes in
    `docs/release-notes/`, linked from the CHANGELOG entry.
-3. Run the full test suite on macOS ([tests/README.md](https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md) says how) and on
+3. Run the full test suite on macOS ([tests/README.md](https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md) says how) and on
    Linux (`sh scripts/linux-check/check.sh`, needs Docker: Python 3.12 and 3.9, two layouts,
    on a `git archive` of HEAD), and the quickstart in clean Linux containers
    (`sh scripts/quickstart-check/check.sh`, needs Docker; its image is built fresh, and
@@ -220,7 +220,7 @@ Then push `main`, `develop` and the tag.
 6. After it is published, check the install line from a clean shell:
 
    ```bash
-   uv tool install --python-preference only-managed phiward==0.2.0b1
+   uv tool install --python-preference only-managed phiward==0.2.0b2
    ```
 
 7. Make the GitHub release from the tag, with the release notes.

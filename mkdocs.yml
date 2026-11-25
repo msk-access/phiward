@@ -73,6 +73,7 @@ nav:
       - Releasing: releasing.md
   - Release notes:
       - v0.2.0b2: release-notes/v0.2.0b2.md
+      - v0.2.0b2: release-notes/v0.2.0b2.md
       - v0.2.0b1: release-notes/v0.2.0b1.md
 
 markdown_extensions:
