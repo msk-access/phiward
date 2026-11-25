@@ -5,10 +5,10 @@ agent sends to its model provider. The agent's tools send their output to the pr
 output can hold file contents, sample identifiers or file names. With phiward, the agent works on
 protected data only through a **gateway** that masks names and identifiers.
 
-- **Status:** v0.2.0b1, a beta. See the [release notes](release-notes/v0.2.0b1.md).
+- **Status:** v0.2.0b2, a beta. See the [release notes](release-notes/v0.2.0b2.md).
 - **Needs:** macOS or Linux, and Claude Code 2.1.295 or newer; 2.1.299 or newer for `@`
   mentions off.
-- **Install:** `uv tool install --python-preference only-managed phiward==0.2.0b1`, then the
+- **Install:** `uv tool install --python-preference only-managed phiward==0.2.0b2`, then the
   [quick start](quickstart.md).
 
 ## How it works

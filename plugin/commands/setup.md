@@ -25,7 +25,7 @@ Rules for you while you do this:
    without uv, give the user the uv install line to run in their own Terminal
    (`curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`) and stop until they
    have. Then, with their yes, run
-   `uv tool install --python-preference only-managed phiward==0.2.0b1` and
+   `uv tool install --python-preference only-managed phiward==0.2.0b2` and
    `uv tool update-shell`. Tell the user to quit and reopen the desktop app afterwards, so that it
    finds `phiward`. If phiward is also installed in conda or another shared Python, tell the user
    to remove it there (`pip uninstall phiward` in that environment).
@@ -98,7 +98,7 @@ Rules for you while you do this:
 
 7. **HPC** (only if they gave a remote): explain that HPC goes through their own shared SSH
    connection, and give them the steps of
-   https://github.com/msk-access/phiward/blob/v0.2.0b1/docs/hpc.md#one-time-setup
+   https://github.com/msk-access/phiward/blob/v0.2.0b2/docs/hpc.md#one-time-setup
    to do in their own Terminal (the ssh config lines, `kinit`, `ssh -fN`). After they edit their
    config, the broker refuses requests until they restart it; give them the restart command that
    the refusal names.

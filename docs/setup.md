@@ -51,17 +51,17 @@ Install a release from PyPI with `uv` (to get `uv` itself:
 `curl -LsSf https://astral.sh/uv/install.sh | sh`, or `brew install uv`):
 
 ```bash
-uv tool install --python-preference only-managed phiward==0.2.0b1
+uv tool install --python-preference only-managed phiward==0.2.0b2
 ```
 
 Or with `pipx`:
 
 ```bash
-pipx install phiward==0.2.0b1
+pipx install phiward==0.2.0b2
 ```
 
 Name the version: a beta is not chosen without it. The same release from its GitHub tag, without
-PyPI: `uv tool install git+https://github.com/msk-access/phiward@v0.2.0b1`. Pin a version or a tag;
+PyPI: `uv tool install git+https://github.com/msk-access/phiward@v0.2.0b2`. Pin a version or a tag;
 do not install a branch. Use `uv tool` or `pipx`: they give phiward a Python folder of its own.
 phiward protects the folder of the Python that runs it (the agent may not write there, or it could
 change what the broker runs), so an install into a shared environment (a conda base, a project's
