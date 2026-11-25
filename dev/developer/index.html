@@ -1197,6 +1197,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
         
   
@@ -1347,7 +1375,7 @@
 </ul>
 <p>phiward keeps protected health information (PHI), and the credentials that would reach it, out
 of what an AI coding agent sends to its model provider. The rules for a change are in
-<a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/CONTRIBUTING.md">CONTRIBUTING.md</a> and <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/AGENTS.md">AGENTS.md</a>. This page does not repeat them.</p>
+<a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/CONTRIBUTING.md">CONTRIBUTING.md</a> and <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/AGENTS.md">AGENTS.md</a>. This page does not repeat them.</p>
 <h2 id="the-first-half-hour">The first half hour<a class="headerlink" href="#the-first-half-hour" title="Permanent link">&para;</a></h2>
 <p><strong>Work beside your own setup, never in it.</strong> You may use phiward for real work, with a real
 config and a running broker. Three variables point a checkout away from them. The tests set the
@@ -1372,7 +1400,7 @@ python3<span class="w"> </span>-m<span class="w"> </span>phiward<span class="w">
   a checkout unless <code>PHIWARD_DEV=1</code> is set.</li>
 </ul>
 <p><strong>Run the tests</strong> in a normal terminal (they make their own scratch home). The command, and how
-to run a part of the suite, are in <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a>. For one file, add its path:
+to run a part of the suite, are in <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md">tests/README.md</a>. For one file, add its path:
 <code>tests/test_protected_paths.py</code>.</p>
 <p><strong>Try a decision by hand.</strong> <code>check</code> shows the decision for a shell command. Nothing runs:</p>
 <div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>phiward<span class="w"> </span>check<span class="w"> </span>--cwd<span class="w"> </span><span class="s2">"</span><span class="nv">$SCRATCH</span><span class="s2">/repo"</span><span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span><span class="s2">"</span><span class="nv">$SCRATCH</span><span class="s2">/phi/FAKE-PT-0001.bam"</span>
@@ -1452,7 +1480,7 @@ the user config (<a href="../configuration/#who-may-set-what">configuration.md</
 <li><strong>The strictest answer wins:</strong> deny over ask over allow (<code>core.strictest</code>). An ask that the
   tool cannot show becomes a deny (<code>core.settle</code>).</li>
 <li><strong>A new check only adds refusals.</strong> It never changes what kind of action a tool is, and never
-  turns a refusal into an ask (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/review-rounds.md">review-rounds.md</a>).</li>
+  turns a refusal into an ask (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/review-rounds.md">review-rounds.md</a>).</li>
 <li><strong>What is checked is what starts.</strong> The gateway runs the entry of the user config's list, not
   a path the agent names (<code>run.listed_run_path</code>). <code>pin</code> records each listed program by its
   content. The broker refuses every request when the config or a listed program changed since
@@ -1568,16 +1596,16 @@ path-like word in it. <code>hook claude</code> and <code>fasthook</code> refuse 
 </tr>
 <tr>
 <td>a new test file</td>
-<td>the index in <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a> (a test checks it)</td>
+<td>the index in <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md">tests/README.md</a> (a test checks it)</td>
 </tr>
 </tbody>
 </table>
 <h2 id="next">Next<a class="headerlink" href="#next" title="Permanent link">&para;</a></h2>
 <ul>
-<li>How a change is planned and reviewed: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/review-rounds.md">review-rounds.md</a>.</li>
-<li>The module map: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/rules/architecture.md">architecture.md</a>.</li>
-<li>Which test files cover which feature: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a>.</li>
-<li>Ideas that were turned down already: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/.agents/decisions.md">decisions.md</a>.</li>
+<li>How a change is planned and reviewed: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/review-rounds.md">review-rounds.md</a>.</li>
+<li>The module map: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/rules/architecture.md">architecture.md</a>.</li>
+<li>Which test files cover which feature: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md">tests/README.md</a>.</li>
+<li>Ideas that were turned down already: <a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/.agents/decisions.md">decisions.md</a>.</li>
 </ul>
 
 

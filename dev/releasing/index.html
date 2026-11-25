@@ -1164,6 +1164,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
         
   
@@ -1325,7 +1353,7 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    It does not check the release notes link or the mkdocs.yml nav entry: grep for them.
 2. In <code>CHANGELOG.md</code>, replace "unreleased" with the date (UTC), and write the release notes in
    <code>docs/release-notes/</code>, linked from the CHANGELOG entry.
-3. Run the full test suite on macOS (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b1/tests/README.md">tests/README.md</a> says how) and on
+3. Run the full test suite on macOS (<a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/tests/README.md">tests/README.md</a> says how) and on
    Linux (<code>sh scripts/linux-check/check.sh</code>, needs Docker: Python 3.12 and 3.9, two layouts,
    on a <code>git archive</code> of HEAD), and the quickstart in clean Linux containers
    (<code>sh scripts/quickstart-check/check.sh</code>, needs Docker; its image is built fresh, and
@@ -1482,7 +1510,7 @@ Then push <code>main</code>, <code>develop</code> and the tag.</p>
    ready. Its actions are pinned by commit; update a pin by its release's commit, not a tag.</li>
 <li>After it is published, check the install line from a clean shell:</li>
 </ol>
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b2
 </code></pre></div>
 <ol>
 <li>Make the GitHub release from the tag, with the release notes.</li>

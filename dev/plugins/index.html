@@ -1231,6 +1231,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
         
   
@@ -1424,19 +1452,19 @@ or permission rules. Those come from the <a href="../quickstart/">quick start</a
 you use the plugin: a project can turn a plugin off, but not your user wiring.</p>
 <h3 id="install-it">Install it<a class="headerlink" href="#install-it" title="Permanent link">&para;</a></h3>
 <p>In Claude Code, two commands:</p>
-<div class="highlight"><pre><span></span><code>/plugin marketplace add msk-access/phiward#v0.2.0b1
+<div class="highlight"><pre><span></span><code>/plugin marketplace add msk-access/phiward#v0.2.0b2
 </code></pre></div>
 <div class="highlight"><pre><span></span><code>/plugin install phiward@phiward
 </code></pre></div>
-<p><code>#v0.2.0b1</code> pins the plugin to the release you installed with <code>uv</code>, so their versions agree.
-In a terminal, the same is <code>claude plugin marketplace add msk-access/phiward#v0.2.0b1</code>, then
+<p><code>#v0.2.0b2</code> pins the plugin to the release you installed with <code>uv</code>, so their versions agree.
+In a terminal, the same is <code>claude plugin marketplace add msk-access/phiward#v0.2.0b2</code>, then
 <code>claude plugin install phiward@phiward</code>.</p>
 <h3 id="offer-it-to-every-contributor-of-a-project">Offer it to every contributor of a project<a class="headerlink" href="#offer-it-to-every-contributor-of-a-project" title="Permanent link">&para;</a></h3>
 <p>The project's committed <code>.claude/settings.json</code> can offer it:</p>
 <div class="highlight"><pre><span></span><code><span class="p">{</span>
 <span class="w">  </span><span class="nt">"extraKnownMarketplaces"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"phiward"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"github"</span><span class="p">,</span><span class="w"> </span><span class="nt">"repo"</span><span class="p">:</span><span class="w"> </span><span class="s2">"msk-access/phiward"</span><span class="p">,</span>
-<span class="w">                             </span><span class="nt">"ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v0.2.0b1"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<span class="w">                             </span><span class="nt">"ref"</span><span class="p">:</span><span class="w"> </span><span class="s2">"v0.2.0b2"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 <span class="w">  </span><span class="p">},</span>
 <span class="w">  </span><span class="nt">"enabledPlugins"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"phiward@phiward"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span>
 <span class="p">}</span>
@@ -1456,7 +1484,7 @@ In a terminal, the same is <code>claude plugin marketplace add msk-access/phiwar
   settings stop that. <code>phiward doctor</code> warns when a project turns the plugin off or sets <code>PATH</code>.</li>
 <li><strong>For an organization, managed settings are the strong form.</strong> They can force the plugin on,
   allow only managed and forced hooks, and set the sandbox and permission rules.</li>
-<li><strong>The plugin follows the tag you added.</strong> With <code>#v0.2.0b1</code>, the marketplace takes the plugin
+<li><strong>The plugin follows the tag you added.</strong> With <code>#v0.2.0b2</code>, the marketplace takes the plugin
   from that release. Without a tag it follows the repository's <code>main</code> branch. The plugin's
   version must match the installed phiward package (<code>phiward --version</code>). To move to a new
   release, update both: <code>uv tool install --force phiward==&lt;version&gt;</code>, then add the marketplace

@@ -1446,6 +1446,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
         
   
@@ -1881,13 +1909,13 @@ exists (<a href="#the-guided-first-run">below</a>).</p>
 <h2 id="2-install">2. Install<a class="headerlink" href="#2-install" title="Permanent link">&para;</a></h2>
 <p>Install a release from PyPI with <code>uv</code> (to get <code>uv</code> itself:
 <code>curl -LsSf https://astral.sh/uv/install.sh | sh</code>, or <code>brew install uv</code>):</p>
-<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>--python-preference<span class="w"> </span>only-managed<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b2
 </code></pre></div>
 <p>Or with <code>pipx</code>:</p>
-<div class="highlight"><pre><span></span><code>pipx<span class="w"> </span>install<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b1
+<div class="highlight"><pre><span></span><code>pipx<span class="w"> </span>install<span class="w"> </span><span class="nv">phiward</span><span class="o">==</span><span class="m">0</span>.2.0b2
 </code></pre></div>
 <p>Name the version: a beta is not chosen without it. The same release from its GitHub tag, without
-PyPI: <code>uv tool install git+https://github.com/msk-access/phiward@v0.2.0b1</code>. Pin a version or a tag;
+PyPI: <code>uv tool install git+https://github.com/msk-access/phiward@v0.2.0b2</code>. Pin a version or a tag;
 do not install a branch. Use <code>uv tool</code> or <code>pipx</code>: they give phiward a Python folder of its own.
 phiward protects the folder of the Python that runs it (the agent may not write there, or it could
 change what the broker runs), so an install into a shared environment (a conda base, a project's
