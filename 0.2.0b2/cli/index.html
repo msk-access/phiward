@@ -1,0 +1,2573 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b2/cli/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../glossary/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Commands - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#commands" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Commands
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refusals and the way around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-operators-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The operator's commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The operator&#39;s commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward pin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward broker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-carryover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward carryover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wire-a-project-and-a-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wire a project and a tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wire a project and a tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-install-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward install claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-mcp-list-wrap-and-unwrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward mcp list, wrap and unwrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-with-protected-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work with protected data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work with protected data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward copy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward launch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward sanitize
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#called-by-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Called by tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Called by tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-hook-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward hook claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-session-note-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward session-note claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-prompt-scan-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward prompt-scan claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward mcp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-git-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward git-hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../endpoint-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For IT and security teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-operators-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The operator's commands
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The operator&#39;s commands">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-pin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward pin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward broker
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-carryover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward carryover
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#wire-a-project-and-a-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Wire a project and a tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Wire a project and a tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-install-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward install claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward doctor
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-mcp-list-wrap-and-unwrap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward mcp list, wrap and unwrap
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-with-protected-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work with protected data
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Work with protected data">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward copy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-launch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward launch
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward check
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward sanitize
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#called-by-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Called by tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Called by tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phiward-hook-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward hook claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-session-note-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward session-note claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-prompt-scan-claude" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward prompt-scan claude
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward mcp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phiward-git-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        phiward git-hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h1>
+<p><strong>For:</strong> looking up a command or an option. The guides say when and why to use each one.</p>
+<p>Each section follows the command's own help (<code>phiward COMMAND --help</code>): its usage lines, word
+for word, and one line for each subcommand and option. The help is the long form. A test
+(<code>tests/test_docs_cli.py</code>) fails when this page and the help disagree.</p>
+<p>The parsers are written by hand. For <code>phiward mcp list</code>, <code>wrap</code> and <code>unwrap</code>, the test also
+checks the options against the parser. For the other commands, nothing checks the help against
+the parser.</p>
+<p>Also: <code>phiward --version</code> (or <code>phiward version</code>, <code>-V</code>) prints the installed version, and
+<code>phiward --help</code> lists the commands.</p>
+<h2 id="the-operators-commands">The operator's commands<a class="headerlink" href="#the-operators-commands" title="Permanent link">&para;</a></h2>
+<p>Run these in your own terminal, not through an agent.</p>
+<h3 id="phiward-setup">phiward setup<a class="headerlink" href="#phiward-setup" title="Permanent link">&para;</a></h3>
+<p>The first-time setup: it asks questions and writes the user config.
+Guide: <a href="../quickstart/#2-set-it-up">Set up</a>. Detail: <a href="../setup/#3-the-user-config-phiward-setup">setup.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward setup [--from TEAM.toml]
+       phiward setup --first-run --root PATH [--root PATH]... [--remote HOST:/PATH]...
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--from FILE</code></td>
+<td>Start from a team template: its settings fill in what your config does not have.</td>
+</tr>
+<tr>
+<td><code>--first-run</code></td>
+<td>Write the first user config without questions. Only when none exists.</td>
+</tr>
+<tr>
+<td><code>--root PATH</code></td>
+<td>With <code>--first-run</code>: a protected root.</td>
+</tr>
+<tr>
+<td><code>--remote HOST:/PATH</code></td>
+<td>With <code>--first-run</code>: a copy remote.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-pin">phiward pin<a class="headerlink" href="#phiward-pin" title="Permanent link">&para;</a></h3>
+<p>Approve the programs of <code>[broker] commands</code>, and record the derived protected folders.
+Guide: <a href="../daily-use/#run-a-script-the-agent-wrote">Run a script the agent wrote</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward pin
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-broker">phiward broker<a class="headerlink" href="#phiward-broker" title="Permanent link">&para;</a></h3>
+<p>Run the gateway commands outside the agent. Start it yourself.
+Guide: <a href="../setup/#5-start-the-broker">Start the broker</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward broker [--max-jobs N]
+       phiward broker --service [--write]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--max-jobs N</code></td>
+<td>Run at most N gateway commands at the same time (default 4).</td>
+</tr>
+<tr>
+<td><code>--service</code></td>
+<td>Print the login service for the broker, and the command that loads it.</td>
+</tr>
+<tr>
+<td><code>--write</code></td>
+<td>With <code>--service</code>: write the service file.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<p>At its start the broker runs the masking check once
+(<a href="../configuration/#sanitize">configuration.md</a>). While it fails, the broker refuses every
+request (<code>refused: the masking check failed when the broker started</code>); fix the config and
+restart the broker.</p>
+<h3 id="phiward-carryover">phiward carryover<a class="headerlink" href="#phiward-carryover" title="Permanent link">&para;</a></h3>
+<p>Read and keep what <code>phiward launch</code> sessions put in quarantine.
+Guide: <a href="../launch/#when-a-session-ends">When a session ends</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward carryover status [--tool NAME]
+       phiward carryover add PATH [--as NAME] [--tool NAME]
+       phiward carryover show [--tool NAME]
+       phiward carryover accept ID [ITEM...] [--tool NAME]
+       phiward carryover reset [--tool NAME]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Command or option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status</code></td>
+<td>Show the size of each carry-over folder, and what it costs to delete it.</td>
+</tr>
+<tr>
+<td><code>add PATH</code></td>
+<td>Put an instruction file or folder of your own into the trusted copy.</td>
+</tr>
+<tr>
+<td><code>show</code></td>
+<td>List the changes in quarantine, each with its ID and items.</td>
+</tr>
+<tr>
+<td><code>accept ID [ITEM...]</code></td>
+<td>Keep a change from quarantine, all of it or the named items.</td>
+</tr>
+<tr>
+<td><code>reset</code></td>
+<td>Make the record again from the trusted copy, when it cannot be read.</td>
+</tr>
+<tr>
+<td><code>--as NAME</code></td>
+<td>With <code>add</code>: the name it gets in the trusted copy.</td>
+</tr>
+<tr>
+<td><code>--tool NAME</code></td>
+<td>The agent tool (default: <code>claude</code>).</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-pseudonymize">phiward pseudonymize<a class="headerlink" href="#phiward-pseudonymize" title="Permanent link">&para;</a></h3>
+<p>Make a copy of one table in which the identifier columns you name hold codes (<code>S0042</code>).
+Guide: <a href="../daily-use/#give-the-agent-pseudonymized-data-phiward-pseudonymize">Give the agent pseudonymized data</a>.
+What it does not hide: <a href="../threat-model/#known-limits">the threat model</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
+                            --columns H[=NEW],... [--drop H,...] [--keep H,...]
+                            [--keep-order] IN OUT
+       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
+                            [--keep-samples N,...] [--keep-order] IN.vcf OUT.vcf
+       phiward pseudonymize (--new-key NAME [--prefix P] | --key NAME)
+                            --columns PATH,... [--drop PATH,...] [--keep PATH,...]
+                            [--keep-order] IN.json OUT.json
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--new-key NAME</code></td>
+<td>Start a new key.</td>
+</tr>
+<tr>
+<td><code>--key NAME</code></td>
+<td>Extend an existing key: known IDs keep their codes.</td>
+</tr>
+<tr>
+<td><code>--prefix P</code></td>
+<td>With <code>--new-key</code>: 1 to 3 capital letters before the digits (default <code>S</code>).</td>
+</tr>
+<tr>
+<td><code>--columns H[=NEW],...</code></td>
+<td>The identifier columns to code (in JSON, key paths).</td>
+</tr>
+<tr>
+<td><code>--drop H,...</code></td>
+<td>Columns (in JSON, key paths) to leave out.</td>
+</tr>
+<tr>
+<td><code>--keep H,...</code></td>
+<td>Columns (in JSON, key paths) that look like identifiers, kept as they are on your word.</td>
+</tr>
+<tr>
+<td><code>--keep-samples N,...</code></td>
+<td>With a VCF: keep the names of these samples, on your word.</td>
+</tr>
+<tr>
+<td><code>--keep-order</code></td>
+<td>Keep the order of the rows, of a VCF's sample columns or of JSON arrays.</td>
+</tr>
+<tr>
+<td><code>--</code></td>
+<td>End the options. IN and OUT follow.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help, with the rules for each kind of file.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="wire-a-project-and-a-tool">Wire a project and a tool<a class="headerlink" href="#wire-a-project-and-a-tool" title="Permanent link">&para;</a></h2>
+<h3 id="phiward-init">phiward init<a class="headerlink" href="#phiward-init" title="Permanent link">&para;</a></h3>
+<p>Set up a project: the rules in <code>AGENTS.md</code>, the Claude Code settings, the git hooks.
+It only adds.
+Guide: <a href="../quickstart/#3-set-up-each-project-and-check-it">Set up each project</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward init [--root DIR]...
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--root DIR</code></td>
+<td>Add DIR to the project's protected folders (<code>.phiward.toml</code>).</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-install-claude">phiward install claude<a class="headerlink" href="#phiward-install-claude" title="Permanent link">&para;</a></h3>
+<p>Print the wiring for Claude Code, or write it after a diff and a yes.
+Detail: <a href="../setup/#claude-code">setup.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward install claude [--user|--project] [--no-hooks] [--block-outside-reads] [--write [--yes]]
+       phiward install claude --json
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--user</code></td>
+<td>The user settings, <code>~/.claude/settings.json</code> (the default).</td>
+</tr>
+<tr>
+<td><code>--project</code></td>
+<td>The project settings, <code>.claude/settings.json</code> and <code>.claude/settings.local.json</code>.</td>
+</tr>
+<tr>
+<td><code>--no-hooks</code></td>
+<td>Write only the sandbox and permission settings, not the hooks.</td>
+</tr>
+<tr>
+<td><code>--block-outside-reads</code></td>
+<td>With <code>--user</code>: also set up to two Claude Code permission settings, as defence in depth around the project. Each is set only when the installed Claude Code takes it: which ones, and from which version, is in <a href="../setup/#claude-code">setup.md</a>.</td>
+</tr>
+<tr>
+<td><code>--write</code></td>
+<td>Merge the wiring into the settings file, show the difference, write it after a yes.</td>
+</tr>
+<tr>
+<td><code>--yes</code></td>
+<td>With <code>--write</code>: write without the question.</td>
+</tr>
+<tr>
+<td><code>--json</code></td>
+<td>Print the user wiring as one JSON object, for an unattended run. See <a href="../unattended/">unattended.md</a>.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-doctor">phiward doctor<a class="headerlink" href="#phiward-doctor" title="Permanent link">&para;</a></h3>
+<p>Show the config in force and what may turn the guards off (on Linux, also when <code>phiward launch</code>
+cannot start because there are no network namespaces).
+Guide: <a href="../setup/#7-check-with-doctor">Check with doctor</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward doctor [--verbose] [--show-paths | --headless]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--verbose</code>, <code>-v</code></td>
+<td>Every check on its own line, and the detail counts.</td>
+</tr>
+<tr>
+<td><code>--show-paths</code></td>
+<td>Also print the protected paths (by default only their counts), and the project files the project scan found (masked, with line numbers).</td>
+</tr>
+<tr>
+<td><code>--headless</code></td>
+<td>A short check before an unattended run: exit 0 when the session would be guarded. See <a href="../unattended/">unattended.md</a>.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<p>After the sanitizer line, doctor prints the masking check: <code>masking check: ok (...)</code>, or a
+WARNING for each value of <code>[sanitize] examples</code> that is not fully masked and each root whose
+made-up path came out unmasked, and a NOTE for each of your rules that no example tests
+(<a href="../configuration/#sanitize">configuration.md</a>). It names index numbers only. A failure does
+not change the exit status; <code>--headless</code> lists it as a reason.</p>
+<p>Then doctor prints the project scan (<a href="../launch/#the-project-scan">launch.md</a>), with no time
+limit: <code>project scan: ok (N files)</code>, or <code>WARNING: project scan: found &lt;SUBJECT&gt; in 3 files,
+&lt;SAMPLEID&gt; in 1 file name; ...</code>. With <code>--show-paths</code>, it lists each file as
+<code>data/&lt;SUBJECT&gt;.csv: line 2: &lt;SUBJECT&gt;</code> (the path masked, at most 50 files). A NOTE counts
+what it did not read. In <code>/</code>, the home folder or above it, it says <code>project scan: skipped (not
+a project folder)</code>; with no rule for subject IDs, <code>project scan: off</code>. A finding does not
+change the exit status; <code>--headless</code> lists it as a reason (it scans for 2 s at most).</p>
+<h3 id="phiward-mcp-list-wrap-and-unwrap">phiward mcp list, wrap and unwrap<a class="headerlink" href="#phiward-mcp-list-wrap-and-unwrap" title="Permanent link">&para;</a></h3>
+<p>Show your MCP servers, and run each one in phiward's kernel profile (wrap) or as it was (unwrap).
+Guide: <a href="../modes/#wrap-an-mcp-server-mode-a">Wrap an MCP server</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward mcp wrap NAME...|--all [--yes|-y]
+       phiward mcp unwrap NAME... [--yes|-y]   (only in your own terminal, even with --yes)
+       phiward mcp list
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Command or option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>list</code></td>
+<td>Say which servers are wrapped, and the command for each that is not.</td>
+</tr>
+<tr>
+<td><code>wrap NAME...</code></td>
+<td>Run these servers under <code>phiward launch</code>. It shows the change and asks first.</td>
+</tr>
+<tr>
+<td><code>unwrap NAME...</code></td>
+<td>Run these servers as they were. Only in your own terminal.</td>
+</tr>
+<tr>
+<td><code>--all</code></td>
+<td>With <code>wrap</code>: every server. One that cannot be wrapped is left as it is.</td>
+</tr>
+<tr>
+<td><code>--yes</code>, <code>-y</code></td>
+<td>Change the files without the question.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="work-with-protected-data">Work with protected data<a class="headerlink" href="#work-with-protected-data" title="Permanent link">&para;</a></h2>
+<h3 id="phiward-run">phiward run<a class="headerlink" href="#phiward-run" title="Permanent link">&para;</a></h3>
+<p>Run a command with read access to protected data, and print its output masked.
+Guide: <a href="../daily-use/#work-with-protected-data-phiward-run">Work with protected data</a>.
+On HPC: <a href="../hpc/">hpc.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward run [--write-to DIR]... [--net] [--names-from FILE]... [--table] -- CMD [ARG]...
+       phiward run --remote HOST [--names-from FILE]... [--table] -- CMD [ARG]...
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--write-to DIR</code></td>
+<td>Let CMD write in DIR, a <code>[broker] write_to</code> folder or a folder inside one.</td>
+</tr>
+<tr>
+<td><code>--net</code></td>
+<td>Let CMD use the network (needs <code>[broker] net = true</code>).</td>
+</tr>
+<tr>
+<td><code>--names-from FILE</code></td>
+<td>Also mask the names listed in FILE.</td>
+</tr>
+<tr>
+<td><code>--table</code></td>
+<td>Read CSV or TSV output by column (needs <code>[sanitize] table = true</code>).</td>
+</tr>
+<tr>
+<td><code>--remote HOST</code></td>
+<td>Run CMD on an HPC host in <code>[remote] hosts</code>.</td>
+</tr>
+<tr>
+<td><code>--</code></td>
+<td>End the options. CMD and its arguments follow.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-copy">phiward copy<a class="headerlink" href="#phiward-copy" title="Permanent link">&para;</a></h3>
+<p>Copy into a protected folder or a configured remote. Nothing is printed.
+Guide: <a href="../daily-use/#copy-protected-data-phiward-copy">Copy protected data</a>.
+On HPC: <a href="../hpc/#phiward-copy">hpc.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward copy [--dry-run] SRC... DST
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--dry-run</code></td>
+<td>Check the request and copy nothing. Only as the first word.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-launch">phiward launch<a class="headerlink" href="#phiward-launch" title="Permanent link">&para;</a></h3>
+<p>Run a whole agent tool, or one program, in phiward's kernel profile (Mode B).
+Guide: <a href="../launch/">Mode B: phiward launch</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward launch [--tool NAME] [--memory] [--report FILE] [--entry ID] [--] [PROGRAM [ARG]...]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--tool NAME</code></td>
+<td>The agent tool: <code>claude</code>, or <code>generic</code> (the default).</td>
+</tr>
+<tr>
+<td><code>--memory</code></td>
+<td>Turn Claude Code's auto memory on.</td>
+</tr>
+<tr>
+<td><code>--report FILE</code></td>
+<td>Write a JSON report there when launch ends, for a run with nobody watching.</td>
+</tr>
+<tr>
+<td><code>--entry ID</code></td>
+<td>Written by <code>phiward mcp wrap</code> into a wrapped server's entry. Not for you to type.</td>
+</tr>
+<tr>
+<td><code>--</code></td>
+<td>End the options. PROGRAM and its arguments follow.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<p>Before the tool starts, launch runs the project scan for 2 s at most
+(<a href="../launch/#the-project-scan">launch.md</a>). On a finding it refuses: <code>phiward launch: the
+project scan found &lt;SUBJECT&gt; in 3 files: move the data under a protected root, pseudonymize it
+(phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward doctor --show-paths
+lists them; nothing runs</code>. When it stops at its limit, the tool starts after one line: <code>phiward
+launch: NOTE: the project scan stopped at its 2 s limit after N files; run phiward doctor for
+the full scan</code>. When it finished but left part unread: <code>phiward launch: NOTE: the project scan
+did not read all of the project (3 files read only to their head); phiward doctor gives the
+counts</code>.</p>
+<p>The session writes the project and the <code>[launch] write_to</code> folders of your user config
+(<a href="../launch/#more-folders-to-write">launch.md</a>), which launch checks and names at the start.</p>
+<h3 id="phiward-check">phiward check<a class="headerlink" href="#phiward-check" title="Permanent link">&para;</a></h3>
+<p>Show what the guard decides for a shell command, and why. Nothing runs.
+Guide: <a href="../daily-use/#check-a-command-phiward-check">Check a command</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward check [--cwd DIR] -- COMMAND...
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--cwd DIR</code></td>
+<td>Decide as if the command ran in DIR.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-sanitize">phiward sanitize<a class="headerlink" href="#phiward-sanitize" title="Permanent link">&para;</a></h3>
+<p>Mask protected paths and identifiers in text: stdin in, the masked text out.
+Guide: <a href="../daily-use/#filter-your-own-output-phiward-sanitize">Filter your own output</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward sanitize [--table] [--names-from FILE]...
+       phiward sanitize --selftest
+       phiward sanitize [--names-from FILE]... --check FILE...
+       phiward sanitize [--names-from FILE]... --check-table FILE...
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--names-from FILE</code></td>
+<td>Also mask the names in FILE, an index file.</td>
+</tr>
+<tr>
+<td><code>--table</code></td>
+<td>Mask each line as a table row (needs <code>[sanitize] table = true</code>).</td>
+</tr>
+<tr>
+<td><code>--check FILE...</code></td>
+<td>Report what the files would leak. Exit 1 when something would.</td>
+</tr>
+<tr>
+<td><code>--check-table FILE...</code></td>
+<td>The same, for files read as tables.</td>
+</tr>
+<tr>
+<td><code>--selftest</code></td>
+<td>Run the sanitizer's own made-up cases.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="called-by-tools">Called by tools<a class="headerlink" href="#called-by-tools" title="Permanent link">&para;</a></h2>
+<p>You rarely run these yourself. <code>phiward install claude</code> and <code>phiward init</code> write them into the
+settings and the git hooks.</p>
+<h3 id="phiward-hook-claude">phiward hook claude<a class="headerlink" href="#phiward-hook-claude" title="Permanent link">&para;</a></h3>
+<p>Read a Claude Code hook payload on stdin, and reply as Claude Code expects.
+Detail: <a href="../setup/#claude-code">setup.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward hook claude
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help (<code>phiward hook --help</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-session-note-claude">phiward session-note claude<a class="headerlink" href="#phiward-session-note-claude" title="Permanent link">&para;</a></h3>
+<p>The start-of-session note, run by Claude Code as a SessionStart hook.
+Detail: <a href="../setup/#claude-code">setup.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward session-note claude   (reads the hook payload on stdin)
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help (<code>phiward session-note --help</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-prompt-scan-claude">phiward prompt-scan claude<a class="headerlink" href="#phiward-prompt-scan-claude" title="Permanent link">&para;</a></h3>
+<p>The check of each prompt before Claude Code sends it, run as a UserPromptSubmit hook. A prompt
+that holds a match of the user config's packs or <code>[sanitize] patterns</code>, or a path below a
+protected root, is not sent; the reply names the kind, never the value.
+Detail: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward prompt-scan claude   (reads the hook payload on stdin)
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help (<code>phiward prompt-scan --help</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-mcp">phiward mcp<a class="headerlink" href="#phiward-mcp" title="Permanent link">&para;</a></h3>
+<p>phiward's gateway as an MCP server on stdin and stdout, which Claude Code starts.
+Detail: <a href="../configuration/#mcp-servers">configuration.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward mcp   (an MCP server on stdin and stdout)
+       phiward mcp list|wrap|unwrap ...   your own MCP servers: see `phiward mcp list --help`
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help, with the server's tools.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phiward-git-hook">phiward git-hook<a class="headerlink" href="#phiward-git-hook" title="Permanent link">&para;</a></h3>
+<p>Run a git hook, or install the hooks.
+Detail: <a href="../setup/#git-hooks">setup.md</a>.</p>
+<div class="highlight"><pre><span></span><code>usage: phiward git-hook pre-commit | pre-push | install [--force]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Command or option</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pre-commit</code></td>
+<td>Check the staged changes. git runs it before a commit.</td>
+</tr>
+<tr>
+<td><code>pre-push</code></td>
+<td>Check the branches to be pushed. git runs it before a push.</td>
+</tr>
+<tr>
+<td><code>install</code></td>
+<td>Write both hooks into this repository's hooks folder.</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td>With <code>install</code>: replace hooks that are there already.</td>
+</tr>
+<tr>
+<td><code>-h</code>, <code>--help</code></td>
+<td>Show the help (<code>phiward git-hook --help</code>).</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../configuration/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Configuration">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Configuration
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../glossary/" class="md-footer__link md-footer__link--next" aria-label="Next: Glossary">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Glossary
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2194 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b2/daily-use/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../refusals/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Daily use - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#daily-use" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Daily use
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-the-agent-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before the agent starts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-with-protected-data-phiward-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work with protected data: phiward run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#small-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small counts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-script-the-agent-wrote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run a script the agent wrote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#copy-protected-data-phiward-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copy protected data: phiward copy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give the agent pseudonymized data: phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-a-command-phiward-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check a command: phiward check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-your-own-output-phiward-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter your own output: phiward sanitize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-command-is-refused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a command is refused
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When a command is refused">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refusals-from-the-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refusals from the hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-prompt-that-was-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A prompt that was not sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#messages-from-run-and-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messages from run and copy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refusals and the way around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../launch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../endpoint-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For IT and security teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-the-agent-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before the agent starts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#work-with-protected-data-phiward-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Work with protected data: phiward run
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#small-counts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Small counts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-a-script-the-agent-wrote" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run a script the agent wrote
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#copy-protected-data-phiward-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Copy protected data: phiward copy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Give the agent pseudonymized data: phiward pseudonymize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#check-a-command-phiward-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check a command: phiward check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#filter-your-own-output-phiward-sanitize" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filter your own output: phiward sanitize
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-command-is-refused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a command is refused
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="When a command is refused">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#refusals-from-the-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refusals from the hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-prompt-that-was-not-sent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A prompt that was not sent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#messages-from-run-and-copy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Messages from run and copy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="daily-use">Daily use<a class="headerlink" href="#daily-use" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>For:</strong> you, the operator, once phiward is set up.</li>
+<li><strong>You will have:</strong> a way to work with the agent on protected data, and an answer for each
+  refusal.</li>
+</ul>
+<p>The setup is in the <a href="../quickstart/">quick start</a>. The agent's own rules are the ones
+<code>phiward init</code> adds to your project's <code>AGENTS.md</code>
+(<a href="https://github.com/msk-access/phiward/blob/v0.2.0b2/src/phiward/data/agents-section.md">the text</a>),
+and the skill.</p>
+<p><strong>How to ask the agent.</strong> Ask for counts and summaries of protected data, and let the agent run
+them through the gateway: for example "count the reads per sample in the protected folder with
+<code>phiward run</code>". The output comes back masked. Do not ask it to show records.</p>
+<h2 id="before-the-agent-starts">Before the agent starts<a class="headerlink" href="#before-the-agent-starts" title="Permanent link">&para;</a></h2>
+<ol>
+<li>The broker runs outside the agent: in a terminal of its own (<code>phiward broker</code>), or as a login
+   service (<code>(cd ~ &amp;&amp; phiward broker --service --write)</code>, once).</li>
+<li><code>phiward doctor</code> in the project's top folder shows no PROBLEM or WARNING line.</li>
+</ol>
+<h2 id="work-with-protected-data-phiward-run">Work with protected data: <code>phiward run</code><a class="headerlink" href="#work-with-protected-data-phiward-run" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>run<span class="w"> </span>--<span class="w"> </span>samtools<span class="w"> </span>flagstat<span class="w"> </span>~/data/patients/study-a/run1.bam
+</code></pre></div>
+<p><code>run</code> is a client. It sends the words of the command to the broker, which runs the command in
+the gateway profile and sends back the sanitized output. The command:</p>
+<ul>
+<li>can read every protected root;</li>
+<li>can write only in its private scratch folder (<code>$TMPDIR</code>) and in granted folders
+  (<code>--write-to</code>, from <code>[broker] write_to</code>; with one granted folder, it is the default and needs
+  no <code>--write-to</code>). Protected roots are read only for it; a granted folder may sit inside a
+  root;</li>
+<li>has no network, unless <code>--net</code> is given and granted;</li>
+<li>has an empty stdin and no terminal;</li>
+<li>runs in the request's folder, with the broker's environment (not the agent's) and the program
+  found on the broker's <code>PATH</code> (the <code>PATH</code> of the terminal that started the broker).</li>
+</ul>
+<p>Every line it prints (stdout and stderr) goes through the sanitizer. A line longer than 64 KiB
+is withheld. At the end, <code>run</code> prints a note (when it has something to say) and one line. The note counts the placeholders in the lines
+shown, for example <code>[placeholders in the lines shown: 412 &lt;SAMPLEID&gt;, 60 &lt;BAMFILE&gt;]</code>, and the
+lines the sanitizer withheld. From 20 shown lines on, when none holds an identifier placeholder
+(a subject, a sample, a patient's folder, an entry or a protected path), it says so: tell the operator, who checks
+<code>[sanitize] packs</code> and <code>patterns</code> with <code>phiward doctor</code>. Then <code>run done: exit=0</code>, or <code>exit=1</code> when the command failed.
+The command's real exit status and the line counts go to the broker's log, which no session
+reads (a number the command chooses could carry data).</p>
+<p><strong>Write it as the whole command.</strong> Nothing before or after it: no <code>cd</code>, no pipe, no redirect, no
+<code>$(...)</code>. The shell may expand globs, braces and <code>~</code>. A gateway call in any other form is checked
+as an ordinary command: Claude Code's sandbox denies the protected paths to it, and where the
+sandbox does not confine the shell, the hook refuses it.</p>
+<p><strong>Write scripts that print aggregates</strong>: counts, summaries, tables. Suppress small counts first (<a href="#small-counts">Small counts</a>). The sanitizer masks paths,
+entry names and identifiers. It does not mask other content. In text mode it also masks long
+numbers (<code>&lt;NUM&gt;</code>). <code>--table</code> reads CSV or TSV output by column: cells under an identifier header
+(<code>sample_id</code>, <code>MRN</code>, <code>Patient ID</code>, ...) show <code>&lt;IDCOL&gt;</code>, and numbers in the other columns are
+kept. It works only when the operator turned it on (<code>[sanitize] table = true</code>). One table per
+output: print its header as the first line, and give it an identifier column. When the first
+line is not such a header (a warning, a line of prose, a table with no identifier column), the
+whole output is masked as text. The first line that is not a row of the table (an empty line, a
+row with a quote or another field count, a row with no number, a second header) turns the rest
+into text: print one table per command. Under <code>chrom</code> and <code>pos</code> columns, both cells are
+shown (text mode masks <code>chr1 1234567</code> as one <code>&lt;LOCUS&gt;</code>).</p>
+<p>Exit codes: 0 when the command succeeded, 1 when it failed (whatever its own code); 2 for a
+refusal or a bad form; 3 for a config,
+sanitizer, broker or confinement problem; 127 when the program cannot start; 130 when it was
+cancelled.</p>
+<p>Options (before <code>--</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--write-to DIR</code></td>
+<td>Also allow writes into DIR. DIR must resolve to a <code>[broker] write_to</code> folder of the user config, or a folder inside one.</td>
+</tr>
+<tr>
+<td><code>--net</code></td>
+<td>Allow the network. Needs <code>[broker] net = true</code> in the user config.</td>
+</tr>
+<tr>
+<td><code>--names-from FILE</code></td>
+<td>Also mask the names in FILE, an index file: tab-separated fields, where each field with a <code>/</code> is a path whose parts are masked (see <a href="../configuration/#sanitize">configuration.md</a>). Not a link, and inside a protected path.</td>
+</tr>
+<tr>
+<td><code>--table</code></td>
+<td>Read CSV/TSV output by column: cells under an identifier header are masked whole (<code>&lt;IDCOL&gt;</code>), numbers in other columns are kept; other lines are masked as text. Only when the operator set <code>[sanitize] table = true</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing asks the operator for a grant. A grant that is not in the user config is refused. The
+agent tool's permission mode does not change this.</p>
+<p>A gateway command cannot read credentials or traces either: the same list that <code>launch</code> hides
+(<code>~/.ssh</code>, <code>~/.aws</code>, Kerberos tickets and keytabs, histories, other tools' logins, …). A command
+that needs one is not one for the gateway. This includes settings files that may hold a token:
+<code>~/.Renviron</code> (R libraries set there are not found), pip and npm settings, <code>~/.m2/settings.xml</code>,
+<code>~/.ipython</code>, <code>~/.gnupg</code>. Pass what a script needs as arguments, or set it in the script. On
+Linux the list is taken when the command starts: a credential made later is not hidden.</p>
+<h2 id="small-counts">Small counts<a class="headerlink" href="#small-counts" title="Permanent link">&para;</a></h2>
+<p>Masking hides identifiers, not small counts. A count of 1 or 2 in a rare group can point to one
+person, with every name masked. So can two tables whose difference leaves one person
+(differencing).</p>
+<p>The rule, from <a href="https://docs.opensafely.org/sdc/">OpenSAFELY's rules on disclosure control</a>:</p>
+<ul>
+<li>Suppress every count of 7 or fewer. Do this first.</li>
+<li>Round the other counts to the nearest 5.</li>
+<li>Recompute totals after you suppress, and check that no two tables of the same people let a
+  reader subtract a hidden cell back out.</li>
+</ul>
+<p>The <a href="https://securedatagroup.org/guides-and-resources/sdc-handbook/">SDC Handbook</a> and the
+<a href="http://sacro-tools.org/">ACRO</a> tool set similar rules, with thresholds you can configure. In the
+end, the rule is yours and your data agreement's: a local rule may be stricter, so use it.</p>
+<p>phiward does not enforce this. It does not see what a count means. The agent writes the script,
+and you read it before it runs (<a href="#run-a-script-the-agent-wrote">Run a script the agent wrote</a>).</p>
+<h2 id="run-a-script-the-agent-wrote">Run a script the agent wrote<a class="headerlink" href="#run-a-script-the-agent-wrote" title="Permanent link">&para;</a></h2>
+<p>With choice 1 of <code>phiward setup</code>, gateway commands run only the listed programs: the
+<code>@genomics</code> tools, and the scripts in your scripts folder (the entry that ends in <code>/</code> in
+<code>[broker] commands</code>). So <code>phiward run -- python3 summarize.py</code> is refused: <code>python3</code> is not
+listed, because it runs any code. To use a script that the agent writes:</p>
+<ol>
+<li>The agent drafts the script in the project, for example <code>summarize.py</code>, and tries it on
+   made-up data.</li>
+<li>You read it. It must print only aggregates (counts, summaries, tables), never records,
+   sample names or identifiers. <strong>Your reading is what keeps raw records out of the output</strong>:
+   the sanitizer masks names and identifiers, not other content.</li>
+<li>Add a shebang as its first line (for example <code>#!/usr/bin/env python3</code>), and make it
+   executable: <code>chmod +x summarize.py</code>.</li>
+<li>Move it into your scripts folder, for example <code>mv summarize.py ~/pipelines/bin/</code>. The agent
+   cannot write there, so it cannot change the script after you read it.</li>
+<li>In your own terminal, run <code>phiward pin</code>: it approves the programs as they are now.</li>
+<li>Restart the broker; <code>pin</code> prints the command: <code>(cd ~ &amp;&amp; phiward broker --service --write)</code>.</li>
+</ol>
+<p>Then the agent runs the script by its full path (the shell expands <code>~</code>):</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>run<span class="w"> </span>--<span class="w"> </span>~/pipelines/bin/summarize.py<span class="w"> </span>~/data/patients/study-a
+</code></pre></div>
+<p>A changed script needs steps 2, 5 and 6 again. Until then, the broker refuses gateway requests,
+and <code>phiward doctor</code> names the program that is not approved. No scripts folder yet? Run
+<code>(cd ~ &amp;&amp; phiward setup)</code> again, choose 1, and give one (keep it outside the projects the agent works
+in).</p>
+<h2 id="copy-protected-data-phiward-copy">Copy protected data: <code>phiward copy</code><a class="headerlink" href="#copy-protected-data-phiward-copy" title="Permanent link">&para;</a></h2>
+<p>A copy never replaces a file that exists at the destination: it keeps it. To update a file,
+delete it yourself first.</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>copy<span class="w"> </span>~/data/patients/run1<span class="w"> </span>~/data/patients/run1-copy
+</code></pre></div>
+<p><code>copy SRC... DST</code> copies without printing names. The destination must be inside a protected path of
+the user config, or under a <code>[copy] remotes</code> entry. Each local path is made absolute once, and every
+check and the copy itself use that path. One with a <code>..</code> part, or one that starts with <code>~</code> (quoted,
+so the shell left it), is refused: give the full path. A local copy first makes the destination
+folder with the system <code>mkdir -p</code>, then copies with the system <code>rsync</code> (files that exist are kept,
+never replaced; a <code>.claude/</code> folder is skipped; times are kept, modes and links are not), or without
+rsync with <code>cp -R -n</code>, single files only: two steps in the same profile, and the copy runs only when
+the folder was made. A copy to or from a remote is a tar stream through your shared SSH connection
+(<a href="../hpc/#phiward-copy">hpc.md</a>). The copy runs in the gateway profile and cannot read credentials.
+Its output is sanitized. The only option is <code>--dry-run</code>, as the first word: it counts what a push
+would send, and for a local copy with rsync it shows what rsync would copy (without rsync it shows
+nothing).</p>
+<h2 id="give-the-agent-pseudonymized-data-phiward-pseudonymize">Give the agent pseudonymized data: <code>phiward pseudonymize</code><a class="headerlink" href="#give-the-agent-pseudonymized-data-phiward-pseudonymize" title="Permanent link">&para;</a></h2>
+<p>When the agent needs a table but not its identifiers, make a copy in which the identifier
+columns hold codes. Type the command yourself, in your own terminal:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>labs<span class="w"> </span>--columns<span class="w"> </span>mrn<span class="w"> </span>--drop<span class="w"> </span>dob<span class="w"> </span>~/raw/labs.tsv<span class="w"> </span>~/data/patients/labs-coded.tsv
+</code></pre></div>
+<ul>
+<li><code>--new-key NAME</code> starts a key; <code>--key NAME</code> extends it, so the same ID gets the same code in
+  every table coded with that key. <code>--prefix P</code> (1 to 3 capital letters, default <code>S</code>) is fixed
+  in a new key. A code is the prefix and 4 digits (<code>S0042</code>), drawn at random from the codes not
+  used yet: a key holds at most 9999 IDs.</li>
+<li><code>--columns H[=NEW],...</code> names the columns to code. A coded column's header becomes <code>NEW</code>
+  (default <code>pseudonym</code>, then <code>pseudonym_2</code>, ...). Every other column whose header looks like an
+  identifier (the built-in list of <code>phiward run --table</code> and <code>[sanitize] id_columns</code>) must be
+  named in <code>--drop</code> (left out) or <code>--keep</code> (kept as it is, on your word).</li>
+<li>The kinds: the extensions decide, and the content must fit them. OUT has the same
+  extensions as IN (<code>labs.tsv.gz</code> gives a <code>.tsv.gz</code>).</li>
+<li><code>.tsv</code>, <code>.csv</code>; <code>.txt</code> is read as a TSV and needs 2 or more columns (free text is refused).</li>
+<li>
+<p><code>.maf</code>: a TSV after its <code>#</code> lines. Only the first <code>#version</code> line with a number
+    (<code>#version 2.4</code>) is kept; the other <code>#</code> lines (commands, paths) are dropped, and a <code>#</code> line after the header is refused. Name
+    the barcode columns, and keep the columns that look like IDs but are not:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>samples<span class="w"> </span>--columns<span class="w"> </span>Tumor_Sample_Barcode,Matched_Norm_Sample_Barcode<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--keep<span class="w"> </span>Entrez_Gene_Id,Exon_Number<span class="w"> </span>~/raw/cohort.maf<span class="w"> </span>~/data/patients/cohort-coded.maf
+</code></pre></div>
+<p>The command names each column that looks like an ID and is not named (by number): add it
+to <code>--keep</code>, or to <code>--drop</code> (<code>Tumor_Sample_UUID</code>).</p>
+<p>A coded MAF column keeps its header, so MAF tools still read the copy. Tumor and normal
+get unrelated codes. A free-text column (<code>BAM_File</code>) that names a sample is refused: drop it.
+  - <code>.vcf</code>: the first line is <code>##fileformat=VCFv4.N</code>. The IDs are the sample names after
+<code>FORMAT</code>, all coded, so give no <code>--columns</code>, <code>--drop</code> or <code>--keep</code>:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>samples<span class="w"> </span>~/raw/calls.vcf.gz<span class="w"> </span>~/data/patients/calls-coded.vcf.gz
+</code></pre></div>
+<ul>
+<li>Of the <code>##</code> lines only <code>fileformat</code>, <code>INFO</code>, <code>FORMAT</code>, <code>FILTER</code> and <code>ALT</code> are kept,
+  and <code>contig</code> with its <code>ID</code> only (<code>##contig=&lt;ID=chr1&gt;</code>). The others are dropped:
+  <code>reference</code>, <code>source</code>, <code>fileDate</code>, the command lines, <code>SAMPLE</code>, <code>PEDIGREE</code>. A kept line
+  the sanitizer would mask is refused.</li>
+<li>A sample name that is a word (<code>tumor</code>, <code>normal</code>, <code>sample</code>, <code>sample1</code>, <code>control</code>,
+  <code>germline</code>, <code>blood</code>, <code>unknown</code>, <code>na</code>, <code>none</code>, in any case), has no digit or is under 3
+  characters is refused (also in another letter case or Unicode form, a full-width
+  <code>ｓａｍｐｌｅ1</code>): it would link unrelated subjects in the key. Rename it first
+  (<code>bcftools reheader</code>), or keep it as it is by number: <code>--keep-samples 2</code> keeps the name
+  of the second sample, out of the key, on your word. The only check of a kept name is
+  that the sanitizer leaves it unchanged; a name it would mask is refused. A word with a
+  digit (<code>TUMOR1</code>) is coded.</li>
+<li>A short sample name of digits only (<code>123</code>) refuses every record that holds that number
+  as a value: rename it first.</li>
+<li>The records keep their order (<code>tabix</code> needs sorted positions) and their values. The
+  sample columns are shuffled instead, the same in every record (<code>--keep-order</code> keeps
+  them). A record or a kept line that holds a sample's ID (an <code>INFO</code> value, the <code>ID</code>
+  column) is refused: clean it first (<code>bcftools annotate</code>).</li>
+<li>The run reports the record count.</li>
+<li><code>.json</code>: the IDs are the values at the key paths you name. Keys are joined by <code>.</code>, and
+<code>[]</code> stands for every element of an array (<code>[].mrn</code> for an array at the top):</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>samples<span class="w"> </span>--columns<span class="w"> </span><span class="s1">'samples[].id, samples[].mrn'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>~/raw/study.json<span class="w"> </span>~/data/patients/study-coded.json
+</code></pre></div>
+<ul>
+<li>A key is matched exactly; a key with <code>.</code>, <code>[</code> or <code>]</code> cannot be named. A path that
+  matches nothing, or meets a value of another kind (a key where there is no object), is
+  refused.</li>
+<li>A coded value is a string or an integer; it becomes a string code (<code>9990001</code> and
+  <code>"9990001"</code> get the same code, as in a table). <code>null</code> stays <code>null</code>. A <code>true</code>, a decimal
+  number, an object or an array at a coded path is refused.</li>
+<li>Every key that looks like an identifier and holds values (strings, numbers, <code>true</code>,
+  <code>false</code>, <code>null</code>) is named by their path in <code>--columns</code>, <code>--drop</code> or <code>--keep</code>:
+  <code>samples[]</code> for strings in an array under <code>samples</code>, <code>samples[].id</code> for the <code>id</code> of its
+  objects. A key that holds only objects or arrays (<code>samples</code> above) needs no name.
+  <code>--keep</code> names such a path; <code>--drop</code> names a key, and drops a container whole. A key
+  the sanitizer would mask is refused: keys that are IDs are not coded.</li>
+<li>The array at the last <code>[]</code> of a coded path (<code>samples[]</code> for <code>samples[].id</code>, an array of
+  objects) is shuffled. It is refused when an array of the same length sits beside it in
+  the same object: arrays side by side may be paired by position (<code>samples</code> and
+  <code>purity</code>), and a shuffle would break the pairing without a word. Give <code>--keep-order</code>
+  (it is for the whole run, never one array), or drop the other array. A path that ends in
+  <code>[]</code> (<code>ids[]</code>, the elements themselves) needs <code>--keep-order</code>: an array of IDs may be
+  paired by position with arrays in other files. Other arrays and the order of keys are
+  kept.</li>
+<li>Refused as unreadable: a key twice in one object, <code>NaN</code>, <code>Infinity</code>, a number out of
+  range (<code>1e400</code>), an integer of more than 4300 digits, nesting deeper than 100 levels, a
+  lone surrogate (<code>\ud800</code>, which has no UTF-8 form).</li>
+<li>Every key and every value of the copy is a field for the scan below; a number that is
+  whole is also read as its integer (<code>1234.0</code>, <code>"9.990001e6"</code> for <code>9990001</code>). The copy is
+  written with an indent of 2, and it must read back as the coded document. A message
+  names a key by its number in the order of the file. The run reports no count.</li>
+<li>Each of them gzip-compressed (<code>.tsv.gz</code>, <code>.maf.gz</code>, <code>.vcf.gz</code>, <code>.json.gz</code>, <code>.md.gz</code>). Every member is read, up to
+1 GiB expanded. The copy is plain gzip with no name and no time, and it must read back as
+the coded table before it is written. A bgzip (BGZF) input, every block of it, gives a
+BGZF copy; for a VCF, <code>tabix -p vcf OUT</code> indexes it. An index (<code>.tbi</code>, <code>.csi</code>) is never
+read or copied. A BGZF file must end with its EOF block (one cut short is refused), and a
+file that mixes BGZF blocks and plain gzip members is refused.</li>
+<li><code>.md</code>: the file holds only pipe tables and blank lines. The names of <code>--columns</code>,
+<code>--drop</code> and <code>--keep</code> apply to each table whose header holds them:</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>pseudonymize<span class="w"> </span>--new-key<span class="w"> </span>labs<span class="w"> </span>--columns<span class="w"> </span>mrn<span class="w"> </span>~/raw/labs.md<span class="w"> </span>~/data/patients/labs-coded.md
+</code></pre></div>
+<ul>
+<li>Each line of a table starts and ends with <code>|</code>, and the second line is the alignment row
+  (<code>| --- | :---: |</code>). Any other line is free text and is refused: prose, a heading, a
+  list, code, front matter, an HTML comment, a row without its outer pipes.</li>
+<li>A line with a backslash or a backtick is refused: an escaped pipe (<code>\|</code>) or a code span
+  has no safe split into cells. A line with <code>&lt;</code>, <code>[</code> or <code>]</code> is refused: inline HTML,
+  links, images and autolinks are not covered (write <code>&amp;lt;</code> for a <code>&lt;</code>). A header with
+  emphasis or an entity (<code>**id**</code>, <code>_mrn_</code>, <code>patient&amp;#95;id</code>) is refused: write it plain.</li>
+<li>Two tables need a blank line between them: a row inside a table whose cells are all
+  like <code>---</code> is refused (it would read as a second header, coded as IDs). So is a body
+  row of dashes only (<code>| - | - |</code>).</li>
+<li>Each table follows the table rules: every column that looks like an identifier is
+  named, in that table. Each name is found in some table, and one ID gets one code in
+  all of them.</li>
+<li>The body rows of a table with a coded column are shuffled (<code>--keep-order</code> keeps them);
+  the other tables keep their order. The header and the alignment row are kept. The copy
+  is written as <code>| a | b |</code> lines, one blank line between tables, and read back.</li>
+<li>For the scan, every cell is also read with its HTML entities decoded (<code>&amp;#45;</code>,
+  <code>&amp;amp;#45;</code>, <code>&amp;hyphen;</code>, also nested up to 4 times; deeper is refused) and its
+  emphasis marks removed (<code>**</code>, <code>_</code>, <code>~~</code>): <code>&amp;#70;AKE-PT-0001</code> and <code>999**0001**</code> are
+  found. A message names a table by its number. The run reports the row count of all
+  tables.</li>
+<li>Not covered: Parquet; convert it to TSV with your own tools first.</li>
+<li>A file that cannot be read or written as its kind gives one fixed refusal.</li>
+<li>The rows are shuffled, so a file sorted by MRN does not give away the order of the IDs.
+  <code>--keep-order</code> keeps the order.</li>
+<li>The home folder itself is not a project (your <code>~/.claude</code> is Claude Code's own folder), so
+  an input in a folder of your home is taken; one below a project inside it is not.</li>
+<li>The input is one table of those kinds (UTF-8, every row as wide as the header), reached with
+  no link, outside every place an agent can write: the working folder and its git work tree,
+  any project (a folder with <code>.git</code>, <code>.claude</code> or <code>.phiward.toml</code> above the input), the temp
+  folders, the sandbox's <code>allowWrite</code> and <code>additionalDirectories</code>,
+  a <code>write_to</code> folder, the spool and <code>~/.phiward</code>. No field of the output (a cell, a header, the
+  kept <code>#version</code> line, the codes too) may hold an ID of a coded column or of the key, also in
+  another letter case, Unicode form, dash (<code>‐</code>, <code>–</code>, <code>−</code> and the other Unicode dashes) or
+  script of digits, or escaped (<code>%2D</code>, <code>\u002D</code>, <code>%E2%80%90</code>, also escaped twice): an ID of
+  5 or more characters anywhere in a field, or across the fields of a line as written (<code>Doe,
+  John</code> as the CSV fields <code>Doe</code> and <code>John</code>), and one with a letter also with every
+  character but letters and digits removed (<code>FAKE PT 0001</code>, <code>FAKE.PT.0001</code>,
+  <code>FAKE-**PT**-0001</code> for <code>FAKE-PT-0001</code>; digits are never joined, so <code>999 0001</code> is not
+  <code>9990001</code>); one of 5 or more digits as a whole run of digits, so
+  <code>see 9990002</code> refuses and <code>19990001</code> does not; a shorter one with a letter as a whole word;
+  a shorter one of digits only as the whole field. No field may hold an invisible format
+  character. Not found: a short digit ID
+  inside a cell (<code>12</code> in <code>12 mg</code>), an ID glued to other digits (<code>19990001</code>), an ID written
+  another way (with spaces or other hyphens, <code>9 990 001</code>), an ID with its leading zeros
+  dropped or added (<code>0001</code> and <code>1</code>). Check such columns yourself, or drop them. Two IDs
+  that are the same once normalized, as the scan reads them (<code>P-1</code>, <code>p-1</code>, a full-width
+  <code>Ｐ-1</code>; <code>FAKE%2DPT-0001</code>, <code>FAKE PT 0001</code> for <code>FAKE-PT-0001</code>; not <code>FAKE-PT-00011</code>), in the
+  input or in the input and the key, are refused: make them one first. A key that already
+  holds two such IDs cannot code either again: start a new key. The output is a new file of the same kind inside a protected root of your user
+  config, outside every <code>write_to</code> folder. It is never replaced. The agent reads it through <code>phiward run</code>, masked; the codes pass the masks.</li>
+<li>The key is <code>~/.phiward/backups/keys/NAME.tsv</code>. No session, launch or gateway command can read
+  or write it. It is only ever added to. <code>phiward install claude</code> makes <code>~/.phiward/backups</code>;
+  until then the command refuses. Keep a backup of the key where no agent can reach it: a lost
+  key cannot be rebuilt, and new runs give new codes.</li>
+<li>The command refuses without a terminal, and the hook refuses it as an agent command. Its
+  messages name no value, header or path, and a run reports only the row count.</li>
+</ul>
+</li>
+</ul>
+<p>Never run it on a file the agent made or asked for, wherever it is, or with a key name the
+agent chose: the codes it gives would confirm the IDs the agent guessed. A file inside a
+protected root may have been put there by <code>phiward copy</code> at the agent's request; the command
+cannot tell. Run it from the folder of the project whose agent will read the copy: the
+places it refuses come from that project's sandbox settings (and the user's). Run it in a terminal the agent's app
+cannot read (not the app's own terminal panel): the command line you type, with its paths and
+headers, stays in the terminal's scrollback. What the codes do not hide is in
+<a href="../threat-model/#known-limits">threat-model.md</a>.</p>
+<h2 id="check-a-command-phiward-check">Check a command: <code>phiward check</code><a class="headerlink" href="#check-a-command-phiward-check" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>check<span class="w"> </span>--<span class="w"> </span>cat<span class="w"> </span>~/data/patients/file.txt
+</code></pre></div>
+<p><code>check</code> prints the hook's decision for a shell command in the current folder (<code>allow</code>, <code>ask</code> or
+<code>deny</code>) and the reason. The exit code is 0, 1 or 2. <code>--cwd DIR</code> before <code>--</code> checks from another
+folder. <code>check</code> answers as if the command ran in Claude Code's sandbox. Where the shell is not
+confined, the hook refuses every command but a whole gateway call, whatever <code>check</code> says. It joins its words with spaces, so quoting in the command is lost.</p>
+<h2 id="filter-your-own-output-phiward-sanitize">Filter your own output: <code>phiward sanitize</code><a class="headerlink" href="#filter-your-own-output-phiward-sanitize" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>some-producer<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>phiward<span class="w"> </span>sanitize
+</code></pre></div>
+<p><code>sanitize</code> masks each line from stdin to stdout, with a <code>sanitizer on:</code> line before and a
+<code>sanitizer done:</code> line after. It does not list the roots, so it does not mask entry names
+(<code>&lt;ENTRY&gt;</code>); <code>run</code> does. Use it for output you share outside the agent. Options: <code>--table</code>,
+<code>--names-from FILE</code>, <code>--check FILE</code> and <code>--check-table FILE</code> (report whether a file would
+change), and <code>--selftest</code> (run the built-in test lines). <code>--table</code> and <code>--check-table</code> need
+<code>[sanitize] table = true</code>, read from the caller's own config: in this form that is a
+convenience, not a guard. Here <code>--table</code> reads no columns: each line is masked for identifiers
+only, and numbers and positions are kept. The hook does not accept this pipe form as a way to read protected
+data: use <code>phiward run</code>.</p>
+<h2 id="when-a-command-is-refused">When a command is refused<a class="headerlink" href="#when-a-command-is-refused" title="Permanent link">&para;</a></h2>
+<p>A refusal is a decision, not a fault. The reason says what to run instead. The agent must not
+try another spelling, a link, a nested shell, an encoded command or another tool to reach the
+same data. It also does not ask you to show it the data (<code>! cat</code>, a paste, a copy into the project)
+or to remove a guard. If it does, say no: that sends the data to the model provider.</p>
+<p>Refusals that typical work meets (a folder on PATH, a wrapper, the package caches, git with
+credentials, a private mirror), with the way around each: <a href="../refusals/">refusals.md</a>.</p>
+<p>Who acts on a refusal:</p>
+<pre class="mermaid"><code>flowchart TD
+  A["A command is refused"] --&gt; B{"What does the reason name?"}
+  B --&gt;|"a protected path"| C["The agent: use phiward run or phiward copy"]
+  B --&gt;|"a credential or the hidden list"| D["Stop: ask the operator"]
+  B --&gt;|"the broker, the config, a grant or the program list"| E["The agent: use what is granted or listed; else the operator"]</code></pre>
+<h3 id="refusals-from-the-hook">Refusals from the hook<a class="headerlink" href="#refusals-from-the-hook" title="Permanent link">&para;</a></h3>
+<p>The hook refuses a tool call that names a protected path, and ends its reason with the rule:
+no tool may read, list, search or print a protected path; use <code>phiward run -- CMD</code> as the
+whole command, or <code>phiward copy</code>. Once a config exists, it also refuses <code>phiward setup</code>,
+<code>broker</code>, <code>pin</code>, <code>carryover</code> and <code>pseudonymize</code>: those are for the operator only.</p>
+<h3 id="a-prompt-that-was-not-sent">A prompt that was not sent<a class="headerlink" href="#a-prompt-that-was-not-sent" title="Permanent link">&para;</a></h3>
+<p>Before Claude Code sends a prompt, phiward checks it. A prompt that holds an identifier of
+your packs or <code>[sanitize] patterns</code>, or a path below a protected root, is not sent:
+<code>phiward: this prompt was not sent: it holds &lt;SAMPLEID&gt; (masked by your packs or [sanitize]
+patterns). ...</code>. The message names the kind, never the value, and the prompt does not reach
+the model. To go on, send it again without that part: use the masked form (<code>&lt;SAMPLEID&gt;</code>), a
+pseudonymized ID (<code>phiward pseudonymize</code>), or let the agent reach the data through the gateway
+(<code>phiward run -- CMD</code>). A message that ends "run <code>phiward doctor</code>" means the check itself
+could not run (a config or pack file it cannot use): every prompt is refused until it is fixed.
+What the check does not see: <a href="../threat-model/#known-prompt-scan">threat-model.md</a>.</p>
+<h3 id="messages-from-run-and-copy">Messages from <code>run</code> and <code>copy</code><a class="headerlink" href="#messages-from-run-and-copy" title="Permanent link">&para;</a></h3>
+<p>Messages start with <code>run</code> or <code>copy</code> (the table shows <code>run</code>; <code>copy</code> says the same), and the real
+text goes on with more detail. Five come from the broker itself and start with <code>refused:</code>
+(busy; cannot use this request; the config changed; programs not approved; the masking check
+failed); all five exit with 3. An exit of 3 with no output at all means the broker refused the request before it could write
+anything: the broker's log has the reason.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Meaning</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[... no identifier placeholder in the N lines shown ...]</code></td>
+<td>20 or more lines were shown and no rule masked a subject, a sample or a protected name in them.</td>
+<td>If the data names subjects or samples, the operator checks <code>[sanitize] packs</code> and <code>patterns</code> (<code>phiward doctor</code>).</td>
+</tr>
+<tr>
+<td><code>run refused: no phiward broker is running</code></td>
+<td>No broker, or its heartbeat is older than 10 s.</td>
+<td>The operator starts the broker: <code>phiward broker</code> in a terminal, or the login service (<a href="../setup/#5-start-the-broker">setup.md §5</a>).</td>
+</tr>
+<tr>
+<td><code>run refused: the request could not be written to the broker's spool folder</code></td>
+<td>The client cannot write the spool.</td>
+<td>The operator adds the spool folder to the tool's sandbox <code>allowWrite</code> (<code>phiward install claude</code> does it).</td>
+</tr>
+<tr>
+<td><code>run refused: the phiward config cannot be used</code></td>
+<td>A bad config.</td>
+<td>The operator runs <code>phiward doctor</code> (with <code>--show-paths</code> for a repo config, in their own terminal) and fixes the file.</td>
+</tr>
+<tr>
+<td><code>run refused: this program is not in [broker] commands of the config</code></td>
+<td>The operator lists the programs gateway commands may run.</td>
+<td>Use a listed program, or ask the operator to add yours; they restart the broker after. For a script the agent wrote, see <a href="#run-a-script-the-agent-wrote">above</a>.</td>
+</tr>
+<tr>
+<td><code>run refused: no protected paths are configured</code></td>
+<td>The operator has not set phiward up yet.</td>
+<td>The operator runs <code>cd ~ &amp;&amp; phiward setup</code> in their own terminal.</td>
+</tr>
+<tr>
+<td><code>run refused: --write-to names a folder that is not granted</code></td>
+<td>DIR is not a <code>[broker] write_to</code> folder or inside one (or is a link to somewhere else).</td>
+<td>Use a granted folder, or ask the operator to add one.</td>
+</tr>
+<tr>
+<td><code>run refused: --net is not granted</code></td>
+<td><code>[broker] net</code> is not true.</td>
+<td>Work without the network, or ask the operator.</td>
+</tr>
+<tr>
+<td><code>run refused: the program is not on the broker's PATH</code></td>
+<td>The program is found neither on the broker's <code>PATH</code> nor as an executable path.</td>
+<td>Give the full path of the program (when a program list is set, only a program listed by its path or folder). Or the operator starts the broker again from a terminal where the program works (for example after <code>conda activate</code>).</td>
+</tr>
+<tr>
+<td><code>run refused: a write place is no longer a real folder</code></td>
+<td>A link was put on the path of a granted folder after it was checked.</td>
+<td>The operator checks that folder.</td>
+</tr>
+<tr>
+<td><code>run failed: the command could not start</code></td>
+<td>The program could not be started.</td>
+<td>Check the program and its path.</td>
+</tr>
+<tr>
+<td><code>copy refused: ... not under a configured remote</code></td>
+<td>A remote source or destination is not a <code>[copy] remotes</code> entry.</td>
+<td>Ask the operator to add the remote.</td>
+</tr>
+<tr>
+<td><code>copy refused: start your shared connection first …</code></td>
+<td>The shared SSH connection to the host is not running.</td>
+<td>The operator runs <code>kinit</code>, then <code>ssh -fN HOST</code>.</td>
+</tr>
+<tr>
+<td><code>refused: the broker cannot use this request (...)</code></td>
+<td>The request was malformed, or its folder does not exist.</td>
+<td>Run the command again from an existing folder.</td>
+</tr>
+<tr>
+<td><code>copy refused: a local path holds `..` or starts with `~`</code></td>
+<td>A local source or destination was written with <code>..</code> or a quoted <code>~</code>.</td>
+<td>Give the full path.</td>
+</tr>
+<tr>
+<td><code>copy refused: options are not accepted</code></td>
+<td><code>copy</code> picks its own options.</td>
+<td>Remove the options (only <code>--dry-run</code> first is allowed).</td>
+</tr>
+<tr>
+<td><code>refused: the broker is busy</code></td>
+<td>Too many requests wait.</td>
+<td>Try again later.</td>
+</tr>
+<tr>
+<td><code>refused: the masking check failed when the broker started</code></td>
+<td>A value of <code>[sanitize] examples</code> is not fully masked by the operator's rules, or a made-up path below a root came out unmasked.</td>
+<td>The operator runs <code>phiward doctor</code>, which names the entry or the root by number, fixes the config and restarts the broker.</td>
+</tr>
+<tr>
+<td><code>refused: the phiward config changed since the broker started</code></td>
+<td>The config, the approved programs or a names file changed while the broker ran.</td>
+<td>The operator reads the change and restarts the broker.</td>
+</tr>
+<tr>
+<td><code>refused: N program(s) of [broker] commands differ from what the operator approved</code></td>
+<td>A listed program changed, is new, cannot be read or is a link.</td>
+<td>The operator runs <code>phiward doctor</code>, checks the programs, runs <code>phiward pin</code> and restarts the broker.</td>
+</tr>
+<tr>
+<td><code>run refused: the sanitizer cannot start</code></td>
+<td>A pack, a names file or the entry limit is wrong.</td>
+<td>The operator runs <code>phiward doctor</code>.</td>
+</tr>
+<tr>
+<td><code>copy refused: the destination is not under [remote] roots of the user config ...</code></td>
+<td>A push goes only under a remote root, where remote output is masked.</td>
+<td>Ask the operator to add the folder to <code>[remote] roots</code> (<code>phiward setup</code> does it).</td>
+</tr>
+<tr>
+<td><code>copy refused: the destination is not inside a protected path of the user config</code></td>
+<td>A copy may not leave the protected folders.</td>
+<td>Copy into a protected folder, or to a configured remote.</td>
+</tr>
+<tr>
+<td><code>run stopped: cancelled</code></td>
+<td>The client was interrupted (Ctrl-C); the broker stopped the command.</td>
+<td>None.</td>
+</tr>
+<tr>
+<td><code>run stopped: the broker stopped before the command finished</code></td>
+<td>The broker went away.</td>
+<td>The operator restarts it.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>doctor</code> says the sandbox does not confine the shell.</strong> The reason follows. The usual ones:
+  a root is missing from <code>denyRead</code> or <code>denyWrite</code> (run
+  <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again after a config change), <code>excludedCommands</code> is not empty, a unix socket is allowed, an
+  <code>allowRead</code> entry re-opens a root, or patterns are configured. (Inside Claude Code, the hook
+  also needs <code>$CLAUDE_PROJECT_DIR</code>; Claude Code sets it.) The hook then refuses shell commands
+  other than gateway calls, <code>doctor</code> and <code>check</code>. With <code>[shell] best_effort</code> on,
+  the hook checks shell command text instead, which is best effort
+  (<a href="../configuration/#shell">configuration.md</a>). When <code>excludedCommands</code> is the only cause, the
+  hook checks the text of every command in the same way, and refuses one that names protected
+  data or a path it cannot see; the refusal names the file that holds the entry.</li>
+<li><strong>A folder with no PHI needs a sandbox opener</strong> (on macOS, <code>allowLocalBinding</code> for a dev
+  server). The operator lists the exact folder in <code>[no_phi] folders</code> of the user config; there
+  Bash gets the text check in place of the refusal, when the openers are the only cause
+  (<a href="../configuration/#no_phi">configuration.md</a>). The session's start message and <code>phiward
+  doctor</code> say whether the folder is relaxed, by the hook's own test; when it is not, they say
+  why (a unix socket, a root missing from <code>denyRead</code>) and the step when there is one.</li>
+<li><strong><code>doctor</code> says the broker uses another config.</strong> The broker and the agent tool were started
+  with a different <code>HOME</code>, <code>PHIWARD_CONFIG</code> or <code>XDG_*</code> variable. Start both from the same
+  environment.</li>
+<li><strong><code>doctor</code> warns that the masking check failed, and <code>launch</code> refuses.</strong> A value of
+  <code>[sanitize] examples</code> is not fully masked, or a made-up path below a root came out unmasked.
+  The warning names the entry, the rule or the root by number. Fix the rule (often an edit
+  that narrowed it), or the example if it is not in the rule's form; then restart the broker
+  (<a href="../configuration/#sanitize">configuration.md</a>).</li>
+<li><strong><code>launch</code> refuses: <code>the project scan found &lt;SUBJECT&gt; in 3 files</code>.</strong> A project file, or a
+  file name, holds a subject or sample ID outside the protected roots. Run <code>phiward doctor
+  --show-paths</code> in your own terminal: it lists the files (masked) and line numbers. Move the
+  data under a protected root, or make a pseudonymized copy (<code>phiward pseudonymize</code>). For
+  made-up IDs (test fixtures), add the files or their folder to <code>[sanitize] scan_allow</code> in your
+  user config (<a href="../launch/#the-project-scan">launch.md</a>).</li>
+<li><strong>A write place is skipped.</strong> <code>doctor</code> says why: it does not exist yet, or a link is on its
+  path. Name the real folder in <code>write_to</code>.</li>
+<li><strong>A gateway command fails to write to <code>/tmp</code>.</strong> The gateway sees <code>/tmp</code> read-only. It writes
+  temporary files to <code>$TMPDIR</code>, its private scratch folder.</li>
+<li><strong>git does not work in a repository.</strong> A protected root sits in that work tree, so its <code>.git</code>
+  is protected. Move the data out of the repository.</li>
+<li><strong>Your endpoint tool stops or reports a phiward process.</strong> Send your IT or security team
+  <a href="../endpoint-security/">endpoint-security.md</a>: it lists every process phiward starts on a Mac,
+  with its command line and a regex for an exception.</li>
+<li><strong>Every shell command fails after an upgrade.</strong> An older phiward's shell prefix is still set:
+  run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code> again (<code>doctor</code> warns about it).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../quickstart/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Quick start">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Quick start
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../refusals/" class="md-footer__link md-footer__link--next" aria-label="Next: Refusals and the way around">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Refusals and the way around
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>

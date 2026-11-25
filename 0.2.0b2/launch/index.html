@@ -1,0 +1,2085 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Keep protected health information (PHI) out of what an AI coding agent sends to its model provider">
+      
+      
+      
+        <link rel="canonical" href="https://msk-access.github.io/phiward/0.2.0b2/launch/">
+      
+      
+        <link rel="prev" href="../unattended/">
+      
+      
+        <link rel="next" href="../setup/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
+    
+    
+      
+        <title>Mode B: phiward launch - phiward</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.fb2fffe2.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mode-b-the-agent-tool-under-phiward-launch" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="phiward" class="md-header__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            phiward
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Mode B: phiward launch
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="custom" data-md-color-accent="custom"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="phiward" class="md-nav__button md-logo" aria-label="phiward" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    phiward
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/msk-access/phiward" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    msk-access/phiward
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../status/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Status
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Use phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Use phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick start
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../daily-use/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Daily use
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../refusals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Refusals and the way around
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hpc/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HPC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unattended/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agents with nobody watching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mode B: phiward launch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Once
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a session can and cannot do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-folders-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More folders to write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The network
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-session-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a session ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux-the-sessions-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: the session's view
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-in-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits in this release
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Setup in detail
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Commands
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../glossary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Glossary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Decide whether it is enough
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Decide whether it is enough
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../why/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Why phiward
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The two modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../threat-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Threat model and limits
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../endpoint-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For IT and security teams
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Change phiward
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Change phiward
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    For contributors
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release notes
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Release notes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release-notes/v0.2.0b1/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0.2.0b1
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#once" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Once
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#every-session" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Every session
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project scan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-a-session-can-and-cannot-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a session can and cannot do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-folders-to-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More folders to write
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-network" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The network
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-session-ends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a session ends
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#linux-the-sessions-view" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: the session's view
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#self-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#limits-in-this-release" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Limits in this release
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="mode-b-the-agent-tool-under-phiward-launch">Mode B: the agent tool under <code>phiward launch</code><a class="headerlink" href="#mode-b-the-agent-tool-under-phiward-launch" title="Permanent link">&para;</a></h1>
+<ul>
+<li><strong>For:</strong> people who run the agent in a terminal and want the whole tool confined.</li>
+<li><strong>Before:</strong> the <a href="../quickstart/">quick start</a>, steps 1 and 2.</li>
+<li><strong>You will have:</strong> sessions in phiward's kernel profile, with settings you approve.</li>
+</ul>
+<p><code>phiward launch --tool claude</code> runs <strong>the whole agent tool</strong>, and everything it starts,
+inside the kernel profile: its file tools, shell, MCP servers and hooks. The tool cannot read your
+protected data, whatever the model asks it to do. You work with protected data through the
+gateway (<code>phiward run</code>, <code>phiward copy</code>), which masks what comes back. This is the
+strongest mode (Mode B). A normal Claude Code session wired by the hook (Mode A) is the other;
+<a href="../modes/">modes.md</a> compares them.</p>
+<p>Tested with the real Claude Code on macOS: reads of protected data by the file tools and the shell
+were refused, and the gateway returned masked output. Mode B is for the terminal: driving a
+<code>launch</code> session from the desktop app with Remote Control is not tested yet.</p>
+<p>How a session's settings stay trusted:</p>
+<pre class="mermaid"><code>flowchart TD
+  A["The trusted copy (what you added with carryover add)"] --&gt; B["A fresh folder for this session"]
+  B --&gt; C["The session runs in the kernel profile"]
+  C --&gt; D["What it changed goes to quarantine"]
+  D --&gt; E{"phiward carryover show: you read it"}
+  E --&gt;|"accept"| A
+  E --&gt;|"leave it"| F["Not used by later sessions"]</code></pre>
+<h2 id="once">Once<a class="headerlink" href="#once" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Install and set up: steps 1 and 2 of the <a href="../quickstart/">quick start</a>.</li>
+<li>A login token, because each session starts in a fresh config folder: run <code>claude setup-token</code>
+   in a plain terminal, open the URL, approve, and keep the token it prints. Then, in the terminal
+   where you start sessions:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">CLAUDE_CODE_OAUTH_TOKEN</span><span class="o">=</span><span class="s1">'&lt;the token&gt;'</span>
+</code></pre></div>
+<p>The agent can read this variable, like an API key. Revoke it in your Claude account settings
+   when you no longer need it.
+3. The broker must run (for <code>run</code> and <code>copy</code>): best as a login service
+   (<a href="../setup/#5-start-the-broker">setup.md</a>), or <code>phiward broker</code> in a terminal of its own.</p>
+<p>On a Mac with an endpoint tool: a session starts <code>/usr/bin/sandbox-exec -f &lt;profile&gt;</code> with the
+tool's full path, and Claude Code then starts phiward's hook on each tool call.
+<a href="../endpoint-security/">endpoint-security.md</a> lists each command line, for your IT or security
+team.</p>
+<h2 id="every-session">Every session<a class="headerlink" href="#every-session" title="Permanent link">&para;</a></h2>
+<p>From the project folder:</p>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>launch<span class="w"> </span>--tool<span class="w"> </span>claude
+</code></pre></div>
+<ul>
+<li><code>--memory</code>: turn Claude Code's auto memory on. It then lives in the session's folder, and its
+  changes go to quarantine like any other instruction.</li>
+<li><code>launch</code> refuses to start in <code>/</code>, your home, a folder above or inside protected data, a dot
+  folder, <code>~/Library</code> (macOS), a folder on your <code>PATH</code>, or a phiward folder. On Linux it also
+  refuses <code>/tmp</code> itself (as the project or the spool): the session's own <code>/tmp</code> would be the shared
+  one. A folder below <code>/tmp</code> works.</li>
+<li><strong>Python environments:</strong> an activated <code>.venv</code> puts a folder of the project on your <code>PATH</code>, so
+  <code>launch</code> refuses: your own shell would run what the session wrote there. The refusal names the
+  entry: <code>PATH holds /path/to/project/.venv/bin, inside the project; ... Run deactivate (or take
+  it off PATH), then start again</code>. Run <code>deactivate</code> before <code>launch</code>; inside the session, use
+  <code>.venv/bin/python</code> or <code>uv run</code>. For another entry (direnv), take it off <code>PATH</code> (<code>direnv deny</code>).
+  An empty entry (a leading or trailing <code>:</code>, or <code>::</code>), <code>.</code> or another relative entry is refused
+  too: it names the folder your shell is in, the project or a folder of it. Remove it from
+  <code>PATH</code>, then start again.</li>
+<li><code>--resume</code> and <code>-c</code> find this project's earlier <code>launch</code> sessions
+  (<a href="#when-a-session-ends">When a session ends</a>).</li>
+<li><code>launch</code> refuses to start when the masking check fails: <code>the masking check failed: ...; run
+  phiward doctor</code>. A value of <code>[sanitize] examples</code> is not fully masked by your own rules, or a
+  made-up path below a root came out unmasked
+  (<a href="../configuration/#sanitize">configuration.md</a>). Fix the rule, the example or the root, then
+  start again. A wrapped MCP server (<code>--entry</code>) is not checked.</li>
+<li><code>launch</code> refuses to start when the project scan finds a subject or sample ID in a project
+  file or a file name (<a href="#the-project-scan">The project scan</a>).</li>
+<li>Several <code>launch</code> sessions may run side by side, also in one project (see limit L8 of the
+  threat model).</li>
+<li>On macOS the tool starts as <code>/usr/bin/sandbox-exec -f FILE TOOL ARGS...</code>, with nothing in
+  between. The profile is a new file in <code>~/.phiward/profiles</code>, as for the gateway, removed when
+  the tool ends. A program name is found on the session's <code>PATH</code> first; when there is none,
+  <code>launch</code> says so and exits 127. Inside another sandbox, <code>sandbox-exec</code> cannot apply the
+  profile, and nothing runs. When the tool exits with an error within a few seconds of its
+  start, <code>launch</code> adds a line: if <code>sandbox-exec</code> printed an error above it, <code>phiward doctor</code>
+  names the cause (inside another sandbox, or a profile that does not compile).</li>
+<li>The hooks <code>launch</code> writes into the session's settings (the fast hook and the prompt check)
+  run from a file in phiward's package, <code>&lt;python&gt; -I -S &lt;package&gt;/phiward/entry.py ...</code>, with
+  <code>onFailure: "block"</code>. So <code>launch --tool claude</code> refuses, on macOS and Linux, a Claude Code
+  older than 2.1.295, which would not honour them. It never starts a program inside the
+  project or the session's folders to learn the version. It asks the native binary
+  <code>TOOL --version</code>, from <code>/</code>. It never starts a script (the npm build): the script's
+  interpreter, or a shim's config, could be the session's. It reads the version from the
+  <code>package.json</code> of the script's npm package (<code>@anthropic-ai/claude-code</code>). A tool that gives
+  no Claude Code version (another program, a wrapper, a mise or asdf shim) is refused too:
+  run Claude Code's own program directly (the native binary, or the npm package's <code>cli.js</code>),
+  or use <code>--tool generic</code> for another tool. <code>phiward doctor</code> warns about a wrapper before the
+  start (<a href="../refusals/">refusals.md</a>).</li>
+</ul>
+<h2 id="the-project-scan">The project scan<a class="headerlink" href="#the-project-scan" title="Permanent link">&para;</a></h2>
+<p>A file in the project is outside the protected roots, so the agent reads it with no gateway.
+Claude Code also sends <code>CLAUDE.md</code> and the list of file names at the start, with no tool call.
+So, before the tool starts, <code>launch</code> reads the project for subject and sample IDs.</p>
+<ul>
+<li><strong>The rules:</strong> the subject rules only: your <code>[sanitize] patterns</code>, your pack files, and the
+  built-in packs in force (a repo's <code>.phiward.toml</code> may add one, such as <code>msk</code>). Not file
+  names, read names, positions, numbers, dates, protected paths or the entry names under the
+  roots: a project holds those everywhere. With no subject rule, there is no scan.</li>
+<li><strong>What it reads:</strong> one walk of the project folder, git-ignored files too: first the
+  instruction files Claude Code sends at the start (<code>CLAUDE.md</code>, <code>CLAUDE.local.md</code>,
+  <code>AGENTS.md</code>, <code>.claude/</code>), names and content; then every other name, breadth first; then the
+  other files' content, the smallest first. Of each
+  regular file it reads the first 64 KiB (<code>phiward doctor</code>: 1 MiB): of its decompressed form
+  for gzip and BGZF (<code>.csv.gz</code>, <code>.vcf.gz</code>), and as UTF-16 with a BOM (Excel's "Unicode text").
+  A folder named after an ID is one finding, not one for each file below it.</li>
+<li><strong>What it does not read:</strong> binary files (a NUL byte in the first 8 KiB: xlsx, parquet, BAM),
+  lines over 64 KiB, anything past the first 64 KiB (doctor: 1 MiB), the targets of links, files it cannot open,
+  more than 10000 entries of one folder, the protected and hidden paths, the folders of
+  installed code and caches (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>,
+  <code>.tox</code>, <code>target</code>, <code>.git</code>, <code>__pycache__</code>, <code>.mypy_cache</code>, <code>.pytest_cache</code>, <code>.ruff_cache</code>,
+  <code>.claude/worktrees</code>), and the paths in <code>[sanitize] scan_allow</code>. It runs no git command:
+  git would run programs that the project's <code>.git/config</code> names.</li>
+<li><strong>On a finding:</strong> <code>launch</code> refuses, and says the kinds and counts only:
+  <code>the project scan found &lt;SUBJECT&gt; in 3 files: move the data under a protected root,
+  pseudonymize it (phiward pseudonymize), or allow the files ([sanitize] scan_allow); phiward
+  doctor --show-paths lists them</code>. Run <code>phiward doctor --show-paths</code> in your own terminal to see
+  the files (masked paths and line numbers). Then move the data under a protected root, make a
+  pseudonymized copy (<code>phiward pseudonymize</code>), or, for made-up IDs only, add the files to
+  <code>[sanitize] scan_allow</code> in your user config
+  (<a href="../configuration/#sanitize">configuration.md</a>).</li>
+<li><strong>The budget:</strong> 2 s. On a made-up project of 5,012 files (5,000 source files of 4 KB and ten
+  2 MiB tables), the scan read all of them in 1.6 s on the maintainer's Mac. A larger project starts
+  anyway, after one line: <code>phiward launch: NOTE: the project scan stopped at its 2 s limit
+  after N files; run phiward doctor for the full scan</code>. An ID found before the limit still
+  refuses. <code>phiward doctor</code> scans with no limit. A scan that finished but left part of the
+  project unread (files past their head, long lines, folders over the entry cap, files it
+  cannot open) starts with one NOTE of those counts.</li>
+<li><strong>A scan that cannot run</strong> refuses: <code>the project scan could not run; run phiward doctor</code>.</li>
+<li><strong><code>[launch] write_to</code> folders</strong> are scanned too, in the same 2 s, the instruction files of
+  every folder first (<a href="#more-folders-to-write">More folders to write</a>).</li>
+<li>A wrapped MCP server (<code>--entry</code>) is not scanned: its folder is not the agent's project.</li>
+<li><strong>Mode A</strong> has no launch: the SessionStart note runs the same scan within 2 s and, on a
+  finding, tells the session the kinds and counts (it never stops the session), and
+  <code>phiward doctor</code> warns. When the scan cannot run, the note says so and asks the agent to have
+  you run <code>phiward doctor</code>. Under <code>launch</code> the note does not scan again. <code>phiward doctor --headless</code> lists a finding as a reason.</li>
+</ul>
+<h2 id="what-a-session-can-and-cannot-do">What a session can and cannot do<a class="headerlink" href="#what-a-session-can-and-cannot-do" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Can</th>
+<th>Cannot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Files</td>
+<td>read and write the project and the <a href="#more-folders-to-write"><code>[launch] write_to</code></a> folders (user config); write its own session folder and the spool</td>
+<td>read protected roots, patterns or derived folders (<code>.git</code>, snapshots, and on Linux other mounts of the same data); read credentials (<code>~/.ssh</code>, <code>~/.aws</code>, <code>~/.claude</code>, other agent tools' logins, browser profiles, Kerberos tickets and keytabs, SSH keys your SSH config names, research-data and registry logins), shell histories, the Trash, or the gateway's <code>write_to</code> folders; write anywhere else</td>
+</tr>
+<tr>
+<td>Files that run later</td>
+<td></td>
+<td>write, at any depth in the project and in each <code>[launch] write_to</code> folder, the <code>.claude</code>, <code>.vscode</code>, <code>.idea</code>, <code>.cursor</code>, <code>.gemini</code> and <code>.codex</code> folders (each as a whole), <code>.mcp.json</code>, <code>.gitmodules</code>, <code>.ripgreprc</code>, <code>.Rprofile</code> or <code>.Renviron</code>, or what a link inside them leads to; or git control files (hooks, config). On Linux <code>launch</code> makes <code>.claude</code>, <code>.vscode</code> and <code>.idea</code> in the project if there are none and <code>.mcp.json</code> as a <code>{}</code> placeholder; the others, a git control file missing at the start (<code>commondir</code>), and one of these made in a subfolder during the session can be made there, and the report at the end names them. In a <code>[launch] write_to</code> folder launch makes nothing; one missing at the start can be made there, and the report at the end names it. A wrapped MCP server (<code>--entry</code>) has the same profile, and cannot write the project's <code>.git</code> folders at all (on macOS also a new <code>.git</code>)</td>
+</tr>
+<tr>
+<td>Processes</td>
+<td>run any program in the profile</td>
+<td>read other terminals, signal processes outside, inject keystrokes, open or script other apps; on macOS also mount file systems or create launchd jobs</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>tunnels (CONNECT) to public addresses, through phiward's proxy (<a href="#the-network">below</a>)</td>
+<td>reach this machine's own services, its link or private ranges; use plain HTTP, UDP, or tools that ignore the proxy variables; reach outside unix sockets (the SSH agent, your shared SSH connection, docker); on Linux before 7.1, see Limits for what stays outside Claude Code's sandbox</td>
+</tr>
+<tr>
+<td>Protected data</td>
+<td><code>phiward run -- CMD</code> (masked output), <code>phiward copy</code> (no names printed)</td>
+<td>anything else</td>
+</tr>
+</tbody>
+</table>
+<h2 id="more-folders-to-write">More folders to write<a class="headerlink" href="#more-folders-to-write" title="Permanent link">&para;</a></h2>
+<p>A project may need to write a sibling repository, a shared output folder or a scratch area.
+List those folders in your user config (a repo's <code>.phiward.toml</code> cannot):</p>
+<div class="highlight"><pre><span></span><code><span class="k">[launch]</span>
+<span class="n">write_to</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">"~/work/shared-results"</span><span class="p">,</span><span class="w"> </span><span class="s2">"/data/me/scratch"</span><span class="p">]</span>
+</code></pre></div>
+<ul>
+<li><strong>The checks, at each start.</strong> launch refuses to start, naming the entry and the step ("fix
+  or remove it in [launch] write_to of the user config"), for an entry that is:</li>
+<li>a file, a link, or reached through a link (whoever can change the link would choose the
+    place); name the real folder;</li>
+<li>inside or above a protected root, a derived folder or a pattern match;</li>
+<li><code>/</code>, the home folder or above it, a dot-folder of the home folder (<code>~/.config</code>,
+    <code>~/.claude</code>, <code>~/.phiward</code>), in <code>~/Library</code>, or a folder that is, holds or is inside a
+    <code>PATH</code> folder (files there run later, outside launch);</li>
+<li>a folder that holds a phiward file (the config, its code) or is the spool;</li>
+<li>a <code>[broker] write_to</code> folder, or one that holds or is inside one, or a credential;</li>
+<li><code>/tmp</code> (Linux): it holds the default Kerberos ticket cache, a credential.</li>
+</ul>
+<p>The hook does not check them, so a bad entry stops only launch. <code>phiward doctor</code> gives the
+  same refusals.
+- <strong>A missing entry is skipped,</strong> with one NOTE: <code>phiward launch: NOTE: [launch] write_to
+  &lt;entry&gt; does not exist, so the session does not write there</code>. An entry inside the project
+  is dropped (the project is written already); one inside another entry is dropped too.
+- <strong>The folders are named at the start:</strong> <code>phiward launch: the session also writes: &lt;folder&gt;,
+  ...</code>, and in the <code>--report</code> JSON (<code>write_to</code>). <code>phiward doctor</code> counts them (the paths with
+  <code>--show-paths</code>).
+- <strong>The project's rules hold in each folder.</strong> What runs later and git control files are
+  read-only there, as in the project (the table above). launch makes nothing in a listed
+  folder: on Linux, one of them missing at the start can be made, and the report at the end
+  names it. A repository made in a listed folder during the session has writable git control
+  files on both platforms, as in the project; the report at the end names its <code>.git/</code> paths.
+- <strong>The project scan reads each folder</strong> with the project's rules and within the same 2 s:
+  first the instruction files of the project and of every listed folder, then the rest of each
+  in turn. A finding in any folder refuses, naming the folder. A listed folder's instruction
+  files not read in 2 s refuse ("run phiward doctor, or make them smaller"); the project's own,
+  and the rest not read, give the NOTE, naming the folders not finished.
+- <strong><code>--tool claude</code> gets <code>--add-dir D</code></strong> for each folder, after your own arguments (so a <code>--</code>
+  among them is refused). From an <code>--add-dir</code> folder Claude Code loads its skills (live), its
+  commands and its subagents, <code>enabledPlugins</code> and <code>extraKnownMarketplaces</code> of its settings,
+  and with <code>CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1</code> (passed on as you set it) its
+  <code>CLAUDE.md</code> and rules. All of them sit under <code>.claude</code>, which is read-only there and scanned
+  before the tool starts.
+- <strong>The trust prompt.</strong> Claude Code 2.1.326 and newer asks you to trust each <code>--add-dir</code>
+  folder. Under launch every session starts with a fresh config folder, so it asks again in
+  every session. That is expected: answer it, or remove the entry.
+- <strong>The end report</strong> names what the session changed in each folder, under the folder's name.
+  Each folder is walked at the start and at the end, up to 2 million entries: list a folder,
+  not a whole disk.
+- <strong>An abnormal end.</strong> SIGHUP (the terminal closes) and SIGTERM still give the end report (one
+  ignored when launch starts, as under <code>nohup</code>, stays ignored). After a signal, a SIGKILL or a
+  crash, the next launch names the folders of the session that did not finish (on macOS the
+  tool may outlive the launcher): read their files that run later and what it changed before
+  you run anything there.
+- <strong>Not <code>[broker] write_to</code>.</strong> That one is the gateway's grant to write inside protected roots,
+  which a session cannot read; this one is what the session itself writes. The two may never
+  overlap (<a href="../configuration/#launch">configuration.md</a>).
+- The broker's <code>PATH</code> filter and <code>phiward pseudonymize</code> treat the listed folders as written by
+  the agent: a program there is not run by the broker, and a table there is not an input.</p>
+<h2 id="the-network">The network<a class="headerlink" href="#the-network" title="Permanent link">&para;</a></h2>
+<p>The session has no direct outbound network. <code>launch</code> runs a proxy outside the profile, and the tool's
+<code>HTTPS_PROXY</code>, <code>HTTP_PROXY</code> and <code>ALL_PROXY</code> (and their lowercase forms) name it, with a token for
+this session only; <code>NO_PROXY</code> is empty. Claude Code, git, pip, npm and curl use it.</p>
+<ul>
+<li><strong>Only public addresses.</strong> The proxy looks the name up once, checks every address it gets
+  back, and connects to the checked addresses in turn (so broken IPv6 falls back to IPv4). It refuses this machine (<code>localhost</code>,
+  <code>127.0.0.1</code> in any spelling, <code>[::1]</code>, this machine's names and addresses, which it reads again
+  for each connection), the local link (<code>169.254.x</code>, <code>fe80::</code>) and the private ranges (<code>10.x</code>,
+  <code>172.16-31.x</code>, <code>192.168.x</code>, <code>100.64.x</code>, <code>fc00::/7</code>).</li>
+<li><strong>Private ranges you need</strong> (an HPC web service, an internal Git server): list them in
+  <code>[launch] private_networks</code> in your user config (<a href="../configuration/#launch">configuration.md</a>).
+  A project's <code>.phiward.toml</code> cannot.</li>
+<li><strong>Tunnels only</strong> (CONNECT), to any port of a checked address: HTTPS, and whatever else a tool
+  sends through a CONNECT tunnel. Plain HTTP requests through the proxy are refused.</li>
+<li><strong>A proxy of your own:</strong> when the terminal you start <code>launch</code> from sets <code>HTTPS_PROXY</code> (or
+  <code>ALL_PROXY</code>) to an <code>http://</code> proxy, phiward's proxy goes through it, by the checked address
+  only (<code>CONNECT &lt;address&gt;:443</code>). A name that does not resolve on this machine is refused, not
+  sent on. An address in your <code>[launch] private_networks</code> is connected to directly, not through
+  that proxy (it does not reach your internal network). Any other kind of proxy there
+  (<code>https://</code>, <code>socks5://</code>) stops the start. Unset it for <code>launch</code>, or give an <code>http://</code> proxy.</li>
+<li><strong>At most 64 connections at once.</strong> One more is refused, not queued.</li>
+<li><strong>A refusal says why.</strong> The proxy answers <code>403 phiward: &lt;why&gt;</code> in the status line and the
+  body; most tools print only the status line (<code>pip</code>: "Tunnel connection failed: 403 phiward:
+  ..."). For a private address it reads <code>git.example.internal is a private address; the operator
+  lists its range in [launch] private_networks (user config)</code>. At exit, <code>launch</code> prints the hosts
+  it refused (the first 20), also into <code>--report</code>: <code>phiward launch: the proxy refused 2
+  connection(s): git.example.internal (a private address), ...; private ranges go in [launch]
+  private_networks (user config)</code>.</li>
+<li><strong><code>ANTHROPIC_BASE_URL</code></strong> (<code>--tool claude</code>): checked at the start with the proxy's rules. A
+  URL that is not <code>https://</code>, or whose host is this machine, its link, or a private range you
+  have not listed, stops the start, since the session could not reach its model: for example
+  <code>ANTHROPIC_BASE_URL (http://127.0.0.1:4000) is not an https:// URL; ...: run Claude Code in
+  Mode A</code>. A name that does not resolve at the start is left to the proxy.</li>
+<li><code>launch</code> refuses to start when the proxy cannot start.</li>
+</ul>
+<p>What this breaks:
+- MCP servers over HTTP on this machine, IDE integrations (the IDE's WebSocket on localhost),
+  and <code>/login</code> with a localhost callback (use <code>CLAUDE_CODE_OAUTH_TOKEN</code>, above). Stdio MCP
+  servers the session starts work.
+- Tools that ignore the proxy variables (raw sockets, <code>ssh</code> to port 22, some Go and Java tools),
+  and all UDP. They fail visibly.
+- Docker over TCP (<code>DOCKER_HOST=tcp://localhost</code>); the Docker socket is blocked already.
+- <strong>macOS:</strong> the session cannot reach a server on this machine, also one it started itself: test
+  suites with local HTTP fixtures, dev servers, Jupyter kernels (ZMQ over TCP by default) and Dask
+  local clusters. Use unix sockets in the project or the session's temp folder, or an IPC
+  transport (<code>jupyter ... --transport ipc</code>). Name lookups still work. A server the session
+  starts can listen on every address, and the LAN can reach it: bind local servers to
+  <code>127.0.0.1</code> (<code>python -m http.server --bind 127.0.0.1</code>) (<a href="../threat-model/#open-network">the limit</a>).
+- <strong>Linux:</strong> the session has a network of its own, with its own <code>localhost</code>: servers it starts
+  itself work. The proxy variables name a relay on that <code>localhost</code>, which gets each connection
+  to the proxy as a socket pair from <code>launch</code> (no socket file; it works also where the tool
+  cannot make unix sockets). Name lookups inside the session fail (<code>ping</code>, <code>dig</code>, <code>ssh</code> to a name); tools that
+  use the proxy do not need them. <code>launch</code> refuses to start where network namespaces are not
+  available: it says so when <code>user.max_net_namespaces</code> is 0, and bubblewrap stops the start
+  when it cannot make one for another reason. Nothing runs then; <code>phiward doctor</code> checks both.</p>
+<h2 id="when-a-session-ends">When a session ends<a class="headerlink" href="#when-a-session-ends" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The session's folder is thrown away.</strong> Each session starts from a trusted copy in
+  <code>~/.phiward/carryover/claude/</code>, which no session can read or write. Only this project's
+  transcripts are shared between sessions: no login, no caches, no other project's history.</li>
+<li><strong>This project's transcripts are kept</strong>, so <code>claude --resume</code> and <code>claude -c</code> work under
+  <code>launch</code>. <code>launch</code> names the session's transcript folder (<code>CLAUDE_CODE_PROJECT_DIR_NAME</code>, the
+  first 16 hex digits of the sha256 of the project's real path). At the end it copies that folder
+  whole into <code>~/.phiward/carryover/claude/transcripts/&lt;16 hex&gt;/</code>, and at the next start back
+  into the new session's folder. phiward never reads a transcript: their format is Claude Code's
+  own.</li>
+<li>Only plain files and real folders are kept. Links are dropped with a NOTE. <code>memory/</code> (auto
+    memory, an instruction) and <code>mcp-tasks/</code> are never kept, in any letter case.</li>
+<li>Sessions that end one after the other are merged; a file is replaced only by a newer one.</li>
+<li>At most 500 MiB and 20,000 entries for each project; past that, the oldest sessions go first.
+    A session larger than that on its own is not kept, and its end says so with a NOTE.</li>
+<li>A resumed session restores what Claude Code restores (the conversation, the model, the
+    agent, a permission mode other than bypass, an active goal, scheduled tasks), inside the
+    kernel profile and <code>launch</code>'s hooks. What an earlier session wrote is read as history
+    (<a href="../threat-model/#open-transcripts">the limit</a>).</li>
+<li><strong>To delete them:</strong> delete <code>~/.phiward/carryover/claude/transcripts/</code> (all projects) or one
+    <code>&lt;16 hex&gt;/</code> folder in it, when no session runs. <code>phiward carryover status --tool claude</code>
+    lists each project's folder and its size. Claude Code's own commands do not reach them
+    (under <code>launch</code> they see only the session's folder).</li>
+<li><strong>To turn it off:</strong> <code>[launch] keep_transcripts = false</code> in your user config
+    (<a href="../configuration/#launch">configuration.md</a>). Each session then starts with no history,
+    and <code>--resume</code> or <code>-c</code> gets a NOTE.</li>
+<li><strong>Instruction changes go to quarantine.</strong> These are files Claude Code reads as instructions
+  or settings (<code>CLAUDE.md</code>, <code>rules/</code>, <code>skills/</code>, <code>agents/</code>, <code>commands/</code>, <code>plugins</code> you install,
+  <code>settings.json</code>), and the MCP and permission keys of <code>.claude.json</code>. The exit message lists
+  them:</li>
+</ul>
+<div class="highlight"><pre><span></span><code>phiward<span class="w"> </span>carryover<span class="w"> </span>show<span class="w"> </span>--tool<span class="w"> </span>claude
+phiward<span class="w"> </span>carryover<span class="w"> </span>accept<span class="w"> </span>ID<span class="w"> </span><span class="o">[</span>ITEM...<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude
+phiward<span class="w"> </span>carryover<span class="w"> </span>add<span class="w"> </span>PATH<span class="w"> </span><span class="o">[</span>--as<span class="w"> </span>NAME<span class="o">]</span><span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">   </span><span class="c1"># your own CLAUDE.md, a skill</span>
+phiward<span class="w"> </span>carryover<span class="w"> </span>status<span class="w"> </span>--tool<span class="w"> </span>claude<span class="w">                 </span><span class="c1"># sizes; what is safe to delete (kept transcripts too)</span>
+</code></pre></div>
+<p><code>accept ID settings.json</code> takes the whole <code>settings.json</code> as the session left it; <code>show</code> lists
+  the keys that changed, and for <code>.claude.json</code> the value <code>accept</code> writes, so read it first.
+  Items you do not name stay in quarantine. <code>add ~/.claude.json</code> takes only its MCP servers,
+  trust and allowed-tools keys, never the login or the history; an MCP server's <code>env</code> and
+  header values there are readable by the agent.
+- <strong>The project report.</strong> It lists every file the session changed that is read as instructions
+  for models (<code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>.claude/</code>), every file that runs later (git control
+  files of any repository, hooks, build files, <code>.pth</code>, scripts, executables) and every settings
+  file. Other changed files are named when there are 10 or fewer, and otherwise only counted;
+  code under <code>.venv</code> or <code>node_modules</code> is in that count. In a very large project it says so, and
+  past its limit checks only the first three kinds (dot folders such as <code>.claude</code> first); past
+  2,000,000 entries it checks nothing more. <strong>Treat everything in the project as written
+  by the agent</strong>, and read it before you run anything outside <code>launch</code>. Each <code>[launch]
+  write_to</code> folder gets a report of its own, under its name.
+- <strong>Anything under <code>~/.phiward</code> may be deleted at any time</strong> (a disk quota, an HPC purge, or
+  you). The next start rebuilds from what is left, and it never trusts a folder a session could
+  write. <code>carryover status</code> says what each deletion costs.</p>
+<h2 id="hpc">HPC<a class="headerlink" href="#hpc" title="Permanent link">&para;</a></h2>
+<p>See <a href="../hpc/">hpc.md</a>: HPC through your Kerberos ticket and mounts, <code>copy</code> to approved remotes, and
+<code>run --remote</code> for commands on HPC.</p>
+<h2 id="linux-the-sessions-view">Linux: the session's view<a class="headerlink" href="#linux-the-sessions-view" title="Permanent link">&para;</a></h2>
+<p>On Linux the session sees a snapshot of the file system. Every folder above a protected path or
+a credential (for example <code>/</code>, <code>/home</code>, your home) is rebuilt for the session from the entries it
+held at the start, without the protected ones. A protected folder replaced at its path, and a
+pattern match, credential or ticket cache made after the start, are not in the view.</p>
+<p>What this costs:
+- An entry the host adds to one of those folders after the start (a new folder in your home) is
+  seen only by the next session. A file the host replaces there (an editor saving <code>~/.gitconfig</code>)
+  stays as it was for the session.
+- The session's view is checked against what was checked before the tool starts. An entry the
+  host removes from one of those folders while the session starts is left out of the view. An
+  entry the host replaces while the session starts stops the start: nothing runs; start again.
+  A short window stays: an entry removed between bubblewrap's own check and its mount stops the
+  start with <code>bwrap: Can't bind mount ...</code>; start again.
+- A folder that is missing from the view cannot be made: <code>mkdir ~/.ssh</code> fails (read-only).
+- A folder that can be entered but not listed (mode 711, common on HPC) cannot be rebuilt. It is
+  shown whole, with the protected roots and credentials in it masked; one made in it later is not
+  hidden.
+- On Linux the view must fit in bwrap's 9000 arguments, about three for each entry it rebuilds. A
+  protected folder below a folder of thousands of entries (a large data folder) would need more,
+  so <code>launch</code> shows such folders whole instead, those that save the most first, and says before
+  the tool starts how many folders it shows whole. In those folders, as in a 711 folder, a
+  protected entry made or replaced after the start is not hidden. A folder shown whole lists its
+  masked entries by name, so the folder that holds a protected root, or where a pattern's <code>*</code>
+  names the protected entries, is never shown whole: if the view cannot fit then, <code>launch</code>
+  refuses, and you protect that folder as a root instead (<code>/data/study</code> rather than
+  <code>/data/study/&lt;name&gt;</code>). <code>launch</code> also counts bwrap's whole command line before it starts and
+  says so when it is too long. A pattern whose <code>*</code> falls on a folder that cannot be listed cannot
+  cover it: <code>launch</code> refuses, and you protect that folder as a root instead.
+- A pattern follows a linked folder only in its literal part (<code>/data/...</code> through <code>/data -&gt;
+  /gpfs/...</code>), not at a <code>*</code> level: a match reached through a link there is hidden at the link
+  only. Protect the target as a root.</p>
+<p><strong>Protection follows the path, on Linux and macOS.</strong> A protected folder that you move into a
+folder the session can see is readable there, during a session or after it.</p>
+<h2 id="self-check">Self-check<a class="headerlink" href="#self-check" title="Permanent link">&para;</a></h2>
+<p>It also reports start-up files next to phiward (<code>.pth</code>, <code>sitecustomize</code> in any form) that no install
+record lists, or that changed since install. One it cannot check: <code>_virtualenv.py</code>, which uv's
+and virtualenv's environments add and no record lists.</p>
+<p><code>launch</code> checks its own installed files against the installer's record first, in a separate
+Python that reads no compiled files. A changed file, a compiled file that does not match its
+source, or a file the record does not list makes it refuse: reinstall. Without a record (a source
+checkout or an editable install) it refuses unless <code>PHIWARD_DEV=1</code> is set. It cannot find code
+that changes the launcher itself so that the check is skipped, and it trusts the installer's
+record: a process running as you that changes a file <strong>and</strong> its record line is not found. It
+is meant to catch what a session without <code>launch</code> left behind by mistake or by a careless agent;
+when in doubt, reinstall: the step names the command for the tool that installed phiward.</p>
+<h2 id="limits-in-this-release">Limits in this release<a class="headerlink" href="#limits-in-this-release" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Not hidden:</strong> shell start-up files (<code>~/.zshrc</code>, which may export tokens), <code>~/.gitconfig</code>
+  (which may hold an <code>http.extraheader</code>), and, on macOS, Keychain items whose access list trusts
+  the <code>security</code> tool (the session can reach the Keychain service). Keep tokens out of start-up
+  files; prefer Mode A's test result for Keychain-backed tokens until Mode B is checked.</li>
+<li><strong>Files that other tools run later are read-only.</strong> Skills, agents, commands, hooks and
+  settings in the project's <code>.claude</code>, and editor and agent-tool settings (<code>.vscode</code>, <code>.idea</code>,
+  <code>.cursor</code>, <code>.gemini</code>, <code>.codex</code>), cannot be written inside <code>launch</code>: edit them in your own
+  terminal, or bring them in with <code>phiward carryover add</code>. Claude Code's <code>--worktree</code> and agent worktrees
+  (<code>isolation: worktree</code>; both write <code>.claude/worktrees/</code>) and <code>/loop</code> durable tasks (<code>.claude/scheduled_tasks.json</code>) do not work
+  inside <code>launch</code>. A folder that a link in them leads to (<code>.claude/skills -&gt; ../.agents/skills</code>)
+  is read-only too; <code>launch</code> refuses to start when such a link leads to a folder that holds the
+  project, to one that does not exist (Linux), or when one of these folders has more entries than
+  it walks for links (50,000 in one tree; it names the folder). Trees of installed code
+  (<code>node_modules</code>, <code>.venv</code>, <code>venv</code>, <code>site-packages</code>, <code>renv/library</code>, <code>.tox</code>, <code>target</code>, <code>.git</code>,
+  <code>__pycache__</code>, <code>.mypy_cache</code>, <code>.pytest_cache</code>, <code>.ruff_cache</code>; <code>SKIP_TREES</code> in <code>wholetool.py</code>) are
+  not walked, and a <code>.vscode</code> or <code>.idea</code> inside them stays writable, so <code>npm install</code> works; nor are
+  the links in <code>.claude/worktrees</code> followed. R: <code>.Rprofile</code> and <code>.Renviron</code> are read-only, so run
+  <code>renv::init()</code> (it writes <code>.Rprofile</code>) once outside <code>launch</code>; <code>renv::restore()</code> and plain R work
+  inside it (they write <code>renv/library</code>, which stays writable).</li>
+<li><strong>A <code>git pull</code>, <code>checkout</code> or <code>switch</code> that changes a tracked file in a <code>.claude</code>, <code>.vscode</code> or
+  <code>.idea</code> folder</strong> (at any depth) fails partway inside <code>launch</code>, since those folders are
+  read-only. Run them in your own terminal.</li>
+<li><strong>Git control files are read-only</strong> for the repositories found at the start, so <code>git remote
+  add</code>, <code>git config</code>, <code>git submodule update --init</code>, <code>git worktree add</code> and <code>git push -u</code> fail
+  inside <code>launch</code> (and <code>git switch</code> to a remote branch, <code>git branch -u</code>, <code>-m</code> and <code>-d</code> cannot
+  record their settings: <code>git switch</code> still prints "set up to track" but does not); run them in
+  your own terminal. A repository the session makes is not
+  read-only, but its control files are listed in the exit report as files that run later.</li>
+<li><strong>Linux: Claude Code's own sandbox runs inside launch.</strong> phiward turns it off only on macOS.
+  On Linux its bubblewrap starts inside phiward's, and where the host refuses a user namespace
+  inside bubblewrap, Claude Code's Bash tool fails (visibly: the command is refused, nothing
+  runs unconfined). The session's settings set <code>sandbox.allowUnsandboxedCommands: false</code>, so a
+  Bash command is not retried outside it. Bash reaches the network through Claude Code's own
+  proxy, which then goes through phiward's; that a given Claude Code version does this is for
+  the real-tool check to confirm.</li>
+<li><strong>Linux: unix sockets.</strong> <code>launch</code> does not mask sockets by name; the kernel limits them.</li>
+<li>From Linux 7.1 (Landlock ABI 9): the session reaches only the unix sockets it made itself,
+    and the system's name-service sockets (sssd, nscd).</li>
+<li>Before 7.1, with <code>--tool claude</code>: Claude Code's own sandbox blocks unix sockets for Bash
+    (its seccomp filter, which the native build carries). <code>launch</code> turns that sandbox on with
+    <code>--settings</code> (<code>sandbox.enabled</code>, <code>sandbox.failIfUnavailable</code>,
+    <code>sandbox.allowUnsandboxedCommands</code> false, and <code>env.CLAUDE_CODE_DISABLE_FILE_MENTIONS</code>:
+    the file <code>install</code> writes for <code>claude --settings</code>), passed as the last arguments of whatever
+    <code>--tool claude</code> runs (<code>claude</code>, a versioned binary, a wrapper); a <code>--</code> among the arguments
+    stops the start (drop the <code>--</code> and put the prompt last). Claude Code keeps only one
+    <code>--settings</code>, so your own stops the start too, unless its content is just the same (the file
+    <code>install</code> writes, as a shell alias adds it, or the one v0.2.0b1's <code>install</code> wrote, with no
+    <code>env</code>; launch reads the content, not the path). One more key, another value or a file that does
+    not parse stops the start; if it is phiward's file, rerun <code>phiward install claude --user
+    --write</code>.
+    Under <code>launch</code>, Claude Code reads a config folder of its own, not <code>~/.claude</code>: put other
+    settings in managed settings, or add a <code>settings.json</code> with <code>phiward carryover add FILE
+    --as settings.json --tool claude</code>.</li>
+<li><strong>What launch checks before the start.</strong> A Claude Code command (<code>claude mcp</code>, <code>doctor</code>,
+    <code>logs</code>, ...), also after options (<code>claude --debug mcp list</code>), is not a session: some ignore
+    <code>--settings</code> and run, and some are hidden from the help. <code>launch</code> refuses it: run it outside
+    <code>launch</code>. To tell a command from a prompt, <code>launch</code> asks the program that runs, inside
+    the session: <code>claude WORD --help</code> for the first word that is not an option (which options
+    take a value comes from <code>claude --help</code>). A help other than the root's means a command; so
+    <code>claude -p mcp</code> is refused too. A help that hangs, fails or is empty stops the start.
+    Some options run something other than a session (<code>--chrome-native-host</code>, <code>--preload</code>,
+    <code>--eval-mock-server</code>, <code>--daemon-worker</code>). <code>launch</code> does not refuse them; they run inside
+    the session's confinement, so the guards still hold. Cost: one help run
+    at each start, and one more when there is such a word. Only Claude Code's native build is
+    accepted (npm and the installer give it from 2.1.250; for an older JavaScript build, run
+    <code>claude install</code>). Before the tool starts, <code>launch</code> runs the filter of the program that will run
+    (found on the session's <code>PATH</code>, then run by its real path) as Claude Code does (the native
+    binary with <code>ARGV0=apply-seccomp</code>) and requires <code>socket(AF_UNIX)</code> to fail. So run the
+    Claude Code binary itself: <code>env</code>, <code>npx</code>, <code>node</code>, a JavaScript program or a wrapper that
+    adds arguments does not pass.
+    It refuses to start when the filter does not block unix sockets, when the session can
+    write the program's real file or a folder above it, on a machine other than x86_64 or
+    aarch64, or when settings
+    open the sandbox (<code>excludedCommands</code>, <code>allowAllUnixSockets</code>, <code>allowUnixSockets</code>,
+    <code>enableWeakerNestedSandbox</code>). With a wrapper of your own, the check is of the wrapper
+    itself. Keep the programs the session runs, and what a wrapper runs, outside the project
+    and the folders the session writes.</li>
+<li><strong>What is not covered.</strong> The tests use a made-up native build. Only the sandbox check shows that
+    the real binary's filter works inside launch's bubblewrap, and whether sessions that Claude Code
+    starts in the background (<code>--bg</code>, its background service) get the same sandbox settings. Claude
+    Code also needs <code>socat</code> and bubblewrap. Bash then cannot use any unix socket, so <code>tmux</code> and
+    Python's <code>forkserver</code> fail there. Hooks, MCP servers, the status line and Claude Code itself run
+    outside that sandbox: they can reach sockets outside. You configure them; the session cannot,
+    because the project's <code>.claude</code> is read-only.</li>
+<li>Before 7.1, with any other tool (<code>--tool generic</code>, a wrapped MCP server): the tool cannot
+    make unix sockets at all, also its own (socketpairs and pipes work).</li>
+<li><strong>A launch inside a session</strong> (a wrapped MCP server, or a launch for another project) runs its
+  command directly, under the session's own profile: not the narrower profile of a server (which
+  keeps more of the project read-only), and not another project's <code>.phiward.toml</code>. Any other
+  launch builds the full profile; where <code>~/.phiward</code> cannot be written, that launch refuses and
+  nothing runs.</li>
+</ul>
+<p>Read <a href="../threat-model/">threat-model.md</a> (Mode B, <a href="../threat-model/#l1">limits L1–L10</a>). In short:
+- <strong>The network goes only to public addresses, through phiward's proxy</strong> (<a href="#the-network">above</a>).
+  A session cannot read protected data, so it cannot send it. But it can carry out what it can
+  read, to any public host: gateway output (masked), the login token, the project.
+- <strong>macOS:</strong> a process that leaves the tool's process tree keeps running after the session
+  (L5). It can no longer change what a later session reads, but it can write the project, and
+  it keeps its session's one allowed port after the proxy is gone. Close the terminal after a
+  session.
+- <strong>macOS:</strong> the Keychain and the per-user temp folder are shared with your own tools.
+- <strong>Masking covers names and identifiers, not content.</strong> Through the gateway, print counts and
+  summaries, not records, and hide small counts (<a href="../daily-use/#small-counts">Small counts</a>) (rule 3 of the agent rules that <code>phiward init</code> adds to <code>AGENTS.md</code>). Dates can be masked with the <code>dates</code> pack.
+- <code>tmux</code>, <code>script</code> and other tools that open a new terminal do not work yet.
+- Other tools than Claude Code run under <code>launch -- PROGRAM</code> with the boundary, but without a
+  per-session config folder (no adapter yet).</p>
+<p>Next: what Mode B does not cover is in <a href="../threat-model/#mode-b-phiward-launch">the threat model</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../unattended/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Agents with nobody watching">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                Agents with nobody watching
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../setup/" class="md-footer__link md-footer__link--next" aria-label="Next: Setup in detail">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                Setup in detail
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2026 Ronak Shah, Memorial Sloan Kettering Cancer Center. AGPL-3.0.
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer", "toc.follow", "search.suggest", "search.highlight", "content.code.copy"], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "stable", "provider": "mike"}}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
+      
+    
+  </body>
+</html>
