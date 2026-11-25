@@ -1903,3 +1903,40 @@ def test_a_wheel_needs_its_sha256(tmp_path, digest):
     r = _wheel_check(tmp_path, w, digest)
     assert r.returncode == 2
     assert "SBX_WHEEL_SHA256" in r.stderr
+
+
+# --- the unix-socket probe (Linux, Mode A): Claude Code's seccomp filter must refuse a new
+# unix socket, since on bubblewrap before 0.5 the KCM and Docker sockets rest on it alone
+
+def _with_socket(line):
+    return LINUX + f"unix-socket {line}\n"
+
+
+def test_a_refused_unix_socket_passes_on_linux():
+    verdict, report = run(results=_with_socket("DENIED not-permitted"), platform="linux",
+                          required="unix-socket")
+    assert verdict == judge.PASS, report
+    assert any("unix-socket: a new unix socket was refused" in r for r in report), report
+
+
+@pytest.mark.parametrize("line", ["DENIED no-such", "OK"])
+def test_a_unix_socket_the_filter_did_not_refuse_is_fail(line):
+    assert run(results=_with_socket(line), platform="linux",
+               required="unix-socket")[0] == judge.FAIL
+
+
+def test_a_unix_socket_on_the_stand_in_is_a_note():
+    verdict, report = run(results=_with_socket("DENIED no-such"), platform="linux",
+                          required="unix-socket", stub="yes")
+    assert verdict == judge.PASS, report
+    assert any(r.startswith("note unix-socket") for r in report), report
+
+
+@pytest.mark.parametrize("line", ["DENIED other", "DENIED permission"])
+def test_a_unix_socket_refused_for_another_reason_is_inconclusive(line):
+    assert run(results=_with_socket(line), platform="linux",
+               required="unix-socket")[0] == judge.INCONCLUSIVE
+
+
+def test_a_missing_unix_socket_line_is_inconclusive_where_required():
+    assert run(results=LINUX, platform="linux", required="unix-socket")[0] == judge.INCONCLUSIVE

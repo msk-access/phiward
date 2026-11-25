@@ -877,7 +877,7 @@ def no_phi_relaxed(cfg: "config.Config", project: str, home: str,
     folders = [project] if folders is None else folders
     if not folders:
         return entry, Reason("no settings folder was checked for this call", NO_PROJECT_STEP)
-    secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+    secret = [h for h in hidden.for_sandbox(hidden.paths(None, cfg, session=True)) if os.path.lexists(h)]
     for p in folders:
         r = no_phi_reason(p, home, cfg.all_roots, cfg.patterns, config.guard_files(),
                           hidden=secret)

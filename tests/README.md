@@ -79,3 +79,4 @@ says what it holds. By feature:
 | The agent harness (AGENTS.md, .agents, .claude) | test_harness |
 | The judge of the real Claude Code check (scripts/sandbox-check: per platform and mode, the facts, the token redaction) | test_sandbox_check_judge |
 | Fixes from the first CI runs on GitHub (bubblewrap mounts, two launches at once, deep scratch folders) | test_v2_github_ci |
+| Sockets of the hidden list on bubblewrap before 0.5 (an HPC node with the KCM socket) | test_v2_old_bwrap_sockets |

@@ -5,8 +5,10 @@ logins, local IPC sockets. `launch` hides it from the whole tool, the gateway fr
 refuses it to the file tools. Standard library only: the hook imports it on every call."""
 
 import os
+import platform
 import re
-from typing import Dict, Iterator, List, Optional
+import sys
+from typing import Dict, Iterator, List, Optional, Tuple
 
 from phiward import config, pathid
 
@@ -200,10 +202,64 @@ KRB5_CACHE_NAMES = r"krb5cc[^/]*"
 KRB5_CACHE_PATTERNS = ("/var/tmp/krb5cc*", "/dev/shm/krb5cc*")
 
 
-IPC_PATHS = (f"/run/user/{os.getuid()}", "/run/munge", "/run/dbus", "/var/run/docker.sock",
-             "/run/docker.sock",
-             # Kerberos tickets kept by KCM (sssd-kcm, Heimdal): a socket, not a file
-             "/run/.heim_org.h5l.kcm-socket", "/var/run/.heim_org.h5l.kcm-socket")
+# the sockets of the IPC list, by name (the same list on every node that shares the home folder)
+IPC_SOCKETS = ("/var/run/docker.sock", "/run/docker.sock",
+               # Kerberos tickets kept by KCM (sssd-kcm, Heimdal): a socket, not a file
+               "/run/.heim_org.h5l.kcm-socket", "/var/run/.heim_org.h5l.kcm-socket")
+IPC_PATHS = (f"/run/user/{os.getuid()}", "/run/munge", "/run/dbus") + IPC_SOCKETS
+
+
+def _platform():
+    return sys.platform, platform.machine()
+
+
+def sockets_blocked(plat: Optional[str] = None, machine: Optional[str] = None) -> bool:
+    """Whether Claude Code's sandbox has a filter for new Unix sockets here: on Linux x86_64 and
+    aarch64 its seccomp filter refuses socket(AF_UNIX) (sandbox-runtime's README, "Unix Socket
+    Restrictions"); elsewhere it has none, or (macOS) denies by path."""
+    if plat is None or machine is None:
+        plat, machine = _platform()
+    return plat.startswith("linux") and machine in ("x86_64", "aarch64")
+
+
+def _bwrap_version() -> Optional[Tuple[int, int]]:
+    """The version of the bubblewrap Claude Code's sandbox finds (on the PATH folders the agent
+    cannot write, as doctor looks), or None when there is none or it cannot be read."""
+    import shutil
+    import subprocess
+    from phiward import service
+    safe = ":".join(service._safe_path_entries(os.environ.get("PATH", "")))
+    found = shutil.which("bwrap", path=safe)
+    if not found:
+        return None
+    try:
+        r = subprocess.run([found, "--version"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r"(\d+)\.(\d+)", r.stdout or "")
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def sockets_left_out() -> bool:
+    """Whether the sockets of the IPC list stay out of Claude Code's sandbox lists here: only
+    where bubblewrap is older than 0.5, which cannot apply a denyRead or denyWrite on a socket
+    (it makes a file there and fails, so every Bash call fails: an HPC node with bubblewrap 0.4
+    and the KCM socket), and only where the sandbox has its seccomp filter for new sockets. On
+    such a node the sockets rest on that filter alone (doctor says so). Anywhere else, or when
+    the version cannot be read, they stay in the lists."""
+    if not sockets_blocked():
+        return False
+    v = _bwrap_version()
+    return v is not None and v < (0, 5)
+
+
+def for_sandbox(hidden_paths: List[str]) -> List[str]:
+    """The hidden paths Claude Code's sandbox mounts over (denyRead, denyWrite): all of them,
+    except the sockets of the IPC list where `sockets_left_out`. The file tools' permission
+    rules keep every path."""
+    if not sockets_left_out():
+        return list(hidden_paths)
+    return [p for p in hidden_paths if p not in IPC_SOCKETS]
 
 # Kerberos caches by name, as path patterns (pathmatch: `*` within one part): new caches are
 # made with new names, so the hook and the gateway match the name, not a list taken at a start

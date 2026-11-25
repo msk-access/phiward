@@ -536,6 +536,7 @@ for m in $modes; do
     req="control-write control-read read-protected write-data write-phiward write-settings"
     req="$req gateway-run parent-environ env-secrets control-commit git-hook"
     [ -n "$REMOTE" ] && req="$req remote-push remote-run remote-pull remote-pull-out remote-own-socket"
+    [ "$os" = linux ] && [ "$m" = A ] && req="$req unix-socket"
     echo "required $req"
   } > "$R/facts.txt"
   runs="$runs $R"

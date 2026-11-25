@@ -268,7 +268,12 @@ What the node needs:
   refuses to run without it. A RHEL 8 node (kernel 4.18) has no Landlock: there the hook and
   Claude Code's sandbox work, and the gateway does not. `phiward doctor` says which.
 - **bubblewrap 0.4 or newer** with user namespaces (RHEL 8 has 0.4.0). `phiward doctor` checks
-  the version.
+  the version. Below 0.5, Claude Code's sandbox cannot hide a socket by path. There (on Linux
+  x86_64 and aarch64 only) phiward leaves the Docker and Kerberos KCM sockets out of the
+  sandbox's lists, and only Claude Code's seccomp filter for new Unix sockets keeps a shell
+  command from them; `phiward doctor` says so in a NOTE. Claude Code warns at its start when it
+  cannot load that filter: then do not use Mode A on that node. Before 0.2.0b2, on such a node
+  every Bash call failed with "bwrap: Can't create file at /run/.heim_org.h5l.kcm-socket".
 - **socat on the PATH.** Without admin rights, make a conda environment for it in your own
   space, for example `mamba create -p /scratch/$USER/claude-env -c conda-forge socat`, and put its
   `bin` folder first on the PATH before you start Claude Code. (`sandbox.socatPath` would name

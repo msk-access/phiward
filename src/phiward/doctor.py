@@ -635,13 +635,21 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
                  "`(cd ~ && phiward install claude --user --write)`); the layers below are what it would "
                  "have"]
     secret = [h for h in hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+    # what the sandbox mounts over (the sockets left out where its seccomp filter refuses them)
+    sandboxed = hidden.for_sandbox(secret)
     # the same rule as the confinement check (`_covers`: both spellings, the path and where it
     # leads, as the sandbox resolves links: on macOS /tmp is /private/tmp)
     deny_read = claude_settings._paths(claude_settings.levels(project, home), project, home,
                                        None, "denyRead", deny=True)
-    miss = [h for h in secret if not claude_settings._covers(deny_read, h)]
-    lines.append(f"  hidden list in the sandbox: {len(secret) - len(miss)} of {len(secret)}"
+    miss = [h for h in sandboxed if not claude_settings._covers(deny_read, h)]
+    lines.append(f"  hidden list in the sandbox: {len(sandboxed) - len(miss)} of {len(sandboxed)}"
                  + ("" if not miss else " (WARNING: run `(cd ~ && phiward install claude --user --write)` again)"))
+    if hidden.sockets_left_out():
+        lines.append("  NOTE: bubblewrap here is older than 0.5, which cannot hide a socket by path: "
+                     "the Docker and Kerberos KCM sockets are not in the sandbox's lists, and only "
+                     "Claude Code's seccomp filter keeps a shell command from them. Claude Code "
+                     "warns at its start when it cannot load that filter: then do not use Mode A "
+                     "on this node.")
     rules = set(_merged_rules(project, home))
     want = install.permission_rules(secret, home)
     have = sum(1 for r in want if r in rules)
@@ -1031,7 +1039,8 @@ def main(argv: List[str]) -> int:
             say(line)
     if cfg.has_protected_paths:
         from phiward import hidden as _hidden
-        hidden_now = [h for h in _hidden.paths(None, cfg, session=True) if os.path.lexists(h)]
+        hidden_now = [h for h in _hidden.for_sandbox(_hidden.paths(None, cfg, session=True))
+                      if os.path.lexists(h)]
         version = _pattern_version(cfg)
         reason = claude_settings.confinement_reason(
             project, home, cfg.all_roots, cfg.patterns, config.guard_files(), hidden=hidden_now,

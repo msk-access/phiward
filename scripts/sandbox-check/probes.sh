@@ -66,6 +66,11 @@ echo "hidden-settings $r" >> results.txt
 try write-data touch "$(p data)/sbx-probe-$mode"
 try write-phiward touch "$(p phiward)/sbx-probe-$mode"
 try write-settings sh -c 'printf x >> "$1"' sh "$(p settings)"
+# a new unix socket (Linux): Claude Code's seccomp filter refuses socket(AF_UNIX) with EPERM; the
+# target does not exist, so without the filter the connect fails with "no such file" instead
+if [ "$(uname -s)" = Linux ]; then
+  try unix-socket socat -u OPEN:/dev/null UNIX-CONNECT:"$(p free)/sbx-no-socket"
+fi
 
 # the gateway from inside the session: it must work and mask the protected path
 code=0
