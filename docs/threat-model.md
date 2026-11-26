@@ -399,6 +399,9 @@ What phiward does with a project's `env`:
   - `PHIWARD_*`, `KRB5*`, `USER`, `LOGNAME`, `CLAUDE_PROJECT_DIR`;
   - `PATH` (it chooses the `phiward` the plugin's and project hooks start);
   - `CLAUDE_CODE_SHELL_PREFIX` and `CLAUDE_CODE_SHELL` (a project's would win over yours);
+  - `CLAUDE_ENV_FILE` (Claude Code sources the file it names before every Bash command). The
+    refusal gives the safe way: put those variables in the project's `env` directly, or in a
+    SessionStart hook in your user settings;
   - a variable that makes the shell run code (`SHELLOPTS`, `BASHOPTS`, `PS4`, `BASH_ENV`, `ENV`,
     `PROMPT_COMMAND`, `IFS`, `CDPATH`, `GLOBIGNORE`, `BASH_FUNC_*`).
 - The hook reads the settings of every project a call may belong to: `$CLAUDE_PROJECT_DIR`, and
@@ -801,8 +804,8 @@ refuses the call: phiward's hook entries set `onFailure: "block"`.
     [How the hook trusts a wrapped MCP server](#how-the-hook-trusts-a-wrapped-mcp-server).
   - **The exempt commands** trust what the shell makes of the bare name `phiward`: the PATH (keep
     folders the agent can write off it) and what the shell runs before a command. No file tool may
-    write the bash and zsh startup files, the files `$BASH_ENV` and `$ENV` name, or Claude Code's
-    shell snapshots, so no `phiward` function or alias can be planted there. Not covered: a file
+    write the bash and zsh startup files, the files `$BASH_ENV` and `$ENV` name, Claude Code's
+    shell snapshots, or its `session-env` folder, so no `phiward` function or alias can be planted there. Not covered: a file
     they source in turn (a plugin framework's folder), which changes the next session's snapshot.
   - **Before the first setup** (no protected path yet) the refusal does not apply: the hidden list
     is then guarded by the text check only, which is best effort.

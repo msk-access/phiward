@@ -425,7 +425,9 @@ and the hook refuses shell commands (`doctor` says so).
 **The shell is pinned to bash.** `install --user` sets `env.CLAUDE_CODE_SHELL` to `/bin/bash`:
 the hook reads commands as bash does. A project's settings that
 set `CLAUDE_CODE_SHELL` or `CLAUDE_CODE_SHELL_PREFIX` make the hook refuse every call (a
-project's value wins over yours in Claude Code).
+project's value wins over yours in Claude Code). So does a project's `CLAUDE_ENV_FILE`: Claude
+Code runs the file it names as shell code before every command. Put those variables in the
+project's `env` directly, or in a SessionStart hook in your user settings.
 
 **`@` mentions are turned off.** `install --user` sets `env.CLAUDE_CODE_DISABLE_FILE_MENTIONS` to
 `1` (also in the `--settings` file). Why: with mentions on, `@path` in a prompt puts the file's

@@ -1016,7 +1016,8 @@ def main(argv: List[str]) -> int:
     redirect = claude_settings.project_redirects(project, home)
     if redirect:
         say(f"  WARNING: {claude_settings.redirect_text(redirect)}: the hook refuses every "
-              "tool call until you fix that (it could change what the hook runs or reads).")
+              "tool call until you fix that (it could change what the hook runs or reads)."
+              + claude_settings.redirect_step(redirect))
     for r in claude_settings.git_redirects(project, home):
         say("  WARNING: " + GIT_REDIRECT.format(r) + ".")
     loader = claude_settings.project_loader_keys(project, home)
@@ -1286,7 +1287,9 @@ def headless_problems(project: str, home: str) -> List[str]:
         out.append(clean)
     redirect = claude_settings.project_redirects(project, home)
     if redirect:
-        out.append(claude_settings.redirect_text(redirect) + " (the hook refuses every call)")
+        step = claude_settings.redirect_step(redirect)
+        out.append(claude_settings.redirect_text(redirect) + " (the hook refuses every call)"
+                   + ("." + step if step else ""))
     out += [GIT_REDIRECT.format(r) for r in claude_settings.git_redirects(project, home)]
     wiring = wiring_state(project, home)
     out += wiring.problems
