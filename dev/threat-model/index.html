@@ -2091,6 +2091,9 @@ server's tool is not checked for it.</p>
 <li><code>PHIWARD_*</code>, <code>KRB5*</code>, <code>USER</code>, <code>LOGNAME</code>, <code>CLAUDE_PROJECT_DIR</code>;</li>
 <li><code>PATH</code> (it chooses the <code>phiward</code> the plugin's and project hooks start);</li>
 <li><code>CLAUDE_CODE_SHELL_PREFIX</code> and <code>CLAUDE_CODE_SHELL</code> (a project's would win over yours);</li>
+<li><code>CLAUDE_ENV_FILE</code> (Claude Code sources the file it names before every Bash command). The
+    refusal gives the safe way: put those variables in the project's <code>env</code> directly, or in a
+    SessionStart hook in your user settings;</li>
 <li>a variable that makes the shell run code (<code>SHELLOPTS</code>, <code>BASHOPTS</code>, <code>PS4</code>, <code>BASH_ENV</code>, <code>ENV</code>,
     <code>PROMPT_COMMAND</code>, <code>IFS</code>, <code>CDPATH</code>, <code>GLOBIGNORE</code>, <code>BASH_FUNC_*</code>).</li>
 <li>The hook reads the settings of every project a call may belong to: <code>$CLAUDE_PROJECT_DIR</code>, and
@@ -2508,8 +2511,8 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     <a href="#how-the-hook-trusts-a-wrapped-mcp-server">How the hook trusts a wrapped MCP server</a>.</li>
 <li><strong>The exempt commands</strong> trust what the shell makes of the bare name <code>phiward</code>: the PATH (keep
     folders the agent can write off it) and what the shell runs before a command. No file tool may
-    write the bash and zsh startup files, the files <code>$BASH_ENV</code> and <code>$ENV</code> name, or Claude Code's
-    shell snapshots, so no <code>phiward</code> function or alias can be planted there. Not covered: a file
+    write the bash and zsh startup files, the files <code>$BASH_ENV</code> and <code>$ENV</code> name, Claude Code's
+    shell snapshots, or its <code>session-env</code> folder, so no <code>phiward</code> function or alias can be planted there. Not covered: a file
     they source in turn (a plugin framework's folder), which changes the next session's snapshot.</li>
 <li><strong>Before the first setup</strong> (no protected path yet) the refusal does not apply: the hidden list
     is then guarded by the text check only, which is best effort.</li>

@@ -2253,7 +2253,9 @@ and the hook refuses shell commands (<code>doctor</code> says so).</p>
 <p><strong>The shell is pinned to bash.</strong> <code>install --user</code> sets <code>env.CLAUDE_CODE_SHELL</code> to <code>/bin/bash</code>:
 the hook reads commands as bash does. A project's settings that
 set <code>CLAUDE_CODE_SHELL</code> or <code>CLAUDE_CODE_SHELL_PREFIX</code> make the hook refuse every call (a
-project's value wins over yours in Claude Code).</p>
+project's value wins over yours in Claude Code). So does a project's <code>CLAUDE_ENV_FILE</code>: Claude
+Code runs the file it names as shell code before every command. Put those variables in the
+project's <code>env</code> directly, or in a SessionStart hook in your user settings.</p>
 <p><strong><code>@</code> mentions are turned off.</strong> <code>install --user</code> sets <code>env.CLAUDE_CODE_DISABLE_FILE_MENTIONS</code> to
 <code>1</code> (also in the <code>--settings</code> file). Why: with mentions on, <code>@path</code> in a prompt puts the file's
 text into the prompt without a tool call phiward's hook sees. With them off, Claude Code passes
