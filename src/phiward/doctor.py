@@ -644,6 +644,14 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
     miss = [h for h in sandboxed if not claude_settings._covers(deny_read, h)]
     lines.append(f"  hidden list in the sandbox: {len(sandboxed) - len(miss)} of {len(sandboxed)}"
                  + ("" if not miss else " (WARNING: run `(cd ~ && phiward install claude --user --write)` again)"))
+    # what a shell runs before a command: settings from an older install leave it out of denyWrite
+    deny_write = claude_settings._paths(claude_settings.levels(project, home), project, home,
+                                        None, "denyWrite", deny=True)
+    startup = claude_settings.shell_code_paths(home)
+    gap = [p for p in startup if not claude_settings._covers(deny_write, p)]
+    lines.append(f"  shell startup files in the sandbox: {len(startup) - len(gap)} of {len(startup)}"
+                 + ("" if not gap else " (WARNING: a session opened in the home folder could "
+                    "write them; run `(cd ~ && phiward install claude --user --write)` again)"))
     if hidden.sockets_left_out():
         lines.append("  NOTE: bubblewrap here is older than 0.5, which cannot hide a socket by path: "
                      "the Docker and Kerberos KCM sockets are not in the sandbox's lists, and only "
@@ -766,6 +774,7 @@ def _after_install(project: str, home: str, cfg: config.Config,
 # its own (an older phiward's prefix, the network limit) is never folded.
 _FOLDED = ("  WARNING: no Claude Code settings file runs phiward", "  mode: none:",
            "  hidden list in the sandbox:", "  permission rules for the hidden list:",
+           "  shell startup files in the sandbox:",
            "  WARNING: sandbox confines the shell: NO", "  NOTE: Claude Code's shell is not pinned",
            "  NOTE: no `--settings` file yet", "  WARNING: env.CLAUDE_CODE_DISABLE_FILE_MENTIONS is not")
 
