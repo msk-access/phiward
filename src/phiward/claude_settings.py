@@ -110,8 +110,9 @@ _ZSH_STARTUP = (".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout")
 
 def shell_code_paths(home: str, env: Optional[Mapping[str, str]] = None) -> List[str]:
     """What a shell runs before an agent's command: the bash and zsh startup files (also under
-    `$ZDOTDIR`), the files `$BASH_ENV` and `$ENV` name, and Claude Code's shell snapshots (it
-    sources one before each Bash command). A `phiward` function or alias planted there would
+    `$ZDOTDIR`), the files `$BASH_ENV` and `$ENV` name, Claude Code's shell snapshots (it
+    sources one before each Bash command), and its `session-env` folder (the files its hooks
+    write through `$CLAUDE_ENV_FILE`, which it also sources before each Bash command). A `phiward` function or alias planted there would
     stand in for phiward in a shell no kernel confines, so no file tool and no `exec` command
     may write them."""
     env = os.environ if env is None else env
@@ -124,13 +125,15 @@ def shell_code_paths(home: str, env: Optional[Mapping[str, str]] = None) -> List
         if v.startswith("/"):
             out.append(v)
     out.append(os.path.join(user_dir(home, env), "shell-snapshots"))
+    out.append(os.path.join(user_dir(home, env), "session-env"))
     return list(dict.fromkeys(os.path.normpath(p) for p in out))
 
 
 # variables a project's `env` must not set: they choose what the hook reads (where phiward's
 # config and spool are, the ticket and user names its hidden list uses), make the shell that
 # starts a hook run code (SHELLOPTS=xtrace with a PS4 that holds `$(...)`, exported functions,
-# BASH_ENV, ENV), choose the `phiward` the plugin's and project hooks start by name (PATH), or
+# BASH_ENV, ENV), name a file Claude Code sources before every Bash command (CLAUDE_ENV_FILE),
+# choose the `phiward` the plugin's and project hooks start by name (PATH), or
 # the project whose settings the hook reads (CLAUDE_PROJECT_DIR). The hook refuses every call while
 # one is set; it cannot undo what such a shell already ran, which is why the agent may not write
 # these files (docs/threat-model.md, "A project's settings can run code before phiward starts").
@@ -142,7 +145,18 @@ REDIRECT_PREFIXES = ("PHIWARD_", "KRB5", "BASH_FUNC_")
 REDIRECT_NAMES = ("USER", "LOGNAME", "PATH", "SHELLOPTS", "BASHOPTS", "PS4", "BASH_ENV", "ENV",
                   "PROMPT_COMMAND", "IFS", "CDPATH", "GLOBIGNORE", "CLAUDE_PROJECT_DIR",
                   # a project's prefix or shell wins over the user's (part 1 of the plan)
-                  "CLAUDE_CODE_SHELL_PREFIX", "CLAUDE_CODE_SHELL")
+                  "CLAUDE_CODE_SHELL_PREFIX", "CLAUDE_CODE_SHELL",
+                  # a file of shell code sourced before every Bash command, in any workspace
+                  "CLAUDE_ENV_FILE")
+# the safe way, for the one redirect a project sets for its own use (plain variables)
+ENV_FILE_STEP = ("CLAUDE_ENV_FILE names a file that runs as shell code before every command: "
+                 "put those variables in the project's `env` directly (each `NAME: value`), "
+                 "or in a SessionStart hook in your user settings.")
+
+
+def redirect_step(found: List[str]) -> str:
+    """The safe way for `found`, with a leading space, or "" when there is none to give."""
+    return " " + ENV_FILE_STEP if "CLAUDE_ENV_FILE" in found else ""
 
 
 def project_files(project: str, home: str) -> List[str]:

@@ -37,7 +37,7 @@ says what it holds. By feature:
 | Feature | Files |
 |---|---|
 | The config | test_config, test_v2_rename |
-| The hook: protected paths in shell and file tools | test_protected_paths, test_v2_p0a, test_v2_p0a2, test_v2_p0a3, test_v2_p0a4, test_v2_round8, test_v2_round9, test_v2_round10, test_v2_round11, test_v2_round12, test_v2_round13, test_v2_round14, test_v2_round15, test_v2_round16, test_v2_round17, test_v2_properties, test_v2_fuzz, test_v2_usability, test_v2_final_review, test_v2_release18, test_v2_release18d, test_v2_release18f |
+| The hook: protected paths in shell and file tools | test_protected_paths, test_v2_p0a, test_v2_p0a2, test_v2_p0a3, test_v2_p0a4, test_v2_round8, test_v2_round9, test_v2_round10, test_v2_round11, test_v2_round12, test_v2_round13, test_v2_round14, test_v2_round15, test_v2_round16, test_v2_round17, test_v2_shell_code_paths, test_v2_properties, test_v2_fuzz, test_v2_usability, test_v2_final_review, test_v2_release18, test_v2_release18d, test_v2_release18f |
 | Globs | test_v2_glob_cases |
 | Credentials and other hidden places | test_v2_hidden, test_v2_modes |
 | Claude Code's sandbox settings and confinement | test_install_and_sandbox, test_v2_part2, test_v2_part3, test_v2_part6, test_v2_sandbox_boundary, test_v2_reason_steps, test_v2_steps_match_install, test_v2_excluded_per_call, test_v2_no_phi, test_v2_records_place, test_v2_launch_settings, test_v2_old_settings, test_v2_network, test_v2_file_mentions |

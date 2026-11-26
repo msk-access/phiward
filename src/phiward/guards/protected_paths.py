@@ -74,7 +74,8 @@ def check(action: Action, cfg: Config) -> Decision:
             return Decision(DENY, text[:1].upper() + text[1:]
                             + ", which can change what phiward's hook runs or reads. Every tool "
                             "call is refused until the operator fixes the project's "
-                            ".claude/settings*.json.", NAME)
+                            ".claude/settings*.json." + claude_settings.redirect_step(redirect),
+                            NAME)
     if cfg.problem:
         return Decision(DENY, f"The phiward config cannot be used, so guarded actions are "
                         f"refused until it is fixed: {cfg.problem}", NAME)
