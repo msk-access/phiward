@@ -63,6 +63,13 @@ def decide(action: Action, claude_sandbox: bool = False) -> Decision:
                 where, step = claude_settings.excluded_step(listed[0], home)
                 r = claude_settings.Reason(EXCLUDED_WHY.format(file=where or "a settings file"),
                                            step or claude_settings.INSTALL_STEP)
+            # the bwrap and socat the sandbox runs, found on Claude Code's PATH (Linux): a
+            # planted one runs code no text check sees, so it wins over the excludedCommands
+            # text check and the no-PHI relaxation
+            bw = claude_settings.sandbox_programs_reason(
+                os.environ.get("CLAUDE_PROJECT_DIR") or action.cwd, home)
+            if bw is not None:
+                r, listed, cfg.no_phi_here = bw, [], False
         action = replace(action, confined=r is None, unconfined_why=r.text if r else "",
                          unconfined_step=r.step if r else "", text_checked=bool(listed))
     return dispatch(action, cfg, GUARDS)

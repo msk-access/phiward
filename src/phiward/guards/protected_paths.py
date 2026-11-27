@@ -276,6 +276,7 @@ def _guard_places(home: str, cfg: Optional[Config] = None) -> List[str]:
     places = config.guard_files() + [os.path.join(claude_settings.user_dir(home), n)
                                      for n in _SETTINGS]
     places += claude_settings.shell_code_paths(home)  # what the shell runs before a command
+    places += claude_settings.sandbox_prefixes(home)  # the bwrap and socat the sandbox runs
     if cfg is not None:
         places += config.command_paths(cfg)  # the operator's own scripts the gateway may run
     for m in claude_settings.MANAGED:

@@ -1086,8 +1086,20 @@ verified** or **from reading the code** means it was not shown by a probe.
     planted in the project (confirmed).
 13. <a id="gap-13"></a>**The git hook's fallback** (`python3 -m phiward`) can import a planted package from the
     repository (confirmed).
-14. <a id="gap-14"></a>**Programs and their settings**: on Linux, Claude Code's own sandbox runs the first `bwrap` on
-    its PATH (confirmed; phiward's own sandbox runs only the system one); a remote copy's
+14. <a id="gap-14"></a>**Programs and their settings**: on Linux, Claude Code's own sandbox runs the first `bwrap` and
+    `socat` on its PATH, found again for each command (confirmed; phiward's own sandbox runs only
+    the system one). The hook now judges them: a PATH folder the agent can change on the way to
+    them (each link on the way included), an entry it cannot look at, a second name, a `lib/`
+    the agent can change, or a prefix another account may write refuses every Bash call; a
+    prefix a group may write is a warning (until a later release decides it). Only the
+    system's own bin folders (`/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`) are not judged further.
+    The hook also judges each settings `env.PATH`, and `LD_LIBRARY_PATH`, `LD_PRELOAD` and
+    `LD_AUDIT` from Claude Code's start (read from `/proc`, not measured) and from settings `env`. What it
+    reads is the PATH it inherits from Claude Code (read in Claude Code's code, not measured).
+    Per call it looks at the prefix, its `bin/` and `lib/` folders and the program, not each
+    library file (`doctor` walks those). A
+    `denyWrite` pattern cannot keep a planted `bwrap` out on Linux: Claude Code's sandbox skips
+    write patterns there (measured, sandbox-runtime 0.0.82). A remote copy's
     `rsync` reads `~/.popt` on Linux (confirmed in Docker); an operator `ssh_config` may `Include`
     or `Match exec` files the agent can write, and ssh reads `~/.ssh/known_hosts` and `id_*` (from
     reading the code).

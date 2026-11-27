@@ -628,6 +628,39 @@ def path_risk_lines(project: str, home: str) -> List[str]:
     return lines
 
 
+def sandbox_program_lines(project: str, home: str, path: str, src: str = "") -> List[str]:
+    """doctor's lines for the bwrap and socat Claude Code's sandbox finds on `path` (from settings
+    `src`, or "" for Claude Code's own; Linux): the hook's refusal with its step, or a warning
+    for each thing a group may write. doctor walks every file in the prefix's `bin/` and `lib/`;
+    the hook, only the prefix, those two folders and the program."""
+    out: List[str] = []
+    for name in claude_settings.SANDBOX_PROGRAMS:
+        r, warnings, prefix, _bindir = claude_settings._sandbox_program(name, path, project,
+                                                                          home, src)
+        if r is not None:
+            out.append(f"  WARNING: the hook counts no Bash call as confined: {r.text}. "
+                       f"Next: {r.step}")
+            continue
+        for sub in ("bin", "lib") if prefix else ():
+            for top, dirs, files in os.walk(os.path.join(prefix, sub)):
+                for f in dirs + files:
+                    w = claude_settings._owned_safe(os.path.join(top, f), name, prefix)
+                    if isinstance(w, claude_settings.Reason):
+                        w = f"{w.text}: {w.step}"
+                    if w and w not in warnings:
+                        warnings.append(w)
+        out += [f"  WARNING: {w}" for w in warnings]
+    return out
+
+
+def loader_lines(project: str, home: str) -> List[str]:
+    """doctor's line for the loader variables Claude Code would pass bwrap (Linux): the shell
+    doctor runs in stands for the one Claude Code starts from."""
+    r = claude_settings.loader_reason(project, home, env=os.environ)
+    return ([f"  WARNING: the hook counts no Bash call as confined: {r.text}. Next: {r.step}"]
+            if r else [])
+
+
 def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
     """Which mode this session is in and which layers are on."""
     from phiward import hidden
@@ -682,6 +715,10 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
         lines.append(f"  WARNING: an MCP config file cannot be read strictly, so its servers count "
                      f"as bare: {why}")
     lines += path_risk_lines(project, home)
+    if sys.platform.startswith("linux"):
+        for path, src in claude_settings.sandbox_paths(project, home):
+            lines += sandbox_program_lines(project, home, path, src)
+        lines += loader_lines(project, home)
     lines += code_root_lines(project, home)
     lines += settings_script_lines(project, home)
     lines += init_lines(project, home)

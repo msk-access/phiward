@@ -1473,3 +1473,306 @@ def inside(path: str, roots: List[str]) -> bool:
     """Whether `path` (as it really leads) is one of `roots` or inside one."""
     real = os.path.realpath(path)
     return any(real == r or real.startswith(r.rstrip("/") + "/") for r in roots)
+
+
+# --- the bwrap and socat Claude Code's sandbox runs (Linux) ----------------------------------
+# sandbox-runtime runs both by bare name, found again on Claude Code's PATH for each command, so
+# the first one on that PATH confines the shell (threat-model gap 14). A `denyWrite` glob cannot
+# keep a planted one out on Linux (sandbox-runtime skips write globs there), so a PATH folder
+# the agent can write before them is refused. bwrap is not setuid, so the loader variables
+# Claude Code passes it are judged the same way.
+SANDBOX_PROGRAMS = ("bwrap", "socat")
+# the system's own bin folders (root's), exactly: a program there is not judged further, and a
+# second name (ostree systems hard-link /usr/bin) is fine. Not /usr/local (review round 1)
+SYSTEM_PREFIXES = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
+# the loader variables that make bwrap or socat load another library; each entry that names a
+# path is judged like a PATH folder
+LOADER_VARS = ("LD_LIBRARY_PATH", "LD_PRELOAD", "LD_AUDIT")
+
+
+def _path_step(name: str, src: str, entry: str = "") -> str:
+    """The step for a PATH (or loader variable) entry `entry` that comes before `name`: from
+    settings `src`, removed there; from the shell Claude Code started in, that shell changed."""
+    what = f"`{entry}`" if entry else "every folder the agent can write"
+    if src:
+        return f"the operator removes {what} from `env` in {src}, then starts Claude Code again"
+    return (f"the operator starts Claude Code again from a shell that leaves {what} out of PATH "
+            f"before {name} (a project's environment: deactivate it first)")
+
+
+def _reinstall_step(name: str) -> str:
+    return (f"the operator installs {name} again in a folder only they can write, first on PATH "
+            "(docs/setup.md)")
+
+
+def _agent_can_change(p: str, roots: List[str], depth: int = 0) -> str:
+    """The first place on the way to the absolute path `p` that the agent can change, or "": a
+    folder inside `roots` that holds an entry on the way (the agent can replace the entry, a
+    link or a folder), or `p` itself inside them. Each link on the way is judged the same way,
+    then where it leads; `..` is taken after the link before it, as the kernel takes it. OSError
+    for a loop of links."""
+    if depth > 40:
+        raise OSError(40, "too many levels of links", p)
+    cur = "/"
+    for part in p.split("/"):
+        if part in ("", "."):
+            continue
+        if inside(cur, roots):
+            return cur
+        if part == "..":
+            cur = os.path.dirname(cur)
+            continue
+        nxt = os.path.join(cur, part)
+        if os.path.islink(nxt):
+            w = _agent_can_change(os.path.join(cur, os.readlink(nxt)), roots, depth + 1)
+            if w:
+                return w
+            cur = os.path.realpath(nxt)
+        else:
+            cur = nxt
+    return cur if inside(cur, roots) else ""
+
+
+def _sandbox_program(name: str, path: str, project: str, home: str, src: str = ""
+                     ) -> Tuple[Optional[Reason], List[str], str, str]:
+    """(the refusal or None, warnings, the prefix judged or "", its bin folder or "") for the
+    `name` found on `path` (from settings `src`, or "" for Claude Code's own), walked as the
+    shell walks it. Refused, for each entry before or at the one that holds `name`: an empty or
+    relative one; one whose way the agent can change (`_agent_can_change`: also one that does
+    not exist yet, and a link inside the project); one that cannot be looked at (fail closed).
+    For the found file: a way the agent can change, also to the prefix's `lib/`. Outside
+    SYSTEM_PREFIXES also: a second name of the file, and a prefix (above its `bin/`), `bin/`,
+    `lib/` or file that another account owns or every account may write. Group write is only a
+    warning (until PR 7). Nothing found: no refusal (Claude Code's sandbox then fails on its
+    own)."""
+    roots = agent_writable(project, home)
+    found = ""
+    for d in path.split(":"):
+        if not d.startswith("/"):
+            what = (f"the entry {d!r}" if d else
+                    "an empty entry (a leading, trailing or doubled `:`, or no PATH)")
+            return (Reason(f"Claude Code's PATH has {what} before {name}: a folder relative to "
+                           "where Claude Code runs, which the agent can write",
+                           _path_step(name, src, d)), [], "", "")
+        try:
+            w = _agent_can_change(d, roots)
+            if not w:
+                os.stat(d)
+        except (FileNotFoundError, NotADirectoryError):
+            continue
+        except OSError as e:
+            return (Reason(f"phiward cannot look at {d} on Claude Code's PATH ({e.strerror}), "
+                           f"which comes before {name}", _path_step(name, src, d)), [], "", "")
+        if w:
+            return (Reason(f"Claude Code's PATH has {d} at or before {name}, and the agent can "
+                           f"change {w} on the way to it (it can put its own {name} there)",
+                           _path_step(name, src, d)), [], "", "")
+        f = os.path.join(d, name)
+        if os.path.isfile(f) and os.access(f, os.X_OK):
+            found = f
+            break
+    if not found:
+        return None, [], "", ""
+    real = os.path.realpath(found)
+    try:
+        w = _agent_can_change(found, roots)
+    except OSError as e:
+        return Reason(f"phiward cannot look at {found} ({e.strerror})",
+                      _reinstall_step(name)), [], "", ""
+    if w:
+        return (Reason(f"the {name} on Claude Code's PATH ({found}) leads through {w}, which the "
+                       "agent can change", _reinstall_step(name)), [], "", "")
+    bindir = os.path.dirname(real)
+    if bindir in SYSTEM_PREFIXES:
+        return None, [], "", ""
+    try:
+        if os.stat(real).st_nlink != 1:
+            return (Reason(f"the {name} on Claude Code's PATH ({real}) has a second name, which "
+                           "another program may change", _reinstall_step(name)), [], "", "")
+    except OSError as e:
+        return (Reason(f"phiward cannot look at {real} ({e.strerror})", config.DOCTOR_STEP),
+                [], "", "")
+    prefix = os.path.dirname(bindir) if os.path.basename(bindir) == "bin" else bindir
+    lib = os.path.join(prefix, "lib")
+    try:
+        w = _agent_can_change(lib, roots)
+    except OSError as e:
+        return (Reason(f"phiward cannot look at the way to {lib} ({e.strerror})",
+                       _reinstall_step(name)), [], prefix, bindir)
+    if w:
+        return (Reason(f"the agent can change {w}, on the way to {lib}, from which the {name} on "
+                       "Claude Code's PATH may load libraries", _reinstall_step(name)),
+                [], prefix, bindir)
+    from phiward import selfcheck
+    above = selfcheck.safe_path(os.path.dirname(prefix))
+    if above:
+        return (Reason(f"the way to {prefix}, which holds the {name} on Claude Code's PATH: "
+                       f"{above}", _reinstall_step(name)), [], prefix, bindir)
+    warnings: List[str] = []
+    for p in (prefix, bindir, lib, real):
+        r = _owned_safe(p, name, prefix)
+        if isinstance(r, Reason):
+            return r, warnings, prefix, bindir
+        if r:
+            warnings.append(r)
+    return None, warnings, prefix, bindir
+
+
+def _owned_safe(p: str, name: str, prefix: str) -> "Optional[Any]":
+    """For `_sandbox_program`: a Reason when another account owns `p` or every account may write
+    it, a warning (text) when a group may write it, None when it is fine or not there."""
+    try:
+        st = os.stat(p)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        return Reason(f"phiward cannot look at {p} ({e.strerror})", config.DOCTOR_STEP)
+    if st.st_uid not in (os.getuid(), 0):
+        return Reason(f"{p}, which holds the {name} Claude Code's sandbox runs, belongs to "
+                      "another account", _reinstall_step(name))
+    if st.st_mode & 0o002:
+        return Reason(f"every account may write {p}, which holds the {name} Claude Code's "
+                      "sandbox runs", f"the operator runs `chmod -R go-w {prefix}` in their own "
+                      "terminal")
+    if st.st_mode & 0o020:
+        return (f"a group may write {p}, which holds the {name} Claude Code's sandbox runs: "
+                f"run `chmod -R go-w {prefix}`")
+    return None
+
+
+def sandbox_program_problem(name: str, path: str, project: str, home: str,
+                            src: str = "") -> Optional[Reason]:
+    """Why the `name` (bwrap or socat) Claude Code's sandbox finds on `path` may not be the one
+    that confines the shell, with the step that fixes it; None when it passes (`_sandbox_program`
+    says what is judged)."""
+    return _sandbox_program(name, path, project, home, src)[0]
+
+
+def _settings_env(project: str, home: str) -> List[Tuple[str, Dict[str, Any]]]:
+    """(the settings file, its `env`) for each settings level that has one."""
+    out = []
+    for _lvl, p, data in levels(project, home):
+        env = data.get("env") if isinstance(data, dict) else None
+        if isinstance(env, dict):
+            out.append((p, env))
+    return out
+
+
+def sandbox_paths(project: str, home: str) -> List[Tuple[str, str]]:
+    """(PATH, where it is set) for each PATH Claude Code may find bwrap and socat on: each
+    settings `env.PATH` (the settings file), which Claude Code applies to its own process (read
+    in Claude Code 2.1.329, not measured: so each is judged), and its own (the hook inherits it;
+    "", unless it equals a settings one)."""
+    own = os.environ.get("PATH", "")
+    out: List[Tuple[str, str]] = []
+    for p, env in _settings_env(project, home):
+        v = env.get("PATH")
+        if isinstance(v, str) and all(v != x for x, _ in out):
+            out.append((v, p))
+    # the hook's own last: equal to a settings one, it is that one (Claude Code applied it)
+    if all(own != x for x, _ in out):
+        out.append((own, ""))
+    return out
+
+
+def _read_parent_environ() -> bytes:
+    with open(f"/proc/{os.getppid()}/environ", "rb") as fh:
+        return fh.read()
+
+
+def _launch_env() -> Dict[str, str]:
+    """The environment the hook's parent (Claude Code, or the shell it starts the hook with)
+    started with: the hook's own has no loader variables (its start, `clean-exec.sh`, clears
+    them). Read from /proc (Linux only: the caller's gate); OSError when it cannot be read, no
+    /proc included (fail closed: not measured on a live Claude Code)."""
+    raw = _read_parent_environ()
+    out = {}
+    for item in raw.split(b"\0"):
+        k, sep, v = item.partition(b"=")
+        if sep:
+            out[os.fsdecode(k)] = os.fsdecode(v)
+    return out
+
+
+def loader_reason(project: str, home: str, env: Optional[Mapping[str, str]] = None
+                  ) -> Optional[Reason]:
+    """Why a loader variable Claude Code passes bwrap and socat (LOADER_VARS, from `env`, by
+    default `_launch_env`, and from each settings `env`) may load a library the agent can
+    plant, with its step; None when none does. An entry with no `/` in LD_PRELOAD or LD_AUDIT
+    is found in the system's folders and LD_LIBRARY_PATH, which are judged."""
+    roots = agent_writable(project, home)
+    try:
+        launch = dict(_launch_env() if env is None else env)
+    except OSError as e:
+        return Reason(f"phiward cannot read the environment Claude Code started with "
+                      f"({e.strerror})", config.DOCTOR_STEP)
+    for src, values in [("", launch)] + _settings_env(project, home):
+        for var in LOADER_VARS:
+            v = values.get(var)
+            if not isinstance(v, str) or not v:
+                continue
+            entries = (v.replace(";", ":").split(":") if var == "LD_LIBRARY_PATH" else
+                       [e for e in v.replace(" ", ":").split(":") if e])
+            for e in entries:
+                if var != "LD_LIBRARY_PATH" and "/" not in e:
+                    continue
+                if not e.startswith("/"):
+                    what = (f"the entry {e!r}" if e else
+                            "an empty entry (a leading, trailing or doubled `:`)")
+                    return Reason(f"{var} has {what}: a path relative to where Claude Code runs, "
+                                  "which the agent can write", _loader_step(var, src))
+                try:
+                    w = _agent_can_change(e, roots)
+                except OSError as err:
+                    return Reason(f"{var} has {e}, which phiward cannot look at "
+                                  f"({err.strerror})", _loader_step(var, src))
+                if w:
+                    return Reason(f"{var} has {e}, and the agent can change {w} on the way to "
+                                  "it: bwrap would load a library it plants",
+                                  _loader_step(var, src))
+    return None
+
+
+def _loader_step(var: str, src: str) -> str:
+    if src:
+        return f"the operator removes {var} from `env` in {src}, then starts Claude Code again"
+    return (f"the operator starts Claude Code again from a shell where {var} names only folders "
+            "the agent cannot write (or is not set)")
+
+
+def sandbox_programs_reason(project: str, home: str) -> Optional[Reason]:
+    """The first refusal for bwrap, then socat, on any of `sandbox_paths`, then for the loader
+    variables (`loader_reason`); Linux only (macOS's sandbox is /usr/bin/sandbox-exec, which no
+    PATH picks)."""
+    if not sys.platform.startswith("linux"):
+        return None
+    for path, src in sandbox_paths(project, home):
+        for name in SANDBOX_PROGRAMS:
+            r = sandbox_program_problem(name, path, project, home, src)
+            if r is not None:
+                return r
+    return loader_reason(project, home)
+
+
+def sandbox_prefixes(home: str) -> List[str]:
+    """For the file tools' guard list (never `config.guard_files`, which also feeds the sandbox's
+    own lists): `~/claude-env`; for each bwrap and socat on `sandbox_paths` that passes
+    `_sandbox_program` outside SYSTEM_PREFIXES, its `bin/` and `lib/` (not the whole prefix,
+    which may hold the home folder or a project); and `bwrap` and `socat` in every absolute
+    folder of each of those PATHs (one put before the found one would run instead). A file tool
+    may not write there. Linux only."""
+    if not sys.platform.startswith("linux"):
+        return []
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    out = [os.path.join(home, "claude-env")]
+    for path, src in sandbox_paths(project, home):
+        for name in SANDBOX_PROGRAMS:
+            r, _w, prefix, bindir = _sandbox_program(name, path, project, home, src)
+            if r is None and prefix:
+                out += [bindir, os.path.join(prefix, "lib")]
+            out += [os.path.join(d, name) for d in path.split(":") if d.startswith("/")]
+    seen: List[str] = []
+    for p in out:
+        if p not in seen:
+            seen.append(p)
+    return seen

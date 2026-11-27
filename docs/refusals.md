@@ -166,6 +166,28 @@ event, every tool call is refused, and the agent can fix nothing. The message en
 in their own terminal". When the config cannot be used, or the hook could not decide, the
 message ends with "the operator runs `phiward doctor` in their own terminal".
 
+**A folder the agent can write comes before bwrap (Linux).** Claude Code's sandbox runs the
+first `bwrap` and `socat` on its PATH. The hook counts no Bash call as confined while one of
+these comes before them:
+
+- a project folder, or a link in the project that leads elsewhere;
+- an empty or relative entry;
+- a folder the sandbox may write, or a link through one;
+- an entry phiward cannot look at.
+
+The message names the entry. For a PATH from the shell, the step is to start Claude Code again
+from a shell that leaves the entry out (a project's environment: deactivate it first). For a
+settings `env.PATH`, the step is to remove the entry there. The same holds for
+`LD_LIBRARY_PATH`, `LD_PRELOAD` and `LD_AUDIT` when they name a place the agent can change,
+because bwrap would load a library from it.
+
+A `bwrap` with a second name, in a folder another account owns, or with a `lib/` the agent can
+change ends with "installs bwrap again in a folder only they can write". One that every account
+may write ends with a `chmod -R go-w` step. A folder a group may write is a doctor warning, not a
+refusal. A file tool may not write that bwrap's `bin/` and `lib/` folders, nor a `bwrap` or
+`socat` into any PATH folder. A planted bwrap also overrides the text check that
+`excludedCommands` and a no-PHI folder would give: no Bash call counts as confined.
+
 **The guard files.** A file tool's write to the phiward config, Claude Code's settings or
 `.mcp.json` is refused. The operator changes these in their own editor or terminal.
 
