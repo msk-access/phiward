@@ -1889,7 +1889,11 @@ exists (<a href="#the-guided-first-run">below</a>).</p>
   it too). On a Mac with an endpoint tool, your IT or security team may want the list of every
   process phiward starts: <a href="../endpoint-security/">endpoint-security.md</a>.</li>
 <li>Linux:</li>
-<li>bubblewrap (<code>bwrap</code>) on the <code>PATH</code>;</li>
+<li>the system's bubblewrap, <code>/usr/bin/bwrap</code> or <code>/bin/bwrap</code>. phiward's own sandbox (launch
+    and the gateway) never uses one on <code>PATH</code> or elsewhere (<code>/usr/local/bin</code>, NixOS). A node
+    without it can still be reached from a machine that can run the gateway (a Mac, or Linux
+    with the system's bubblewrap and Landlock ABI 2; often your laptop):
+    <code>phiward run --remote HOST -- CMD</code>;</li>
 <li>Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
     gateway uses it as a second layer for its writes and refuses to run without it;</li>
 <li>for <code>phiward launch --tool claude</code> before Linux 7.1: <code>socat</code>, and Claude Code's native

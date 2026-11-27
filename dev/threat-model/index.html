@@ -2792,7 +2792,8 @@ verified</strong> or <strong>from reading the code</strong> means it was not sho
     planted in the project (confirmed).
 13. <a id="gap-13"></a><strong>The git hook's fallback</strong> (<code>python3 -m phiward</code>) can import a planted package from the
     repository (confirmed).
-14. <a id="gap-14"></a><strong>Programs and their settings</strong>: Linux finds <code>bwrap</code> on PATH (confirmed); a remote copy's
+14. <a id="gap-14"></a><strong>Programs and their settings</strong>: on Linux, Claude Code's own sandbox runs the first <code>bwrap</code> on
+    its PATH (confirmed; phiward's own sandbox runs only the system one); a remote copy's
     <code>rsync</code> reads <code>~/.popt</code> on Linux (confirmed in Docker); an operator <code>ssh_config</code> may <code>Include</code>
     or <code>Match exec</code> files the agent can write, and ssh reads <code>~/.ssh/known_hosts</code> and <code>id_*</code> (from
     reading the code).
