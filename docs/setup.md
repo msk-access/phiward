@@ -45,7 +45,13 @@ Later: [change the setup](#change-the-setup),
   for `@` mentions off (`doctor` warns below it). On Linux, Claude
   Code's own sandbox (Mode A) also needs bubblewrap and `socat`; `install` sets
   `failIfUnavailable`, so without them Claude Code stops at start instead of running commands
-  unsandboxed. `doctor` checks both.
+  unsandboxed. `doctor` checks both. Claude Code's sandbox runs the first `bwrap` and `socat`
+  on its PATH, found again for each command. So no folder the agent can write may come before
+  them: deactivate a project's environment (`.venv`, conda) before you start Claude Code, or the
+  hook refuses every Bash call. The same goes for `LD_LIBRARY_PATH`, `LD_PRELOAD` and
+  `LD_AUDIT`. A `bwrap`
+  of your own must sit in a folder only you can write; a folder a group may write gets a
+  `doctor` warning with the `chmod` step.
 
 Without a working confinement backend, the broker refuses to run anything. It fails closed.
 
