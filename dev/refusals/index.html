@@ -1445,6 +1445,16 @@ phiward writes (doctor names it).</p>
 <p><strong>Files that run later.</strong> A write to <code>.vscode/</code>, <code>.Rprofile</code>, a skill or a hook asks you first.
 In <code>-p</code>, auto, <code>dontAsk</code> or <code>bypassPermissions</code> mode nobody can be asked, so it is refused: write
 the file yourself.</p>
+<p><strong>The hook cannot run.</strong> When phiward's code cannot be loaded, or the hook is wired to another
+event, every tool call is refused, and the agent can fix nothing. The message ends with:
+"ask the operator to reinstall phiward or to run <code>(cd ~ &amp;&amp; phiward install claude --user --write)</code>
+in their own terminal". When the config cannot be used, or the hook could not decide, the
+message ends with "the operator runs <code>phiward doctor</code> in their own terminal".</p>
+<p><strong>The guard files.</strong> A file tool's write to the phiward config, Claude Code's settings or
+<code>.mcp.json</code> is refused. The operator changes these in their own editor or terminal.</p>
+<p><strong>Loader variables.</strong> A project whose Claude Code settings set <code>env.LD_*</code> (or another loader key)
+gets a line in the session note with the key names, ending "tell the operator". Doctor names
+them too (<a href="../threat-model/">threat-model.md</a>).</p>
 <h2 id="the-gateway-phiward-run-and-phiward-copy">The gateway: <code>phiward run</code> and <code>phiward copy</code><a class="headerlink" href="#the-gateway-phiward-run-and-phiward-copy" title="Permanent link">&para;</a></h2>
 <p><strong>A program not on the broker's PATH.</strong> The broker keeps the PATH of the terminal that started
 it. Doctor warns about each listed program it does not find there. Start the broker again from a

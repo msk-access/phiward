@@ -2071,7 +2071,7 @@ server's tool is not checked for it.</p>
   <code>GLIBC_TUNABLES</code>, <code>HOSTALIASES</code>, <code>LOCALDOMAIN</code>, <code>RES_OPTIONS</code>, <code>RESOLV_HOST_CONF</code>, <code>NIS_PATH</code>,
   <code>TZDIR</code> and <code>GETCONF_DIR</code>; and a <code>TZ</code> that names a file (<code>/...</code>, <code>:/...</code>; a zone name stays).
   <code>/bin/sh</code> and awk read the loader's and allocator's variables and <code>GCONV_PATH</code>/<code>LOCPATH</code> before
-  they are unset; <code>doctor</code> notes a project that sets them. A phiward whose Python needs <code>PYTHONPATH</code>
+  they are unset; <code>doctor</code> and the session note name a project's keys that set them. A phiward whose Python needs <code>PYTHONPATH</code>
   or <code>LD_LIBRARY_PATH</code> cannot start after the clean-up, so every call is refused; <code>doctor</code> says so.
   The variables are listed by <code>/usr/bin/awk</code> (by absolute path). When awk cannot run, the hook
   refuses every call (exit 2) instead of running with them. This is a list of known names, not an
