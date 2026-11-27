@@ -102,9 +102,11 @@ def user_dir(home: str, env: Optional[Mapping[str, str]] = None) -> str:
     return env.get("CLAUDE_CONFIG_DIR") or os.path.join(home, ".claude")
 
 
-# what bash and zsh read when they start (Claude Code makes its shell snapshot from them)
+# what bash and zsh read when they start (Claude Code makes its shell snapshot from them);
+# `.bashrc.d` is the folder whose files the RHEL and Fedora skeleton `.bashrc` sources
 SHELL_STARTUP = (".bashrc", ".bash_profile", ".bash_login", ".profile", ".bash_aliases",
-                 ".bash_logout", ".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout")
+                 ".bash_logout", ".bashrc.d", ".zshrc", ".zshenv", ".zprofile", ".zlogin",
+                 ".zlogout")
 _ZSH_STARTUP = (".zshrc", ".zshenv", ".zprofile", ".zlogin", ".zlogout")
 
 

@@ -10,7 +10,8 @@ It builds two things from the phiward config:
   the hook sees (Claude Code v2.1.299+ reads it; it ignores it in a project's settings);
 - the sandbox block: `enabled: true`, `allowUnsandboxedCommands: false`;
   `filesystem.denyRead` with every protected root (and the derived ones); `filesystem.denyWrite`
-  with the same roots and the phiward config and code; `filesystem.allowWrite` with the
+  with the same roots, the phiward config and code, and the shell startup files (also in
+  `--project`'s local file); `filesystem.allowWrite` with the
   broker's spool folder (gateway calls are clients that write a request there).
 
 Without `--write` it prints them. With `--write` it merges them into the settings file, shows the
@@ -300,8 +301,11 @@ def wiring(cfg: config.Config, project: bool = False, project_dir: str = "",
                 # the project's own Claude Code settings: a Bash command must not rewrite them
                 # (`printf ... > .claude/settings.local.json`)
                 # and all of phiward's own folder (config.sandbox_denied)
+                # and what a shell runs before a command (the hook's own list): Claude Code's
+                # sandbox leaves some of it writable in a session opened in the home folder
                 "denyWrite": _once(roots_sb + pat_write + git_write + sp(guard) + sp(secret_sb)
                                    + sp(config.sandbox_denied())
+                                   + ([] if project else sp(claude_settings.shell_code_paths(home)))
                                    + ([f"./{f}" for f in claude_settings.PROJECT_FILES]
                                       if project else [])),
                 "allowWrite": allow,
@@ -614,7 +618,7 @@ def local_wiring(cfg: config.Config, project_dir: str = "") -> Dict[str, Any]:
     outside the project), phiward's own files (config, code, launcher), the hidden list entries
     of this machine outside the home folder, the ticket name globs, a spool that is not the
     default."""
-    from phiward import hidden
+    from phiward import claude_settings, hidden
     home = pathid.home()
     sp = (lambda xs: _sandbox_paths(list(xs), home))
     _rel, roots = _project_split(cfg, project_dir or os.getcwd())
@@ -628,7 +632,8 @@ def local_wiring(cfg: config.Config, project_dir: str = "") -> Dict[str, Any]:
         "hooks": {"PreToolUse": []},
         "permissions": {"deny": permission_rules(roots + hidden.for_sandbox(machine), home)},
         "sandbox": {"filesystem": {"denyRead": sp(roots) + sp(hidden.for_sandbox(machine)) + globs,
-                                   "denyWrite": sp(roots) + sp(guard) + sp(hidden.for_sandbox(machine)),
+                                   "denyWrite": _once(sp(roots) + sp(guard) + sp(hidden.for_sandbox(machine))
+                                                      + sp(claude_settings.shell_code_paths(home))),
                                    "allowWrite": allow}},
     }
 
