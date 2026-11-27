@@ -2510,9 +2510,14 @@ refuses the call: phiward's hook entries set <code>onFailure: "block"</code>.</p
     and the limits of that:
     <a href="#how-the-hook-trusts-a-wrapped-mcp-server">How the hook trusts a wrapped MCP server</a>.</li>
 <li><strong>The exempt commands</strong> trust what the shell makes of the bare name <code>phiward</code>: the PATH (keep
-    folders the agent can write off it) and what the shell runs before a command. No file tool may
-    write the bash and zsh startup files, the files <code>$BASH_ENV</code> and <code>$ENV</code> name, Claude Code's
-    shell snapshots, or its <code>session-env</code> folder, so no <code>phiward</code> function or alias can be planted there. Not covered: a file
+    folders the agent can write off it) and what the shell runs before a command. No file tool, and
+    no sandboxed command (<code>install</code>'s <code>denyWrite</code>), may write the bash and zsh startup files,
+    <code>~/.bashrc.d</code>, the files <code>$BASH_ENV</code> and <code>$ENV</code> name, Claude Code's shell snapshots, or its
+    <code>session-env</code> folder, so no <code>phiward</code> function or alias can be planted there (the sandbox part
+    measured on Linux; macOS not measured). The sandbox list
+    is the one from install time: run <code>install</code> again after you set <code>ZDOTDIR</code>, <code>BASH_ENV</code>, <code>ENV</code> or
+    <code>CLAUDE_CONFIG_DIR</code>. <code>phiward doctor</code> counts them and warns when settings from an older install
+    leave some out. Not covered: a file
     they source in turn (a plugin framework's folder), which changes the next session's snapshot.</li>
 <li><strong>Before the first setup</strong> (no protected path yet) the refusal does not apply: the hidden list
     is then guarded by the text check only, which is best effort.</li>
@@ -2758,7 +2763,10 @@ verified</strong> or <strong>from reading the code</strong> means it was not sho
    writes to <code>.claude</code> settings files and <code>.mcp.json</code> in the working folder and the folders above
    it, shell startup files, <code>.gitconfig</code> and <code>.git/hooks</code> and <code>.git/config</code> in the working folder,
    and most of <code>~/.claude</code>. phiward's HPC probe confirmed this for the sandbox engine with explicit
-   entries, not for Claude Code's own list.
+   entries. Claude Code's own list is shorter than phiward's: measured with 2.1.327 on Linux, in a
+   session opened in the home folder, it left <code>.zshenv</code>, <code>.bash_login</code>, <code>.bash_aliases</code>,
+   <code>.bash_logout</code>, <code>.zlogin</code>, <code>.zlogout</code> and <code>~/.bashrc.d</code> writable. <code>install</code> adds all the
+   startup files to <code>denyWrite</code>.
 5. <a id="gap-5"></a><strong>Keystroke injection</strong>: from a confined shell, a program can queue keystrokes into the terminal
    that started it (TIOCSTI; confirmed under a profile like phiward's old one, not tested under
    Claude Code's own sandbox).
