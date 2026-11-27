@@ -33,8 +33,8 @@ from typing import AbstractSet, Dict, List, Mapping, NamedTuple, Optional, Seque
 
 from phiward import gateway, paths, pathid, shell
 from phiward.config import Config
-from phiward.core import (ALLOW, ALLOWED, ASK, DENY, FILE_READ, FILE_SEARCH, FILE_WRITE,
-                               SHELL, Action, Decision)
+from phiward.core import (ALLOW, ALLOWED, ASK, DENY, DOCTOR_STEP, FILE_READ, FILE_SEARCH,
+                           FILE_WRITE, SHELL, Action, Decision)
 
 NAME = "protected-paths"
 MAX_DEPTH = 8  # nesting of $( ) inside $( ) the guard follows before it gives up (fail closed)
@@ -78,7 +78,7 @@ def check(action: Action, cfg: Config) -> Decision:
                             NAME)
     if cfg.problem:
         return Decision(DENY, f"The phiward config cannot be used, so guarded actions are "
-                        f"refused until it is fixed: {cfg.problem}", NAME)
+                        f"refused until it is fixed: {cfg.problem}; {DOCTOR_STEP}.", NAME)
     home0 = pathid.home()
     memo: dict = {}  # the Claude folders and each path's answer, once for this call
     if action.kind == FILE_WRITE and _writes_a_guard_file(action, home0, cfg, memo=memo):
@@ -86,7 +86,7 @@ def check(action: Action, cfg: Config) -> Decision:
         # file tool must not write it then either
         return deny("This file tool writes a file that controls the guards (the phiward "
                     "config, code or status file, the agent tool's settings, `.mcp.json`, anything "
-                    "inside a `.git` folder or a `.git` file, or a `phiward` on PATH). Only the operator changes these.",
+                    "inside a `.git` folder or a `.git` file, or a `phiward` on PATH). Only the operator changes these, in their own editor or terminal.",
                     step="")
     if action.starts:
         # the app starts the project's own code outside the sandbox, with the operator's rights;
@@ -555,7 +555,8 @@ def _check_text(texts: Sequence[str], pset: paths.ProtectedSet, home: str,
                 if _writes_a_guard_file(probe, home, cfg, index, memo):
                     return deny("This tool call names a file that controls the guards (the "
                                 "phiward config, code, status or session files, or the agent "
-                                "tool's settings). Only the operator changes these.", step="")
+                                "tool's settings). Only the operator changes these, in their own "
+                                "editor or terminal.", step="")
                 if tool.startswith("mcp__") and _writes_code(probe, home, memo):
                     # an MCP server's tool may write what it names; Claude Code's own tools
                     # that are not file tools (Skill, LSP) read or run, and write nothing
@@ -615,7 +616,8 @@ def _check_shell(action: Action, cfg: Config, pset: paths.ProtectedSet, home: st
         return _check_gateway(call)
     if _writes_claude_settings(cmd):
         return deny("This command writes Claude Code settings (`.claude/settings*.json`) or the "
-                    "MCP config (`.mcp.json`). Only the operator changes these.", step="")
+                    "MCP config (`.mcp.json`). Only the operator changes these, in their own editor or "
+                    "terminal.", step="")
     if action.confined:
         pset.fail_closed = False  # the kernel decides about paths the walk cannot resolve
     pset.mode = "confined" if action.confined else "shell"

@@ -513,7 +513,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
         return 2
     cfg = config.load(cwd)
     if cfg.problem:
-        out.write("run refused: the phiward config cannot be used (run phiward doctor)\n")
+        out.write(f"run refused: the phiward config cannot be used ({config.DOCTOR_STEP})\n")
         return 3
     if a.remote:  # needs only [remote]
         return _execute_remote(a, cwd, env, out, cfg, cancelled)

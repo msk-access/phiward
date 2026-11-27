@@ -16,6 +16,7 @@ there or could not run. It never fails a session: on any error it prints nothing
 
 import json
 import os
+import re
 import sys
 from typing import List, Optional
 
@@ -58,11 +59,14 @@ def note(cfg: config.Config, project: str = "", no_phi: bool = False,
     broken = _selfcheck_line()
     if broken:
         lines.append(f"{len(lines) - 1}. {broken}")
+    loader = _loader_line(project)
+    if loader:
+        lines.append(f"{len(lines) - 1}. {loader}")
     found = _scan_found(cfg, project) if found is None else found
     if found == SCAN_FAILED:
         lines.append(f"{len(lines) - 1}. phiward's project scan could not run, so this note "
                      "cannot say whether the project holds subject IDs outside the protected "
-                     "roots: ask the operator to run `phiward doctor` in their own terminal.")
+                     "roots: " + config.DOCTOR_STEP + ".")
     elif found:
         lines.append(f"{len(lines) - 1}. phiward's project scan found {found} in this project, "
                      "outside the protected roots: do not read, quote or copy those files; tell "
@@ -137,6 +141,27 @@ def _scan_found(cfg: config.Config, project: str) -> str:
     if r.error:
         return SCAN_FAILED
     return projectscan.found_text(r) if r.hits else ""
+
+
+_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _loader_line(project: str) -> str:
+    """The loader keys (`env.LD_*` and the like) the project's Claude Code settings set: the
+    shell that starts each hook loads them before the hook clears them (docs/threat-model.md).
+    Key names only, and at most 5: a key is the project's text, and the model reads this note."""
+    if not project:
+        return ""
+    from phiward import claude_settings, pathid
+    try:
+        keys = claude_settings.project_loader_keys(project, pathid.home())
+    except Exception:  # noqa: BLE001 - a note must never stop a session
+        return ""
+    keys = [k for k in keys if isinstance(k, str) and _KEY.fullmatch(k)][:5]
+    if not keys:
+        return ""
+    return ("This project's Claude Code settings set " + ", ".join("env." + k for k in keys)
+            + ": programs load these before phiward's hooks clear them; tell the operator.")
 
 
 def _selfcheck_line() -> str:

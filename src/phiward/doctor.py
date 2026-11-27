@@ -126,7 +126,7 @@ def _hook_type(h: Dict[str, Any]) -> str:
 def _other_prompt_hook(where: str, ev: str, h: Dict[str, Any]) -> str:
     return (f"  WARNING: {where} has a {ev} hook of type `{_hook_type(h)}`: it runs beside "
             "phiward's prompt check, and may send the prompt on (the check is a tripwire, not a "
-            "boundary)")
+            "boundary): remove that hook, or what adds it, if it may send the prompt on")
 
 
 def plugin_prompt_lines(project: str, home: str) -> List[str]:
@@ -245,7 +245,10 @@ def wiring_state(project: str, home: str) -> Wiring:
                               "may read")
     if disable and disable[1]:
         w.lines.append(f"  WARNING: disableAllHooks is true at the {disable[0]} level: user and "
-                       "project hooks do not run (managed hooks still do).")
+                       "project hooks do not run (managed hooks still do). "
+                       + ("Only the admin who manages Claude Code on this machine can set it to "
+                          "false." if disable[0] == "managed" else
+                          f"Set it to false in the {disable[0]} settings file, or remove it."))
         if "managed" not in wired_levels:
             w.problems.append(f"disableAllHooks is true at the {disable[0]} level")
     if managed_only and "managed" not in wired_levels:
@@ -259,10 +262,12 @@ def wiring_state(project: str, home: str) -> Wiring:
             wired_levels.append(level)
     if off:
         w.lines.append("  WARNING: this project's settings turn the phiward plugin off: only "
-                       "your user wiring's own hooks guard this project")
+                       "your user wiring's own hooks guard this project; remove the phiward entry "
+                       "from `enabledPlugins` in the project's settings")
     if path:
         w.lines.append("  WARNING: this project's settings set env.PATH: the plugin's hooks run "
-                       "`phiward` by name, so the project could choose the program")
+                       "`phiward` by name, so the project could choose the program; remove "
+                       "`env.PATH` from the project's settings")
         if bare_name:
             w.problems.append("the project's settings set env.PATH, and a hook runs `phiward` "
                               "by name")
@@ -366,7 +371,8 @@ def selfcheck_lines() -> List[str]:
     try:
         installed, package, python = selfcheck.check_full_isolated()
     except Exception as exc:  # noqa: BLE001 - doctor reports; it does not stop
-        return [f"WARNING: phiward's self-check could not run ({type(exc).__name__})"]
+        return [f"WARNING: phiward's self-check could not run ({type(exc).__name__}): "
+                "reinstall phiward"]
     SELFCHECK["installed"] = bool(installed)
     if not installed:
         return []
@@ -688,7 +694,7 @@ def mode_report(project: str, home: str, cfg: "config.Config") -> List[str]:
                 f"  WARNING: Claude Code {claude_settings.version_text(version)} does not tell "
                 "the hook which server a tool belongs to (from "
                 f"{claude_settings.version_text(mcp_config.MIN_SOURCE_VERSION)} on): until you "
-                "update it, a server of the project's `.mcp.json` counts as bare, and only your "
+                "update it (`claude update`), a server of the project's `.mcp.json` counts as bare, and only your "
                 "own config (`~/.claude.json`) can make a server wrapped")
     if servers and len(bare) < len(servers):
         lines.append("  NOTE: the hook trusts a server as wrapped only while it runs under a live "
@@ -933,7 +939,8 @@ def main(argv: List[str]) -> int:
     hl = fsinfo.hardlinked_count(cfg.roots, cfg.inventory_limit) if cfg.roots else 0
     if hl:
         print(f"WARNING: {hl} protected file(s) have other hard links; path rules cannot cover "
-              "those other names (docs/threat-model.md, known gap 9)")
+              "those other names: protect the other names too, or give the file one name "
+              "(docs/threat-model.md, known gap 9)")
     if any(os.path.basename(d) in fsinfo.SNAPSHOT_NAMES + tuple(cfg.snapshot_names)
            for d in cfg.derived_roots):
         print("NOTE: snapshot folders next to or above a root are protected too (derived roots)")

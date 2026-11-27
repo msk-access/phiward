@@ -41,7 +41,10 @@ def main() -> int:
     if not isinstance(payload, dict):
         return 0
     if payload.get("hook_event_name", "PreToolUse") != "PreToolUse":
-        sys.stderr.write("phiward: this hook is a PreToolUse hook; this event is refused\n")
+        # the words of core.REWIRE_STEP (this file loads no phiward code)
+        sys.stderr.write("phiward: this hook is a PreToolUse hook; this event is refused: ask "
+                         "the operator to reinstall phiward or to run `(cd ~ && phiward install "
+                         "claude --user --write)` in their own terminal\n")
         return 2
     fold = sys.platform == "darwin"
     keys = [(r.rstrip("/").casefold() if fold else r.rstrip("/")) for r in roots]

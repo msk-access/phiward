@@ -26,8 +26,8 @@ OVERRIDE = ("To override, the human can run `git commit --no-verify` "
 PUSH_OVERRIDE = "To override, the human can run `git push --no-verify`."
 FAULT = ("phiward: the git hook failed, so the operation is refused. "
          "Report this as a bug; the human can use --no-verify.")
-BAD_CONFIG = ("phiward: refused: the guard configuration has a problem. "
-              "Run `phiward doctor` to see it, and fix it.")
+BAD_CONFIG = ("phiward: refused: the guard configuration has a problem: "
+              + config.DOCTOR_STEP + " to see it, and fixes it.")
 USAGE = "usage: phiward git-hook pre-commit | pre-push | install [--force]"
 HELP = USAGE + """
 
