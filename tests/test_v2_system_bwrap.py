@@ -55,3 +55,22 @@ def test_the_gateway_runs_the_system_bwrap(linux):
     for fd in fds:
         os.close(fd)
     assert cmd[0] == real, cmd[:2]
+
+
+def test_the_step_says_where_run_remote_runs_from(linux):
+    # `run --remote` runs its ssh through this machine's gateway: from a node with no backend it
+    # refuses the same way, so the step names a machine that has one (review of PR 2)
+    assert "from a machine that has one" in confine.NO_BACKEND, confine.NO_BACKEND
+    assert "--remote" in confine.NO_BACKEND, confine.NO_BACKEND
+
+
+def test_launch_never_runs_a_bare_bwrap(tree, monkeypatch, tmp_path):
+    from phiward import wholetool
+    empty = tmp_path / "no-system-bin"
+    empty.mkdir()
+    monkeypatch.setattr(confine, "SYSTEM_BIN", str(empty), raising=False)
+    monkeypatch.setattr(confine, "backend", lambda: "bwrap")
+    with pytest.raises(wholetool.LaunchError) as exc:
+        wholetool.build(["/bin/echo", "x"], str(tree / "repo"), dict(os.environ),
+                        wholetool.ADAPTERS["generic"])
+    assert str(exc.value) == confine.NO_BACKEND, exc.value

@@ -28,7 +28,8 @@ Later: [change the setup](#change-the-setup),
   process phiward starts: [endpoint-security.md](endpoint-security.md).
 - Linux:
   - the system's bubblewrap, `/usr/bin/bwrap` or `/bin/bwrap`. phiward's own sandbox (launch
-    and the gateway) never uses one on `PATH`;
+    and the gateway) never uses one on `PATH`. A node without it can still be reached from a
+    machine that has one (a Mac, or a Linux machine with it): `phiward run --remote HOST -- CMD`;
   - Landlock ABI 2 or newer in the kernel (Linux 5.19 or newer, with Landlock turned on). The
     gateway uses it as a second layer for its writes and refuses to run without it;
   - for `phiward launch --tool claude` before Linux 7.1: `socat`, and Claude Code's native

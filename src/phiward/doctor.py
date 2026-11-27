@@ -1527,7 +1527,7 @@ def launch_network_lines(platform: str = sys.platform, problem: Optional[str] = 
     if problem is None:
         bwrap = confine.system_bwrap()  # the one launch runs
         if not bwrap:
-            return []  # sandbox_needs says bwrap is missing
+            return []  # self_test's NO_BACKEND line says it is missing
         problem = confine.net_namespace_problem(bwrap)
     if not problem:
         return []
