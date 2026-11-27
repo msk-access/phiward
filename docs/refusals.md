@@ -90,8 +90,10 @@ terminal names an `https://` or `socks5://` proxy, launch cannot chain it and st
 for `launch`, or give an `http://` proxy.
 
 **No confinement backend.** Launch, `phiward run` and `phiward copy` need macOS
-`sandbox-exec` or Linux bubblewrap (`bwrap`). Without one they refuse. On Linux, install
-bubblewrap with the system's package manager and have it on the PATH
+`sandbox-exec`, or on Linux the system's bubblewrap (`/usr/bin/bwrap` or `/bin/bwrap`). Without
+one they refuse. phiward never runs a `bwrap` it finds on PATH: a folder early on PATH (a conda
+environment, a project's `.venv/bin`) must not choose what confines the gateway. On a node with
+no system bubblewrap, run the work on a host that has it: `phiward run --remote HOST -- CMD`
 ([setup.md](setup.md#1-requirements)).
 
 **Linux below Landlock ABI 9 (the inner mode).** There Claude Code's own sandbox blocks unix

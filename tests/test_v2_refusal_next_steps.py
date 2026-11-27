@@ -288,7 +288,7 @@ def test_no_confinement_backend_names_bubblewrap_and_setup(tree, monkeypatch):
     monkeypatch.setattr(confine, "backend", lambda: None)
     msg = _refusal(["/bin/echo", "x"], tree / "repo", dict(os.environ))
     assert "no confinement backend" in msg, msg
-    assert "install bubblewrap" in msg and "on the PATH" in msg and "setup.md" in msg, msg
+    assert "/usr/bin/bwrap" in msg and "--remote" in msg and "setup.md" in msg, msg
     with pytest.raises(confine.ConfineError) as exc:
         confine.gateway_command(["/bin/echo", "x"], [str(tree / "phi")], [])
     assert str(exc.value) == msg, exc.value

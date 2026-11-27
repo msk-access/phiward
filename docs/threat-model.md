@@ -1086,7 +1086,8 @@ verified** or **from reading the code** means it was not shown by a probe.
     planted in the project (confirmed).
 13. <a id="gap-13"></a>**The git hook's fallback** (`python3 -m phiward`) can import a planted package from the
     repository (confirmed).
-14. <a id="gap-14"></a>**Programs and their settings**: Linux finds `bwrap` on PATH (confirmed); a remote copy's
+14. <a id="gap-14"></a>**Programs and their settings**: on Linux, Claude Code's own sandbox runs the first `bwrap` on
+    its PATH (confirmed; phiward's own sandbox runs only the system one); a remote copy's
     `rsync` reads `~/.popt` on Linux (confirmed in Docker); an operator `ssh_config` may `Include`
     or `Match exec` files the agent can write, and ssh reads `~/.ssh/known_hosts` and `id_*` (from
     reading the code).

@@ -34,10 +34,22 @@ class ConfineError(Exception):
     pass
 
 
+# phiward's own bubblewrap: the system's only. A PATH entry (a conda env, a project's
+# .venv/bin) must not choose what confines the gateway (plan 3.1; Claude Code's own bwrap is
+# the first on its PATH, which phiward judges instead)
+SYSTEM_BIN = "/usr/bin:/bin"
+
+
+def system_bwrap() -> Optional[str]:
+    """The system's bubblewrap, by its full path, or None: never one found on PATH, never a
+    bare name."""
+    return shutil.which("bwrap", path=SYSTEM_BIN)
+
+
 def backend() -> Optional[str]:
     if sys.platform == "darwin" and os.path.exists(SANDBOX_EXEC):
         return "seatbelt"
-    if sys.platform.startswith("linux") and shutil.which("bwrap"):
+    if sys.platform.startswith("linux") and system_bwrap():
         return "bwrap"
     return None
 
@@ -732,9 +744,10 @@ def prune_profiles(max_age: int = PROFILE_MAX_AGE) -> int:
 
 # -- entry points -------------------------------------------------------------------------------
 
-NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec or Linux "
-              "bubblewrap): on Linux, install bubblewrap (bwrap) with the system's package "
-              "manager and have it on the PATH; see Requirements in docs/setup.md")
+NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec, or on Linux "
+              "the system's bubblewrap, /usr/bin/bwrap or /bin/bwrap; one on PATH is never "
+              "used): run the work on a host that has it with `phiward run --remote HOST -- "
+              "CMD`; see Requirements in docs/setup.md")
 
 
 def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequence[str],
@@ -751,7 +764,8 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
         path = write_profile(seatbelt_gateway_profile(writable, patterns, net, deny_read,
                                                       socket, allow_read))
         return [SANDBOX_EXEC, "-f", path] + list(argv), []
-    if b == "bwrap":
+    bwrap = system_bwrap() if b == "bwrap" else None
+    if bwrap:
         prog = seccomp_program(unix=bool(socket))
         r, w = os.pipe()
         os.write(w, prog)  # small: it fits in the pipe buffer
@@ -788,7 +802,7 @@ def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequ
         held = [str(fd) for fd in fds.values()]
         helper = [sys.executable, "-I", "-S", "-c", LANDLOCK_HELPER, str(len(entries))] + \
             entries + [str(len(held))] + held
-        return [shutil.which("bwrap") or "bwrap", "--seccomp", str(r)] + bw + \
+        return [bwrap, "--seccomp", str(r)] + bw + \
             ["--"] + helper + \
             list(argv), \
             [r] + list(fds.values())
