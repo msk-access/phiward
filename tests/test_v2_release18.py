@@ -536,8 +536,12 @@ def test_a_fifo_named_like_the_heartbeat_does_not_hang_the_broker(tree, broker):
     import stat as st_mod
     # the broker removes the FIFO and makes a plain file again at a later beat (HEARTBEAT 1 s)
     for _ in range(120):
-        if os.path.lexists(alive) and st_mod.S_ISREG(os.lstat(alive).st_mode):
-            break
+        # one lstat: the broker may remove the file between two calls (a missing file: not yet)
+        try:
+            if st_mod.S_ISREG(os.lstat(alive).st_mode):
+                break
+        except FileNotFoundError:
+            pass
         time.sleep(0.05)
     else:
         raise AssertionError("the broker still blocks on the FIFO")
