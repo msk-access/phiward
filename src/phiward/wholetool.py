@@ -2398,7 +2398,9 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
         if not os.path.isfile(config.user_config_path(env)):
             raise LaunchError("no user config exists, and on Linux the tool could create one; "
                               "run phiward setup first")
-        bwrap = shutil.which("bwrap", path="/usr/bin:/bin") or "bwrap"
+        bwrap = confine.system_bwrap()
+        if not bwrap:
+            raise LaunchError(confine.NO_BACKEND)
         why = confine.net_namespace_problem(bwrap, probe=False)
         if why:
             raise LaunchError(f"the session needs a network of its own, and {why} (phiward "

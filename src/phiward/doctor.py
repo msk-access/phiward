@@ -1522,13 +1522,12 @@ def sandbox_needs(platform: str = sys.platform, run=None) -> List[str]:
 def launch_network_lines(platform: str = sys.platform, problem: Optional[str] = None) -> List[str]:
     """Linux: a WARNING when `phiward launch` would refuse because bubblewrap cannot give the
     session a network namespace of its own (its network goes only through phiward's proxy)."""
-    import shutil
     if not platform.startswith("linux"):
         return []
     if problem is None:
-        bwrap = shutil.which("bwrap", path="/usr/bin:/bin")  # the one launch runs
+        bwrap = confine.system_bwrap()  # the one launch runs
         if not bwrap:
-            return []  # sandbox_needs says bwrap is missing
+            return []  # self_test's NO_BACKEND line says it is missing
         problem = confine.net_namespace_problem(bwrap)
     if not problem:
         return []
