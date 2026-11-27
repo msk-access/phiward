@@ -746,9 +746,9 @@ def prune_profiles(max_age: int = PROFILE_MAX_AGE) -> int:
 
 NO_BACKEND = ("no confinement backend on this system (needs macOS sandbox-exec, or on Linux "
               "the system's bubblewrap, /usr/bin/bwrap or /bin/bwrap; one on PATH is never "
-              "used): reach this host from a machine that has one (a Mac, or a Linux machine "
-              "with the system's bubblewrap) with `phiward run --remote HOST -- CMD`; see "
-              "Requirements in docs/setup.md")
+              "used): reach this host from a machine that can run the gateway (a Mac, or Linux "
+              "with the system's bubblewrap and Landlock ABI 2, Linux 5.19 or newer) with "
+              "`phiward run --remote HOST -- CMD`; see Requirements in docs/setup.md")
 
 
 def gateway_command(argv: Sequence[str], writable: Sequence[str], patterns: Sequence[str],

@@ -79,7 +79,8 @@ Other refusals you can meet:
 
 - "The phiward config cannot be used": the config is bad. Every guarded action is refused.
   Tell the operator to run `phiward doctor`.
-- "no confinement backend": the system has no `sandbox-exec` or `bwrap`. Tell the operator.
+- "no confinement backend": the system has no `sandbox-exec` or system bubblewrap
+  (`/usr/bin/bwrap`; one on PATH is not used). Tell the operator.
 - "the destination is not inside a protected path": `copy` refused the destination.
 - "no phiward broker is running": ask the operator to start the broker (in a terminal, or its
   login service), in a

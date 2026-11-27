@@ -60,8 +60,10 @@ def test_the_gateway_runs_the_system_bwrap(linux):
 def test_the_step_says_where_run_remote_runs_from(linux):
     # `run --remote` runs its ssh through this machine's gateway: from a node with no backend it
     # refuses the same way, so the step names a machine that has one (review of PR 2)
-    assert "from a machine that has one" in confine.NO_BACKEND, confine.NO_BACKEND
+    assert "from a machine that" in confine.NO_BACKEND, confine.NO_BACKEND
     assert "--remote" in confine.NO_BACKEND, confine.NO_BACKEND
+    # that machine's gateway needs Landlock ABI 2 too (a RHEL 8 host with /usr/bin/bwrap refuses)
+    assert "Landlock ABI 2" in confine.NO_BACKEND, confine.NO_BACKEND
 
 
 def test_launch_never_runs_a_bare_bwrap(tree, monkeypatch, tmp_path):

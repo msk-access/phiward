@@ -94,8 +94,10 @@ for `launch`, or give an `http://` proxy.
 one they refuse. phiward never runs a `bwrap` it finds on PATH: a folder early on PATH (a conda
 environment, a project's `.venv/bin`) must not choose what confines the gateway. `run --remote`
 runs its ssh through the gateway too, so reach a node with no system bubblewrap from a machine
-that has one (a Mac, or a Linux machine with the system's bubblewrap):
-`phiward run --remote HOST -- CMD` ([setup.md](setup.md#1-requirements)).
+that can run the gateway (a Mac, or Linux with the system's bubblewrap and Landlock ABI 2, Linux
+5.19 or newer; often your laptop): `phiward run --remote HOST -- CMD`
+([setup.md](setup.md#1-requirements)). A bubblewrap elsewhere (`/usr/local/bin`, NixOS) is not
+used either.
 
 **Linux below Landlock ABI 9 (the inner mode).** There Claude Code's own sandbox blocks unix
 sockets, and launch passes its own `--settings`, last. So launch refuses your own `--settings`
