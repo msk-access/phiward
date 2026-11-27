@@ -338,7 +338,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
         return 0
     cfg = config.load(cwd)
     if cfg.problem:
-        out.write("copy refused: the phiward config cannot be used (run phiward doctor)\n")
+        out.write(f"copy refused: the phiward config cannot be used ({config.DOCTOR_STEP})\n")
         return 3
     args, why = local_args(args, cwd)
     if why:
@@ -356,7 +356,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
     try:
         san = Sanitizer.from_config(cfg, entries=True)
     except SanitizerError:
-        out.write("copy refused: the sanitizer cannot start (run phiward doctor)\n")
+        out.write(f"copy refused: the sanitizer cannot start ({config.DOCTOR_STEP})\n")
         return 3
     from phiward import confine, run
     try:

@@ -1924,7 +1924,8 @@ def main(argv: List[str]) -> int:
             cfg = config.load(os.getcwd(), env=env)
             src = os.path.abspath(args[1])
             if cfg.problem:
-                raise CarryoverError("the phiward config cannot be used (run phiward doctor)")
+                raise CarryoverError(
+                    f"the phiward config cannot be used ({config.DOCTOR_STEP})")
             rel = paths.ProtectedSet(cfg.all_roots, cfg.patterns).relation(os.path.realpath(src))
             if rel in (paths.INSIDE, paths.ABOVE):  # priority 1: the model reads this copy
                 raise CarryoverError("that path is inside or above protected data; it is never put "

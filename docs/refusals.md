@@ -155,6 +155,19 @@ phiward writes (doctor names it).
 In `-p`, auto, `dontAsk` or `bypassPermissions` mode nobody can be asked, so it is refused: write
 the file yourself.
 
+**The hook cannot run.** When phiward's code cannot be loaded, or the hook is wired to another
+event, every tool call is refused, and the agent can fix nothing. The message ends with:
+"ask the operator to reinstall phiward or to run `(cd ~ && phiward install claude --user --write)`
+in their own terminal". When the config cannot be used, or the hook could not decide, the
+message ends with "the operator runs `phiward doctor` in their own terminal".
+
+**The guard files.** A file tool's write to the phiward config, Claude Code's settings or
+`.mcp.json` is refused. The operator changes these in their own editor or terminal.
+
+**Loader variables.** A project whose Claude Code settings set `env.LD_*` (or another loader key)
+gets a line in the session note with the key names, ending "tell the operator". Doctor names
+them too ([threat-model.md](threat-model.md)).
+
 ## The gateway: `phiward run` and `phiward copy`
 
 **A program not on the broker's PATH.** The broker keeps the PATH of the terminal that started

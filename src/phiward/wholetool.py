@@ -2255,7 +2255,7 @@ def build(argv: Sequence[str], cwd: str, env: Dict[str, str], adapter: Adapter,
     (the NOTEs said about them at the start)."""
     cfg = config.load(cwd, env=env)
     if cfg.problem:
-        raise LaunchError("the phiward config cannot be used (run phiward doctor)")
+        raise LaunchError(f"the phiward config cannot be used ({config.DOCTOR_STEP})")
     if not cfg.has_protected_paths:
         raise LaunchError(NO_PATHS)
     from phiward import phicheck

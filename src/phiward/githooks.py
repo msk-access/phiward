@@ -26,8 +26,8 @@ OVERRIDE = ("To override, the human can run `git commit --no-verify` "
 PUSH_OVERRIDE = "To override, the human can run `git push --no-verify`."
 FAULT = ("phiward: the git hook failed, so the operation is refused. "
          "Report this as a bug; the human can use --no-verify.")
-BAD_CONFIG = ("phiward: refused: the guard configuration has a problem. "
-              "Run `phiward doctor` to see it, and fix it.")
+BAD_CONFIG = ("phiward: refused: the guard configuration has a problem: "
+              + config.DOCTOR_STEP + " to see it, and fixes it.")
 USAGE = "usage: phiward git-hook pre-commit | pre-push | install [--force]"
 HELP = USAGE + """
 
@@ -120,8 +120,8 @@ def pre_commit(cwd: str) -> int:
     try:
         san = _make_sanitizer(cfg)
     except Exception:  # noqa: BLE001 - SanitizerError or any fault: fail closed
-        print("phiward: refused: the sanitizer could not be set up. "
-              "Run `phiward doctor` to see why.", file=sys.stderr)
+        print("phiward: refused: the sanitizer could not be set up: "
+              + config.DOCTOR_STEP + " to see why.", file=sys.stderr)
         return 1
     pset = paths.ProtectedSet(cfg.roots, cfg.patterns)
     staged = _names(_git(["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"], top))

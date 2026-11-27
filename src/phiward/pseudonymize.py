@@ -1636,7 +1636,7 @@ def _run(opts: Dict[str, object], home: str, bfd: int, kfd: int) -> Tuple[int, s
         raise Refused("the key does not exist (start one with --new-key).")
     cfg = config.load(os.getcwd())
     if cfg.problem:
-        raise Refused("the config cannot be used (see `phiward doctor`).")
+        raise Refused(f"the config cannot be used ({config.DOCTOR_STEP}).")
     if not cfg.user_roots:
         raise Refused("the user config has no protected root to put the output in.")
     full_in = _input_place(str(opts["inp"]), cfg, home)

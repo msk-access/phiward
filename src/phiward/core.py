@@ -3,6 +3,15 @@
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
+# The step for a config problem. Its reader is the agent (a hook, `run` or `copy` refusal) or the
+# operator (doctor, install, a git hook run by hand); only the operator can run doctor.
+DOCTOR_STEP = "the operator runs `phiward doctor` in their own terminal"
+# The step when the hook itself cannot run: every tool call is refused, so the agent can fix
+# nothing. `fasthook` and `entry` load no phiward code and hold the same words. The command is
+# claude_settings.INSTALL_STEP's (core cannot import claude_settings: a cycle).
+REWIRE_STEP = ("ask the operator to reinstall phiward or to run "
+               "`(cd ~ && phiward install claude --user --write)` in their own terminal")
+
 # Kinds of action an adapter can report.
 SHELL = "shell"
 FILE_READ = "file_read"

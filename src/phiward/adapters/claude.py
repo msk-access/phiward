@@ -12,8 +12,8 @@ import os
 from typing import Any, Dict, Iterable, List, Optional, TextIO, Tuple
 
 from phiward import pathid
-from phiward.core import (ASK, DENY, FILE_READ, FILE_SEARCH, FILE_WRITE, OTHER, SHELL,
-                               Action)
+from phiward.core import (ASK, DENY, DOCTOR_STEP, FILE_READ, FILE_SEARCH, FILE_WRITE, OTHER,
+                           REWIRE_STEP, SHELL, Action)
 
 # phiward's own MCP tools, as a user server (`phiward`) or from the plugin
 PHIWARD_MCP = re.compile(r"mcp__(?:plugin_phiward_)?phiward__phiward_(?:run|copy|remote|check|doctor)")
@@ -404,8 +404,8 @@ def main(fin: TextIO, fout: TextIO, ferr: TextIO) -> int:
             raise ValueError("payload is not an object")
         if payload.get("hook_event_name", "PreToolUse") != "PreToolUse":
             # a tool hook wired to another event: refuse, never judge it as a tool call
-            ferr.write("phiward: `hook claude` is a PreToolUse hook; this event is refused. "
-                       "Run `phiward doctor`.\n")
+            ferr.write("phiward: `hook claude` is a PreToolUse hook; this event is refused: "
+                       f"{REWIRE_STEP}.\n")
             return 2
         action, camel = to_action(payload)
         # Only Claude Code's own payload (it carries permission_mode) can be confined by Claude
@@ -418,7 +418,7 @@ def main(fin: TextIO, fout: TextIO, ferr: TextIO) -> int:
         d = decide(action, claude_sandbox=claude_code and not leaves)
     except Exception as exc:  # noqa: BLE001 - fail closed
         ferr.write(f"phiward: the hook could not decide ({type(exc).__name__}), so the "
-                   "action is refused. Run `phiward doctor`.\n")
+                   f"action is refused; {DOCTOR_STEP}.\n")
         return 2
     if d.verdict == DENY:
         ferr.write(f"phiward [{d.guard}]: {d.reason}\n")

@@ -142,11 +142,11 @@ def test_no_names_and_no_inventory(place, monkeypatch, tmp_path):
 def test_fails_closed_with_a_reason(place, monkeypatch, tmp_path):
     missing = tmp_path / "gone.toml"
     v = place("hello", f'[sanitize]\npacks = ["{missing}"]\n')
-    assert v.blocked and "gone.toml" in v.why and v.why.endswith("run `phiward doctor`.")
+    assert v.blocked and "gone.toml" in v.why and v.why.endswith(config.DOCTOR_STEP + ".")
     v = place("hello", "[sanitize\n")
-    assert v.blocked and "config" in v.why and v.why.endswith("run `phiward doctor`.")
+    assert v.blocked and "config" in v.why and v.why.endswith(config.DOCTOR_STEP + ".")
     v = place("hello", repo_cfg="[sanitize\n")
-    assert v.blocked and "repo config" in v.why and v.why.endswith("run `phiward doctor`.")
+    assert v.blocked and "repo config" in v.why and v.why.endswith(config.DOCTOR_STEP + ".")
     (place.repo / ".phiward.toml").unlink()
     v = place("x" * (promptscan.MAX_BYTES + 1))
     assert v.blocked and "too long" in v.why

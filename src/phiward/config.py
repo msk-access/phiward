@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from phiward import _toml, pathid
+from phiward.core import DOCTOR_STEP  # noqa: F401 - the step every config problem names
 
 REPO_FILE = ".phiward.toml"
 # the names before the rename (v0.2.0b1): the program is kept as an alias for the beta; the old

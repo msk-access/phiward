@@ -379,7 +379,7 @@ What phiward does with a project's `env`:
   `GLIBC_TUNABLES`, `HOSTALIASES`, `LOCALDOMAIN`, `RES_OPTIONS`, `RESOLV_HOST_CONF`, `NIS_PATH`,
   `TZDIR` and `GETCONF_DIR`; and a `TZ` that names a file (`/...`, `:/...`; a zone name stays).
   `/bin/sh` and awk read the loader's and allocator's variables and `GCONV_PATH`/`LOCPATH` before
-  they are unset; `doctor` notes a project that sets them. A phiward whose Python needs `PYTHONPATH`
+  they are unset; `doctor` and the session note name a project's keys that set them. A phiward whose Python needs `PYTHONPATH`
   or `LD_LIBRARY_PATH` cannot start after the clean-up, so every call is refused; `doctor` says so.
   The variables are listed by `/usr/bin/awk` (by absolute path). When awk cannot run, the hook
   refuses every call (exit 2) instead of running with them. This is a list of known names, not an

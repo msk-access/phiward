@@ -29,7 +29,7 @@ from phiward import config, pathid, sanitize
 MAX_BYTES = 1 << 20
 PROTECTED = "<PROTECTED>"
 WITHHELD_KIND = "text the sanitizer withholds"
-DOCTOR = "run `phiward doctor`."
+DOCTOR = config.DOCTOR_STEP + "."
 _WORD = re.compile(r"\"[^\"\n]*\"|'[^'\n]*'|\S+")
 _HOME = re.compile(r"(?:~|\$HOME|\$\{HOME\})(?=/)")
 _URL = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*:")

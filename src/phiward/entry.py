@@ -15,8 +15,11 @@ def _start() -> int:
     try:
         from phiward.cli import main
     except Exception as exc:  # a moved or broken package: a refusal, never a pass
+        # the words of core.REWIRE_STEP (phiward's code cannot be loaded here)
         sys.stderr.write(f"phiward: its code cannot be loaded ({type(exc).__name__}); every "
-                         "tool call is refused\n")
+                         "tool call is refused: ask the operator to reinstall phiward or to run "
+                         "`(cd ~ && phiward install claude --user --write)` in their own "
+                         "terminal\n")
         return 2
     return main()
 

@@ -429,7 +429,8 @@ NO_BROKER = ("run refused: no phiward broker is running. The operator starts one
 FAKES = {
     "no-broker": (NO_BROKER, 3),
     "stopped": ("run stopped: the broker stopped before the command finished", 3),
-    "refused": ("run refused: the phiward config cannot be used (run phiward doctor)", 3),
+    "refused": ("run refused: the phiward config cannot be used (the operator runs `phiward "
+                "doctor` in their own terminal)", 3),
     "failed": ("run done: exit=1 (the command failed; its exit status is in the operator's "
                "broker log)", 1),
     "other": ("wc: FAKE-PT-0001/a.txt%2D ~/FAKE-PT-00 Traceback: something", 1),

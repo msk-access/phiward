@@ -513,7 +513,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
         return 2
     cfg = config.load(cwd)
     if cfg.problem:
-        out.write("run refused: the phiward config cannot be used (run phiward doctor)\n")
+        out.write(f"run refused: the phiward config cannot be used ({config.DOCTOR_STEP})\n")
         return 3
     if a.remote:  # needs only [remote]
         return _execute_remote(a, cwd, env, out, cfg, cancelled)
@@ -576,7 +576,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
     try:
         san = Sanitizer.from_config(cfg, entries=True, names_lines=lines)
     except SanitizerError:
-        out.write("run refused: the sanitizer cannot start (run phiward doctor)\n")
+        out.write(f"run refused: the sanitizer cannot start ({config.DOCTOR_STEP})\n")
         return 3
     watch = _Watch(out)
     try:
@@ -789,7 +789,7 @@ def _execute_remote(a: RunArgs, cwd: str, env: Dict[str, str], out: TextIO, cfg:
     try:
         san = Sanitizer.from_config(cfg, entries=True, names_lines=lines)
     except SanitizerError:
-        out.write("run refused: the sanitizer cannot start (run phiward doctor)\n")
+        out.write(f"run refused: the sanitizer cannot start ({config.DOCTOR_STEP})\n")
         return 3
     # the remote protected paths, masked first (longest first, so a root inside another one
     # does not leave a tail)
