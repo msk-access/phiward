@@ -120,8 +120,8 @@ def pre_commit(cwd: str) -> int:
     try:
         san = _make_sanitizer(cfg)
     except Exception:  # noqa: BLE001 - SanitizerError or any fault: fail closed
-        print("phiward: refused: the sanitizer could not be set up. "
-              "Run `phiward doctor` to see why.", file=sys.stderr)
+        print("phiward: refused: the sanitizer could not be set up: "
+              + config.DOCTOR_STEP + " to see why.", file=sys.stderr)
         return 1
     pset = paths.ProtectedSet(cfg.roots, cfg.patterns)
     staged = _names(_git(["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"], top))

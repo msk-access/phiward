@@ -356,7 +356,7 @@ def execute(argv: Sequence[str], cwd: str, env: Dict[str, str], out: TextIO,
     try:
         san = Sanitizer.from_config(cfg, entries=True)
     except SanitizerError:
-        out.write("copy refused: the sanitizer cannot start (run phiward doctor)\n")
+        out.write(f"copy refused: the sanitizer cannot start ({config.DOCTOR_STEP})\n")
         return 3
     from phiward import confine, run
     try:

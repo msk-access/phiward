@@ -232,3 +232,29 @@ def test_a_failing_loader_lookup_keeps_the_rest_of_the_note(tree, monkeypatch):
     monkeypatch.setattr(claude_settings, "project_loader_keys", boom)
     text = _note(tree)
     assert "Rules for this session:" in text and "phiward run --" in text, text
+
+
+# --- the sanitizer cannot start: a config problem too (review of PR 0) ---------------------------
+
+def test_a_sanitizer_that_cannot_start_names_the_operators_doctor_step(tree, monkeypatch, capsys):
+    from phiward import copying, githooks, run, sanitize
+
+    def boom(*_a, **_k):
+        raise sanitize.SanitizerError("made-up failure")
+
+    monkeypatch.setattr(run.Sanitizer, "from_config", boom)
+    monkeypatch.setattr(copying.Sanitizer, "from_config", boom)
+    out = io.StringIO()
+    assert run.execute(["--", sys.executable, "-c", "pass"], str(tree / "repo"),
+                       dict(os.environ), out) == 3, out.getvalue()
+    assert "sanitizer cannot start" in out.getvalue() and STEP in out.getvalue(), out.getvalue()
+    out = io.StringIO()
+    code = copying.execute([str(tree / "phi" / "FAKE-PT-0001.bam"), str(tree / "phi" / "c.bam")],
+                           str(tree / "repo"), dict(os.environ), out)
+    assert code == 3 and "sanitizer cannot start" in out.getvalue(), out.getvalue()
+    assert STEP in out.getvalue(), out.getvalue()
+    subprocess.run(["git", "init", "-q", str(tree / "repo")], check=True)
+    monkeypatch.setattr(githooks, "_make_sanitizer", boom)
+    assert githooks.pre_commit(str(tree / "repo")) == 1
+    err = capsys.readouterr().err
+    assert "could not be set up" in err and STEP in err, err
